@@ -15,6 +15,7 @@ import {
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
 } from './airports.js';
 import { MISSIONS, missionByKey } from './missions.js';
+import { gradeLanding, loadBest, recordBest } from './landing.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
   flareSinkMps, elevatorForPitch, throttleForSpeed, sideslipYawAccel, trimAoaDeg,
@@ -73,6 +74,13 @@ const sim = {
   windVec: new THREE.Vector3(),
   windNowKts: 0,
   simTime: 0,
+
+  // Touchdown detection for the landing grade (landing.js)
+  wasOnGround: false,
+  airborneTime: 0,
+  lastAirVsi: 0,
+  landingGraded: false,
+  lastLanding: null,
   audioEnabled: false,
   lastCalloutIdx: -1,
 
@@ -551,6 +559,78 @@ function buildAircraft(type) {
   scene.add(aircraftRoot);
 }
 
+// --- Landing grade ---------------------------------------------------------------
+function checkTouchdown(dt) {
+  if (!sim.onGround) {
+    sim.airborneTime += dt;
+    if (sim.aglFt > 50) sim.landingGraded = false;
+  }
+  const touchedDown = sim.onGround && !sim.wasOnGround && sim.airborneTime > 3 && !sim.landingGraded;
+  sim.wasOnGround = sim.onGround;
+  if (!touchedDown) return;
+  sim.landingGraded = true;
+  sim.airborneTime = 0;
+  const end = sim.activeEnd || selectActiveRunway(RUNWAY_ENDS, sim.pos, 0, null);
+  if (!end) return;
+  const g = approachGeometry(end, sim.pos);
+  const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
+  _euler.setFromQuaternion(sim.quat, 'YXZ');
+  const result = gradeLanding({
+    vsFpm: sim.lastAirVsi,
+    crossM: g.crossM,
+    pastThresholdM: -g.distM,
+    runwayLengthM: geom ? geom.lengthM - end.displacedM : 3000,
+    runwayWidthM: end.widthM,
+    pitchDeg: _euler.x * RAD_TO_DEG,
+    bankDeg: _euler.z * RAD_TO_DEG,
+    iasKts: sim.iasKts,
+    vrefKts: sim.spec.vrefKts,
+  });
+  sim.lastLanding = {
+    pastThresholdM: -g.distM, crossM: g.crossM, vsFpm: sim.lastAirVsi,
+    pitchDeg: _euler.x * RAD_TO_DEG, bankRightDeg: -_euler.z * RAD_TO_DEG,
+    grade: result.grade, score: result.score, runway: end.id,
+  };
+  let best = { isNewBest: false, best: null };
+  try { best = recordBest(window.localStorage, sim.missionKey, result); } catch { /* storage unavailable */ }
+  showResults(result, best, end);
+}
+
+const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
+function showResults(result, best, end) {
+  const card = document.getElementById('resultsCard');
+  const gradeEl = document.getElementById('txtGrade');
+  gradeEl.textContent = result.grade;
+  gradeEl.className = `${result.grade === 'CRASH' ? 'text-2xl' : 'text-5xl'} font-black w-20 text-center ${GRADE_COLOURS[result.grade]}`;
+  document.getElementById('txtScore').textContent = String(result.score);
+  document.getElementById('txtResultRunway').textContent = end.name;
+  const reason = document.getElementById('txtGradeReason');
+  reason.textContent = result.reason || '';
+  reason.classList.toggle('hidden', !result.reason);
+  const bestEl = document.getElementById('txtBest');
+  if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
+  else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';
+  const list = document.getElementById('resultsFactors');
+  list.innerHTML = '';
+  for (const f of result.factors) {
+    const li = document.createElement('li');
+    li.className = 'flex flex-col gap-0.5';
+    const tone = f.score >= 85 ? 'bg-emerald-400' : f.score >= 60 ? 'bg-amber-400' : 'bg-red-400';
+    li.innerHTML = `<div class="flex justify-between"><span class="text-slate-400">${f.label}</span><span>${f.value}</span></div>`
+      + `<div class="h-1.5 rounded bg-slate-800 overflow-hidden"><div class="h-full ${tone}" style="width:${f.score}%"></div></div>`;
+    list.appendChild(li);
+  }
+  card.classList.remove('hidden');
+}
+
+document.getElementById('btnFlyAgain').addEventListener('click', () => {
+  document.getElementById('resultsCard').classList.add('hidden');
+  loadScenario(sim.missionKey);
+});
+document.getElementById('btnKeepRolling').addEventListener('click', () => {
+  document.getElementById('resultsCard').classList.add('hidden');
+});
+
 // --- Weather -----------------------------------------------------------------------
 const WX_IDS = 'KDFW,KDAL,KADS,KAFW,KFTW,KGKY';
 let cloudDeck = null;
@@ -691,6 +771,7 @@ function step6DofPhysics(dt) {
   // Approach target + PAPI lamps
   updateActiveRunway(dt);
   updatePapi();
+  checkTouchdown(dt);
 }
 
 function integrateSubStep(dt) {
@@ -737,9 +818,9 @@ function integrateSubStep(dt) {
       sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight);
     };
     // Fly a flight-path angle: pitch = path + current angle of attack.
-    // Pitch is capped at 8° nose-up (airliner tailstrike protection).
+    // Pitch is capped at 9.5° nose-up (737 tailstrike is ~11°).
     const holdGamma = (gammaDeg) => {
-      sim.elevInput = elevatorForPitch(Math.min(8, gammaDeg + sim.aoaDeg), pitchDeg, pitchRateUp);
+      sim.elevInput = elevatorForPitch(Math.min(9.5, gammaDeg + sim.aoaDeg), pitchDeg, pitchRateUp);
     };
 
     if (sim.apApproach && sim.activeEnd) {
@@ -747,13 +828,13 @@ function integrateSubStep(dt) {
       holdHeading(sim.activeEnd.hdgT + localizerInterceptDeg(ap.crossM));
       const wheelH = sim.pos.y - spec.gearHeight;
       const gsMps = Math.max(20, Math.hypot(sim.vel.x, sim.vel.z));
-      if (wheelH > 12) {
+      if (wheelH > 15) {
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM));
         sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 5, sim.throttle, dt);
       } else {
-        // Flare: trade sink rate for height; keep approach power until ~5 m, then retard.
+        // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
         holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
-        if (wheelH > 5) sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts, sim.throttle, dt);
+        if (wheelH > 8) sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 3, sim.throttle, dt * 3);
         else sim.throttle = Math.max(0, sim.throttle - dt * 0.5);
       }
       if (sim.onGround) { sim.elevInput = 0; sim.throttle = 0; }
@@ -840,6 +921,9 @@ function integrateSubStep(dt) {
   const accel = totalForceWorld.divideScalar(spec.massKg);
   sim.vel.addScaledVector(accel, dt);
   sim.pos.addScaledVector(sim.vel, dt);
+
+  // Sink rate at the moment of contact, captured before the ground clamp zeroes it.
+  if (!sim.onGround) sim.lastAirVsi = Math.round(sim.vel.y * M_TO_FT * 60);
 
   if (sim.pos.y < gh) {
     sim.pos.y = gh;
@@ -1170,6 +1254,10 @@ function loadScenario(key) {
   sim.lastCalloutIdx = -1;
   sim.angVel.set(0, 0, 0);
   sim.rwySelectTimer = 0;
+  sim.landingGraded = false;
+  sim.airborneTime = 0;
+  sim.lastLanding = null;
+  document.getElementById('resultsCard').classList.add('hidden');
 
   if (mission.kind === 'final') {
     const end = runwayEnd(mission.airport, mission.rwy);
@@ -1628,6 +1716,7 @@ window.openaeroDebug = () => {
     gsKts: sim.gsKts,
     wxLive: sim.wx.live,
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
+    lastLanding: sim.lastLanding,
   };
 };
 

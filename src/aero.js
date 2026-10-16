@@ -61,6 +61,10 @@ export function papiWhiteLights(slopeDeg) {
 }
 
 export const GPWS_ALT_THRESHOLDS = [1000, 500, 400, 300, 200, 100, 50, 40, 30, 20, 10];
+const CALLOUT_WORDS = ['one thousand', 'five hundred', 'four hundred', 'three hundred', 'two hundred',
+  'one hundred', 'fifty', 'forty', 'thirty', 'twenty', 'ten'];
+// Spoken word for a GPWS_ALT_THRESHOLDS index (the real automatic callout cadence).
+export const calloutWord = (i) => CALLOUT_WORDS[i];
 
 // Index into GPWS_ALT_THRESHOLDS that should fire now, or -1. Each threshold has a
 // 35 ft window below it and does not repeat while it is the last one called.

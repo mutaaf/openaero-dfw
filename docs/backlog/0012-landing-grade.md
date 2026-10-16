@@ -1,12 +1,12 @@
 ---
 id: 0012
 title: Grade every landing and keep a personal best per mission
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-16
-pr:
+pr: 9
 ---
 
 ## Why

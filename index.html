@@ -29,9 +29,22 @@
   <div id="stallAlertBanner" class="hidden pointer-events-none absolute top-28 left-1/2 -translate-x-1/2 z-30 px-5 py-1.5 rounded-xl bg-amber-500/90 border-2 border-amber-200 text-slate-950 font-mono font-extrabold text-xs tracking-widest uppercase shadow-2xl">
     STALL WARNING — ADD POWER / LOWER NOSE
   </div>
-  <div id="touchdownBanner" class="hidden pointer-events-none absolute top-36 left-1/2 -translate-x-1/2 z-30 px-5 py-2 rounded-xl hud-glass border-emerald-400 text-emerald-300 font-mono text-xs text-center shadow-2xl">
-    <div class="font-bold text-sm">TOUCHDOWN CONFIRMED</div>
-    <div id="txtTouchdownStats" class="text-[11px] text-slate-300">VS: -120 FPM | IAS: 136 KTS | G: 1.05G</div>
+  <!-- Landing results card (src/landing.js grades every touchdown) -->
+  <div id="resultsCard" class="hidden absolute inset-x-3 top-1/2 -translate-y-1/2 z-40 mx-auto max-w-sm hud-glass rounded-2xl p-4 font-mono text-slate-200 border-emerald-400/50 shadow-2xl" role="dialog" aria-labelledby="txtGrade" aria-live="polite">
+    <div class="flex items-center gap-4 border-b border-slate-700/80 pb-3">
+      <div id="txtGrade" class="text-5xl font-black text-emerald-300 w-20 text-center">A</div>
+      <div class="flex-1">
+        <div class="text-[10px] uppercase tracking-widest text-slate-400">Landing grade</div>
+        <div class="text-sm font-bold"><span id="txtScore">0</span><span class="text-slate-500">/100</span> · <span id="txtResultRunway" class="text-sky-300">KDFW 35C</span></div>
+        <div id="txtBest" class="text-[11px] text-amber-300"></div>
+      </div>
+    </div>
+    <div id="txtGradeReason" class="hidden text-xs text-red-300 pt-2"></div>
+    <ul id="resultsFactors" class="flex flex-col gap-1.5 py-3 text-[11px]"></ul>
+    <div class="grid grid-cols-2 gap-2">
+      <button id="btnFlyAgain" class="hud-btn active rounded-xl min-h-[44px] text-xs font-bold">FLY AGAIN</button>
+      <button id="btnKeepRolling" class="hud-btn rounded-xl min-h-[44px] text-xs">KEEP ROLLING</button>
+    </div>
   </div>
 
   <!-- Onboarding & Flight Academy Modal -->
@@ -61,6 +74,11 @@
             <span class="text-[9px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-300">RECOMMENDED</span>
           </div>
           <div class="text-[10px] text-slate-400">4 NM out lined up on Runway 35C. Follow the green HUD velocity vector and 4-light PAPI!</div>
+        </button>
+
+        <button data-scenario="kdfw_35c_flare" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
+          <div class="font-bold text-amber-300">🎯 Flare Challenge (KDFW 35C)</div>
+          <div class="text-[10px] text-slate-400">One mile out, 300 ft up. Grease it: every landing is graded and your best is saved.</div>
         </button>
 
         <button data-scenario="kdfw_takeoff" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
