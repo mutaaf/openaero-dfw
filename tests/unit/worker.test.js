@@ -53,10 +53,29 @@ describe('handleMetar', () => {
     expect(body.source).toBe('aviationweather.gov');
     expect(f).toHaveBeenCalledTimes(1);
     expect(String(f.mock.calls[0][0])).toBe('https://aviationweather.gov/api/data/metar?ids=KDFW&format=json');
-    expect(r1.headers.get('cache-control')).toMatch(/max-age=300/);
+    expect(r1.headers.get('cache-control')).toBe('public, max-age=60');
     const r2 = await handleMetar(req('?ids=kdfw'), d);
     expect((await r2.json()).metars[0].icaoId).toBe('KDFW');
     expect(f).toHaveBeenCalledTimes(1);
+  });
+  it('re-stamps cache-control on cache hits (edge rules may have rewritten the stored header)', async () => {
+    const cache = memoryCache();
+    // Simulate a stored copy whose header was stretched to 4 hours.
+    cache.store.set('https://mutaafaziz.com/openaero/api/metar?ids=KDFW', new Response(JSON.stringify({ metars: [] }), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=14400' },
+    }));
+    const f = vi.fn();
+    const r = await handleMetar(req('?ids=KDFW&t=29870000'), deps(f, cache));
+    expect(f).not.toHaveBeenCalled();
+    expect(r.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(r.headers.get('content-type')).toMatch(/json/);
+  });
+  it('the edge copy is kept for 5 minutes', async () => {
+    const cache = memoryCache();
+    const f = vi.fn(async () => new Response(JSON.stringify(SAMPLE), { status: 200 }));
+    await handleMetar(req('?ids=KDFW'), deps(f, cache));
+    const stored = cache.store.get('https://mutaafaziz.com/openaero/api/metar?ids=KDFW');
+    expect(stored.headers.get('cache-control')).toBe('public, max-age=300');
   });
   it('400s on invalid ids without calling upstream', async () => {
     const f = vi.fn();
