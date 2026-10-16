@@ -1,12 +1,12 @@
 ---
 id: 0003
 title: Rebuild every DFW-area runway from real survey data and fly approaches to any of them
-status: ready
+status: shipped
 priority: P1
 size: L
 lens: authenticity
 created: 2026-10-16
-pr:
+pr: 4
 ---
 
 ## Why

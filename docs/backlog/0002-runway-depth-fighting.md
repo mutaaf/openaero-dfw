@@ -1,12 +1,12 @@
 ---
 id: 0002
 title: Stop the modelled runways vanishing under the satellite tiles
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-16
-pr:
+pr: 4
 ---
 
 ## Why

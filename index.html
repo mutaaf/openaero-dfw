@@ -147,11 +147,6 @@
           <label for="selScenario" class="text-[10px] text-slate-400 font-bold">MISSION:</label>
           <select id="selScenario" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-amber-300 focus:outline-none">
             <option value="kdfw_35c_final">KDFW RWY 35C (4 NM ILS Final)</option>
-            <option value="kdfw_takeoff">KDFW RWY 35C (Takeoff Roll)</option>
-            <option value="kdfw_17c_final">KDFW RWY 17C (South Flow 4 NM)</option>
-            <option value="kdal_31r_final">KDAL Love Field 31R Final</option>
-            <option value="downtown_skyline">Downtown Dallas Skyline Tour</option>
-            <option value="att_stadium">Arlington AT&T Stadium</option>
           </select>
         </div>
 
@@ -306,9 +301,7 @@
 
     <div class="relative w-full h-36 rounded-xl overflow-hidden border border-slate-700 bg-slate-950">
       <canvas id="mapCanvas" class="block w-full h-full"></canvas>
-      <div class="pointer-events-none absolute top-1 left-1.5 text-[9px] text-emerald-400">
-        NAV1: KDFW 35C (110.30)
-      </div>
+      <div id="txtNav1" class="pointer-events-none absolute top-1 left-1.5 text-[9px] text-emerald-400">NAV1: KDFW 35C ILS</div>
       <div class="pointer-events-none absolute bottom-1 right-1.5 text-[9px] text-amber-300">
         TRK: <span id="txtRadarHdg">360°</span>
       </div>
