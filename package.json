@@ -1,0 +1,30 @@
+{
+  "name": "openaero-dfw",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenAero DFW: a 6-DOF browser flight simulator over real Dallas-Fort Worth satellite imagery.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "check": "node scripts/check-backlog.mjs && npm test && npm run e2e"
+  },
+  "dependencies": {
+    "three": "0.128.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.30",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.1"
+  }
+}

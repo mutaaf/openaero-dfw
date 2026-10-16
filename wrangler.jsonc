@@ -1,0 +1,11 @@
+{
+  // openaero-dfw: static assets only, served under mutaafaziz.com/openaero/.
+  // The route takes precedence over the mutaafaziz.com Custom Domain (the personal site).
+  // Operator-owned file (agents/control.json → frozen_paths).
+  "name": "openaero-dfw",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "mutaafaziz.com/openaero*", "zone_name": "mutaafaziz.com" }]
+}

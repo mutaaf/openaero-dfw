@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ported verbatim from the single-file prototype. */
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: #020617; color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", monospace;
+}
+.hud-glass {
+  background: rgba(10, 15, 29, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.hud-btn {
+  transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  cursor: pointer;
+}
+.hud-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+.hud-btn:active { transform: translateY(1px); }
+.hud-btn.active {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: #10b981;
+  color: #6ee7b7;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+}
+.hud-btn.active-amber {
+  background: rgba(245, 158, 11, 0.28);
+  border-color: #f59e0b;
+  color: #fcd34d;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
+}
+.hud-btn.active-sky {
+  background: rgba(14, 165, 233, 0.32);
+  border-color: #38bdf8;
+  color: #bae6fd;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+}
+input[type=range] { accent-color: #38bdf8; }
+.scanlines {
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%);
+  background-size: 100% 3px;
+}
+
+/* Imagery attribution (Esri World Imagery terms require it to be visible).
+   Lives inside the moving-map panel so it never covers the HUD. */
+.imagery-credit {
+  display: block;
+  font-size: 8px;
+  line-height: 1.2;
+  color: rgba(148, 163, 184, 0.85);
+  text-align: right;
+  text-decoration: none;
+}
+.imagery-credit:hover { color: #e2e8f0; }

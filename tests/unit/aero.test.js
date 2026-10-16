@@ -1,0 +1,121 @@
+import { describe, it, expect } from 'vitest';
+import {
+  clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
+  inducedDragK, headingError, headingFromYaw, papiWhiteLights, gpwsCalloutIndex,
+  GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning,
+} from '../../src/aero.js';
+import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
+import { DEG_TO_RAD, KTS_TO_MPS, MPS_TO_KTS, M_TO_FT, FT_TO_M } from '../../src/constants.js';
+
+const b738 = AIRCRAFT_DATABASE.b738;
+
+describe('units', () => {
+  it('round-trips knots and feet', () => {
+    expect(100 * KTS_TO_MPS * MPS_TO_KTS).toBeCloseTo(100, 10);
+    expect(1000 * FT_TO_M * M_TO_FT).toBeCloseTo(1000, 10);
+  });
+});
+
+describe('basic math', () => {
+  it('clamps and lerps', () => {
+    expect(clamp(5, -1, 1)).toBe(1);
+    expect(clamp(-5, -1, 1)).toBe(-1);
+    expect(lerp(0, 10, 0.25)).toBe(2.5);
+  });
+  it('computes dynamic pressure q = ½ρv²', () => {
+    expect(dynamicPressure(100)).toBeCloseTo(0.5 * 1.225 * 10000, 6);
+  });
+});
+
+describe('liftCoefficient', () => {
+  it('is linear in AoA below stall, plus 0.28 per flap notch', () => {
+    const a = 5 * DEG_TO_RAD;
+    expect(liftCoefficient(b738, a, 0)).toBeCloseTo(b738.cl0 + b738.clAlpha * a, 10);
+    expect(liftCoefficient(b738, a, 2) - liftCoefficient(b738, a, 0)).toBeCloseTo(0.56, 10);
+  });
+  it('drops off past the stall angle', () => {
+    const atStall = liftCoefficient(b738, b738.alphaStallDeg * DEG_TO_RAD, 0);
+    const deepStall = liftCoefficient(b738, (b738.alphaStallDeg + 10) * DEG_TO_RAD, 0);
+    expect(deepStall).toBeLessThan(atStall);
+  });
+  it('the F-16 stalls much later than the 737', () => {
+    const a = 20 * DEG_TO_RAD;
+    const f16 = AIRCRAFT_DATABASE.f16;
+    expect(liftCoefficient(f16, a, 0)).toBeCloseTo(f16.cl0 + f16.clAlpha * a, 10);
+    expect(liftCoefficient(b738, a, 0)).toBeLessThan(b738.cl0 + b738.clAlpha * a);
+  });
+});
+
+describe('groundEffectFactor', () => {
+  it('reduces drag near the ground and tends to 1 at altitude', () => {
+    const low = groundEffectFactor(2, b738.wingSpanM);
+    const high = groundEffectFactor(500, b738.wingSpanM);
+    expect(low).toBeLessThan(high);
+    expect(high).toBeGreaterThan(0.99);
+    expect(high).toBeLessThanOrEqual(1);
+  });
+  it('treats heights below 1 m as 1 m', () => {
+    expect(groundEffectFactor(0, 10)).toBe(groundEffectFactor(1, 10));
+  });
+});
+
+describe('dragCoefficient', () => {
+  it('adds gear and flap drag', () => {
+    const clean = dragCoefficient(b738, 0.5, false, 0, 1);
+    expect(dragCoefficient(b738, 0.5, true, 0, 1) - clean).toBeCloseTo(0.018, 10);
+    expect(dragCoefficient(b738, 0.5, false, 3, 1) - clean).toBeCloseTo(0.036, 10);
+  });
+  it('includes induced drag k·CL²', () => {
+    const k = inducedDragK(b738);
+    expect(dragCoefficient(b738, 1, false, 0, 1)).toBeCloseTo(b738.cd0 + k, 10);
+  });
+});
+
+describe('headings', () => {
+  it('wraps heading error to [-180, 180]', () => {
+    expect(headingError(10, 350)).toBe(20);
+    expect(headingError(350, 10)).toBe(-20);
+    expect(headingError(180, 0)).toBe(180);
+  });
+  it('converts YXZ yaw to compass heading', () => {
+    expect(headingFromYaw(0)).toBe(0);
+    expect(headingFromYaw(-Math.PI / 2)).toBeCloseTo(90, 10);
+    expect(headingFromYaw(Math.PI / 2)).toBeCloseTo(270, 10);
+  });
+});
+
+describe('PAPI', () => {
+  it('shows two white / two red on a 3° glidepath', () => {
+    expect(papiWhiteLights(3.0)).toBe(2);
+  });
+  it('goes all white when high and all red when low', () => {
+    expect(papiWhiteLights(4.0)).toBe(4);
+    expect(papiWhiteLights(3.2)).toBe(3);
+    expect(papiWhiteLights(2.6)).toBe(1);
+    expect(papiWhiteLights(2.0)).toBe(0);
+  });
+});
+
+describe('GPWS callouts', () => {
+  it('fires inside the 35 ft window under each threshold', () => {
+    expect(gpwsCalloutIndex(990, -1)).toBe(0);
+    expect(GPWS_ALT_THRESHOLDS[gpwsCalloutIndex(480, -1)]).toBe(500);
+    expect(gpwsCalloutIndex(700, -1)).toBe(-1);
+  });
+  it('does not repeat the last callout', () => {
+    expect(gpwsCalloutIndex(990, 0)).toBe(-1);
+  });
+});
+
+describe('warnings', () => {
+  it('stall warning only when airborne and slow', () => {
+    expect(isStallWarning(100, 114, false)).toBe(true);
+    expect(isStallWarning(100, 114, true)).toBe(false);
+    expect(isStallWarning(130, 114, false)).toBe(false);
+  });
+  it('terrain warning needs low altitude and a high sink rate', () => {
+    expect(isGpwsWarning(300, -2000, false)).toBe(true);
+    expect(isGpwsWarning(300, -800, false)).toBe(false);
+    expect(isGpwsWarning(800, -2000, false)).toBe(false);
+  });
+});

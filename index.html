@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Dallas Metroplex 6-DOF Real-World Flight Simulator — OpenAero Pro</title>
+  <meta name="description" content="OpenAero DFW: fly a 6-DOF flight model over real Dallas-Fort Worth satellite imagery in your browser." />
+  <meta name="theme-color" content="#020617" />
+  <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
+</head>
+<body class="relative w-full h-full overflow-hidden">
+
+  <!-- 3D WebGL Canvas and Collimated HUD Layer -->
+  <div id="simViewport" class="absolute inset-0 w-full h-full">
+    <canvas id="simCanvas" class="block w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+    <canvas id="hudCanvas" class="pointer-events-none absolute inset-0 block w-full h-full z-10"></canvas>
+    <div class="pointer-events-none absolute inset-0 z-10 scanlines opacity-20"></div>
+  </div>
+
+  <!-- Mouse Flight Control Crosshair Indicator -->
+  <div id="mouseFlightCrosshair" class="hidden pointer-events-none absolute w-10 h-10 -translate-x-1/2 -translate-y-1/2 z-20 border-2 border-dashed border-sky-400 rounded-full flex items-center justify-center">
+    <span class="w-1.5 h-1.5 rounded-full bg-sky-300"></span>
+  </div>
+
+  <!-- Real-Time Master Alert / Callout Banner -->
+  <div id="masterAlertBanner" class="hidden pointer-events-none absolute top-20 left-1/2 -translate-x-1/2 z-30 px-6 py-2 rounded-xl bg-red-600/90 border-2 border-red-300 text-white font-mono font-black text-sm tracking-widest uppercase shadow-2xl animate-pulse">
+    PULL UP — TERRAIN AHEAD
+  </div>
+  <div id="stallAlertBanner" class="hidden pointer-events-none absolute top-28 left-1/2 -translate-x-1/2 z-30 px-5 py-1.5 rounded-xl bg-amber-500/90 border-2 border-amber-200 text-slate-950 font-mono font-extrabold text-xs tracking-widest uppercase shadow-2xl">
+    STALL WARNING — ADD POWER / LOWER NOSE
+  </div>
+  <div id="touchdownBanner" class="hidden pointer-events-none absolute top-36 left-1/2 -translate-x-1/2 z-30 px-5 py-2 rounded-xl hud-glass border-emerald-400 text-emerald-300 font-mono text-xs text-center shadow-2xl">
+    <div class="font-bold text-sm">TOUCHDOWN CONFIRMED</div>
+    <div id="txtTouchdownStats" class="text-[11px] text-slate-300">VS: -120 FPM | IAS: 136 KTS | G: 1.05G</div>
+  </div>
+
+  <!-- Onboarding & Flight Academy Modal -->
+  <div id="onboardingModal" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-200">
+    <div class="hud-glass max-w-2xl w-full rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-slate-200 border-sky-400/40 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-700/80 pb-3">
+        <div class="flex items-center gap-2.5">
+          <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 -ml-6"></span>
+          <div>
+            <h1 class="text-sm sm:text-base font-bold text-sky-300 tracking-wider font-mono">DALLAS 6-DOF SATELLITE SIMULATOR PRO</h1>
+            <p class="text-[11px] text-slate-400">Real High-Resolution Aerial Imagery • 6-DOF Aerodynamic Matrix • Live NOAA METAR</p>
+          </div>
+        </div>
+        <button id="btnCloseModal" class="hud-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white">✕ CLOSE</button>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Captain, welcome to the Dallas-Fort Worth airspace! Powered by <b class="text-sky-300">real high-resolution satellite imagery</b> covering DFW, Love Field, and Downtown Dallas, combined with a <b>full 6-Degree-of-Freedom (6-DOF) flight dynamics model</b> with genuine aerodynamic lift/drag polars, ground effect float, and FAA runway elevations.
+      </p>
+
+      <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">Quick-Select Flight Mission:</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        <button data-scenario="kdfw_35c_final" class="btnMission hud-btn active p-3 rounded-xl text-left flex flex-col gap-1 border-emerald-500/50">
+          <div class="flex items-center justify-between font-bold text-emerald-300">
+            <span>✈ 1. Stabilized Landing (KDFW 35C)</span>
+            <span class="text-[9px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-300">RECOMMENDED</span>
+          </div>
+          <div class="text-[10px] text-slate-400">4 NM out lined up on Runway 35C. Follow the green HUD velocity vector and 4-light PAPI!</div>
+        </button>
+
+        <button data-scenario="kdfw_takeoff" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
+          <div class="font-bold text-sky-300">🛫 2. Takeoff Roll (KDFW 35C)</div>
+          <div class="text-[10px] text-slate-400">Hold brakes, spool engines to 100% TO/GA, release brakes and rotate at 142 KTS.</div>
+        </button>
+
+        <button data-scenario="downtown_skyline" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
+          <div class="font-bold text-amber-300">🏙 3. Downtown Dallas Skyline</div>
+          <div class="text-[10px] text-slate-400">Fly past Bank of America Plaza, Reunion Tower, and through the JPMorgan Chase Tower sky window.</div>
+        </button>
+
+        <button data-scenario="kdal_31r_final" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
+          <div class="font-bold text-purple-300">🛬 4. Love Field Approach (KDAL 31R)</div>
+          <div class="text-[10px] text-slate-400">Crosswind approach over Dallas urban centers into Runway 31R.</div>
+        </button>
+      </div>
+
+      <!-- Controls Matrix -->
+      <div class="bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
+        <div>
+          <div class="text-sky-400 font-bold mb-1 flex items-center gap-1.5">
+            <span>🕹️ FLIGHT YOKE CONTROLS:</span>
+          </div>
+          <div class="text-slate-300 leading-relaxed text-[10px]">
+            • <b>W / S</b> or <b>↑ / ↓</b>: Pitch Down / Up<br>
+            • <b>A / D</b> or <b>← / →</b>: Bank Left / Right<br>
+            • <b>Q / E</b>: Rudder Yaw | <b>Space</b>: Center Controls<br>
+            • <b>M</b>: Toggle Direct Mouse Yoke (Steer with cursor!)
+          </div>
+        </div>
+        <div>
+          <div class="text-emerald-400 font-bold mb-1 flex items-center gap-1.5">
+            <span>⚙️ POWER & SYSTEMS:</span>
+          </div>
+          <div class="text-slate-300 leading-relaxed text-[10px]">
+            • <b>Shift / Ctrl</b>: Throttle Up / Down (0–100%)<br>
+            • <b>G</b>: Landing Gear | <b>F</b>: Flaps | <b>B</b>: Wheel Brakes<br>
+            • <b>C</b>: Cycle 6 Camera Views | <b>Z</b>: Autopilot Master<br>
+            • <b>Orbit Drag</b>: Click and drag canvas to rotate camera view!
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-1">
+        <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+          <input id="chkAutoSound" type="checkbox" checked class="w-4 h-4 rounded accent-sky-400" />
+          <span>Enable Web Audio Turbines & Altitude Chirps</span>
+        </label>
+        <button id="btnStartFlight" class="hud-btn active px-6 py-2.5 rounded-xl text-xs font-bold font-mono text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
+          ENTER COCKPIT ✈
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Real-Time Aviation Operations Bar -->
+  <header class="absolute top-2 left-2 right-2 z-20 flex flex-col gap-1.5 pointer-events-none">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <!-- Left: Aircraft, Scenario, NAVAID Selectors -->
+      <div class="hud-glass pointer-events-auto rounded-xl px-3 py-1.5 flex flex-wrap items-center gap-2 text-xs">
+        <div class="flex items-center gap-2 pr-2 border-r border-slate-700/80">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="font-bold font-mono text-sky-400 tracking-wider text-[11px]">DFW SATELLITE PRO</span>
+        </div>
+
+        <div class="flex items-center gap-1 font-mono">
+          <label for="selAircraft" class="text-[10px] text-slate-400 font-bold">PLANE:</label>
+          <select id="selAircraft" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-200 focus:outline-none">
+            <option value="b738">Boeing 737-800 NG</option>
+            <option value="c172">Cessna 172S Skyhawk</option>
+            <option value="f16">F-16C Fighting Falcon</option>
+          </select>
+        </div>
+
+        <div class="flex items-center gap-1 font-mono">
+          <label for="selScenario" class="text-[10px] text-slate-400 font-bold">MISSION:</label>
+          <select id="selScenario" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-amber-300 focus:outline-none">
+            <option value="kdfw_35c_final">KDFW RWY 35C (4 NM ILS Final)</option>
+            <option value="kdfw_takeoff">KDFW RWY 35C (Takeoff Roll)</option>
+            <option value="kdfw_17c_final">KDFW RWY 17C (South Flow 4 NM)</option>
+            <option value="kdal_31r_final">KDAL Love Field 31R Final</option>
+            <option value="downtown_skyline">Downtown Dallas Skyline Tour</option>
+            <option value="att_stadium">Arlington AT&T Stadium</option>
+          </select>
+        </div>
+
+        <button id="btnOpenMissions" class="hud-btn px-2 py-0.5 rounded text-[11px] font-mono text-sky-300 font-bold">🎯 Missions</button>
+      </div>
+
+      <!-- Center: Autopilot Mode Control Panel (MCP) -->
+      <div class="hud-glass pointer-events-auto rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 text-xs font-mono">
+        <span class="text-[10px] text-slate-400 font-bold mr-0.5">MCP:</span>
+        <button id="btnApMaster" class="hud-btn px-2 py-0.5 rounded text-[11px] font-bold" title="Master Autopilot (Z)">AP</button>
+        <button id="btnApHdg" class="hud-btn px-1.5 py-0.5 rounded text-[11px]" title="Heading Hold">HDG</button>
+        <button id="btnApAlt" class="hud-btn px-1.5 py-0.5 rounded text-[11px]" title="Altitude Hold">ALT</button>
+        <button id="btnApApr" class="hud-btn active-amber px-2.5 py-0.5 rounded text-[11px] font-bold" title="Couple ILS Glide & Localizer">ILS AUTOLAND</button>
+      </div>
+
+      <!-- Right: Camera, Mouse Yoke, Weather, Audio, Reset -->
+      <div class="hud-glass pointer-events-auto rounded-xl px-2.5 py-1.5 flex items-center gap-1 text-xs font-mono">
+        <button id="btnCamera" class="hud-btn active-sky px-2 py-0.5 rounded text-[11px]" title="Cycle 6 Camera Views (C)">
+          Cam: <span id="txtCamMode" class="font-bold">Cockpit 3D</span>
+        </button>
+        <button id="btnMouseYoke" class="hud-btn px-2 py-0.5 rounded text-[11px]" title="Toggle Direct Mouse Yoke (M)">
+          Mouse-Fly: <span id="txtMouseYokeState" class="text-amber-400 font-bold">OFF</span>
+        </button>
+        <button id="btnSatLayer" class="hud-btn active-sky px-2 py-0.5 rounded text-[11px]" title="Toggle Satellite Orthophotos">
+          🛰️ <span id="txtSatState">Satellite</span>
+        </button>
+        <button id="btnTimeOfDay" class="hud-btn px-2 py-0.5 rounded text-[11px]" title="Toggle Day / Sunset / Night">
+          ☀️ <span id="txtTimeBadge">Day</span>
+        </button>
+        <button id="btnAudio" class="hud-btn px-2 py-0.5 rounded text-[11px]">
+          Sound: <span id="txtAudioState" class="text-amber-400 font-bold">OFF</span>
+        </button>
+        <button id="btnPause" class="hud-btn px-2 py-0.5 rounded text-[11px] font-bold text-red-400">PAUSE</button>
+        <button id="btnReset" class="hud-btn px-2 py-0.5 rounded text-[11px] text-amber-300">RESET</button>
+      </div>
+    </div>
+
+    <!-- Live METAR Weather Status Ribbon -->
+    <div class="hud-glass pointer-events-auto rounded-xl px-3 py-1 flex items-center justify-between text-[11px] font-mono border-sky-500/40">
+      <div class="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
+        <span class="px-1.5 py-0.5 rounded bg-sky-950 border border-sky-400 text-sky-300 font-bold text-[9px]">NOAA METAR</span>
+        <span id="txtMetarString" class="text-emerald-300">METAR KDFW 161453Z 35021G31KT 10SM OVC022 18/14 A2998</span>
+      </div>
+      <div class="hidden md:flex items-center gap-3 text-slate-300 text-[10px] shrink-0">
+        <span>WIND: <b class="text-amber-300" id="txtWindBadge">350° @ 21G31 KT</b></span>
+        <span>AOA: <b class="text-emerald-300" id="txtAoaBadge">2.4°</b></span>
+        <span>ACTIVE FLOW: <b class="text-emerald-400">NORTH (RWY 35C/35L/31R)</b></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Left: EICAS Propulsion, Flight Controls & Trim Deck -->
+  <aside class="hud-glass absolute bottom-3 left-3 z-20 w-68 sm:w-76 rounded-2xl p-3 text-xs flex flex-col gap-2 font-mono">
+    <div class="flex items-center justify-between border-b border-slate-700/80 pb-1">
+      <div>
+        <div class="text-[9px] uppercase tracking-wider text-slate-400 font-bold">EICAS / 6-DOF DATA</div>
+        <div id="txtAircraftTitle" class="font-bold text-sky-300 text-[11px]">Boeing 737-800 NG</div>
+      </div>
+      <div class="text-right text-[10px]">
+        <div>G-LOAD <span id="txtGLoad" class="text-emerald-400 font-bold">1.00G</span></div>
+        <div>V/S <span id="txtVsi" class="text-sky-300">-720 FPM</span></div>
+      </div>
+    </div>
+
+    <!-- Throttle Slider with Presets -->
+    <div class="flex flex-col gap-1 text-[11px]">
+      <div class="flex justify-between items-center">
+        <label for="rngThrottle" class="text-slate-400">THROTTLE / N1:</label>
+        <span id="txtThrottle" class="font-bold text-emerald-400 text-xs">44%</span>
+      </div>
+      <input id="rngThrottle" type="range" min="0" max="100" value="44" class="w-full h-2 rounded-lg cursor-pointer bg-slate-800" />
+      <div class="grid grid-cols-4 gap-1 text-[9px] font-bold text-center pt-0.5">
+        <button id="btnIdle" class="hud-btn py-1 rounded bg-slate-800/80 text-slate-300">IDLE 0%</button>
+        <button id="btnApp" class="hud-btn py-1 rounded bg-slate-800/80 text-amber-300">APP 44%</button>
+        <button id="btnClimb" class="hud-btn py-1 rounded bg-slate-800/80 text-sky-300">CLB 75%</button>
+        <button id="btnToga" class="hud-btn py-1 rounded bg-slate-800/80 text-emerald-400">TO/GA 100%</button>
+      </div>
+    </div>
+
+    <!-- Secondary Flight Surfaces -->
+    <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800 text-center text-[10px]">
+      <button id="btnGear" class="hud-btn active p-1.5 rounded-lg flex flex-col items-center">
+        <span class="text-slate-400 text-[8px]">GEAR (G)</span>
+        <span id="txtGear" class="font-bold text-emerald-400">DOWN 3 GRN</span>
+      </button>
+      <button id="btnFlaps" class="hud-btn p-1.5 rounded-lg flex flex-col items-center">
+        <span class="text-slate-400 text-[8px]">FLAPS (F)</span>
+        <span id="txtFlaps" class="font-bold text-sky-300">25°</span>
+      </button>
+      <button id="btnBrakes" class="hud-btn p-1.5 rounded-lg flex flex-col items-center">
+        <span class="text-slate-400 text-[8px]">BRAKES (B)</span>
+        <span id="txtBrakes" class="font-bold">OFF</span>
+      </button>
+    </div>
+
+    <!-- Aerodynamic Control Deflection Meters -->
+    <div class="bg-slate-900/90 rounded p-1.5 border border-slate-800 text-[9px] flex flex-col gap-1">
+      <div class="flex justify-between text-slate-400">
+        <span>ELEV: <b id="meterElev" class="text-sky-300">0%</b></span>
+        <span>AIL: <b id="meterAil" class="text-sky-300">0%</b></span>
+        <span>RUD: <b id="meterRud" class="text-sky-300">0%</b></span>
+      </div>
+      <div class="text-[8px] text-slate-500 leading-tight">
+        High-Res Satellite Tiles Streamed • Press 'M' for Mouse-Yoke flight
+      </div>
+    </div>
+  </aside>
+
+  <!-- Center-Bottom: Virtual Flight Stick & Glide Path Indicator -->
+  <div class="hud-glass absolute bottom-3 left-1/2 -translate-x-1/2 z-20 hidden lg:flex items-center gap-3 rounded-2xl px-3.5 py-2 text-xs font-mono">
+    <div class="flex flex-col items-center">
+      <div class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-1">6-DOF Stick (Drag or WASD)</div>
+      <div id="virtualStickPad" class="relative w-24 h-24 rounded-xl bg-slate-950/95 border border-sky-500/30 cursor-crosshair flex items-center justify-center overflow-hidden">
+        <div class="absolute inset-x-0 top-1/2 h-px bg-slate-800"></div>
+        <div class="absolute inset-y-0 left-1/2 w-px bg-slate-800"></div>
+        <div class="absolute inset-2 border border-slate-800/80 rounded-lg pointer-events-none"></div>
+        <div id="virtualStickKnob" class="w-6 h-6 rounded-full bg-sky-400/90 border-2 border-white shadow-lg pointer-events-none transition-transform duration-75 flex items-center justify-center">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-950"></span>
+        </div>
+      </div>
+    </div>
+    <div class="flex flex-col gap-1.5 text-[11px] min-w-[135px]">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1">
+        <span class="text-slate-400 text-[10px]">STATE:</span>
+        <span id="txtSurfaceState" class="text-emerald-400 font-bold ml-1">AIRBORNE</span>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1">
+        <span class="text-slate-400 text-[10px]">PAPI:</span>
+        <span id="txtPapiStatus" class="text-emerald-400 font-bold ml-1">ON GLIDESLOPE</span>
+      </div>
+      <button id="btnCenterWings" class="hud-btn px-2 py-1 rounded text-[10px] text-slate-200">Center Stick (Space)</button>
+    </div>
+  </div>
+
+  <!-- Right: Dallas Moving Map Radar & Telemetry -->
+  <aside class="hud-glass absolute bottom-3 right-3 z-20 w-64 sm:w-72 rounded-2xl p-2.5 text-xs flex flex-col gap-1.5 font-mono">
+    <div class="flex items-center justify-between text-[10px]">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-sky-300 font-bold uppercase">DFW Class B Moving Map</span>
+      </div>
+      <span id="txtNavDist" class="text-emerald-400 font-bold">DME 4.0 NM</span>
+    </div>
+
+    <div class="relative w-full h-36 rounded-xl overflow-hidden border border-slate-700 bg-slate-950">
+      <canvas id="mapCanvas" class="block w-full h-full"></canvas>
+      <div class="pointer-events-none absolute top-1 left-1.5 text-[9px] text-emerald-400">
+        NAV1: KDFW 35C (110.30)
+      </div>
+      <div class="pointer-events-none absolute bottom-1 right-1.5 text-[9px] text-amber-300">
+        TRK: <span id="txtRadarHdg">360°</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-1 text-center text-[10px]">
+      <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
+        <div class="text-slate-500 text-[8px]">IAS / GS</div>
+        <div id="txtIasGs" class="text-slate-200 font-bold">140/122K</div>
+      </div>
+      <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
+        <div class="text-slate-500 text-[8px]">ALT (MSL)</div>
+        <div id="txtAltMsl" class="text-sky-300 font-bold">1880 FT</div>
+      </div>
+      <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
+        <div class="text-slate-500 text-[8px]">RADAR AGL</div>
+        <div id="txtAltAgl" class="text-emerald-300 font-bold">1274 FT</div>
+      </div>
+    </div>
+    <a class="imagery-credit" href="https://www.esri.com/en-us/legal/terms/full-master-agreement" target="_blank" rel="noopener">Satellite imagery © Esri, Maxar, Earthstar Geographics</a>
+  </aside>
+
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
