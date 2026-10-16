@@ -2,6 +2,7 @@
 // tours keep explicit spawns. The <select> and mission loader are built from this table.
 export const MISSIONS = [
   { key: 'kdfw_35c_final', label: 'KDFW RWY 35C (4 NM ILS Final)', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4 },
+  { key: 'kdfw_35c_flare', label: 'KDFW 35C Flare Challenge (0.5 NM)', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 0.5 },
   { key: 'kdfw_takeoff', label: 'KDFW RWY 35C (Takeoff Roll)', kind: 'takeoff', airport: 'KDFW', rwy: '35C' },
   { key: 'kdfw_17c_final', label: 'KDFW RWY 17C (South Flow 4 NM)', kind: 'final', airport: 'KDFW', rwy: '17C', distNm: 4 },
   { key: 'kdfw_36l_final', label: 'KDFW RWY 36L (West Side 6 NM)', kind: 'final', airport: 'KDFW', rwy: '36L', distNm: 6 },

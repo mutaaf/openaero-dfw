@@ -28,10 +28,10 @@ describe('basic math', () => {
 });
 
 describe('liftCoefficient', () => {
-  it('is linear in AoA below stall, plus 0.28 per flap notch', () => {
+  it('is linear in AoA below stall, plus the airframe\'s flap increment per notch', () => {
     const a = 5 * DEG_TO_RAD;
     expect(liftCoefficient(b738, a, 0)).toBeCloseTo(b738.cl0 + b738.clAlpha * a, 10);
-    expect(liftCoefficient(b738, a, 2) - liftCoefficient(b738, a, 0)).toBeCloseTo(0.56, 10);
+    expect(liftCoefficient(b738, a, 2) - liftCoefficient(b738, a, 0)).toBeCloseTo(2 * b738.flapClPerNotch, 10);
   });
   it('drops off past the stall angle', () => {
     const atStall = liftCoefficient(b738, b738.alphaStallDeg * DEG_TO_RAD, 0);
@@ -117,5 +117,23 @@ describe('warnings', () => {
     expect(isGpwsWarning(300, -2000, false)).toBe(true);
     expect(isGpwsWarning(300, -800, false)).toBe(false);
     expect(isGpwsWarning(800, -2000, false)).toBe(false);
+  });
+});
+
+import { liftCoefficient as lc } from '../../src/aero.js';
+import { AIRCRAFT_DATABASE as DB } from '../../src/aircraft.js';
+describe('flap lift per airframe', () => {
+  it('the 737 needs ~4–6° AoA for 1 g at Vref+5 with flaps 25', () => {
+    const s = DB.b738;
+    const q = 0.5 * 1.225 * ((s.vrefKts + 5) * 0.514444) ** 2;
+    const clNeeded = (s.massKg * 9.80665) / (q * s.wingAreaM2);
+    const aoaDeg = ((clNeeded - s.cl0 - 2 * s.flapClPerNotch) / s.clAlpha) * 180 / Math.PI;
+    expect(aoaDeg).toBeGreaterThan(4);
+    expect(aoaDeg).toBeLessThan(6);
+    expect(lc(s, aoaDeg * Math.PI / 180, 2)).toBeCloseTo(clNeeded, 3);
+  });
+  it('airframes without a value keep the original 0.28 per notch', () => {
+    const s = { ...DB.c172, flapClPerNotch: undefined };
+    expect(lc(s, 0, 2) - lc(s, 0, 0)).toBeCloseTo(0.56, 6);
   });
 });

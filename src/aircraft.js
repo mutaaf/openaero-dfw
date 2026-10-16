@@ -14,6 +14,12 @@ export const AIRCRAFT_DATABASE = {
     cl0: 0.28,
     clAlpha: 5.2,
     clMaxFlaps: 2.65,
+    // Flaps 25 ≈ +0.84 CL: approach AoA ~5° and pitch ~2° on a 3° path at Vref+5, like the real 737.
+    flapClPerNotch: 0.42,
+    // Control authority (rad/s² at 120 kt). With the damping above: ~12°/s pitch, ~18°/s roll.
+    pitchAuthority: 0.5,
+    rollAuthority: 1.0,
+    maxGroundPitchDeg: 11, // tailstrike
     alphaStallDeg: 14.8,
     maxThrustN: 240000, // 2x CFM56-7B (120 kN each)
     vrefKts: 136,
