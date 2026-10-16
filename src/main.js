@@ -15,6 +15,10 @@ import {
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
 } from './airports.js';
 import { MISSIONS, missionByKey } from './missions.js';
+import {
+  parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents,
+  fogDensityForVisibility, metarAgeMinutes, flowForWind,
+} from './weather.js';
 import { latLonToTile, tilePlacement, esriTileUrl } from './geo.js';
 import {
   dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
@@ -59,7 +63,12 @@ const sim = {
   // Environment & Layers
   timeOfDayMode: 0,
   satelliteEnabled: true,
-  windDirDeg: 350, windSpeedKts: 21, windGustKts: 31,
+  // Weather (weather.js): today's METARs from the edge Worker, or labelled scenario weather
+  wx: scenarioWeather(),
+  wxByIcao: {},
+  windVec: new THREE.Vector3(),
+  windNowKts: 0,
+  simTime: 0,
   audioEnabled: false,
   lastCalloutIdx: -1,
 
@@ -538,8 +547,115 @@ function buildAircraft(type) {
   scene.add(aircraftRoot);
 }
 
+// --- Weather -----------------------------------------------------------------------
+const WX_IDS = 'KDFW,KDAL,KADS,KAFW,KFTW,KGKY';
+let cloudDeck = null;
+const skyBase = new THREE.Color(0x38bdf8);   // set by the time-of-day preset
+const OVERCAST_GREY = new THREE.Color(0x9aa5b1);
+
+// Sky = time-of-day colour, greyed by how much of it a low deck covers.
+function applySky() {
+  const base = sim.wx.ceilingFt;
+  const k = base !== null && base <= 12000 ? (sim.wx.ceilingCover === 'BKN' ? 0.45 : 0.8) : 0;
+  scene.background.copy(skyBase).lerp(OVERCAST_GREY, k);
+}
+
+async function fetchWeather() {
+  try {
+    // no-store + a minute bucket: the zone's Browser Cache TTL can stretch cached edge
+    // responses to hours, and weather must never be served stale from a browser cache.
+    const bucket = Math.floor(Date.now() / 60000);
+    const res = await fetch(`${import.meta.env.BASE_URL}api/metar?ids=${WX_IDS}&t=${bucket}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const body = await res.json();
+    const next = {};
+    for (const m of body.metars || []) next[m.icaoId] = parseMetar(m);
+    if (Object.keys(next).length) sim.wxByIcao = next;
+  } catch {
+    // Offline: keep the last real weather, or the labelled scenario weather.
+  }
+  refreshWeather();
+}
+
+// The weather for where you are flying: the active runway's field, else DFW, else scenario.
+function currentWeather() {
+  const field = sim.activeEnd ? sim.activeEnd.airport : 'KDFW';
+  return sim.wxByIcao[field] || sim.wxByIcao.KDFW || scenarioWeather();
+}
+
+function refreshWeather() {
+  sim.wx = currentWeather();
+  scene.fog.density = fogDensityForVisibility(sim.wx.visibilitySm);
+  const base = sim.wx.ceilingFt;
+  if (base !== null && base <= 12000) {
+    if (!cloudDeck) {
+      cloudDeck = new THREE.Mesh(
+        new THREE.PlaneGeometry(160000, 160000),
+        new THREE.MeshBasicMaterial({ color: 0xdfe5ec, transparent: true, depthWrite: false, side: THREE.DoubleSide }),
+      );
+      cloudDeck.rotation.x = -Math.PI / 2;
+      scene.add(cloudDeck);
+    }
+    cloudDeck.position.y = base * 0.3048;
+    cloudDeck.material.opacity = sim.wx.ceilingCover === 'BKN' ? 0.55 : 0.88;
+    cloudDeck.visible = true;
+  } else if (cloudDeck) {
+    cloudDeck.visible = false;
+  }
+  applySky();
+}
+
+// Wind at the aircraft: steady + smoothed gusts, fading to zero in the last ~30 m above
+// the ground (surface friction), which also keeps a parked aircraft from sliding sideways.
+function updateWind(dt) {
+  sim.simTime += dt;
+  const wx = sim.wx;
+  sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
+  const h = Math.max(0, sim.pos.y - sim.spec.gearHeight);
+  const surface = Math.sqrt(Math.min(1, h / 30));
+  const w = windVector(wx.windDirDeg, sim.windNowKts * 0.514444 * surface);
+  sim.windVec.set(w.x, 0, w.z);
+}
+
+function windText(wx) {
+  if (!wx.windKts) return 'CALM';
+  const dir = wx.windDirDeg === null ? 'VRB' : `${String(Math.round(wx.windDirDeg)).padStart(3, '0')}°`;
+  return `${dir} @ ${wx.windKts}${wx.gustKts > wx.windKts ? `G${wx.gustKts}` : ''} KT`;
+}
+
+// Ribbon text, once a second (cheap, and the age counter only needs minutes).
+let wxUiTimer = 0;
+function syncWeatherUI(dt) {
+  wxUiTimer -= dt;
+  if (wxUiTimer > 0) return;
+  wxUiTimer = 1;
+  const wx = currentWeather();
+  if (wx !== sim.wx) refreshWeather();
+  const badge = document.getElementById('wxBadge');
+  badge.textContent = wx.live ? 'LIVE METAR' : 'SCENARIO WX';
+  badge.className = wx.live
+    ? 'px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-400 text-emerald-300 font-bold text-[9px] shrink-0'
+    : 'px-1.5 py-0.5 rounded bg-slate-900 border border-slate-500 text-slate-300 font-bold text-[9px] shrink-0';
+  const age = wx.live && wx.obsTime ? ` · ${metarAgeMinutes(wx.obsTime, Date.now() / 1000)} min ago` : '';
+  // Remarks (RMK …) are for forecasters; drop them so the age stays visible.
+  document.getElementById('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
+  document.getElementById('txtWindBadge').textContent = windText(wx);
+  const dfw = sim.wxByIcao.KDFW || scenarioWeather();
+  const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
+  document.getElementById('txtFlow').textContent = flow === 'NORTH' ? 'NORTH (RWY 35/36)' : 'SOUTH (RWY 17/18)';
+  const rw = document.getElementById('txtRwyWind');
+  if (sim.activeEnd && wx.windKts) {
+    const c = runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT);
+    const hw = Math.round(c.headwindKts), xw = Math.round(Math.abs(c.crosswindKts));
+    rw.textContent = `${sim.activeEnd.ident}: ${Math.abs(hw)} ${hw >= 0 ? 'HW' : 'TW'} · ${xw} XW${xw ? (c.crosswindKts > 0 ? ' R' : ' L') : ''}`;
+  } else {
+    rw.textContent = '';
+  }
+}
+
 function step6DofPhysics(dt) {
   if (sim.paused) return;
+  updateWind(dt);
 
   // Sub-stepping for ultra-stable numerical integration (3 sub-steps per frame)
   const subSteps = 3;
@@ -642,9 +758,10 @@ function integrateSubStep(dt) {
     }
   }
 
-  // Transform World Velocity to Aircraft Body Frame: u (fwd), v (right), w (down)
+  // Transform the AIR-RELATIVE velocity to the body frame: u (fwd), v (right), w (down).
+  // Aerodynamics see the air mass, not the ground (weather.js wind, gusts included).
   const invQuat = _q1.copy(sim.quat).invert();
-  const bodyVel = _v1.copy(sim.vel).applyQuaternion(invQuat);
+  const bodyVel = _v1.copy(sim.vel).sub(sim.windVec).applyQuaternion(invQuat);
   const u = -bodyVel.z;
   const v = bodyVel.x;
   const w = -bodyVel.y;
@@ -1062,26 +1179,27 @@ function toggleTimeOfDay() {
   const badge = document.getElementById('txtTimeBadge');
   if (sim.timeOfDayMode === 0) {
     badge.textContent = 'Day';
-    scene.background.setHex(0x38bdf8);
+    skyBase.setHex(0x38bdf8);
     scene.fog.color.setHex(0x94a3b8);
     ambientLight.color.setHex(0xdbeafe);
     ambientLight.intensity = 0.85;
     sunLight.intensity = 1.4;
   } else if (sim.timeOfDayMode === 1) {
     badge.textContent = 'Sunset';
-    scene.background.setHex(0xf97316);
+    skyBase.setHex(0xf97316);
     scene.fog.color.setHex(0x7c2d12);
     ambientLight.color.setHex(0xfed7aa);
     ambientLight.intensity = 0.6;
     sunLight.intensity = 0.9;
   } else {
     badge.textContent = 'Night';
-    scene.background.setHex(0x020617);
+    skyBase.setHex(0x020617);
     scene.fog.color.setHex(0x0f172a);
     ambientLight.color.setHex(0x1e293b);
     ambientLight.intensity = 0.25;
     sunLight.intensity = 0.15;
   }
+  applySky();
 }
 
 function syncUI() {
@@ -1439,6 +1557,7 @@ function renderLoop(time) {
 
   updateGamepad();
   step6DofPhysics(dt);
+  syncWeatherUI(dt);
   updateCamera();
   renderer.render(scene, camera);
   renderHud();
@@ -1462,6 +1581,10 @@ window.openaeroDebug = () => {
     heightAbovePathM: sim.approach.heightAbovePathM,
     pos: { x: sim.pos.x, y: sim.pos.y, z: sim.pos.z },
     onGround: sim.onGround,
+    iasKts: sim.iasKts,
+    gsKts: sim.gsKts,
+    wxLive: sim.wx.live,
+    cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
   };
 };
 
@@ -1478,6 +1601,8 @@ function populateMissionSelect() {
 
 function boot() {
   populateMissionSelect();
+  fetchWeather();
+  setInterval(fetchWeather, 10 * 60 * 1000);
   buildSatelliteTerrain();
   buildAircraft('b738');
   loadScenario('kdfw_35c_final');

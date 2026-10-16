@@ -43,7 +43,7 @@
           <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 -ml-6"></span>
           <div>
             <h1 class="text-sm sm:text-base font-bold text-sky-300 tracking-wider font-mono">DALLAS 6-DOF SATELLITE SIMULATOR PRO</h1>
-            <p class="text-[11px] text-slate-400">Real High-Resolution Aerial Imagery • 6-DOF Aerodynamic Matrix • Live NOAA METAR</p>
+            <p class="text-[11px] text-slate-400">Real satellite imagery • Real runways • Today's METAR weather when online</p>
           </div>
         </div>
         <button id="btnCloseModal" class="hud-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white">✕ CLOSE</button>
@@ -187,13 +187,14 @@
     <!-- Live METAR Weather Status Ribbon -->
     <div class="hud-glass pointer-events-auto rounded-xl px-3 py-1 flex items-center justify-between text-[11px] font-mono border-sky-500/40">
       <div class="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
-        <span class="px-1.5 py-0.5 rounded bg-sky-950 border border-sky-400 text-sky-300 font-bold text-[9px]">NOAA METAR</span>
-        <span id="txtMetarString" class="text-emerald-300">METAR KDFW 161453Z 35021G31KT 10SM OVC022 18/14 A2998</span>
+        <span id="wxBadge" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-500 text-slate-300 font-bold text-[9px] shrink-0">SCENARIO WX</span>
+        <span id="txtMetarString" class="text-emerald-300 truncate">SCENARIO KDFW 35010KT 10SM FEW050 18/08 A3000</span>
       </div>
       <div class="hidden md:flex items-center gap-3 text-slate-300 text-[10px] shrink-0">
-        <span>WIND: <b class="text-amber-300" id="txtWindBadge">350° @ 21G31 KT</b></span>
+        <span>WIND: <b class="text-amber-300" id="txtWindBadge">350° @ 10 KT</b></span>
+        <span id="txtRwyWind" class="text-slate-300"></span>
         <span>AOA: <b class="text-emerald-300" id="txtAoaBadge">2.4°</b></span>
-        <span>ACTIVE FLOW: <b class="text-emerald-400">NORTH (RWY 35C/35L/31R)</b></span>
+        <span>DFW FLOW: <b id="txtFlow" class="text-emerald-400">NORTH</b></span>
       </div>
     </div>
 
