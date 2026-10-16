@@ -82,7 +82,11 @@ src/main.js         renderer + scene build, 6-DOF integrator, camera, HUD/radar 
                     the Keeper carves it into modules, no behavior change per PR.
 src/constants.js    units, KDFW origin, field elevation
 src/aircraft.js     aircraft database (mass, wing, lift/drag, thrust, V-speeds, damping)
-src/runways.js      runway table + downtown landmark origin (sim metres)
+src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
+                    thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns
+src/missions.js     mission catalogue (approaches by runway end, tours by spawn)
+src/runways.js      downtown landmark origin (moving to landmarks.js with ticket 0010)
+src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
 src/geo.js          Web Mercator tile math, lat/lon → sim metres, Esri tile URLs
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
                     GPWS callouts, warnings, heading math
@@ -93,7 +97,12 @@ tests/unit/         Vitest for the pure modules
 tests/e2e/          Playwright: smoke, controls, missions, phone, perf probe
 ```
 
-World frame: metres from the KDFW origin, +X east, +Y up, **−Z north**. Loop per frame
+World frame: metres from the KDFW origin, +X east, +Y up, **−Z north**. The ground is
+drawn as layers with `depthWrite: false` in a fixed `renderOrder` (base → z12 imagery →
+z13 imagery → runway surface → markings), so coplanar ground layers can never
+depth-fight; everything above the ground depth-tests normally. Approach guidance
+(ILS bars, PAPI text, APR autopilot, DME, NAV1) follows `sim.activeEnd`, re-picked twice
+a second by `selectActiveRunway` from whatever you're lined up on. Loop per frame
 (`renderLoop`): `step6DofPhysics(dt)` (3 sub-steps of `integrateSubStep`, dt capped at
 50 ms) → `updateCamera` → `renderer.render` → `renderHud` (2D canvas) → `renderRadar`
 → `syncUI` (DOM text) → `audio.update`.

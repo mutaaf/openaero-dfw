@@ -9,7 +9,12 @@ import {
   SPEED_OF_SOUND_KTS, DFW_ORIGIN_LAT, DFW_ORIGIN_LON, FIELD_ELEV_FT,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
-import { RUNWAYS, DOWNTOWN_DALLAS } from './runways.js';
+import { DOWNTOWN_DALLAS } from './runways.js';
+import {
+  RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
+  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
+} from './airports.js';
+import { MISSIONS, missionByKey } from './missions.js';
 import { latLonToTile, tilePlacement, esriTileUrl } from './geo.js';
 import {
   dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
@@ -60,6 +65,12 @@ const sim = {
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
   stick: { x: 0, y: 0, active: false },
+
+  // Approach guidance target (airports.js); re-picked twice a second from what you're lined up on
+  activeEnd: null,
+  missionKey: 'kdfw_35c_final',
+  approach: { distM: 0, crossM: 0, heightAbovePathM: 0, pathHeightM: 0 },
+  rwySelectTimer: 0,
   pad: null,
   inputSource: 'keyboard',
 };
@@ -80,7 +91,7 @@ const mapCtx = mapCanvas.getContext('2d');
 let renderer, scene, camera, ambientLight, sunLight;
 let aircraftRoot, terrainGroup;
 let animRefs = { prop: null, flame: null, fanL: null, fanR: null };
-let papiSpheres = [];
+let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order)
 
 try {
   renderer = new THREE.WebGLRenderer({
@@ -129,113 +140,143 @@ function updateAudioButton() {
 const textureLoader = new THREE.TextureLoader();
 textureLoader.crossOrigin = 'anonymous';
 
-function buildSatelliteTerrain() {
-  terrainGroup = new THREE.Group();
+// Ground layering: everything flat on the ground (base plane, imagery, runway surfaces,
+// markings) is drawn first, in renderOrder, without writing depth. Nothing is ever below
+// the ground, so it can't wrongly hide anything — and two coplanar layers can never
+// depth-fight, at any distance (ticket 0002). Aircraft, buildings and lights draw after,
+// depth-tested as usual.
+const GROUND_ORDER = { base: -6, z12: -5, z13: -4, runway: -3, marking: -2 };
 
-  // Base regional fallback ground plane
-  const groundGeo = new THREE.PlaneGeometry(120000, 120000);
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x1b281f });
-  const basePlane = new THREE.Mesh(groundGeo, groundMat);
-  basePlane.rotation.x = -Math.PI / 2;
-  basePlane.position.y = -0.5;
-  terrainGroup.add(basePlane);
+function groundMaterial(opts, order) {
+  const m = new THREE.MeshLambertMaterial({ ...opts, depthWrite: false, side: THREE.DoubleSide });
+  m.userData.order = order;
+  return m;
+}
 
-  // Stream real Esri Aerial Satellite Tiles at Zoom 13
-  // Covering Dallas-Fort Worth Metroplex (~35km x 35km)
-  const zoom = 13;
+function addTileLayer(zoom, radius, order, skip) {
   const centerTile = latLonToTile(DFW_ORIGIN_LAT, DFW_ORIGIN_LON, zoom);
-  const tileRadius = 4; // 9x9 grid of high-res satellite tiles
-
-  for (let dx = -tileRadius; dx <= tileRadius; dx++) {
-    for (let dy = -tileRadius; dy <= tileRadius; dy++) {
+  for (let dx = -radius; dx <= radius; dx++) {
+    for (let dy = -radius; dy <= radius; dy++) {
       const tileX = centerTile.x + dx;
       const tileY = centerTile.y + dy;
+      if (skip && skip(tileX, tileY)) continue;
 
       // NW and SE corners for geographic placement (geo.js)
       const { widthM, lengthM, posX, posZ } = tilePlacement(tileX, tileY, zoom);
-
-      const tileGeo = new THREE.PlaneGeometry(widthM, lengthM);
-      const tileMat = new THREE.MeshLambertMaterial({
-        color: 0xffffff,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1
-      });
-
-      const tileMesh = new THREE.Mesh(tileGeo, tileMat);
+      const tileMat = groundMaterial({ color: 0xffffff }, order);
+      const tileMesh = new THREE.Mesh(new THREE.PlaneGeometry(widthM, lengthM), tileMat);
       tileMesh.rotation.x = -Math.PI / 2;
-      tileMesh.position.set(posX, 0.05, posZ);
+      tileMesh.position.set(posX, 0, posZ);
+      tileMesh.renderOrder = order;
       terrainGroup.add(tileMesh);
 
-      // Esri World Imagery sub-meter satellite tile service
-      const url = esriTileUrl(zoom, tileX, tileY);
+      // Esri World Imagery tile service
       textureLoader.load(
-        url,
+        esriTileUrl(zoom, tileX, tileY),
         (tex) => {
           tex.anisotropy = 4;
           tileMat.map = tex;
           tileMat.needsUpdate = true;
         },
         undefined,
-        (err) => {
-          // Graceful fallback to dark satellite green if tile is cached or rate limited
-          tileMat.color.setHex(0x233827);
-        }
+        () => { tileMat.color.setHex(0x233827); }, // offline / rate-limited fallback
       );
     }
   }
+}
+
+// Append an axis-aligned quad (in a runway's local frame) to a flat position array,
+// rotated by `rot` around Y and translated to (ox, oz). y is the height above ground.
+function pushQuad(arr, ox, oz, rot, lx, lz, w, l, y) {
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const pts = [[lx - w / 2, lz - l / 2], [lx + w / 2, lz - l / 2], [lx + w / 2, lz + l / 2], [lx - w / 2, lz + l / 2]];
+  const world = pts.map(([px, pz]) => [ox + px * c + pz * s, oz - px * s + pz * c]);
+  for (const i of [0, 2, 1, 0, 3, 2]) arr.push(world[i][0], y, world[i][1]);
+}
+
+function flatMesh(positions, material, order) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, material);
+  mesh.renderOrder = order;
+  return mesh;
+}
+
+function buildRunways() {
+  const surface = [];
+  const marks = [];
+  for (const r of RUNWAYS_GEOM) {
+    // Local frame: +Z runs from the le end towards the he end (along the le heading).
+    const rot = Math.PI - r.hdgT * DEG_TO_RAD;
+    const half = r.lengthM / 2;
+    pushQuad(surface, r.cx, r.cz, rot, 0, 0, r.widthM, r.lengthM, 0);
+    // Centreline: 120 ft stripes with 80 ft gaps.
+    for (let z = -half + 120; z < half - 120; z += 61) pushQuad(marks, r.cx, r.cz, rot, 0, z, 0.9, 36.6, 0);
+    // Each end: piano keys at the landing threshold, aiming-point bars, side stripes.
+    r.ends.forEach((id, i) => {
+      const e = runwayEndById(id);
+      const sign = i === 0 ? -1 : 1; // le end sits at local -Z, he end at +Z
+      const thrZ = sign * (half - e.displacedM);
+      const inward = -sign;
+      const keyW = 1.8, keys = Math.max(4, Math.floor((r.widthM - 6) / 3.6));
+      for (let k = 0; k < keys; k++) {
+        const x = -((keys - 1) * 3.6) / 2 + k * 3.6;
+        pushQuad(marks, r.cx, r.cz, rot, x, thrZ + inward * 26, keyW, 45, 0);
+      }
+      pushQuad(marks, r.cx, r.cz, rot, 0, thrZ + inward * 1.5, r.widthM - 2, 3, 0); // threshold bar
+      for (const side of [-1, 1]) {
+        pushQuad(marks, r.cx, r.cz, rot, side * r.widthM * 0.22, thrZ + inward * (AIM_POINT_M + 22), 9, 45, 0);
+      }
+    });
+    for (const side of [-1, 1]) pushQuad(marks, r.cx, r.cz, rot, side * (r.widthM / 2 - 1), 0, 0.9, r.lengthM, 0);
+  }
+  scene.add(flatMesh(surface, groundMaterial({ color: 0x1c2029 }, GROUND_ORDER.runway), GROUND_ORDER.runway));
+  const markMat = new THREE.MeshBasicMaterial({ color: 0xf1f5f9, depthWrite: false, side: THREE.DoubleSide });
+  scene.add(flatMesh(marks, markMat, GROUND_ORDER.marking));
+
+  // PAPI: four lamps left of every runway end, abeam the aiming point. Drawn as one
+  // Points object with a constant on-screen size, the way real lights read from miles out.
+  const lampPos = new Float32Array(RUNWAY_ENDS.length * 4 * 3);
+  const lampCol = new Float32Array(RUNWAY_ENDS.length * 4 * 3);
+  RUNWAY_ENDS.forEach((e, ei) => {
+    const d = courseVector(e.hdgT);
+    const left = { x: d.z, z: -d.x };
+    for (let i = 0; i < 4; i++) {
+      const off = e.widthM / 2 + 15 + i * 9;
+      const k = (ei * 4 + i) * 3;
+      lampPos[k] = e.thrX + d.x * AIM_POINT_M + left.x * off;
+      lampPos[k + 1] = 1.5;
+      lampPos[k + 2] = e.thrZ + d.z * AIM_POINT_M + left.z * off;
+      lampCol[k] = 1; lampCol[k + 1] = 0.13; lampCol[k + 2] = 0.13;
+    }
+  });
+  const lampGeo = new THREE.BufferGeometry();
+  lampGeo.setAttribute('position', new THREE.BufferAttribute(lampPos, 3));
+  lampGeo.setAttribute('color', new THREE.BufferAttribute(lampCol, 3));
+  papiLamps = new THREE.Points(lampGeo, new THREE.PointsMaterial({ size: 5, sizeAttenuation: false, vertexColors: true }));
+  scene.add(papiLamps);
+}
+
+function buildSatelliteTerrain() {
+  terrainGroup = new THREE.Group();
+
+  // Base regional fallback ground plane
+  const basePlane = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), groundMaterial({ color: 0x1b281f }, GROUND_ORDER.base));
+  basePlane.rotation.x = -Math.PI / 2;
+  basePlane.renderOrder = GROUND_ORDER.base;
+  terrainGroup.add(basePlane);
+
+  // Esri satellite imagery: a zoom-13 core (~37 km square around KDFW) and a zoom-12 ring
+  // (~74 km) so Alliance, Meacham and Arlington sit on real imagery too.
+  const core = latLonToTile(DFW_ORIGIN_LAT, DFW_ORIGIN_LON, 13);
+  const inCore = (x13, y13) => Math.abs(x13 - core.x) <= 4 && Math.abs(y13 - core.y) <= 4;
+  addTileLayer(12, 4, GROUND_ORDER.z12, (x, y) =>
+    inCore(2 * x, 2 * y) && inCore(2 * x + 1, 2 * y) && inCore(2 * x, 2 * y + 1) && inCore(2 * x + 1, 2 * y + 1));
+  addTileLayer(13, 4, GROUND_ORDER.z13);
 
   scene.add(terrainGroup);
-
-  // Runways with Exact Precision Centerlines, Touchdown Zones & 4-Light PAPI
-  RUNWAYS.forEach(rwy => {
-    const rGroup = new THREE.Group();
-    rGroup.position.set(rwy.cx, 0.35, rwy.cz);
-    rGroup.rotation.y = (180 - rwy.headingDeg) * DEG_TO_RAD;
-
-    const rwyMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(rwy.width, rwy.length),
-      new THREE.MeshLambertMaterial({ color: 0x181c24 })
-    );
-    rwyMesh.rotation.x = -Math.PI / 2;
-    rGroup.add(rwyMesh);
-
-    // Centerline dashes
-    for (let z = -rwy.length / 2 + 50; z < rwy.length / 2 - 50; z += 60) {
-      const dash = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 32), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      dash.rotation.x = -Math.PI / 2;
-      dash.position.set(0, 0.06, z);
-      rGroup.add(dash);
-    }
-
-    // Threshold Piano Keys
-    for (let x = -rwy.width / 2 + 5; x <= rwy.width / 2 - 5; x += 5) {
-      const bar1 = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 36), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      bar1.rotation.x = -Math.PI / 2;
-      bar1.position.set(x, 0.06, -rwy.length / 2 + 30);
-      rGroup.add(bar1);
-
-      const bar2 = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 36), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-      bar2.rotation.x = -Math.PI / 2;
-      bar2.position.set(x, 0.06, rwy.length / 2 - 30);
-      rGroup.add(bar2);
-    }
-
-    // Active 4-Light PAPI Glideslope for Runway 35C
-    if (rwy.id === 'KDFW_35C') {
-      for (let i = 0; i < 4; i++) {
-        const papiSphere = new THREE.Mesh(
-          new THREE.SphereGeometry(1.6, 8, 8),
-          new THREE.MeshBasicMaterial({ color: 0xffffff })
-        );
-        papiSphere.position.set(-rwy.width / 2 - 14 - i * 5.5, 1.2, 1850 - 300);
-        rGroup.add(papiSphere);
-        papiSpheres.push(papiSphere);
-      }
-    }
-
-    scene.add(rGroup);
-  });
+  buildRunways();
 
   // 3D Downtown Dallas Landmark Architecture
   const dallas = new THREE.Group();
@@ -527,7 +568,8 @@ function step6DofPhysics(dt) {
     animRefs.flame.visible = sim.throttle > 0.6;
   }
 
-  // Update PAPI glideslope lamps
+  // Approach target + PAPI lamps
+  updateActiveRunway(dt);
   updatePapi();
 }
 
@@ -564,16 +606,18 @@ function integrateSubStep(dt) {
 
   // Autopilot / ILS Coupling
   if (sim.apMaster) {
-    if (sim.apApproach) {
-      const locOffset = sim.pos.x;
-      sim.aileronInput = THREE.MathUtils.clamp(-locOffset * 0.003, -0.6, 0.6);
-
-      // 3.0° Glideslope profile
-      const idealAlt = Math.max(spec.gearHeight, sim.pos.z * Math.tan(3.0 * DEG_TO_RAD));
-      const altErr = sim.pos.y - idealAlt;
-      const targetPitchAngle = THREE.MathUtils.clamp(-0.052 - altErr * 0.0006, -0.15, 0.1);
-
+    if (sim.apApproach && sim.activeEnd) {
+      // Localizer: steer to the runway heading, corrected towards the centreline.
+      const ap = approachGeometry(sim.activeEnd, sim.pos);
       _euler.setFromQuaternion(sim.quat, 'YXZ');
+      const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
+      const interceptDeg = THREE.MathUtils.clamp(-ap.crossM * 0.08, -25, 25);
+      const hdgErr = headingError(sim.activeEnd.hdgT + interceptDeg, curHdg);
+      sim.aileronInput = THREE.MathUtils.clamp(hdgErr * 0.03 - _euler.z * 1.2, -0.6, 0.6);
+
+      // 3.0° glideslope to the aiming point
+      const altErr = ap.heightAbovePathM;
+      const targetPitchAngle = THREE.MathUtils.clamp(-0.052 - altErr * 0.0006, -0.15, 0.1);
       sim.elevInput = THREE.MathUtils.clamp((targetPitchAngle - _euler.x) * 4.0, -1.0, 1.0);
 
       // Flare at 50 FT AGL
@@ -688,7 +732,7 @@ function integrateSubStep(dt) {
 
   // Telemetry derivatives
   sim.aglFt = Math.max(0, Math.round(sim.pos.y * M_TO_FT));
-  sim.mslFt = Math.round(sim.aglFt + FIELD_ELEV_FT);
+  sim.mslFt = Math.round(sim.aglFt + (sim.activeEnd ? sim.activeEnd.elevFt : FIELD_ELEV_FT));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
   sim.gLoad = 1.0 + (accel.y / GRAVITY);
 
@@ -700,31 +744,48 @@ function integrateSubStep(dt) {
 }
 
 function updatePapi() {
-  if (!papiSpheres.length) return;
-  const distToThreshold = Math.max(10, sim.pos.z - 1850);
-  const currentSlopeDeg = Math.atan2(sim.pos.y, distToThreshold) * RAD_TO_DEG;
-
-  const numWhite = papiWhiteLights(currentSlopeDeg);
-
-  for (let i = 0; i < 4; i++) {
-    if (i < numWhite) {
-      papiSpheres[i].material.color.setHex(0xffffff);
-    } else {
-      papiSpheres[i].material.color.setHex(0xff2222);
+  if (!papiLamps) return;
+  // Every runway end's PAPI shows the true picture from where the aircraft is.
+  const col = papiLamps.geometry.attributes.color.array;
+  RUNWAY_ENDS.forEach((e, ei) => {
+    const g = approachGeometry(e, sim.pos);
+    const distToPapi = Math.max(10, g.distM + AIM_POINT_M);
+    const white = g.distM > -AIM_POINT_M ? papiWhiteLights(Math.atan2(sim.pos.y, distToPapi) * RAD_TO_DEG) : 0;
+    // Lamps are numbered outward from the runway; the inboard lamps turn red first.
+    for (let i = 0; i < 4; i++) {
+      const k = (ei * 4 + i) * 3;
+      const isWhite = (3 - i) < white;
+      col[k] = 1; col[k + 1] = isWhite ? 1 : 0.13; col[k + 2] = isWhite ? 1 : 0.13;
     }
-  }
+  });
+  papiLamps.geometry.attributes.color.needsUpdate = true;
 
   const txt = document.getElementById('txtPapiStatus');
+  if (!sim.activeEnd) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
+  const ap = sim.approach;
+  const numWhite = papiWhiteLights(Math.atan2(sim.pos.y, Math.max(10, ap.distM + AIM_POINT_M)) * RAD_TO_DEG);
   if (numWhite === 2) {
     txt.textContent = 'ON GLIDESLOPE';
     txt.className = 'text-emerald-400 font-bold ml-1';
   } else if (numWhite > 2) {
-    txt.textContent = 'SLIGHTLY HIGH';
+    txt.textContent = numWhite === 4 ? 'HIGH' : 'SLIGHTLY HIGH';
     txt.className = 'text-sky-300 font-bold ml-1';
   } else {
-    txt.textContent = 'SLIGHTLY LOW';
+    txt.textContent = numWhite === 0 ? 'LOW' : 'SLIGHTLY LOW';
     txt.className = 'text-amber-400 font-bold ml-1';
   }
+}
+
+// Re-pick the runway you're flying to (twice a second) and cache its approach geometry.
+function updateActiveRunway(dt) {
+  sim.rwySelectTimer -= dt;
+  if (sim.rwySelectTimer <= 0) {
+    sim.rwySelectTimer = 0.5;
+    _euler.setFromQuaternion(sim.quat, 'YXZ');
+    const hdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
+    if (!sim.onGround) sim.activeEnd = selectActiveRunway(RUNWAY_ENDS, sim.pos, hdg, sim.activeEnd);
+  }
+  if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
 }
 
 function updateCamera() {
@@ -866,10 +927,11 @@ function renderHud() {
   hudCtx.fillText(`TRK ${String(hdgDeg).padStart(3, '0')}°`, cx, cy - 129);
 
   // ILS Guidance Crosshairs
-  if (sim.apApproach || Math.abs(sim.pos.z) > 1000) {
-    const locDev = THREE.MathUtils.clamp(sim.pos.x * 0.08, -80, 80);
-    const idealAlt = Math.max(0, sim.pos.z * Math.tan(3 * DEG_TO_RAD));
-    const gsDev = THREE.MathUtils.clamp((sim.pos.y - idealAlt) * 0.4, -60, 60);
+  // Fly-to bars: the localizer bar sits where the centreline is (left when you're right of
+  // it), the glideslope bar where the path is (below when you're high).
+  if (sim.activeEnd && sim.approach.distM > -500 && sim.approach.distM < 20000) {
+    const locDev = THREE.MathUtils.clamp(-sim.approach.crossM * 0.08, -80, 80);
+    const gsDev = THREE.MathUtils.clamp(sim.approach.heightAbovePathM * 0.4, -60, 60);
 
     hudCtx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
     hudCtx.setLineDash([3, 3]);
@@ -901,15 +963,26 @@ function renderRadar() {
   mapCtx.arc(cx, cy, 65, 0, Math.PI * 2);
   mapCtx.stroke();
 
-  RUNWAYS.forEach(r => {
-    const rx = cx + (r.cx - sim.pos.x) * scale;
-    const ry = cy + (r.cz - sim.pos.z) * scale;
-    mapCtx.fillStyle = '#38bdf8';
-    mapCtx.fillRect(rx - 2, ry - 14, 4, 28);
-    mapCtx.fillStyle = '#94a3b8';
-    mapCtx.font = '8px monospace';
-    mapCtx.fillText(r.name.replace('KDFW ', ''), rx + 4, ry);
-  });
+  // Runways in true orientation; the active one highlighted, airport idents labelled.
+  mapCtx.lineCap = 'round';
+  const labelled = new Set();
+  for (const r of RUNWAYS_GEOM) {
+    const d = courseVector(r.hdgT);
+    const hx = d.x * r.lengthM / 2, hz = d.z * r.lengthM / 2;
+    const ax = cx + (r.cx - hx - sim.pos.x) * scale, az = cy + (r.cz - hz - sim.pos.z) * scale;
+    const bx = cx + (r.cx + hx - sim.pos.x) * scale, bz = cy + (r.cz + hz - sim.pos.z) * scale;
+    const active = sim.activeEnd && r.ends.includes(sim.activeEnd.id);
+    mapCtx.strokeStyle = active ? '#f59e0b' : '#38bdf8';
+    mapCtx.lineWidth = active ? 3 : 2;
+    mapCtx.beginPath(); mapCtx.moveTo(ax, az); mapCtx.lineTo(bx, bz); mapCtx.stroke();
+    if (!labelled.has(r.airport)) {
+      labelled.add(r.airport);
+      mapCtx.fillStyle = '#94a3b8';
+      mapCtx.font = '8px monospace';
+      mapCtx.fillText(r.airport, Math.max(ax, bx) + 4, (az + bz) / 2);
+    }
+  }
+  mapCtx.lineWidth = 1;
 
   const dx = cx + (DOWNTOWN_DALLAS.x - sim.pos.x) * scale;
   const dy = cy + (DOWNTOWN_DALLAS.z - sim.pos.z) * scale;
@@ -936,62 +1009,51 @@ function renderRadar() {
 }
 
 function loadScenario(key) {
+  const mission = missionByKey(key);
+  sim.missionKey = mission.key;
   sim.brakesOn = false;
   sim.apMaster = false;
   sim.apApproach = false;
   sim.lastCalloutIdx = -1;
   sim.angVel.set(0, 0, 0);
+  sim.rwySelectTimer = 0;
 
-  if (key === 'kdfw_35c_final') {
-    sim.pos.set(0, 390, 7408);
-    sim.vel.set(0, -3.6, -72);
-    sim.quat.set(0, 0, 0, 1);
+  if (mission.kind === 'final') {
+    const end = runwayEnd(mission.airport, mission.rwy);
+    const s = approachSpawn(end, mission.distNm, (sim.spec.vrefKts + 5) * 0.514444);
+    sim.pos.set(s.pos.x, s.pos.y, s.pos.z);
+    sim.vel.set(s.vel.x, s.vel.y, s.vel.z);
+    sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0.44;
     sim.flapsIndex = 2;
     sim.gearDown = true;
     sim.onGround = false;
-  } else if (key === 'kdfw_takeoff') {
-    sim.pos.set(0, sim.spec.gearHeight, 1800);
+    sim.activeEnd = end;
+  } else if (mission.kind === 'takeoff') {
+    const end = runwayEnd(mission.airport, mission.rwy);
+    const s = takeoffSpawn(end);
+    sim.pos.set(s.pos.x, sim.spec.gearHeight, s.pos.z);
     sim.vel.set(0, 0, 0);
-    sim.quat.set(0, 0, 0, 1);
+    sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0;
     sim.flapsIndex = 1;
     sim.gearDown = true;
     sim.onGround = true;
-  } else if (key === 'kdfw_17c_final') {
-    sim.pos.set(0, 390, -7408);
-    sim.vel.set(0, -3.6, 72);
-    sim.quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
-    sim.throttle = 0.44;
-    sim.flapsIndex = 2;
-    sim.gearDown = true;
-    sim.onGround = false;
-  } else if (key === 'kdal_31r_final') {
-    sim.pos.set(18000, 360, 9000);
-    const rad = 316 * DEG_TO_RAD;
-    sim.vel.set(-Math.sin(rad) * 70, -3.5, -Math.cos(rad) * 70);
-    sim.quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rad);
-    sim.throttle = 0.42;
-    sim.flapsIndex = 2;
-    sim.gearDown = true;
-    sim.onGround = false;
-  } else if (key === 'downtown_skyline') {
-    sim.pos.set(17600, 520, 13000);
-    sim.vel.set(0, 0, -108);
-    sim.quat.set(0, 0, 0, 1);
-    sim.throttle = 0.65;
+    sim.activeEnd = end;
+  } else {
+    const [x, y, z] = mission.pos;
+    const yaw = -mission.hdg * DEG_TO_RAD;
+    const d = courseVector(mission.hdg);
+    sim.pos.set(x, y, z);
+    sim.vel.set(d.x * mission.speedMps, 0, d.z * mission.speedMps);
+    sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), yaw);
+    sim.throttle = mission.throttle;
     sim.flapsIndex = 0;
     sim.gearDown = false;
     sim.onGround = false;
-  } else if (key === 'att_stadium') {
-    sim.pos.set(-2400, 480, 12500);
-    sim.vel.set(0, 0, -100);
-    sim.quat.set(0, 0, 0, 1);
-    sim.throttle = 0.62;
-    sim.flapsIndex = 0;
-    sim.gearDown = false;
-    sim.onGround = false;
+    sim.activeEnd = null;
   }
+  if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
   document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
 }
 
@@ -1035,8 +1097,15 @@ function syncUI() {
   const curHdg = Math.round((-_euler.y * RAD_TO_DEG + 360) % 360);
   document.getElementById('txtRadarHdg').textContent = `${curHdg}°`;
 
-  const distNm = Math.hypot(sim.pos.x, sim.pos.z) / NM_TO_M;
-  document.getElementById('txtNavDist').textContent = `DME ${distNm.toFixed(1)} NM`;
+  const nav1 = document.getElementById('txtNav1');
+  if (sim.activeEnd) {
+    const distNm = Math.max(0, sim.approach.distM) / NM_TO_M;
+    document.getElementById('txtNavDist').textContent = `DME ${distNm.toFixed(1)} NM`;
+    nav1.textContent = `NAV1: ${sim.activeEnd.name} ILS · ${String(Math.round(sim.activeEnd.hdgT)).padStart(3, '0')}°T`;
+  } else {
+    document.getElementById('txtNavDist').textContent = 'DME ---';
+    nav1.textContent = 'NAV1: no runway ahead';
+  }
   document.getElementById('txtSurfaceState').textContent = sim.onGround ? 'TOUCHDOWN / GROUND' : 'AIRBORNE';
 
   document.getElementById('btnApMaster').classList.toggle('active', sim.apMaster);
@@ -1378,7 +1447,37 @@ function renderLoop(time) {
   audio.update();
 }
 
+// Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
+window.openaeroDebug = () => {
+  _euler.setFromQuaternion(sim.quat, 'YXZ');
+  const m = missionByKey(sim.missionKey);
+  return {
+    mission: sim.missionKey,
+    missionRunway: m.kind === 'tour' ? null : `${m.airport}_${m.rwy}`,
+    activeRunway: sim.activeEnd ? sim.activeEnd.id : null,
+    runwayHdgT: sim.activeEnd ? sim.activeEnd.hdgT : null,
+    headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
+    crossM: sim.approach.crossM,
+    distM: sim.approach.distM,
+    heightAbovePathM: sim.approach.heightAbovePathM,
+    pos: { x: sim.pos.x, y: sim.pos.y, z: sim.pos.z },
+    onGround: sim.onGround,
+  };
+};
+
+function populateMissionSelect() {
+  const sel = document.getElementById('selScenario');
+  sel.innerHTML = '';
+  for (const m of MISSIONS) {
+    const o = document.createElement('option');
+    o.value = m.key;
+    o.textContent = m.label;
+    sel.appendChild(o);
+  }
+}
+
 function boot() {
+  populateMissionSelect();
   buildSatelliteTerrain();
   buildAircraft('b738');
   loadScenario('kdfw_35c_final');
