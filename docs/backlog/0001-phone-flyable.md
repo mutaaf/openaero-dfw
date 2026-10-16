@@ -40,4 +40,4 @@ the meters change; assert panel bounding boxes don't intersect; assert the start
 box is inside the viewport.
 
 ## Out of scope
-Device-tilt (gyro) steering, gamepad support.
+Device-tilt (gyro) steering (gamepad is ticket 0009).
