@@ -1,38 +1,43 @@
 ---
 id: 0004
-title: Make the wind real in the physics and stop calling scenario weather "live"
+title: Fly in today's real weather (edge METAR + wind in the physics)
 status: ready
 priority: P1
-size: M
+size: L
 lens: authenticity
 created: 2026-10-16
 pr:
 ---
 
 ## Why
-The UI says "Live NOAA METAR" and shows `35021G31KT`, but the METAR string is hard-coded
-and `sim.windDirDeg` / `windSpeedKts` / `windGustKts` are never used by the integrator:
-the aircraft flies in still air. That's both untrue and a missed opportunity, since a gusty
-north wind on a north-flow approach is exactly the kind of thing a pilot wants to feel.
+The UI says "Live NOAA METAR" but the string is hard-coded and the wind never reaches
+the integrator: the aircraft flies in still air. Real wind, gusts and visibility from
+today's METAR would make every approach different and true.
 
 ## What
-- In the integrator, compute airspeed, AoA and sideslip from velocity **relative to the
-  air mass** (ground velocity minus wind vector), with gusts as smoothed noise between
-  the steady and gust speed. Keep it in a pure helper in `src/aero.js` with unit tests.
-- Show the crosswind/headwind components for the active runway on the HUD or ribbon.
-- Relabel the ribbon to "SCENARIO WX" and remove "Live NOAA METAR" from the modal copy
-  until a live source exists. Fetching real METARs (e.g. aviationweather.gov) needs a new
-  runtime host: open a `proposal/` PR for the operator rather than adding it.
+Two PRs:
+1. **Edge Worker** (operator-authorized, frozen paths): `src/worker/index.js` serves
+   `GET /openaero/api/metar?ids=KDFW,KDAL` by fetching
+   `https://aviationweather.gov/api/data/metar?ids=…&format=json`, validating ids
+   (`^K[A-Z0-9]{3}$`, at most 6), caching 5 minutes with the Cache API, returning
+   trimmed JSON. `wrangler.jsonc` gets `main` and `assets.run_worker_first:
+   ["/openaero/api/*"]`. Unit-tested with mocked fetch.
+2. **Client**: fetch on boot and every 10 minutes; pure helpers in `src/weather.js`
+   parse wind/gust/visibility/ceiling/altimeter; airspeed, AoA and sideslip computed
+   from velocity relative to the air mass with smoothed gusts; fog density from
+   visibility, a cloud deck at the ceiling; the raw METAR shown with its age. Offline or
+   API failure → clearly labelled "SCENARIO WX" fallback.
 
 ## Acceptance criteria
-- [ ] Unit test: with a 20 kt headwind, indicated airspeed exceeds groundspeed by ~20 kt
-- [ ] Unit test: with a pure crosswind, sideslip/drift is non-zero and in the right direction
-- [ ] The words "Live" and "NOAA" no longer appear in the UI
-- [ ] Holding the 35C approach with AP off now requires a small crab into the wind (e2e: heading drifts without input)
+- [ ] Worker unit tests: valid ids → upstream called once then cached; invalid ids → 400; upstream failure → 502 JSON
+- [ ] Unit test: 20 kt headwind → IAS exceeds groundspeed by ~20 kt
+- [ ] Unit test: METAR parsing for wind/gust/variable/calm, visibility "10+", ceilings BKN/OVC
+- [ ] e2e: with the API route mocked, the ribbon shows the mocked raw METAR; with it failing, "SCENARIO WX"
+- [ ] The word "live" appears only when real data is displayed
 
 ## Test plan
-Unit tests for the wind-relative airspeed helper; e2e asserting the copy change and that
-track ≠ heading after a few seconds of hands-off flight in a crosswind scenario.
+Vitest for the worker handler and weather helpers; Playwright route mocking for
+`**/openaero/api/metar*`.
 
 ## Out of scope
-Turbulence models beyond simple gusts, live weather fetching (separate proposal).
+TAF forecasts, winds aloft, turbulence beyond gusts.

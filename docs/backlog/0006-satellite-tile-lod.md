@@ -1,7 +1,7 @@
 ---
 id: 0006
 title: Stream sharper satellite tiles near the aircraft
-status: ready
+status: proposed
 priority: P2
 size: L
 lens: performance

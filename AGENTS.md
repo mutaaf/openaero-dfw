@@ -6,23 +6,40 @@ anything. `CLAUDE.md` points here.
 ## 1 · Product vision
 
 OpenAero DFW is a browser flight simulator set over the real Dallas-Fort Worth metroplex:
-real satellite imagery underneath, real airports (KDFW, KDAL Love Field, KADS Addison,
-KAFW Alliance, KFTW Meacham, KGKY Arlington) where they actually are, and a 6-DOF flight
-model that feels believable. It opens in a second, needs no install or account, and runs
-on a laptop or a phone.
+real satellite imagery underneath, real airports where they actually are, real weather
+overhead, and a 6-DOF flight model that feels believable. It opens in a second, needs no
+install or account, and runs on a laptop, a phone, or with a gamepad.
 
 It must be **approachable for a casual player and rewarding for a pilot**. A first-timer
-should be on a stabilized final to DFW 35C within 30 seconds and land it with the PAPI and
-the velocity vector guiding them. Someone who flies for real should recognise the
-procedures: correct runway headings and thresholds, a 3° glidepath, believable V-speeds,
-real frequencies, wind that actually pushes the aircraft, GPWS callouts that match the
-real cadence.
+should be on a stabilized final to DFW within 30 seconds and land it, guided by a coach,
+the PAPI and the velocity vector, then see a grade that makes them want one more go.
+Someone who flies for real should recognise the place and the procedures: runway
+thresholds and headings you can check against a chart, a 3° glidepath, believable
+V-speeds, today's METAR pushing the aircraft around, GPWS callouts with the real cadence.
 
-**North star for the Scout:** authenticity you can check against a chart, and feel you
-notice in the first minute. Prefer making the DFW world truer (real coordinates, real
-procedures, real landmarks, honest weather) and the flying feel better (control response,
-touch controls, landings that are satisfying to grease) over adding new aircraft or modes.
-Never claim something is "live" or "real" unless it is.
+### The 10x pillars (north star; the Scout steers here, in roughly this order)
+
+1. **Flyable on any device.** Touch (on-screen stick + throttle, multi-touch, ≥44px
+   targets, no page scroll), gamepad, keyboard, mouse. The HUD never overlaps itself at
+   390x844 and never hides the horizon.
+2. **Airport fidelity.** Every runway at KDFW (7), KDAL, KAFW, KADS, KGKY and KFTW from
+   real survey data (OurAirports / FAA), drawn flush with the imagery and visible from a
+   10 NM final: markings, edge and approach lights, a PAPI per runway end. Landmarks at
+   their true coordinates. Approach guidance (ILS/PAPI/HUD) works for whichever runway
+   you are flying to, not just 35C.
+3. **Real weather.** Today's METAR for the field you are flying to (served same-origin by
+   this repo's edge Worker) drives wind, gusts, visibility, ceiling and altimeter in both
+   the physics and the visuals. Honest labels: "live" only when it is; a clear offline
+   fallback.
+4. **A game worth replaying.** Every landing is graded (touchdown rate, centreline,
+   touchdown zone, flare) with a results card and a per-mission personal best. A
+   first-30-seconds coach. Voice GPWS callouts. Missions that teach something real.
+5. **A world that looks right.** Sun position from the actual time in Dallas (day, dusk,
+   night with runway and city lights), better sky and haze, sharper imagery near the
+   aircraft, and a current three.js underneath.
+
+Prefer depth over breadth: making the DFW world truer and the flying feel better beats
+adding aircraft or modes. Never claim something is "live" or "real" unless it is.
 
 ## 2 · Live
 
@@ -39,10 +56,11 @@ Never claim something is "live" or "real" unless it is.
 2. **Base path.** The app is served under `/openaero/`. Vite `base` and `build.outDir`
    (`dist/openaero/`) encode this. Never use root-absolute URLs (`/foo.png`); import
    assets or use `import.meta.env.BASE_URL`.
-3. **Allowed runtime hosts:** `server.arcgisonline.com` (Esri World
-   Imagery tiles, loaded as WebGL textures) and nothing else. The on-screen attribution
-   ("Satellite imagery © Esri, Maxar, Earthstar Geographics") must stay visible. Adding any
-   other host (e.g. a live METAR source) needs the operator: open a `proposal/` PR.
+3. **Allowed runtime hosts.** Browser: own origin + `server.arcgisonline.com` (Esri World
+   Imagery tiles, loaded as WebGL textures), nothing else. The on-screen attribution
+   ("Satellite imagery © Esri, Maxar, Earthstar Geographics") must stay visible. Edge
+   (the Worker in `src/worker/`, once it exists): `aviationweather.gov` only. Adding any
+   other host needs the operator: open a `proposal/` PR.
    No analytics, ads, trackers, fonts or scripts from CDNs. Everything else is bundled.
 4. **Frame budget.** The render loop must hold 60fps on a mid-range laptop and stay
    playable on a recent phone. No per-frame allocations in hot paths (reuse vectors and
