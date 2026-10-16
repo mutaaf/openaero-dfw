@@ -5,14 +5,16 @@ test.beforeEach(async ({ page }) => { await stubTiles(page); });
 const snap = (page) => page.evaluate(() => window.openaeroDebug());
 
 test('D banks right and a held bank turns the aircraft right', async ({ page }) => {
+  // Polls wait in wall time; CI's software GL runs fewer sim-seconds per second, so be generous.
+  test.setTimeout(90_000);
   await enterCockpit(page);
   await page.selectOption('#selScenario', 'downtown_skyline');
   const x0 = (await snap(page)).pos.x;
   await page.keyboard.down('KeyD');
-  await expect.poll(async () => (await snap(page)).bankRightDeg, { timeout: 5_000 }).toBeGreaterThan(12);
+  await expect.poll(async () => (await snap(page)).bankRightDeg, { timeout: 30_000 }).toBeGreaterThan(12);
   await page.keyboard.up('KeyD');
   // Heading 000 → turning right means the heading climbs and the aircraft drifts east.
-  await expect.poll(async () => { const s = await snap(page); return s.headingDeg > 2 && s.headingDeg < 90; }, { timeout: 15_000 }).toBe(true);
+  await expect.poll(async () => { const s = await snap(page); return s.headingDeg > 2 && s.headingDeg < 90; }, { timeout: 45_000 }).toBe(true);
   expect((await snap(page)).pos.x).toBeGreaterThan(x0);
 });
 
