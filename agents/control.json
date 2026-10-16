@@ -10,7 +10,7 @@
     },
     "builder": {
       "enabled": true,
-      "max_merges_per_day": 4
+      "max_merges_per_day": 8
     },
     "keeper": {
       "enabled": true
