@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
-    "check": "node scripts/check-backlog.mjs && npm test && npm run e2e"
+    "check": "node scripts/check-backlog.mjs && npm test && npm run e2e",
+    "check:fast": "node scripts/check-backlog.mjs && npm test && npm run build"
   },
   "dependencies": {
     "three": "0.128.0"

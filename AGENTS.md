@@ -90,6 +90,7 @@ World frame: metres from the KDFW origin, +X east, +Y up, **−Z north**. Loop p
 | `npm test` | Unit tests (Vitest) |
 | `npm run e2e` | Playwright e2e (builds first) |
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
+| `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
 Budgets: JS ≤ 180 kB gzipped (2026-10-16: 137.6 kB, almost all
 three.js), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.
