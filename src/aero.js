@@ -11,7 +11,8 @@ export function dynamicPressure(airspeedMps, rho = RHO_SEA_LEVEL) {
 
 // Lift coefficient: linear lift curve + flap increment, with an exponential post-stall drop.
 export function liftCoefficient(spec, aoaRad, flapsIndex) {
-  let cl = spec.cl0 + spec.clAlpha * aoaRad + (flapsIndex * 0.28);
+  // Flap lift increment per notch is per airframe (default 0.28, the prototype's value).
+  let cl = spec.cl0 + spec.clAlpha * aoaRad + flapsIndex * (spec.flapClPerNotch ?? 0.28);
   const stallAngleRad = spec.alphaStallDeg * DEG_TO_RAD;
   if (Math.abs(aoaRad) > stallAngleRad) {
     const excess = Math.abs(aoaRad) - stallAngleRad;

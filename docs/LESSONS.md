@@ -13,3 +13,6 @@ you learn something a future run must not re-learn; prune rows that no longer ap
 | 2026-10-16 | **Check the data before the test.** | A unit test asserted Love Field is north of KDFW; OurAirports says 32.84°N vs 32.90°N — south-east. The data was right. |
 | 2026-10-16 | **Stub same-origin APIs in e2e too.** | `vite preview` has no Worker, so `/openaero/api/metar` 404s — and Chromium logs failed loads as console errors, which the zero-error smoke tests catch. `stubTiles()` now also serves a fixed METAR. |
 | 2026-10-16 | **Edge cache headers can be rewritten.** | On cache HITs the zone's Browser Cache TTL stretched the METAR response to `max-age=14400`. Weather is fetched with `cache: 'no-store'` plus a minute-bucket query param; the Worker re-stamps cache-control on hits. |
+| 2026-10-16 | **Test that the aircraft flies, not just that the page renders.** | The ported prototype passed every boot/render test while D banked left, banks never turned, takeoff capped at 75 kt and autoland looped into the ground (in production). `flight.spec.js` now rolls, turns, takes off and autolands. |
+| 2026-10-16 | **Pin control-law signs with unit tests.** | The glideslope law `(target − pitch)·k` was positive feedback because elevator + is nose-down here. `src/autopilot.js` laws each have a sign test. |
+

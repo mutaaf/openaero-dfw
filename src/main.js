@@ -16,6 +16,10 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey } from './missions.js';
 import {
+  localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
+  flareSinkMps, elevatorForPitch, throttleForSpeed, sideslipYawAccel, trimAoaDeg,
+} from './autopilot.js';
+import {
   parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents,
   fogDensityForVisibility, metarAgeMinutes, flowForWind,
 } from './weather.js';
@@ -720,40 +724,44 @@ function integrateSubStep(dt) {
   sim.aileronInput = THREE.MathUtils.lerp(sim.aileronInput, targetRoll, dt * 10);
   sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, targetYaw, dt * 10);
 
-  // Autopilot / ILS Coupling
+  // Autopilot / ILS coupling (control laws in autopilot.js; signs pinned by unit tests)
   if (sim.apMaster) {
+    _euler.setFromQuaternion(sim.quat, 'YXZ');
+    const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
+    const pitchDeg = _euler.x * RAD_TO_DEG;
+    const bankRightDeg = -_euler.z * RAD_TO_DEG;
+    const rollRateRight = -sim.angVel.z;
+    const pitchRateUp = sim.angVel.x;
+    const holdHeading = (hdgDeg) => {
+      const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg));
+      sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight);
+    };
+    // Fly a flight-path angle: pitch = path + current angle of attack.
+    // Pitch is capped at 8° nose-up (airliner tailstrike protection).
+    const holdGamma = (gammaDeg) => {
+      sim.elevInput = elevatorForPitch(Math.min(8, gammaDeg + sim.aoaDeg), pitchDeg, pitchRateUp);
+    };
+
     if (sim.apApproach && sim.activeEnd) {
-      // Localizer: steer to the runway heading, corrected towards the centreline.
       const ap = approachGeometry(sim.activeEnd, sim.pos);
-      _euler.setFromQuaternion(sim.quat, 'YXZ');
-      const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
-      const interceptDeg = THREE.MathUtils.clamp(-ap.crossM * 0.08, -25, 25);
-      const hdgErr = headingError(sim.activeEnd.hdgT + interceptDeg, curHdg);
-      sim.aileronInput = THREE.MathUtils.clamp(hdgErr * 0.03 - _euler.z * 1.2, -0.6, 0.6);
-
-      // 3.0° glideslope to the aiming point
-      const altErr = ap.heightAbovePathM;
-      const targetPitchAngle = THREE.MathUtils.clamp(-0.052 - altErr * 0.0006, -0.15, 0.1);
-      sim.elevInput = THREE.MathUtils.clamp((targetPitchAngle - _euler.x) * 4.0, -1.0, 1.0);
-
-      // Flare at 50 FT AGL
-      if (sim.pos.y < 20) {
-        sim.elevInput = -0.22;
-        sim.throttle = THREE.MathUtils.lerp(sim.throttle, 0.0, dt * 1.5);
+      holdHeading(sim.activeEnd.hdgT + localizerInterceptDeg(ap.crossM));
+      const wheelH = sim.pos.y - spec.gearHeight;
+      const gsMps = Math.max(20, Math.hypot(sim.vel.x, sim.vel.z));
+      if (wheelH > 12) {
+        holdGamma(glidepathGammaDeg(ap.heightAbovePathM));
+        sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 5, sim.throttle, dt);
       } else {
-        sim.throttle = 0.44;
+        // Flare: trade sink rate for height; keep approach power until ~5 m, then retard.
+        holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
+        if (wheelH > 5) sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts, sim.throttle, dt);
+        else sim.throttle = Math.max(0, sim.throttle - dt * 0.5);
       }
+      if (sim.onGround) { sim.elevInput = 0; sim.throttle = 0; }
     } else {
-      _euler.setFromQuaternion(sim.quat, 'YXZ');
-      if (sim.apHdgHold) {
-        const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
-        const diff = headingError(sim.targetHdgDeg, curHdg);
-        sim.aileronInput = THREE.MathUtils.clamp(diff * 0.025, -0.6, 0.6);
-      }
+      if (sim.apHdgHold) holdHeading(sim.targetHdgDeg);
       if (sim.apAltHold) {
-        const altErr = sim.targetAltFt - sim.mslFt;
-        const desiredPitch = THREE.MathUtils.clamp(altErr * 0.00018, -0.15, 0.2);
-        sim.elevInput = THREE.MathUtils.clamp((desiredPitch - _euler.x) * 3.5, -1.0, 1.0);
+        const altErrFt = sim.targetAltFt - sim.mslFt;
+        holdGamma(THREE.MathUtils.clamp(altErrFt * 0.01, -4, 4));
       }
     }
   }
@@ -809,9 +817,22 @@ function integrateSubStep(dt) {
     totalForceWorld.y += normalForce;
     sim.onGround = true;
 
-    const mu = sim.brakesOn ? 0.45 : 0.025;
-    totalForceWorld.x -= sim.vel.x * spec.massKg * mu * 3.5;
-    totalForceWorld.z -= sim.vel.z * spec.massKg * mu * 3.5;
+    // Tyres: rolling resistance (μ·N, brakes μ 0.45) along the nose, and a stiff side
+    // force across it so the aircraft rolls where it points instead of skating sideways.
+    // (The prototype used friction ∝ speed, which capped the takeoff roll near 75 kt.)
+    const fwd = _v3.set(0, 0, -1).applyQuaternion(sim.quat);
+    fwd.y = 0;
+    fwd.normalize();
+    const vAlong = sim.vel.x * fwd.x + sim.vel.z * fwd.z;
+    const vSideX = sim.vel.x - fwd.x * vAlong;
+    const vSideZ = sim.vel.z - fwd.z * vAlong;
+    const mu = sim.brakesOn ? 0.45 : 0.02;
+    const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
+    totalForceWorld.x += fwd.x * roll;
+    totalForceWorld.z += fwd.z * roll;
+    const sideMax = 0.8 * normalForce;
+    totalForceWorld.x += THREE.MathUtils.clamp(-vSideX * spec.massKg * 4, -sideMax, sideMax);
+    totalForceWorld.z += THREE.MathUtils.clamp(-vSideZ * spec.massKg * 4, -sideMax, sideMax);
   } else {
     sim.onGround = false;
   }
@@ -826,9 +847,13 @@ function integrateSubStep(dt) {
   }
 
   // Angular Moments & Inertial Damping
-  const qRate = (-sim.elevInput * 1.8 - sim.angVel.x * spec.pitchDamping) * (airspeed / 120);
-  const pRate = (sim.aileronInput * 2.8 - sim.angVel.z * spec.rollDamping) * (airspeed / 120);
-  const rRate = (-sim.rudderInput * 1.2 - sim.angVel.y * spec.yawDamping) * (airspeed / 120);
+  const qRate = (-sim.elevInput * (spec.pitchAuthority ?? 1.8) - sim.angVel.x * spec.pitchDamping) * (airspeed / 120);
+  // aileron + rolls right (negative body z rate); see autopilot.js for the conventions
+  const pRate = (-sim.aileronInput * (spec.rollAuthority ?? 2.8) - sim.angVel.z * spec.rollDamping) * (airspeed / 120);
+  // Rudder + directional stability: the nose weathervanes into the relative wind, so a
+  // banked aircraft actually turns.
+  const betaRad = Math.asin(THREE.MathUtils.clamp(v / airspeed, -1, 1));
+  const rRate = (-sim.rudderInput * 1.2 + sideslipYawAccel(betaRad) - sim.angVel.y * spec.yawDamping) * (airspeed / 120);
 
   sim.angVel.x += qRate * dt;
   sim.angVel.y += rRate * dt;
@@ -846,6 +871,17 @@ function integrateSubStep(dt) {
     1.0
   ).normalize();
   sim.quat.multiply(deltaRot).normalize();
+
+  // On the ground the gear and tail limit pitch: no rotating past the tailstrike angle.
+  if (sim.onGround) {
+    _euler.setFromQuaternion(sim.quat, 'YXZ');
+    const maxP = (spec.maxGroundPitchDeg ?? 15) * DEG_TO_RAD;
+    if (_euler.x > maxP || _euler.x < -0.05) {
+      _euler.x = THREE.MathUtils.clamp(_euler.x, -0.05, maxP);
+      sim.quat.setFromEuler(_euler);
+      if ((_euler.x >= maxP && sim.angVel.x > 0) || (_euler.x <= -0.05 && sim.angVel.x < 0)) sim.angVel.x = 0;
+    }
+  }
 
   // Telemetry derivatives
   sim.aglFt = Math.max(0, Math.round(sim.pos.y * M_TO_FT));
@@ -1137,12 +1173,15 @@ function loadScenario(key) {
 
   if (mission.kind === 'final') {
     const end = runwayEnd(mission.airport, mission.rwy);
-    const s = approachSpawn(end, mission.distNm, (sim.spec.vrefKts + 5) * 0.514444);
+    const vApp = (sim.spec.vrefKts + 5) * 0.514444;
+    const s = approachSpawn(end, mission.distNm, vApp);
     sim.pos.set(s.pos.x, s.pos.y, s.pos.z);
     sim.vel.set(s.vel.x, s.vel.y, s.vel.z);
-    sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
-    sim.throttle = 0.44;
     sim.flapsIndex = 2;
+    // Spawn in trim: pitch = trim AoA − 3° path, so the final starts stable, not sinking.
+    const pitch = (trimAoaDeg(sim.spec, vApp, sim.flapsIndex) - 3) * DEG_TO_RAD;
+    sim.quat.setFromEuler(_euler.set(pitch, s.yawRad, 0, 'YXZ'));
+    sim.throttle = 0.44;
     sim.gearDown = true;
     sim.onGround = false;
     sim.activeEnd = end;
@@ -1576,6 +1615,10 @@ window.openaeroDebug = () => {
     activeRunway: sim.activeEnd ? sim.activeEnd.id : null,
     runwayHdgT: sim.activeEnd ? sim.activeEnd.hdgT : null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
+    pitchDeg: _euler.x * RAD_TO_DEG,
+    bankRightDeg: -_euler.z * RAD_TO_DEG,
+    elevInput: sim.elevInput,
+    aileronInput: sim.aileronInput,
     crossM: sim.approach.crossM,
     distM: sim.approach.distM,
     heightAbovePathM: sim.approach.heightAbovePathM,

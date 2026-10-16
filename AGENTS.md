@@ -87,6 +87,10 @@ src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY
 src/missions.js     mission catalogue (approaches by runway end, tours by spawn)
 src/runways.js      downtown landmark origin (moving to landmarks.js with ticket 0010)
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
+src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign
+                    conventions (pinned by tests):** aileron + = roll right, elevator + =
+                    nose down, rudder + = yaw right; body rates: angVel.x + = nose up,
+                    angVel.y + = nose left, angVel.z + = roll left.
 src/geo.js          Web Mercator tile math, lat/lon → sim metres, Esri tile URLs
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
                     GPWS callouts, warnings, heading math
