@@ -15,7 +15,8 @@ import {
   dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning,
 } from './aero.js';
-import { keys, pilotTargets, stickFromPoint } from './input.js';
+import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
+import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 
 // --- Simulation State ---
@@ -55,7 +56,12 @@ const sim = {
   satelliteEnabled: true,
   windDirDeg: 350, windSpeedKts: 21, windGustKts: 31,
   audioEnabled: false,
-  lastCalloutIdx: -1
+  lastCalloutIdx: -1,
+
+  // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
+  stick: { x: 0, y: 0, active: false },
+  pad: null,
+  inputSource: 'keyboard',
 };
 
 // Math vectors
@@ -528,10 +534,15 @@ function step6DofPhysics(dt) {
 function integrateSubStep(dt) {
   const spec = sim.spec;
 
-  // Pilot Input Controls
-  const targets = pilotTargets(keys);
+  // Pilot Input Controls: touch/drag stick > gamepad > keyboard (input.js)
+  const targets = combineTargets(pilotTargets(keys), sim.stick, sim.pad);
+  sim.inputSource = targets.source;
   let targetPitch = targets.pitch, targetRoll = targets.roll;
   const targetYaw = targets.yaw;
+
+  if (sim.pad && sim.pad.throttleRate) {
+    sim.throttle = THREE.MathUtils.clamp(sim.throttle + sim.pad.throttleRate * dt * 0.5, 0, 1);
+  }
 
   if (keys['ShiftLeft'] || keys['ShiftRight']) {
     sim.throttle = Math.min(1.0, sim.throttle + dt * 0.4);
@@ -542,7 +553,7 @@ function integrateSubStep(dt) {
     document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
   }
 
-  if (sim.mouseYoke) {
+  if (sim.mouseYoke && targets.source === 'keyboard') {
     targetRoll = sim.aileronInput;
     targetPitch = sim.elevInput;
   }
@@ -1050,6 +1061,27 @@ function syncUI() {
     const ky = sim.elevInput * 36;
     knob.style.transform = `translate(${kx}px, ${ky}px)`;
   }
+
+  // Phone layout (touch deck + telemetry strip)
+  const tKnob = document.getElementById('touchStickKnob');
+  tKnob.style.transform = `translate(${sim.aileronInput * 44}px, ${sim.elevInput * 44}px)`;
+  const thrPct = Math.round(sim.throttle * 100);
+  document.getElementById('txtTouchThr').textContent = `${thrPct}%`;
+  document.getElementById('touchThrottleFill').style.height = `${thrPct}%`;
+  document.getElementById('touchThrottleHandle').style.bottom = `${thrPct}%`;
+  document.getElementById('touchThrottle').setAttribute('aria-valuenow', String(thrPct));
+  document.getElementById('txtTouchGear').textContent = sim.gearDown ? 'DN' : 'UP';
+  document.getElementById('touchGear').classList.toggle('active', sim.gearDown);
+  document.getElementById('txtTouchFlaps').textContent = `${sim.flapAngles[sim.flapsIndex]}°`;
+  document.getElementById('touchBrakes').classList.toggle('active-amber', sim.brakesOn);
+  document.getElementById('touchIls').classList.toggle('active-amber', sim.apApproach);
+  document.getElementById('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
+  document.getElementById('txtPhoneAgl').textContent = `${sim.aglFt}`;
+  document.getElementById('txtPhoneVs').textContent = `${sim.vsiFpm}`;
+  const papi = document.getElementById('txtPapiStatus');
+  const phonePapi = document.getElementById('txtPhonePapi');
+  phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
+  phonePapi.className = papi.className.replace('ml-1', '');
 }
 
 function handleResize() {
@@ -1194,29 +1226,80 @@ document.getElementById('btnCenterWings').addEventListener('click', () => {
   sim.angVel.set(0, 0, 0);
 });
 
-// Virtual Stick Dragging
-const stickPad = document.getElementById('virtualStickPad');
-let isStickActive = false;
-function handleStickEvent(e) {
-  const rect = stickPad.getBoundingClientRect();
-  const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-  const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-  if (clientX === undefined) return;
-  const stick = stickFromPoint(clientX, clientY, rect);
-  sim.aileronInput = stick.x;
-  sim.elevInput = stick.y;
+// On-screen sticks (desktop drag pad + phone touch stick) feed sim.stick through pointer
+// events. Each control captures its own pointer, so two thumbs work at once.
+function bindStick(el) {
+  let pointerId = null;
+  const move = (e) => {
+    const s = stickFromPoint(e.clientX, e.clientY, el.getBoundingClientRect());
+    sim.stick.x = s.x; sim.stick.y = s.y;
+  };
+  el.addEventListener('pointerdown', (e) => {
+    pointerId = e.pointerId;
+    el.setPointerCapture(e.pointerId);
+    sim.stick.active = true;
+    move(e);
+    e.preventDefault();
+  });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) move(e); });
+  const release = (e) => {
+    if (e.pointerId !== pointerId) return;
+    pointerId = null;
+    sim.stick.active = false; sim.stick.x = 0; sim.stick.y = 0;
+  };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
 }
+bindStick(document.getElementById('virtualStickPad'));
+bindStick(document.getElementById('touchStick'));
 
-stickPad.addEventListener('mousedown', e => { isStickActive = true; handleStickEvent(e); });
-stickPad.addEventListener('touchstart', e => { isStickActive = true; handleStickEvent(e); }, { passive: true });
-window.addEventListener('mousemove', e => { if (isStickActive) handleStickEvent(e); });
-window.addEventListener('touchmove', e => { if (isStickActive) handleStickEvent(e); }, { passive: true });
-window.addEventListener('mouseup', () => {
-  if (isStickActive) { isStickActive = false; sim.aileronInput = 0; sim.elevInput = 0; }
-});
-window.addEventListener('touchend', () => {
-  if (isStickActive) { isStickActive = false; sim.aileronInput = 0; sim.elevInput = 0; }
-});
+// Phone throttle track: drag anywhere on it, top = TO/GA, bottom = idle.
+(function bindTouchThrottle() {
+  const el = document.getElementById('touchThrottle');
+  let pointerId = null;
+  const set = (e) => {
+    sim.throttle = throttleFromPoint(e.clientY, el.getBoundingClientRect());
+    document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
+  };
+  el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); set(e); e.preventDefault(); });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) set(e); });
+  el.addEventListener('pointerup', (e) => { if (e.pointerId === pointerId) pointerId = null; });
+  el.addEventListener('pointercancel', (e) => { if (e.pointerId === pointerId) pointerId = null; });
+})();
+
+// Phone system buttons reuse the desktop handlers.
+document.getElementById('touchGear').addEventListener('click', () => document.getElementById('btnGear').click());
+document.getElementById('touchFlaps').addEventListener('click', () => document.getElementById('btnFlaps').click());
+document.getElementById('touchBrakes').addEventListener('click', () => document.getElementById('btnBrakes').click());
+document.getElementById('touchIls').addEventListener('click', () => document.getElementById('btnApApr').click());
+
+// Small status toast (gamepad connect/disconnect, etc.)
+let toastTimer = 0;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
+}
+const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
+window.addEventListener('gamepadconnected', (e) => showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear`));
+window.addEventListener('gamepaddisconnected', () => { sim.pad = null; showToast('🎮 Controller disconnected'); });
+
+// Per-frame gamepad poll: continuous axes into sim.pad, edge-triggered buttons into actions.
+function updateGamepad() {
+  const p = pollGamepad();
+  if (!p) { sim.pad = null; return; }
+  sim.pad = p.targets;
+  for (const b of p.edges) {
+    if (b === BUTTON.A) document.getElementById('btnFlaps').click();
+    else if (b === BUTTON.B) document.getElementById('btnGear').click();
+    else if (b === BUTTON.X) document.getElementById('btnBrakes').click();
+    else if (b === BUTTON.Y) document.getElementById('btnCamera').click();
+    else if (b === BUTTON.START) document.getElementById('btnPause').click();
+    else if (b === BUTTON.DPAD_UP) document.getElementById('btnApApr').click();
+  }
+}
 
 // Canvas Dragging for Orbit Camera & Mouse-Fly
 let isCanvasOrbiting = false;
@@ -1285,6 +1368,7 @@ function renderLoop(time) {
   const dt = Math.min((time - lastTime) / 1000, 0.05);
   lastTime = time;
 
+  updateGamepad();
   step6DofPhysics(dt);
   updateCamera();
   renderer.render(scene, camera);

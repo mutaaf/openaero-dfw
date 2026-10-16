@@ -36,7 +36,7 @@
 
   <!-- Onboarding & Flight Academy Modal -->
   <div id="onboardingModal" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-200">
-    <div class="hud-glass max-w-2xl w-full rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-slate-200 border-sky-400/40 shadow-2xl">
+    <div class="hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-slate-200 border-sky-400/40 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-700/80 pb-3">
         <div class="flex items-center gap-2.5">
           <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping"></span>
@@ -80,7 +80,14 @@
       </div>
 
       <!-- Controls Matrix -->
-      <div class="bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-[11px] grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
+      <div class="lg:hidden bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-[11px] font-mono text-slate-300 leading-relaxed">
+        <div class="text-sky-400 font-bold mb-1">👍 TOUCH CONTROLS:</div>
+        • <b>Right thumb</b>: flight stick (drag up to raise the nose)<br>
+        • <b>Left thumb</b>: throttle (top = TO/GA, bottom = idle)<br>
+        • <b>Middle</b>: gear, flaps, brakes, ILS autoland<br>
+        • <b>Gamepad</b>: left stick flies, RT/LT throttle, A flaps, B gear, X brakes
+      </div>
+      <div class="hidden lg:grid bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-[11px] grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
         <div>
           <div class="text-sky-400 font-bold mb-1 flex items-center gap-1.5">
             <span>🕹️ FLIGHT YOKE CONTROLS:</span>
@@ -105,12 +112,12 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-between pt-1">
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
         <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
           <input id="chkAutoSound" type="checkbox" checked class="w-4 h-4 rounded accent-sky-400" />
           <span>Enable Web Audio Turbines & Altitude Chirps</span>
         </label>
-        <button id="btnStartFlight" class="hud-btn active px-6 py-2.5 rounded-xl text-xs font-bold font-mono text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
+        <button id="btnStartFlight" class="hud-btn active px-6 py-2.5 min-h-[44px] rounded-xl text-xs font-bold font-mono text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
           ENTER COCKPIT ✈
         </button>
       </div>
@@ -118,7 +125,7 @@
   </div>
 
   <!-- Top Real-Time Aviation Operations Bar -->
-  <header class="absolute top-2 left-2 right-2 z-20 flex flex-col gap-1.5 pointer-events-none">
+  <header id="phoneHeader" class="absolute left-2 right-2 z-20 flex flex-col gap-1.5 pointer-events-none" style="top: max(0.5rem, env(safe-area-inset-top))">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <!-- Left: Aircraft, Scenario, NAVAID Selectors -->
       <div class="hud-glass pointer-events-auto rounded-xl px-3 py-1.5 flex flex-wrap items-center gap-2 text-xs">
@@ -127,7 +134,7 @@
           <span class="font-bold font-mono text-sky-400 tracking-wider text-[11px]">DFW SATELLITE PRO</span>
         </div>
 
-        <div class="flex items-center gap-1 font-mono">
+        <div class="hidden lg:flex items-center gap-1 font-mono">
           <label for="selAircraft" class="text-[10px] text-slate-400 font-bold">PLANE:</label>
           <select id="selAircraft" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-200 focus:outline-none">
             <option value="b738">Boeing 737-800 NG</option>
@@ -136,7 +143,7 @@
           </select>
         </div>
 
-        <div class="flex items-center gap-1 font-mono">
+        <div class="hidden lg:flex items-center gap-1 font-mono">
           <label for="selScenario" class="text-[10px] text-slate-400 font-bold">MISSION:</label>
           <select id="selScenario" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-amber-300 focus:outline-none">
             <option value="kdfw_35c_final">KDFW RWY 35C (4 NM ILS Final)</option>
@@ -152,7 +159,7 @@
       </div>
 
       <!-- Center: Autopilot Mode Control Panel (MCP) -->
-      <div class="hud-glass pointer-events-auto rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 text-xs font-mono">
+      <div class="hud-glass pointer-events-auto rounded-xl px-2.5 py-1.5 hidden lg:flex items-center gap-1.5 text-xs font-mono">
         <span class="text-[10px] text-slate-400 font-bold mr-0.5">MCP:</span>
         <button id="btnApMaster" class="hud-btn px-2 py-0.5 rounded text-[11px] font-bold" title="Master Autopilot (Z)">AP</button>
         <button id="btnApHdg" class="hud-btn px-1.5 py-0.5 rounded text-[11px]" title="Heading Hold">HDG</button>
@@ -161,17 +168,17 @@
       </div>
 
       <!-- Right: Camera, Mouse Yoke, Weather, Audio, Reset -->
-      <div class="hud-glass pointer-events-auto rounded-xl px-2.5 py-1.5 flex items-center gap-1 text-xs font-mono">
+      <div class="hud-glass pointer-events-auto rounded-xl px-2.5 py-1.5 flex flex-wrap items-center gap-1 text-xs font-mono">
         <button id="btnCamera" class="hud-btn active-sky px-2 py-0.5 rounded text-[11px]" title="Cycle 6 Camera Views (C)">
           Cam: <span id="txtCamMode" class="font-bold">Cockpit 3D</span>
         </button>
-        <button id="btnMouseYoke" class="hud-btn px-2 py-0.5 rounded text-[11px]" title="Toggle Direct Mouse Yoke (M)">
+        <button id="btnMouseYoke" class="hud-btn hidden lg:inline-block px-2 py-0.5 rounded text-[11px]" title="Toggle Direct Mouse Yoke (M)">
           Mouse-Fly: <span id="txtMouseYokeState" class="text-amber-400 font-bold">OFF</span>
         </button>
-        <button id="btnSatLayer" class="hud-btn active-sky px-2 py-0.5 rounded text-[11px]" title="Toggle Satellite Orthophotos">
+        <button id="btnSatLayer" class="hud-btn hidden lg:inline-block active-sky px-2 py-0.5 rounded text-[11px]" title="Toggle Satellite Orthophotos">
           🛰️ <span id="txtSatState">Satellite</span>
         </button>
-        <button id="btnTimeOfDay" class="hud-btn px-2 py-0.5 rounded text-[11px]" title="Toggle Day / Sunset / Night">
+        <button id="btnTimeOfDay" class="hud-btn hidden lg:inline-block px-2 py-0.5 rounded text-[11px]" title="Toggle Day / Sunset / Night">
           ☀️ <span id="txtTimeBadge">Day</span>
         </button>
         <button id="btnAudio" class="hud-btn px-2 py-0.5 rounded text-[11px]">
@@ -194,10 +201,18 @@
         <span>ACTIVE FLOW: <b class="text-emerald-400">NORTH (RWY 35C/35L/31R)</b></span>
       </div>
     </div>
+
+    <!-- Phone telemetry strip (the EICAS and moving map are desktop-only) -->
+    <div class="lg:hidden hud-glass pointer-events-auto rounded-xl px-2 py-1 grid grid-cols-4 gap-1 text-center font-mono text-[10px]">
+      <div><div class="text-slate-500 text-[8px]">IAS</div><b id="txtPhoneIas" class="text-slate-100">140</b></div>
+      <div><div class="text-slate-500 text-[8px]">AGL FT</div><b id="txtPhoneAgl" class="text-emerald-300">1270</b></div>
+      <div><div class="text-slate-500 text-[8px]">V/S FPM</div><b id="txtPhoneVs" class="text-sky-300">-700</b></div>
+      <div><div class="text-slate-500 text-[8px]">PAPI</div><b id="txtPhonePapi" class="text-emerald-400">ON GS</b></div>
+    </div>
   </header>
 
   <!-- Left: EICAS Propulsion, Flight Controls & Trim Deck -->
-  <aside class="hud-glass absolute bottom-3 left-3 z-20 w-68 sm:w-76 rounded-2xl p-3 text-xs flex flex-col gap-2 font-mono">
+  <aside class="hud-glass absolute bottom-3 left-3 z-20 w-68 sm:w-76 rounded-2xl p-3 text-xs hidden lg:flex flex-col gap-2 font-mono">
     <div class="flex items-center justify-between border-b border-slate-700/80 pb-1">
       <div>
         <div class="text-[9px] uppercase tracking-wider text-slate-400 font-bold">EICAS / 6-DOF DATA</div>
@@ -280,7 +295,7 @@
   </div>
 
   <!-- Right: Dallas Moving Map Radar & Telemetry -->
-  <aside class="hud-glass absolute bottom-3 right-3 z-20 w-64 sm:w-72 rounded-2xl p-2.5 text-xs flex flex-col gap-1.5 font-mono">
+  <aside id="mapPanel" class="hud-glass absolute bottom-3 right-3 z-20 w-64 sm:w-72 rounded-2xl p-2.5 text-xs hidden lg:flex flex-col gap-1.5 font-mono">
     <div class="flex items-center justify-between text-[10px]">
       <div class="flex items-center gap-1.5">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -313,9 +328,35 @@
         <div id="txtAltAgl" class="text-emerald-300 font-bold">1274 FT</div>
       </div>
     </div>
-    <a class="imagery-credit" href="https://www.esri.com/en-us/legal/terms/full-master-agreement" target="_blank" rel="noopener">Satellite imagery © Esri, Maxar, Earthstar Geographics</a>
   </aside>
 
+  <!-- Touch flight deck (below lg): throttle under the left thumb, stick under the right -->
+  <div id="touchDeck" class="lg:hidden absolute inset-x-0 bottom-0 z-20 pointer-events-none font-mono"
+       style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
+    <div class="flex items-end justify-between gap-2 px-3">
+      <div class="pointer-events-auto flex flex-col items-center gap-1">
+        <span class="text-[10px] text-slate-300">THR <b id="txtTouchThr" class="text-emerald-400">44%</b></span>
+        <div id="touchThrottle" class="touch-control hud-glass relative w-16 h-44 rounded-2xl overflow-hidden" aria-label="Throttle" role="slider" aria-valuemin="0" aria-valuemax="100">
+          <div id="touchThrottleFill" class="absolute inset-x-0 bottom-0 bg-emerald-500/30"></div>
+          <div id="touchThrottleHandle" class="absolute inset-x-1 h-9 -mb-[18px] rounded-xl bg-slate-200/90 border-2 border-white shadow-lg pointer-events-none"></div>
+        </div>
+      </div>
+      <div id="touchButtons" class="pointer-events-auto flex flex-col gap-1.5 text-[11px] font-bold">
+        <button id="touchGear" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">GEAR <span id="txtTouchGear" class="text-emerald-400">DN</span></button>
+        <button id="touchFlaps" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">FLAPS <span id="txtTouchFlaps" class="text-sky-300">25°</span></button>
+        <button id="touchBrakes" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">BRAKES</button>
+        <button id="touchIls" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px] text-amber-300">ILS AUTO</button>
+      </div>
+      <div id="touchStick" class="touch-control hud-glass pointer-events-auto relative w-36 h-36 rounded-full flex items-center justify-center" aria-label="Flight stick">
+        <div class="absolute inset-x-4 top-1/2 h-px bg-slate-600/60 pointer-events-none"></div>
+        <div class="absolute inset-y-4 left-1/2 w-px bg-slate-600/60 pointer-events-none"></div>
+        <div id="touchStickKnob" class="w-14 h-14 rounded-full bg-sky-400/90 border-2 border-white shadow-lg pointer-events-none"></div>
+      </div>
+    </div>
+  </div>
+
+  <a class="imagery-credit" href="https://www.esri.com/en-us/legal/terms/full-master-agreement" target="_blank" rel="noopener">Satellite imagery © Esri, Maxar, Earthstar Geographics</a>
+  <div id="toast" role="status" aria-live="polite" class="hidden pointer-events-none absolute left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-xl hud-glass text-xs font-mono text-sky-200" style="top: 45%"></div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

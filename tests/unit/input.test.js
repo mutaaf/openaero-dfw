@@ -25,3 +25,37 @@ describe('stickFromPoint', () => {
     expect(stickFromPoint(0, 1000, rect)).toEqual({ x: -1, y: 1 });
   });
 });
+
+import { combineTargets, throttleFromPoint } from '../../src/input.js';
+
+describe('combineTargets', () => {
+  const kb = { pitch: 1, roll: -1, yaw: 0 };
+  it('uses the keyboard when nothing else is active', () => {
+    expect(combineTargets(kb, null, null)).toEqual({ pitch: 1, roll: -1, yaw: 0, source: 'keyboard' });
+  });
+  it('an active touch/drag stick wins over everything', () => {
+    const stick = { x: 0.5, y: -0.25, active: true };
+    const pad = { roll: 1, pitch: 1, yaw: 1, active: true };
+    expect(combineTargets(kb, stick, pad)).toEqual({ pitch: -0.25, roll: 0.5, yaw: 1, source: 'stick' });
+  });
+  it('a deflected gamepad wins over the keyboard', () => {
+    const pad = { roll: 0.3, pitch: -0.4, yaw: 0.1, active: true };
+    expect(combineTargets(kb, { x: 0, y: 0, active: false }, pad)).toEqual({ pitch: -0.4, roll: 0.3, yaw: 0.1, source: 'gamepad' });
+  });
+  it('keyboard yaw still works while the touch stick is held', () => {
+    expect(combineTargets({ pitch: 0, roll: 0, yaw: -1 }, { x: 0.2, y: 0.1, active: true }, null).yaw).toBe(-1);
+  });
+});
+
+describe('throttleFromPoint', () => {
+  const rect = { top: 100, height: 200 };
+  it('top of the track is full power, bottom is idle', () => {
+    expect(throttleFromPoint(100, rect)).toBe(1);
+    expect(throttleFromPoint(300, rect)).toBe(0);
+    expect(throttleFromPoint(200, rect)).toBeCloseTo(0.5);
+  });
+  it('clamps outside the track', () => {
+    expect(throttleFromPoint(0, rect)).toBe(1);
+    expect(throttleFromPoint(999, rect)).toBe(0);
+  });
+});

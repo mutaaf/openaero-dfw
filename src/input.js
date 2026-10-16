@@ -20,3 +20,24 @@ export function stickFromPoint(clientX, clientY, rect) {
     y: c(((clientY - rect.top) / rect.height) * 2 - 1),
   };
 }
+
+// Merge the input sources into one set of control targets. Priority: a held on-screen
+// stick (touch or mouse drag) > a deflected gamepad > keyboard. Rudder (yaw) comes from
+// the stick-less sources so keyboard Q/E or gamepad shoulders still work while the
+// touch stick is held. Returns the source name for the HUD and tests.
+export function combineTargets(kb, stick, pad) {
+  if (stick && stick.active) {
+    const yaw = pad && pad.active && pad.yaw ? pad.yaw : kb.yaw;
+    return { pitch: stick.y, roll: stick.x, yaw, source: 'stick' };
+  }
+  if (pad && pad.active) {
+    return { pitch: pad.pitch, roll: pad.roll, yaw: pad.yaw || kb.yaw, source: 'gamepad' };
+  }
+  return { pitch: kb.pitch, roll: kb.roll, yaw: kb.yaw, source: 'keyboard' };
+}
+
+// Throttle (0..1) from a point on a vertical track: top = full power, bottom = idle.
+export function throttleFromPoint(clientY, rect) {
+  const t = 1 - (clientY - rect.top) / rect.height;
+  return Math.max(0, Math.min(1, t));
+}
