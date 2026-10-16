@@ -1,7 +1,7 @@
 ---
 id: 0005
 title: Plan and start the three.js r128 → current upgrade
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: tech-health
