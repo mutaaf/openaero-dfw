@@ -1,12 +1,12 @@
 ---
 id: 0004
 title: Fly in today's real weather (edge METAR + wind in the physics)
-status: ready
+status: shipped
 priority: P1
 size: L
 lens: authenticity
 created: 2026-10-16
-pr:
+pr: 6
 ---
 
 ## Why

@@ -8,7 +8,24 @@ const TILE_PNG = Buffer.from(
   'base64',
 );
 
+// Default weather for tests: a fixed, calm-ish METAR served for the edge API. vite preview
+// has no Worker, so without this every page load would log a 404.
+export const TEST_METAR = {
+  icaoId: 'KDFW', obsTime: Math.floor(Date.now() / 1000) - 600,
+  rawOb: 'METAR KDFW 161953Z 18005KT 10SM FEW250 24/10 A3002', temp: 24, dewp: 10,
+  wdir: 180, wspd: 5, wgst: null, visib: '10+', altim: 1016.6, clouds: [{ cover: 'FEW', base: 25000 }], fltCat: 'VFR',
+};
+
+export async function stubMetar(page, metars = [TEST_METAR], status = 200) {
+  await page.route('**/openaero/api/metar*', (route) => route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(status === 200 ? { source: 'aviationweather.gov', fetchedAt: new Date().toISOString(), metars } : { error: 'test' }),
+  }));
+}
+
 export async function stubTiles(page) {
+  await stubMetar(page);
   await page.route('https://server.arcgisonline.com/**', (route) =>
     route.fulfill({
       status: 200,
