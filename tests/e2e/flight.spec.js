@@ -23,14 +23,18 @@ test('ILS autoland flies the short final to an upright touchdown on the runway',
   await enterCockpit(page);
   await page.selectOption('#selScenario', 'kdfw_35c_flare');
   await page.click('#btnApApr');
-  await expect.poll(async () => (await snap(page)).onGround, { timeout: 120_000 }).toBe(true);
-  const s = await snap(page);
-  expect(Math.abs(s.crossM)).toBeLessThan(15);
-  expect(s.distM).toBeLessThan(0);         // past the threshold
-  expect(s.distM).toBeGreaterThan(-900);   // and in the touchdown zone-ish
-  expect(Math.abs(s.bankRightDeg)).toBeLessThan(3);
-  expect(s.pitchDeg).toBeGreaterThan(0);
-  expect(s.pitchDeg).toBeLessThan(10);
+  // Assert on the state captured AT touchdown (not when the poll notices it, after rollout).
+  await expect.poll(async () => (await snap(page)).lastLanding, { timeout: 120_000 }).not.toBeNull();
+  const td = (await snap(page)).lastLanding;
+  expect(td.runway).toBe('KDFW_35C');
+  expect(Math.abs(td.crossM)).toBeLessThan(15);
+  expect(td.pastThresholdM).toBeGreaterThan(0);    // past the threshold
+  expect(td.pastThresholdM).toBeLessThan(900);     // inside the 3,000 ft touchdown zone
+  expect(Math.abs(td.bankRightDeg)).toBeLessThan(3);
+  expect(td.pitchDeg).toBeGreaterThan(0);
+  expect(td.pitchDeg).toBeLessThan(10);
+  expect(td.vsFpm).toBeGreaterThan(-600);          // not a crash
+  expect(td.vsFpm).toBeLessThan(-20);              // a real sink rate was measured (not lost to the ground clamp)
 });
 
 test('ILS autoland holds the localizer and glideslope from 4 NM', async ({ page }) => {

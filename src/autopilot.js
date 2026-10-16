@@ -18,7 +18,7 @@ export const aileronForBank = (bankCmdDeg, bankRightDeg, rollRateRight) =>
 export const glidepathGammaDeg = (heightAbovePathM) => clamp(-3 - heightAbovePathM * 0.12, -6, -0.5);
 
 // Flare: target vertical speed (m/s, negative = down) from wheel height (m).
-export const flareSinkMps = (wheelHeightM) => -Math.max(0.45, wheelHeightM * 0.16);
+export const flareSinkMps = (wheelHeightM) => -Math.max(0.8, wheelHeightM * 0.2);
 
 // Pitch hold: elevator from pitch error (deg) with pitch-rate damping (rad/s).
 export const elevatorForPitch = (pitchCmdDeg, pitchDeg, pitchRateUp) =>

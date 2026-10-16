@@ -1,12 +1,12 @@
 ---
 id: 0013
 title: Voice GPWS altitude callouts
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-16
-pr:
+pr: 9
 ---
 
 ## Why

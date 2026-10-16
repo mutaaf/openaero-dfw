@@ -1,7 +1,8 @@
-// Web Audio synthesis: engine tone, wind rush, stall horn, GPWS altitude chirps.
+// Web Audio synthesis: engine tone, wind rush, stall horn; spoken GPWS callouts
+// (speechSynthesis, on-device, no network) with chirps as the fallback.
 // createAudio(sim) binds to the shared sim state; nothing starts until init() runs
 // from a user gesture (browser autoplay policy).
-import { gpwsCalloutIndex, GPWS_ALT_THRESHOLDS, isStallWarning } from './aero.js';
+import { gpwsCalloutIndex, GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, calloutWord } from './aero.js';
 
 export function createAudio(sim, onStateChange) {
   let audioCtx = null;
@@ -82,13 +83,40 @@ export function createAudio(sim, onStateChange) {
     } catch (e) { /* audio is best-effort */ }
   }
 
+  const synth = typeof window !== 'undefined' && window.speechSynthesis ? window.speechSynthesis : null;
+  // Speak a callout. Altitude callouts interrupt a stale one (they must be on time);
+  // follow-ups like "retard" queue behind.
+  function say(text, { interrupt = true } = {}) {
+    if (!audioCtx || !sim.audioEnabled) return false;
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return false;
+    try {
+      if (interrupt && synth.cancel) synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.35;
+      u.pitch = 0.75;
+      u.volume = 0.9;
+      synth.speak(u);
+      return true;
+    } catch (e) { return false; }
+  }
+
   function checkGpwsCallouts() {
     if (sim.onGround || sim.vel.y >= 0) return;
     const i = gpwsCalloutIndex(sim.aglFt, sim.lastCalloutIdx);
     if (i >= 0 && i < GPWS_ALT_THRESHOLDS.length) {
       sim.lastCalloutIdx = i;
-      chirp(587.33, 0.18);
+      if (!say(calloutWord(i))) chirp(587.33, 0.18);
+      if (GPWS_ALT_THRESHOLDS[i] === 20 && sim.throttle > 0.05) say('retard', { interrupt: false });
     }
+  }
+
+  let lastPullUp = -10;
+  function checkGpwsWarning() {
+    if (!isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround)) return;
+    const now = audioCtx.currentTime;
+    if (now - lastPullUp < 3) return;
+    lastPullUp = now;
+    if (!say(sim.aglFt < 250 ? 'pull up' : 'sink rate')) chirp(880, 0.4);
   }
 
   function update() {
@@ -102,6 +130,7 @@ export function createAudio(sim, onStateChange) {
     const stalling = isStallWarning(sim.iasKts, sim.spec.stallCleanKts, sim.onGround);
     stallGain.gain.setTargetAtTime(stalling ? 0.07 : 0.0, now, 0.05);
     checkGpwsCallouts();
+    checkGpwsWarning();
   }
 
   // Hard-mute every voice (used when the player switches sound off).

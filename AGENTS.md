@@ -67,9 +67,10 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    arrays), no layout thrash from the HUD.
 5. **Mobile.** Touch controls work at 390x844, touch targets ≥44px, no page scroll or
    zoom while playing, safe-area insets respected.
-6. **Save data compatibility.** No persistent state yet. When you add some, use
-   `localStorage` keys prefixed `openaero_`, store a `v` version field, and migrate old
-   versions on read; never throw away a player's data.
+6. **Save data compatibility.** `localStorage['openaero_best'] = { v: 1, missions: {
+   <missionKey>: { score, grade, at } } }` (personal bests, `src/landing.js`). New keys are
+   prefixed `openaero_` and carry a `v`; bump `v` only with a migration on read; never throw
+   away a player's data; tolerate storage that throws (private mode).
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
    every control has a keyboard path; text meets 4.5:1 contrast on HUD backgrounds.
 
@@ -87,6 +88,8 @@ src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY
 src/missions.js     mission catalogue (approaches by runway end, tours by spawn)
 src/runways.js      downtown landmark origin (moving to landmarks.js with ticket 0010)
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
+src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +
+                    versioned personal bests
 src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign
                     conventions (pinned by tests):** aileron + = roll right, elevator + =
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,

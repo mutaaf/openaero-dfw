@@ -137,3 +137,12 @@ describe('flap lift per airframe', () => {
     expect(lc(s, 0, 2) - lc(s, 0, 0)).toBeCloseTo(0.56, 6);
   });
 });
+
+import { calloutWord, GPWS_ALT_THRESHOLDS as T } from '../../src/aero.js';
+describe('calloutWord', () => {
+  it('maps 1:1 to the GPWS thresholds', () => {
+    expect(T.map((_, i) => calloutWord(i))).toEqual([
+      'one thousand', 'five hundred', 'four hundred', 'three hundred', 'two hundred',
+      'one hundred', 'fifty', 'forty', 'thirty', 'twenty', 'ten']);
+  });
+});
