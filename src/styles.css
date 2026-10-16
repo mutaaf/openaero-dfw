@@ -63,3 +63,23 @@ input[type=range] { accent-color: #38bdf8; }
   text-decoration: none;
 }
 .imagery-credit:hover { color: #e2e8f0; }
+
+/* Imagery credit: always visible, tucked at the very bottom edge. */
+.imagery-credit {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: 1px;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+/* Touch controls own their gestures: no scroll, zoom or text selection. */
+.touch-control { touch-action: none; -webkit-touch-callout: none; }
+
+/* Coarse pointers get ≥44px targets on the HUD buttons. */
+@media (pointer: coarse) {
+  header .hud-btn { min-height: 44px; min-width: 44px; }
+}

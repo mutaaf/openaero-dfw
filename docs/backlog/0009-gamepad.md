@@ -1,12 +1,12 @@
 ---
 id: 0009
 title: Fly with a gamepad
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-16
-pr:
+pr: 3
 ---
 
 ## Why

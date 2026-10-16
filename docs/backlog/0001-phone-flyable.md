@@ -1,12 +1,12 @@
 ---
 id: 0001
 title: Make the sim flyable on a phone
-status: ready
+status: shipped
 priority: P0
 size: L
 lens: player-feel
 created: 2026-10-16
-pr:
+pr: 3
 ---
 
 ## Why
