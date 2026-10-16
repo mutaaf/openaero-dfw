@@ -93,6 +93,10 @@ src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
 src/input.js        keyboard state → control targets, virtual stick mapping
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
 src/styles.css      Tailwind entry + ported custom HUD styles
+src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):
+                    GET /openaero/api/metar?ids=KDFW,… → aviationweather.gov METARs,
+                    validated ids, trimmed JSON, 5-min edge cache. Operator-frozen with
+                    wrangler.jsonc: changes go in a build/ PR the operator merges.
 tests/unit/         Vitest for the pure modules
 tests/e2e/          Playwright: smoke, controls, missions, phone, perf probe
 ```
@@ -113,7 +117,8 @@ a second by `selectActiveRunway` from whatever you're lined up on. Loop per fram
 |---|---|
 | `npm run dev` | Vite dev server at http://localhost:5173/openaero/ |
 | `npm run build` | Production build into `dist/openaero/` |
-| `npm run preview` | Serve the production build locally |
+| `npm run preview` | Serve the production build locally (static only: the /api Worker isn't running, the client falls back) |
+| `npx wrangler dev --local --port 8799` | Build first; serves assets **and** the edge Worker locally (real METARs) |
 | `npm test` | Unit tests (Vitest) |
 | `npm run e2e` | Playwright e2e (builds first) |
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
