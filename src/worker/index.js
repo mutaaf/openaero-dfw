@@ -6,7 +6,8 @@
 // the edge for 5 minutes. aviationweather.gov is the only host this Worker talks to.
 
 const UPSTREAM = 'https://aviationweather.gov/api/data/metar';
-const TTL_S = 300;
+const TTL_S = 300;          // how long the edge (caches.default) keeps a copy
+const BROWSER_TTL_S = 60;   // what browsers are told, on every response we return
 const MAX_IDS = 6;
 const ID_RE = /^K[A-Z0-9]{3}$/;
 
@@ -14,6 +15,12 @@ const json = (status, body, extra = {}) => new Response(JSON.stringify(body), {
   status,
   headers: { 'content-type': 'application/json; charset=utf-8', ...extra },
 });
+
+function withBrowserTtl(res) {
+  const out = new Response(res.body, res);
+  out.headers.set('cache-control', `public, max-age=${BROWSER_TTL_S}`);
+  return out;
+}
 
 // "kdfw, KDAL" → ['KDAL', 'KDFW'] (sorted, deduped), or null if anything is invalid.
 export function parseIds(raw) {
@@ -39,8 +46,10 @@ export async function handleMetar(request, deps) {
   if (!ids) return json(400, { error: `ids must be 1-${MAX_IDS} comma-separated K-prefixed ICAO codes` });
 
   const cacheKey = `${url.origin}${url.pathname}?ids=${ids.join(',')}`;
+  // Re-stamp cache-control on hits: zone rules (Browser Cache TTL) can rewrite the stored
+  // header to hours, and weather must not sit stale in a browser cache.
   const hit = await deps.cache.match(cacheKey);
-  if (hit) return hit;
+  if (hit) return withBrowserTtl(hit);
 
   let upstream;
   try {
@@ -64,7 +73,7 @@ export async function handleMetar(request, deps) {
   };
   const res = json(200, body, { 'cache-control': `public, max-age=${TTL_S}` });
   deps.waitUntil(deps.cache.put(cacheKey, res.clone()));
-  return res;
+  return withBrowserTtl(res);
 }
 
 export default {
