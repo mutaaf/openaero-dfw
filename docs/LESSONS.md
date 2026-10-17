@@ -16,3 +16,4 @@ you learn something a future run must not re-learn; prune rows that no longer ap
 | 2026-10-16 | **Test that the aircraft flies, not just that the page renders.** | The ported prototype passed every boot/render test while D banked left, banks never turned, takeoff capped at 75 kt and autoland looped into the ground (in production). `flight.spec.js` now rolls, turns, takes off and autolands. |
 | 2026-10-16 | **Pin control-law signs with unit tests.** | The glideslope law `(target − pitch)·k` was positive feedback because elevator + is nose-down here. `src/autopilot.js` laws each have a sign test. |
 
+| 2026-10-17 | Scout: playing needs the Esri host stubbed, not blocked | Blocking tiles with 404s floods the console with errors that look like bugs; fulfil with a 1x1 PNG + CORS like `stubTiles()`. |
