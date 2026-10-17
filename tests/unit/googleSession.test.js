@@ -42,6 +42,8 @@ describe('session reuse (memory only, per the Google no-caching policy)', () => 
     expect(r1.session).toBe('SESS123');
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][0]).toBe(`${ROOT_URL}?key=K`);
+    // Full-URL referrer, or Google rejects the path-restricted key.
+    expect(fetch.mock.calls[0][1]).toEqual({ referrerPolicy: 'no-referrer-when-downgrade' });
     await a.getRoot();
     await a.getRoot();
     expect(fetch).toHaveBeenCalledTimes(1);
