@@ -25,6 +25,7 @@ import {
   fogDensityForVisibility, metarAgeMinutes, flowForWind,
 } from './weather.js';
 import { createTerrainLod } from './terrainLod.js';
+import { createPhotoreal, photorealAllowed } from './photoreal.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl } from './terrain.js';
 import {
   dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
@@ -112,7 +113,8 @@ const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
 
 let renderer, scene, camera, ambientLight, sunLight;
-let aircraftRoot, terrainGroup, terrainLod;
+let aircraftRoot, terrainGroup, terrainLod, photoreal;
+const runwayMeshes = []; // runway surface + markings: hidden under the photoreal mesh
 let animRefs = { prop: null, flame: null, fanL: null, fanR: null };
 let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order)
 
@@ -259,11 +261,13 @@ function buildRunways() {
     });
     for (const side of [-1, 1]) pushQuad(marks, r.cx, r.cz, rot, side * (r.widthM / 2 - 1), 0, 0.9, r.lengthM, 0);
   }
-  scene.add(flatMesh(surface, groundMaterial({ color: 0x1c2029 }, GROUND_ORDER.runway, 'runway'), GROUND_ORDER.runway));
+  runwayMeshes.push(flatMesh(surface, groundMaterial({ color: 0x1c2029 }, GROUND_ORDER.runway, 'runway'), GROUND_ORDER.runway));
+  scene.add(runwayMeshes[0]);
   const markMat = new THREE.MeshBasicMaterial({
     color: 0xf1f5f9, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: GROUND_OFFSET.marking,
   });
-  scene.add(flatMesh(marks, markMat, GROUND_ORDER.marking));
+  runwayMeshes.push(flatMesh(marks, markMat, GROUND_ORDER.marking));
+  scene.add(runwayMeshes[1]);
 
   // PAPI: four lamps left of every runway end, abeam the aiming point. Drawn as one
   // Points object with a constant on-screen size, the way real lights read from miles out.
@@ -309,6 +313,16 @@ function buildSatelliteTerrain() {
   });
   applyGroundLight();
   loadDem();
+
+  photoreal = createPhotoreal({
+    scene, camera, renderer,
+    base: import.meta.env.BASE_URL,
+    storage: safeStorage(),
+    isMobile: window.innerWidth < 700,
+    runwayEnds: RUNWAY_ENDS,
+    onActive: () => setPhotorealMode(true),
+    onUnavailable: () => setPhotorealMode(false),
+  });
 
   scene.add(terrainGroup);
   buildRunways();
@@ -377,6 +391,25 @@ function buildSatelliteTerrain() {
   scene.add(att);
   landmarks.push(att);
   seatLandmarks();
+}
+
+function safeStorage() {
+  try { return window.localStorage; } catch { return null; }
+}
+
+// Photoreal on: Google's mesh has the real ground, runways, buildings and landmarks, so our
+// imagery, runway surfaces and stand-in landmarks step aside (PAPIs and lights stay), and
+// the credits switch to Google's logo + the data providers of the tiles on screen.
+let photorealOn = false;
+function setPhotorealMode(on) {
+  photorealOn = on;
+  const sat = sim.satelliteEnabled;
+  terrainLod?.setVisible(sat && !on);
+  for (const m of runwayMeshes) m.visible = !on;
+  for (const o of landmarks) o.visible = !on;
+  photoreal?.setVisible(sat);
+  document.getElementById('creditsFree').classList.toggle('hidden', on);
+  document.getElementById('creditsGoogle').classList.toggle('hidden', !on);
 }
 
 // Landmarks stand on the real ground; their own y is the height above it.
@@ -1352,6 +1385,7 @@ function loadScenario(key) {
     sim.activeEnd = null;
   }
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
+  photoreal?.noteSessionReuse(); // a new mission keeps the same Google session (usage counter)
   if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
   document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
 }
@@ -1462,6 +1496,7 @@ function handleResize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  photoreal?.resize();
 
   hudCanvas.width = w;
   hudCanvas.height = h;
@@ -1479,6 +1514,8 @@ document.getElementById('btnCloseModal').addEventListener('click', () => {
 });
 document.getElementById('btnStartFlight').addEventListener('click', () => {
   if (document.getElementById('chkAutoSound').checked) audio.init();
+  // The (billable) Google session starts only when someone actually flies, once per page.
+  if (photorealAllowed(window.location)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   document.getElementById('onboardingModal').classList.add('hidden');
 });
 document.getElementById('btnOpenMissions').addEventListener('click', () => {
@@ -1516,6 +1553,7 @@ document.getElementById('btnCamera').addEventListener('click', () => {
 document.getElementById('btnSatLayer').addEventListener('click', () => {
   sim.satelliteEnabled = !sim.satelliteEnabled;
   if (terrainGroup) terrainGroup.visible = sim.satelliteEnabled;
+  setPhotorealMode(photorealOn);
   const txt = document.getElementById('txtSatState');
   txt.textContent = sim.satelliteEnabled ? 'Satellite' : 'Grid';
   document.getElementById('btnSatLayer').classList.toggle('active-sky', sim.satelliteEnabled);
@@ -1745,11 +1783,34 @@ function renderLoop(time) {
   syncWeatherUI(dt);
   updateCamera();
   terrainLod.update(dt, camera);
+  photoreal.update(dt);
+  updateDebugOverlay(dt);
   renderer.render(scene, camera);
   renderHud();
   renderRadar();
   syncUI();
   audio.update();
+}
+
+// ?debug: a one-line usage readout of the Google session (to verify the free tier holds).
+const debugOverlay = new URLSearchParams(window.location.search).has('debug') ? document.createElement('div') : null;
+if (debugOverlay) {
+  debugOverlay.style.cssText = 'position:absolute;left:8px;bottom:14px;z-index:40;font:10px monospace;color:#a7f3d0;background:rgba(2,6,23,.7);padding:2px 6px;border-radius:4px;pointer-events:none';
+  document.body.appendChild(debugOverlay);
+}
+let debugTimer = 0;
+let creditsTimer = 0;
+function updateDebugOverlay(dt) {
+  if (photorealOn && (creditsTimer -= dt) <= 0) {
+    creditsTimer = 1;
+    const txt = document.getElementById('txtGoogleData');
+    if (txt.textContent !== photoreal.state.attributions) txt.textContent = photoreal.state.attributions;
+  }
+  if (!debugOverlay || (debugTimer -= dt) > 0) return;
+  debugTimer = 1;
+  const st = photoreal.state, s = photoreal.session;
+  debugOverlay.textContent = `3D tiles: ${st.status}${st.reason ? ` (${st.reason})` : ''} · this page: ${s ? s.page.roots : 0} root, ${s ? s.page.reuses : 0} reuses`
+    + ` · this browser: ${s ? s.usage.roots : 0} roots, ${s ? s.usage.reuses : 0} reuses · tiles ${st.visibleTiles} · calib ${st.calibM.toFixed(1)} m`;
 }
 
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
@@ -1780,6 +1841,12 @@ window.openaeroDebug = () => {
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
+    photoreal: photoreal ? {
+      ...photoreal.state,
+      page: photoreal.session ? { ...photoreal.session.page } : null,
+      usage: photoreal.session ? { ...photoreal.session.usage } : null,
+      bounds: photoreal.state.status === 'active' ? photoreal.bounds() : null,
+    } : null,
     render: renderer ? { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles } : null,
   };
 };
