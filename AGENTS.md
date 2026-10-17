@@ -102,7 +102,9 @@ src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gest
 src/styles.css      Tailwind entry + ported custom HUD styles
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):
                     GET /openaero/api/metar?ids=KDFW,… → aviationweather.gov METARs,
-                    validated ids, trimmed JSON, 5-min edge cache. Operator-frozen with
+                    validated ids, trimmed JSON, 5-min edge cache.
+                    GET /openaero/api/config → { googleTilesKey } from the
+                    GOOGLE_MAPS_KEY Worker secret (null when unset), no-store. Operator-frozen with
                     wrangler.jsonc: changes go in a build/ PR the operator merges.
 tests/unit/         Vitest for the pure modules
 tests/e2e/          Playwright: smoke, controls, missions, phone, perf probe

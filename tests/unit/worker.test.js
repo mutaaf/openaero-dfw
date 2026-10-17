@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import worker, { handleMetar, parseIds, trimMetar } from '../../src/worker/index.js';
+import worker, { handleConfig, handleMetar, parseIds, trimMetar } from '../../src/worker/index.js';
 
 const SAMPLE = [{
   icaoId: 'KDFW', obsTime: 1792183980, reportTime: '2026-10-16T21:00:00.000Z', temp: 18.3, dewp: 2.8,
@@ -109,5 +109,23 @@ describe('worker.fetch routing', () => {
   it('only allows GET', async () => {
     const r = await worker.fetch(new Request('https://mutaafaziz.com/openaero/api/metar?ids=KDFW', { method: 'POST' }), { ASSETS: {} }, { waitUntil() {} });
     expect(r.status).toBe(405);
+  });
+});
+
+describe('config endpoint', () => {
+  it('returns the Google tiles key from the secret, never cached', async () => {
+    const res = handleConfig({ GOOGLE_MAPS_KEY: ' abc123 ' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.json()).toEqual({ googleTilesKey: 'abc123' });
+  });
+  it('returns null when the secret is unset or blank', async () => {
+    expect(await handleConfig({}).json()).toEqual({ googleTilesKey: null });
+    expect(await handleConfig({ GOOGLE_MAPS_KEY: '  ' }).json()).toEqual({ googleTilesKey: null });
+    expect(await handleConfig(undefined).json()).toEqual({ googleTilesKey: null });
+  });
+  it('is routed at /openaero/api/config', async () => {
+    const res = await worker.fetch(new Request('https://mutaafaziz.com/openaero/api/config'), { GOOGLE_MAPS_KEY: 'k' }, { waitUntil() {} });
+    expect(await res.json()).toEqual({ googleTilesKey: 'k' });
   });
 });
