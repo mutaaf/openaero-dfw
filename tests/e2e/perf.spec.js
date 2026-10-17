@@ -3,9 +3,9 @@ import { stubTiles, enterCockpit } from './helpers.js';
 
 // Light frame-time probe. CI renders through SwiftShader (software GL), so the threshold
 // is deliberately generous: it catches catastrophic regressions (a hang, a per-frame
-// rebuild), not small ones. Track real numbers in docs/PERF.md.
+// rebuild), not small ones. Track real numbers in docs/PERF.md. It runs in its own
+// `perf` project (playwright.config.js), alone, after every other test has finished.
 test('frame time stays within the regression guard', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop', 'measured on desktop only');
   await stubTiles(page);
   await enterCockpit(page);
   await page.waitForTimeout(1500);
