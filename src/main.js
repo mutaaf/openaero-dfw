@@ -124,6 +124,9 @@ try {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
+  // Program validation forces a synchronous GPU round-trip per shader; three recommends it
+  // off in production. It stays on in `npm run dev`, where shader bugs get caught.
+  renderer.debug.checkShaderErrors = import.meta.env.DEV;
 } catch (err) {
   console.error('Three.js renderer init failure:', err);
 }
@@ -134,10 +137,14 @@ scene.fog = new THREE.FogExp2(0x94a3b8, 0.000035);
 
 camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 95000);
 
-ambientLight = new THREE.AmbientLight(0xdbeafe, 0.85);
+// three ≥ r155 uses physically based light units: Lambert/Standard BRDFs divide by π,
+// so the r128-era intensities are scaled by π to keep the same exposure (docs/THREE-UPGRADE.md).
+const LIGHT_SCALE = Math.PI;
+
+ambientLight = new THREE.AmbientLight(0xdbeafe, 0.85 * LIGHT_SCALE);
 scene.add(ambientLight);
 
-sunLight = new THREE.DirectionalLight(0xfffbeb, 1.4);
+sunLight = new THREE.DirectionalLight(0xfffbeb, 1.4 * LIGHT_SCALE);
 sunLight.position.set(-4500, 7500, 3500);
 scene.add(sunLight);
 
@@ -195,6 +202,7 @@ function addTileLayer(zoom, radius, order, skip) {
       textureLoader.load(
         esriTileUrl(zoom, tileX, tileY),
         (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace; // imagery is sRGB-encoded
           tex.anisotropy = 4;
           tileMat.map = tex;
           tileMat.needsUpdate = true;
@@ -1309,22 +1317,22 @@ function toggleTimeOfDay() {
     skyBase.setHex(0x38bdf8);
     scene.fog.color.setHex(0x94a3b8);
     ambientLight.color.setHex(0xdbeafe);
-    ambientLight.intensity = 0.85;
-    sunLight.intensity = 1.4;
+    ambientLight.intensity = 0.85 * LIGHT_SCALE;
+    sunLight.intensity = 1.4 * LIGHT_SCALE;
   } else if (sim.timeOfDayMode === 1) {
     badge.textContent = 'Sunset';
     skyBase.setHex(0xf97316);
     scene.fog.color.setHex(0x7c2d12);
     ambientLight.color.setHex(0xfed7aa);
-    ambientLight.intensity = 0.6;
-    sunLight.intensity = 0.9;
+    ambientLight.intensity = 0.6 * LIGHT_SCALE;
+    sunLight.intensity = 0.9 * LIGHT_SCALE;
   } else {
     badge.textContent = 'Night';
     skyBase.setHex(0x020617);
     scene.fog.color.setHex(0x0f172a);
     ambientLight.color.setHex(0x1e293b);
-    ambientLight.intensity = 0.25;
-    sunLight.intensity = 0.15;
+    ambientLight.intensity = 0.25 * LIGHT_SCALE;
+    sunLight.intensity = 0.15 * LIGHT_SCALE;
   }
   applySky();
 }
