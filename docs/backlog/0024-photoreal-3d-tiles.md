@@ -1,12 +1,12 @@
 ---
 id: 0024
 title: Google Photorealistic 3D Tiles over the metroplex
-status: in-progress
+status: shipped
 priority: P0
 size: L
 lens: authenticity
 created: 2026-10-17
-pr:
+pr: 18
 ---
 
 ## Why
