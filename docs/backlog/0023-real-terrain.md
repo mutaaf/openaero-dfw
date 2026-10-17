@@ -1,12 +1,12 @@
 ---
 id: 0023
 title: Real 3D terrain with streamed, sharp satellite imagery
-status: in-progress
+status: shipped
 priority: P0
 size: L
 lens: authenticity
 created: 2026-10-17
-pr:
+pr: 17
 ---
 
 ## Why
@@ -26,11 +26,11 @@ up to 117 ft higher), so the 3° path and the PAPI were wrong everywhere but DFW
 - Elevation attribution next to the imagery credit.
 
 ## Acceptance criteria
-- [ ] Runways at KDFW/KDAL/KAFW sit at their surveyed elevations; MSL reads correctly
-- [ ] The DEM loads and the imagery is ≥ z15 near the aircraft on a final
-- [ ] Takeoff roll rests on its gear on a sloped runway
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
-- [ ] No frame-time regression beyond the e2e guard; all existing e2e green
+- [x] Runways at KDFW/KDAL/KAFW sit at their surveyed elevations; MSL reads correctly
+- [x] The DEM loads and the imagery is ≥ z15 near the aircraft on a final
+- [x] Takeoff roll rests on its gear on a sloped runway
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] No frame-time regression beyond the e2e guard; all existing e2e green
 
 ## Test plan
 Unit: `terrain.test.js` (codec, sampling, ground model, baked DEM vs all 30 surveyed runway
