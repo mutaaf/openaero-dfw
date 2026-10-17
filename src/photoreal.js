@@ -13,7 +13,7 @@
 // runway surface matches each threshold's surveyed height (geoid/datum residuals).
 import * as THREE from 'three';
 import { ecefToSim, ecefToSimRigid } from './ecef.js';
-import { createGoogleSession, ROOT_URL, PhotorealUnavailable } from './googleSession.js';
+import { createGoogleSession, ROOT_URL, PhotorealUnavailable, GOOGLE_FETCH } from './googleSession.js';
 import { courseVector } from './airports.js';
 
 export const PHOTOREAL_ORIGINS = ['https://mutaafaziz.com'];
@@ -88,7 +88,7 @@ export function createPhotoreal({ scene, camera, renderer, base, storage, isMobi
       const res = await fetch(configUrl, { cache: 'no-store' });
       const key = res.ok ? (await res.json()).googleTilesKey : null;
       if (!key) { state.status = 'off'; state.reason = 'no key'; return; }
-      session = createGoogleSession({ key, fetch: (u) => fetch(u), storage });
+      session = createGoogleSession({ key, fetch: (u, o) => fetch(u, o), storage });
       await session.getRoot(); // the one billable request (throws PhotorealUnavailable)
       const [{ TilesRenderer }, { GoogleCloudAuthPlugin }, { GLTFExtensionsPlugin, UnloadTilesPlugin }, { DRACOLoader }] = await Promise.all([
         import('3d-tiles-renderer'),
@@ -106,12 +106,13 @@ export function createPhotoreal({ scene, camera, renderer, base, storage, isMobi
         }
         async fetchData(url, options) {
           if (url.startsWith(ROOT_URL)) return structuredClone(session.current.root);
-          let r = await fetch(session.sign(url), options);
+          const opts = { ...options, ...GOOGLE_FETCH };
+          let r = await fetch(session.sign(url), opts);
           // A session that outlived Google's ~3 h: one fresh root, at most twice a page.
           if ((r.status === 401 || r.status === 403) && this.refreshes < 2 && new URL(url).host === 'tile.googleapis.com') {
             this.refreshes++;
             try { await session.refresh(); } catch (err) { fail(err); return r; }
-            r = await fetch(session.sign(url), options);
+            r = await fetch(session.sign(url), opts);
           }
           return r;
         }

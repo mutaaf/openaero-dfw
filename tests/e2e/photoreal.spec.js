@@ -62,13 +62,15 @@ async function stubGoogle(page, { rootStatus = 200 } = {}) {
   await page.route('**/openaero/api/config*', (r) => { hits.config++; return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ googleTilesKey: 'TEST-KEY' }) }); });
   await page.route('https://tile.googleapis.com/v1/3dtiles/root.json*', (r) => {
     hits.root++;
+    hits.rootReferer = r.request().headers().referer || '';
     if (rootStatus !== 200) return r.fulfill({ status: rootStatus, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{}' });
     return r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(ROOT) });
   });
   await page.route('https://tile.googleapis.com/v1/3dtiles/datasets/**', (r) => {
     hits.tile++;
     const u = new URL(r.request().url());
-    if (u.searchParams.get('key') === 'TEST-KEY' && u.searchParams.get('session') === 'TESTSESSION') hits.tileKeyOk++;
+    const ref = r.request().headers().referer || '';
+    if (u.searchParams.get('key') === 'TEST-KEY' && u.searchParams.get('session') === 'TESTSESSION' && ref.includes('/openaero/')) hits.tileKeyOk++;
     return r.fulfill({ status: 200, contentType: 'model/gltf-binary', headers: { 'Access-Control-Allow-Origin': '*' }, body: quadGlb() });
   });
   return hits;
@@ -88,7 +90,8 @@ test('photoreal tiles load once flying, land exactly on the sim ground, and reus
   await expect.poll(async () => (await snap(page)).photoreal.status, { timeout: 30_000 }).toBe('active');
   const s = await snap(page);
   expect(hits.root).toBe(1);
-  expect(hits.tileKeyOk).toBeGreaterThan(0); // tile requests signed with key + session
+  expect(hits.tileKeyOk).toBeGreaterThan(0); // tile requests signed with key + session, full referrer
+  expect(hits.rootReferer).toContain('/openaero/'); // the key is path-restricted to /openaero/*
   // The 2 km quad at the KDFW origin, field elevation: centred on (0, 0) and flat at y ≈ 0
   // (calibration may shift it slightly toward the nearest threshold, within a few metres).
   const [minX, minY, minZ] = s.photoreal.bounds.min, [maxX, maxY, maxZ] = s.photoreal.bounds.max;

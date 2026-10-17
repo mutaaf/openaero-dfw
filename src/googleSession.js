@@ -57,6 +57,11 @@ const write = (storage, k, v) => {
   try { if (v === null) storage?.removeItem(k); else storage?.setItem(k, JSON.stringify(v)); } catch { /* full or blocked */ }
 };
 
+// The key is restricted to the referrer https://mutaafaziz.com/openaero/*, but browsers
+// send only the origin ("https://mutaafaziz.com/") on cross-origin requests by default,
+// which Google rejects (API_KEY_HTTP_REFERRER_BLOCKED). Send the full page URL (https only).
+export const GOOGLE_FETCH = { referrerPolicy: 'no-referrer-when-downgrade' };
+
 export class PhotorealUnavailable extends Error {
   constructor(reason, status = 0) { super(reason); this.reason = reason; this.status = status; }
 }
@@ -79,7 +84,7 @@ export function createGoogleSession({ key, fetch: fetchFn, storage, now = () => 
     if (block && block.tag === tag && block.until > now()) throw new PhotorealUnavailable(block.reason);
     let res;
     try {
-      res = await fetchFn(`${ROOT_URL}?key=${encodeURIComponent(key)}`);
+      res = await fetchFn(`${ROOT_URL}?key=${encodeURIComponent(key)}`, GOOGLE_FETCH);
     } catch {
       throw new PhotorealUnavailable('network');
     }
