@@ -767,8 +767,10 @@ function step6DofPhysics(dt) {
   if (sim.paused) return;
   updateWind(dt);
 
-  // Sub-stepping for ultra-stable numerical integration (3 sub-steps per frame)
-  const subSteps = 3;
+  // Sub-stepping: at least 3 per frame and never longer than 1/60 s each, so the
+  // integration is as stable on a slow device as at 60 fps, and sim time keeps pace with
+  // real time down to 4 fps (renderLoop caps a frame at 250 ms) instead of slowing down.
+  const subSteps = Math.max(3, Math.ceil(dt * 60));
   const subDt = dt / subSteps;
 
   for (let step = 0; step < subSteps; step++) {
@@ -1704,9 +1706,11 @@ document.getElementById('btnAudio').addEventListener('click', () => {
 });
 
 let lastTime = performance.now();
+// Longest frame the sim catches up on (a hidden tab or a stall beyond this is skipped).
+const MAX_FRAME_S = 0.25;
 function renderLoop(time) {
   requestAnimationFrame(renderLoop);
-  const dt = Math.min((time - lastTime) / 1000, 0.05);
+  const dt = Math.min((time - lastTime) / 1000, MAX_FRAME_S);
   lastTime = time;
 
   updateGamepad();

@@ -114,8 +114,8 @@ z13 imagery → runway surface → markings), so coplanar ground layers can neve
 depth-fight; everything above the ground depth-tests normally. Approach guidance
 (ILS bars, PAPI text, APR autopilot, DME, NAV1) follows `sim.activeEnd`, re-picked twice
 a second by `selectActiveRunway` from whatever you're lined up on. Loop per frame
-(`renderLoop`): `step6DofPhysics(dt)` (3 sub-steps of `integrateSubStep`, dt capped at
-50 ms) → `updateCamera` → `renderer.render` → `renderHud` (2D canvas) → `renderRadar`
+(`renderLoop`): `step6DofPhysics(dt)` (dt capped at 250 ms, split into ≥ 3 sub-steps of
+≤ 1/60 s, so sim time keeps pace with real time down to 4 fps) → `updateCamera` → `renderer.render` → `renderHud` (2D canvas) → `renderRadar`
 → `syncUI` (DOM text) → `audio.update`.
 
 ## 5 · Commands
