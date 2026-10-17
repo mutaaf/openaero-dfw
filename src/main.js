@@ -175,10 +175,28 @@ textureLoader.crossOrigin = 'anonymous';
 // depth-tested as usual.
 const GROUND_ORDER = { base: -6, z12: -5, z13: -4, runway: -3, marking: -2 };
 
+// The ground is unlit: satellite imagery already carries real sunlight, and since three r151
+// Lambert lights every pixel, which on a full-screen ground costs more than everything else
+// combined on software GL. Each ground material is tinted with exactly what Lambert would
+// give a flat, up-facing surface under the current lights (applyGroundLight), so it looks
+// the same at a fraction of the cost.
+const groundMats = [];
+const _tint = new THREE.Color();
+const _sunTint = new THREE.Color();
+const _sunDir = new THREE.Vector3();
 function groundMaterial(opts, order) {
-  const m = new THREE.MeshLambertMaterial({ ...opts, depthWrite: false, side: THREE.DoubleSide });
+  const m = new THREE.MeshBasicMaterial({ ...opts, depthWrite: false, side: THREE.DoubleSide });
   m.userData.order = order;
+  m.userData.baseColor = m.color.clone();
+  groundMats.push(m);
+  applyGroundLight(m);
   return m;
+}
+function applyGroundLight(only) {
+  const nDotL = Math.max(0, _sunDir.copy(sunLight.position).normalize().y);
+  _sunTint.copy(sunLight.color).multiplyScalar(sunLight.intensity * nDotL);
+  _tint.copy(ambientLight.color).multiplyScalar(ambientLight.intensity).add(_sunTint).multiplyScalar(1 / Math.PI);
+  for (const m of only ? [only] : groundMats) m.color.copy(m.userData.baseColor).multiply(_tint);
 }
 
 function addTileLayer(zoom, radius, order, skip) {
@@ -749,8 +767,10 @@ function step6DofPhysics(dt) {
   if (sim.paused) return;
   updateWind(dt);
 
-  // Sub-stepping for ultra-stable numerical integration (3 sub-steps per frame)
-  const subSteps = 3;
+  // Sub-stepping: at least 3 per frame and never longer than 1/60 s each, so the
+  // integration is as stable on a slow device as at 60 fps, and sim time keeps pace with
+  // real time down to 4 fps (renderLoop caps a frame at 250 ms) instead of slowing down.
+  const subSteps = Math.max(3, Math.ceil(dt * 60));
   const subDt = dt / subSteps;
 
   for (let step = 0; step < subSteps; step++) {
@@ -1334,6 +1354,7 @@ function toggleTimeOfDay() {
     ambientLight.intensity = 0.25 * LIGHT_SCALE;
     sunLight.intensity = 0.15 * LIGHT_SCALE;
   }
+  applyGroundLight();
   applySky();
 }
 
@@ -1685,9 +1706,11 @@ document.getElementById('btnAudio').addEventListener('click', () => {
 });
 
 let lastTime = performance.now();
+// Longest frame the sim catches up on (a hidden tab or a stall beyond this is skipped).
+const MAX_FRAME_S = 0.25;
 function renderLoop(time) {
   requestAnimationFrame(renderLoop);
-  const dt = Math.min((time - lastTime) / 1000, 0.05);
+  const dt = Math.min((time - lastTime) / 1000, MAX_FRAME_S);
   lastTime = time;
 
   updateGamepad();
