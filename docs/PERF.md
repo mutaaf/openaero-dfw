@@ -3,6 +3,8 @@
 Updated by the Keeper. Numbers come from `tests/e2e/perf.spec.js` (3 s of
 `requestAnimationFrame` after entering the cockpit on the default KDFW 35C approach,
 desktop 1280x720, satellite tiles stubbed).
+In CI the probe has its own `perf` Playwright project that runs alone after every other
+test. To measure it by itself locally: `npx playwright test --project=perf --no-deps`.
 
 **Caveat:** headless Chromium renders WebGL through SwiftShader (software GL), so these
 numbers are far slower than a real GPU. They are for spotting regressions between runs on
