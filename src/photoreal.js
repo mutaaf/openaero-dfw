@@ -25,7 +25,8 @@ export function photorealAllowed(loc) {
 }
 
 const CALIB_EVERY_S = 1.5;
-const CALIB_MAX_M = 30;
+const CALIB_MAX_M = 8;
+const CALIB_RANGE_M = 2500;
 
 export function createPhotoreal({ scene, camera, renderer, base, storage, isMobile, runwayEnds, onActive, onUnavailable }) {
   const state = { status: 'off', reason: '', visibleTiles: 0, loadedTiles: 0, calibM: 0, calibSamples: 0, attributions: '' };
@@ -139,10 +140,13 @@ export function createPhotoreal({ scene, camera, renderer, base, storage, isMobi
     }
   }
 
-  // Fit the vertical offset: ray down onto Google's runway surface at the aiming point of
-  // the runway nearest the camera, compare with its surveyed threshold height.
+  // Refine the vertical offset: ray down onto Google's runway surface at three points of
+  // the nearest runway and compare with its surveyed height. Only close up (< 2.5 km), where
+  // the tiles are fine detail: a distant runway is drawn from a simplified mesh whose
+  // heights are tens of metres off. The geoid model is already within ~2 m, so the
+  // correction is clamped to ±8 m and smoothed; far from runways the last value holds.
   function calibrate() {
-    let best = null, bestD = 12000 * 12000;
+    let best = null, bestD = CALIB_RANGE_M * CALIB_RANGE_M;
     for (const e of runwayEnds) {
       const dx = e.thrX - camera.position.x, dz = e.thrZ - camera.position.z;
       const d = dx * dx + dz * dz;
@@ -150,14 +154,19 @@ export function createPhotoreal({ scene, camera, renderer, base, storage, isMobi
     }
     if (!best) return;
     const d = courseVector(best.hdgT);
-    const x = best.thrX + d.x * 300, z = best.thrZ + d.z * 300;
-    raycaster.set(_v.set(x, best.thrY + 400, z), _down);
-    raycaster.far = 800;
-    const hit = raycaster.intersectObject(tiles.group, true)[0];
-    if (!hit) return;
-    const meshGround = hit.point.y - calib.position.y; // Google's surface before calibration
-    const target = THREE.MathUtils.clamp(best.thrY - meshGround, -CALIB_MAX_M, CALIB_MAX_M);
-    calib.position.y += (target - calib.position.y) * (state.calibSamples === 0 ? 1 : 0.3);
+    const offsets = [];
+    for (const along of [150, 300, 600]) {
+      const x = best.thrX + d.x * along, z = best.thrZ + d.z * along;
+      const planeY = best.thrY; // runway plane near the threshold (slopes are < 0.5 %)
+      raycaster.set(_v.set(x, planeY + 300, z), _down);
+      raycaster.far = 600;
+      const hit = raycaster.intersectObject(tiles.group, true)[0];
+      if (hit) offsets.push(planeY - (hit.point.y - calib.position.y));
+    }
+    if (offsets.length < 2) return;
+    offsets.sort((a, b) => a - b);
+    const target = THREE.MathUtils.clamp(offsets[Math.floor(offsets.length / 2)], -CALIB_MAX_M, CALIB_MAX_M);
+    calib.position.y += (target - calib.position.y) * (state.calibSamples === 0 ? 1 : 0.2);
     state.calibM = calib.position.y;
     state.calibSamples++;
   }
