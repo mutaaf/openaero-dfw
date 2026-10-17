@@ -58,10 +58,15 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    (`dist/openaero/`) encode this. Never use root-absolute URLs (`/foo.png`); import
    assets or use `import.meta.env.BASE_URL`.
 3. **Allowed runtime hosts.** Browser: own origin + `server.arcgisonline.com` (Esri World
-   Imagery tiles, loaded as WebGL textures), nothing else. The on-screen attribution
-   ("Satellite imagery © Esri, Maxar, Earthstar Geographics") must stay visible. Edge
-   (the Worker in `src/worker/`, once it exists): `aviationweather.gov` only. Adding any
-   other host needs the operator: open a `proposal/` PR.
+   Imagery tiles) + `tile.googleapis.com` (Google Photorealistic 3D Tiles; only on
+   https://mutaafaziz.com, only with the operator's key from /openaero/api/config, only
+   after the player starts flying), nothing else. Attribution must stay visible: Esri +
+   elevation credits on the free terrain; the Google Maps logo (16–19 px, clear space) +
+   the on-screen tiles' data providers in one line under photoreal. Google content is
+   never stored, proxied or cached by us (Map Tiles policy: "you must not pre-fetch,
+   index, store, or cache any Content"); the browser HTTP cache only. The Google session
+   is one per page, never persisted. Edge (`src/worker/`): `aviationweather.gov` only.
+   Adding any other host needs the operator: open a `proposal/` PR.
    No analytics, ads, trackers, fonts or scripts from CDNs. Everything else is bundled.
 4. **Frame budget.** The render loop must hold 60fps on a mid-range laptop and stay
    playable on a recent phone. No per-frame allocations in hot paths (reuse vectors and
@@ -71,7 +76,9 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
 6. **Save data compatibility.** `localStorage['openaero_best'] = { v: 1, missions: {
    <missionKey>: { score, grade, at } } }` (personal bests, `src/landing.js`). New keys are
    prefixed `openaero_` and carry a `v`; bump `v` only with a migration on read; never throw
-   away a player's data; tolerate storage that throws (private mode).
+   away a player's data; tolerate storage that throws (private mode). Photoreal keeps only
+   our own bookkeeping: `openaero_g3dt_usage_v1` (lifetime root/reuse counts) and
+   `openaero_g3dt_block_v1` (quota/forbidden back-off, no key, no Google content).
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
    every control has a keyboard path; text meets 4.5:1 contrast on HUD backgrounds.
 
@@ -100,6 +107,12 @@ src/terrain.js      the one ground truth: baked DEM (public/terrain/dfw-dem-v1.b
                     AWS Terrain Tiles via scripts/bake-terrain.mjs) + every runway
                     flattened onto the plane through its surveyed end elevations.
                     ground.heightAt(x, z) → sim Y; physics, AGL, runways, PAPIs read it
+src/ecef.js         WGS84 ECEF ↔ geodetic ↔ sim (geoid plane fit), rigid ECEF→sim matrix
+src/googleSession.js  the billable part of Google 3D Tiles: one root per page, quota
+                    back-off, signed URLs, usage counters (pure, tested)
+src/photoreal.js    Google Photorealistic 3D Tiles (lazy 3d-tiles-renderer): exact per-
+                    vertex ECEF → sim remap on load, vertical calibration against runway
+                    thresholds, attribution, ?debug usage readout
 src/tileTree.js     quadtree LOD selection for the streamed imagery (pure, tested)
 src/terrainLod.js   streamed Esri imagery draped on terrain.js: per-tile height grids with
                     skirts, hillshade in vertex colours, load queue, LRU cache
@@ -148,8 +161,10 @@ a second by `selectActiveRunway` from whatever you're lined up on. Loop per fram
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 180 kB gzipped (2026-10-16: 137.6 kB, almost all
-three.js), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.
+Budgets: JS ≤ 190 kB gzipped at boot (2026-10-17: 184 kB, almost all three.js; raised
+from 180 for photoreal: three is one module, so the core classes the lazy glTF/3D-tiles
+chunk needs are hoisted into the entry chunk; 3d-tiles-renderer + Draco load only when
+photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.
 
 ## 6 · The agents
 

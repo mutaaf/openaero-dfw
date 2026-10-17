@@ -64,6 +64,8 @@ input[type=range] { accent-color: #38bdf8; }
 }
 .imagery-credit a { color: inherit; text-decoration: none; }
 .imagery-credit a:hover { color: #e2e8f0; }
+/* Google's attribution rules: logo 16–19 px tall with clear space; data providers in a line. */
+.imagery-credit .google-logo { display: inline-block; height: 16px; width: auto; margin: 10px 10px 5px 10px; vertical-align: bottom; }
 
 /* Imagery credit: always visible, tucked at the very bottom edge. */
 .imagery-credit {
