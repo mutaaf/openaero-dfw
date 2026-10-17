@@ -151,6 +151,20 @@ a second by `selectActiveRunway` from whatever you're lined up on. Loop per fram
 (2D canvas) → `renderRadar`
 → `syncUI` (DOM text) → `audio.update`.
 
+### URL parameters (deep links, ticket 0028)
+
+The site launcher links into the sim with these. `airport`/`mission` are stripped after use
+(a refresh starts at the default mission); invalid values are ignored. **Nothing skips the
+Start flight tap**, and the billable Google session still starts only there (see 0024).
+
+| Param | Effect |
+|---|---|
+| `?airport=KDFW\|KDAL\|KADS\|KAFW\|KFTW\|KGKY` | fly from that airport: its takeoff if it has one, else its first approach (`src/deeplink.js`) |
+| `?mission=<key>` | that mission from `src/missions.js` (wins over `?airport`) |
+| `?view=terrain` | free terrain map this visit: no Google config/session request at all |
+| `?photoreal` | force photoreal off the live origin (tests/debugging; Google refuses other referrers) |
+| `?debug` | debug overlay |
+
 ## 5 · Commands
 
 | Command | What it does |

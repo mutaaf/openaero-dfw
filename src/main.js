@@ -15,6 +15,7 @@ import {
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
 } from './airports.js';
 import { MISSIONS, missionByKey } from './missions.js';
+import { missionFromLink, terrainOnly, stripDeepLink } from './deeplink.js';
 import { gradeLanding, loadBest, recordBest } from './landing.js';
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import {
@@ -1574,7 +1575,7 @@ document.getElementById('btnStartFlight').addEventListener('click', () => {
   if (document.getElementById('chkAutoSound').checked) audio.init();
   applyCoachChoice();
   // The (billable) Google session starts only when someone actually flies, once per page.
-  if (photorealAllowed(window.location)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
+  if (photorealAllowed(window.location) && !terrainOnly(window.location.search)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   document.getElementById('onboardingModal').classList.add('hidden');
 });
 document.getElementById('btnOpenMissions').addEventListener('click', () => {
@@ -1931,7 +1932,14 @@ function boot() {
   setInterval(fetchWeather, 10 * 60 * 1000);
   buildSatelliteTerrain();
   buildAircraft('b738');
-  loadScenario('kdfw_35c_final');
+  // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap.
+  const linked = missionFromLink(window.location.search);
+  loadScenario(linked || 'kdfw_35c_final');
+  if (linked) {
+    document.getElementById('selScenario').value = linked;
+    document.querySelectorAll('.btnMission').forEach((b) => b.classList.toggle('active', b.dataset.scenario === linked));
+    try { history.replaceState(null, '', `${location.pathname}${stripDeepLink(location.search)}${location.hash}`); } catch { /* sandboxed */ }
+  }
   handleResize();
   requestAnimationFrame(renderLoop);
 }
