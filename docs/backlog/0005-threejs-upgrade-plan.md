@@ -1,7 +1,7 @@
 ---
 id: 0005
-title: Plan and start the three.js r128 → current upgrade
-status: ready
+title: Upgrade three.js r128 → current
+status: shipped
 priority: P2
 size: M
 lens: tech-health
@@ -27,10 +27,10 @@ would look different. That needs a deliberate, screenshot-verified migration.
 3. Add the remaining steps as new backlog tickets.
 
 ## Acceptance criteria
-- [ ] `docs/THREE-UPGRADE.md` exists with the breaking-change list and steps
-- [ ] `three` is on the current release; `npm run check` green
-- [ ] Day / Sunset / Night screenshots before and after attached to the PR and visually close
-- [ ] JS bundle stays within the 180 kB gz budget
+- [x] `docs/THREE-UPGRADE.md` exists with the breaking-change list and steps
+- [x] `three` is on the current release; `npm run check` green
+- [x] Day / Sunset / Night screenshots before and after attached to the PR and visually close
+- [x] JS bundle stays within the 180 kB gz budget
 
 ## Test plan
 Existing e2e suite plus before/after screenshots of the three time-of-day modes in the PR.
