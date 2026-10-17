@@ -1,7 +1,7 @@
 ---
 id: 0026
 title: Adaptive render resolution to hold frame rate on slow devices
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: performance

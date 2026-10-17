@@ -1,7 +1,7 @@
 ---
 id: 0027
 title: A lit windsock at every airport that shows today's wind
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
