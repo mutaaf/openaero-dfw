@@ -5,6 +5,7 @@
 // Pure module: no THREE, no DOM. Tested in tests/unit/airports.test.js.
 import { latLonToSimMeters } from './geo.js';
 import { DEG_TO_RAD, NM_TO_M } from './constants.js';
+import { ftMslToY } from './terrain.js';
 
 const FT = 0.3048;
 export const GLIDE_DEG = 3.0;
@@ -70,10 +71,13 @@ export function courseVector(hdgT) {
   return { x: Math.sin(r), z: -Math.cos(r) };
 }
 
-function buildEnd(rwy, end) {
+function buildEnd(rwy, end, other) {
   const p = latLonToSimMeters(end.lat, end.lon);
   const d = courseVector(end.hdgT);
   const disp = end.displacedFt * FT;
+  // Threshold height (sim Y): on the runway plane between the two surveyed ends.
+  const t = disp / (rwy.lengthFt * FT);
+  const thrY = ftMslToY(end.elevFt + (other.elevFt - end.elevFt) * t);
   return {
     id: `${rwy.airport}_${end.ident}`,
     airport: rwy.airport,
@@ -86,12 +90,14 @@ function buildEnd(rwy, end) {
     thrX: p.x + d.x * disp,
     thrZ: p.z + d.z * disp,
     displacedM: disp,
+    thrY,
   };
 }
 
-export const RUNWAY_ENDS = RUNWAY_DATA.flatMap((r) => [buildEnd(r, r.le), buildEnd(r, r.he)]);
+export const RUNWAY_ENDS = RUNWAY_DATA.flatMap((r) => [buildEnd(r, r.le, r.he), buildEnd(r, r.he, r.le)]);
 
-// One entry per physical runway (for drawing): centre, length, true heading of the le end.
+// One entry per physical runway (for drawing and the ground model): centre, length, true
+// heading of the le end, and both physical ends with their surveyed heights (sim Y).
 export const RUNWAYS_GEOM = RUNWAY_DATA.map((r) => {
   const a = latLonToSimMeters(r.le.lat, r.le.lon);
   const b = latLonToSimMeters(r.he.lat, r.he.lon);
@@ -103,6 +109,8 @@ export const RUNWAYS_GEOM = RUNWAY_DATA.map((r) => {
     widthM: r.widthFt * FT,
     hdgT: r.le.hdgT,
     ends: [`${r.airport}_${r.le.ident}`, `${r.airport}_${r.he.ident}`],
+    ax: a.x, az: a.z, ay: ftMslToY(r.le.elevFt),
+    bx: b.x, bz: b.z, by: ftMslToY(r.he.elevFt),
   };
 });
 
@@ -116,7 +124,8 @@ export function runwayEndById(id) {
 // Position relative to a runway end's approach: distM = distance to the landing threshold
 // along the extended centreline (positive before it), crossM = metres right of the
 // centreline (looking along the landing direction), heightAbovePathM = height above the
-// 3° glidepath that touches down at the aiming point. Sim ground is the y = 0 plane.
+// 3° glidepath that touches down at the aiming point, measured from the threshold height
+// (end.thrY, sim Y; terrain.js), so every field flies a true 3° path at its real elevation.
 export function approachGeometry(end, pos) {
   const d = courseVector(end.hdgT);
   const rx = pos.x - end.thrX;
@@ -125,7 +134,7 @@ export function approachGeometry(end, pos) {
   const cross = rx * -d.z + rz * d.x;
   const distM = -along;
   const pathH = (distM + AIM_POINT_M) * Math.tan(GLIDE_DEG * DEG_TO_RAD);
-  return { distM, crossM: cross, heightAbovePathM: pos.y - pathH, pathHeightM: pathH };
+  return { distM, crossM: cross, heightAbovePathM: pos.y - (end.thrY ?? 0) - pathH, pathHeightM: pathH };
 }
 
 // The runway end you are flying to: in front of you (before the threshold, up to 30 km),
@@ -155,7 +164,7 @@ export function approachSpawn(end, distNm, speedMps = 72) {
   const h = (dist + AIM_POINT_M) * Math.tan(GLIDE_DEG * DEG_TO_RAD);
   const g = GLIDE_DEG * DEG_TO_RAD;
   return {
-    pos: { x: end.thrX - d.x * dist, y: h, z: end.thrZ - d.z * dist },
+    pos: { x: end.thrX - d.x * dist, y: end.thrY + h, z: end.thrZ - d.z * dist },
     vel: { x: d.x * speedMps * Math.cos(g), y: -speedMps * Math.sin(g), z: d.z * speedMps * Math.cos(g) },
     yawRad: -end.hdgT * DEG_TO_RAD,
   };

@@ -47,7 +47,7 @@ describe('approachGeometry', () => {
     const dist = 4 * 1852;
     const h = (dist + AIM_POINT_M) * Math.tan(GLIDE_DEG * Math.PI / 180);
     const rad = e.hdgT * Math.PI / 180;
-    const p = { x: e.thrX - Math.sin(rad) * dist, y: h, z: e.thrZ + Math.cos(rad) * dist };
+    const p = { x: e.thrX - Math.sin(rad) * dist, y: e.thrY + h, z: e.thrZ + Math.cos(rad) * dist };
     const g = approachGeometry(e, p);
     expect(g.distM).toBeCloseTo(dist, 0);
     expect(Math.abs(g.crossM)).toBeLessThan(0.5);
@@ -105,5 +105,31 @@ describe('missions', () => {
     for (const k of ['kdfw_35c_final', 'kdfw_takeoff', 'kdfw_17c_final', 'kdal_31r_final', 'downtown_skyline', 'att_stadium']) {
       expect(keys).toContain(k);
     }
+  });
+});
+
+describe('real field elevations', () => {
+  const FT = 0.3048;
+  it('thresholds sit at their surveyed height relative to KDFW (606 ft = y 0)', () => {
+    expect(runwayEnd('KDFW', '35C').thrY).toBeCloseTo((562 - 606) * FT, 1);
+    expect(runwayEnd('KDAL', '31L').thrY).toBeCloseTo((476 - 606) * FT, 1);
+    expect(runwayEnd('KAFW', '16L').thrY).toBeCloseTo((723 - 606) * FT, 1);
+  });
+  it('a displaced threshold is on the runway plane between the two ends', () => {
+    // KDAL 13R: 476 ft at both ends, so the 490 ft displacement keeps it at 476 ft.
+    expect(runwayEnd('KDAL', '13R').thrY).toBeCloseTo((476 - 606) * FT, 1);
+    // KDFW 13L: 550 ft → 508 ft over 9000 ft, displaced 625 ft → 550 − 42·625/9000.
+    expect(runwayEnd('KDFW', '13L').thrY).toBeCloseTo((550 - 42 * 625 / 9000 - 606) * FT, 1);
+  });
+  it('an approach spawn is on the 3° path above its own threshold', () => {
+    const e = runwayEnd('KAFW', '34L');
+    const s = approachSpawn(e, 3);
+    expect(approachGeometry(e, s.pos).heightAbovePathM).toBeCloseTo(0, 3);
+    expect(s.pos.y - e.thrY).toBeCloseTo((3 * 1852 + AIM_POINT_M) * Math.tan(3 * Math.PI / 180), 3);
+  });
+  it('runway geometry carries both surveyed end heights', () => {
+    const r = RUNWAYS_GEOM.find((g) => g.name === 'KDFW 13L/31R');
+    expect(r.ay).toBeCloseTo((550 - 606) * FT, 3);
+    expect(r.by).toBeCloseTo((508 - 606) * FT, 3);
   });
 });

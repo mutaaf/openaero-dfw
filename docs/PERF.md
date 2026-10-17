@@ -15,6 +15,8 @@ the same kind of machine, not for judging real-world smoothness.
 | 2026-10-16 | macOS arm64 (local, `--workers=1`) | 139 | 21.6 ms | 33.4 ms | 137.6 kB | Port baseline |
 | 2026-10-16 | macOS arm64 (local, `--workers=1`) | ~155 | 19.2 ms | 33.4 ms | 142 kB | 15 real runways, 30 PAPIs, z12 imagery ring; ground layers no longer write depth |
 
+| 2026-10-17 | macOS arm64 (local, `--workers=1`) | 88 | 34.4 ms | 50.1 ms | 166 kB | #0023 real terrain: quadtree imagery (~100 tiles in view, ~9k terrain tris), unlit hillshaded ground |
+
 The regression guard in the test fails above 250 ms average. That's deliberately loose
 (it catches hangs and per-frame rebuilds, not small regressions).
 
@@ -23,4 +25,3 @@ The regression guard in the test fails above 250 ms average. That's deliberately
 - `syncUI()` does ~25 `document.getElementById` lookups and text writes **every frame**,
   even when values haven't changed. Cache the elements once and write only on change.
 - `updateCamera()` allocates with `sim.pos.clone()` in three camera modes every frame.
-- All 81 zoom-13 satellite tiles are requested at boot with no LOD or disposal.

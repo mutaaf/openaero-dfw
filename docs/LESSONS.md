@@ -17,3 +17,6 @@ you learn something a future run must not re-learn; prune rows that no longer ap
 | 2026-10-16 | **Pin control-law signs with unit tests.** | The glideslope law `(target − pitch)·k` was positive feedback because elevator + is nose-down here. `src/autopilot.js` laws each have a sign test. |
 
 | 2026-10-17 | Scout: playing needs the Esri host stubbed, not blocked | Blocking tiles with 404s floods the console with errors that look like bugs; fulfil with a 1x1 PNG + CORS like `stubTiles()`. |
+| 2026-10-17 | **The ground is not y = 0.** | Since #0023 y is height above KDFW's 606 ft; use `sim.groundY` for AGL/contact and `end.thrY` for approach/PAPI. On sloped runways, sub-nanometre drift changed the ground by 1e-13 m and broke gear contact: compare with a tolerance. |
+| 2026-10-17 | **three ≥ r151 lights Lambert per pixel.** | Full-screen Lambert ground doubled CI (SwiftShader) frame time after the r186 upgrade and made real-time e2e flaky. Ground is unlit + tinted (`applyGroundLight`), relief shading baked in vertex colours. |
+| 2026-10-17 | **Auto-merged PRs don't trigger CI on main.** | Merges made with the workflow's GITHUB_TOKEN create no new workflow runs, so main's own CI didn't run after agent merges. A red main can go unnoticed: check the PR's CI, not main's. |
