@@ -4,6 +4,11 @@
 // GET /openaero/api/metar?ids=KDFW,KDAL → today's METARs from aviationweather.gov
 // (NOAA Aviation Weather Center, public data), trimmed to what the sim uses and cached at
 // the edge for 5 minutes. aviationweather.gov is the only host this Worker talks to.
+//
+// GET /openaero/api/config → { googleTilesKey } from the GOOGLE_MAPS_KEY Worker secret
+// (null when unset). The key is a browser key restricted to the Map Tiles API and the
+// mutaafaziz.com/openaero/* referrer, so handing it to the page is how Google intends it to
+// be used; keeping it out of the repo means it can be rotated without a deploy.
 
 const UPSTREAM = 'https://aviationweather.gov/api/data/metar';
 const TTL_S = 300;          // how long the edge (caches.default) keeps a copy
@@ -76,6 +81,11 @@ export async function handleMetar(request, deps) {
   return withBrowserTtl(res);
 }
 
+export function handleConfig(env) {
+  const key = typeof env?.GOOGLE_MAPS_KEY === 'string' ? env.GOOGLE_MAPS_KEY.trim() : '';
+  return json(200, { googleTilesKey: key || null }, { 'cache-control': 'no-store' });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -87,6 +97,7 @@ export default {
         waitUntil: (p) => ctx.waitUntil(p),
       });
     }
+    if (url.pathname === '/openaero/api/config') return handleConfig(env);
     return json(404, { error: 'not found' });
   },
 };
