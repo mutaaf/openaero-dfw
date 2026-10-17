@@ -1,7 +1,7 @@
 ---
 id: 0006
 title: Stream sharper satellite tiles near the aircraft
-status: proposed
+status: dropped
 priority: P2
 size: L
 lens: performance
@@ -35,3 +35,5 @@ texture count stays under a cap.
 
 ## Out of scope
 Elevation/terrain height data, 3D buildings from imagery.
+
+> Dropped 2026-10-17: superseded by shipped 0023 (streamed quadtree imagery over real terrain).
