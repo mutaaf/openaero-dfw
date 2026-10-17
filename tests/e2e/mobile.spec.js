@@ -94,3 +94,20 @@ test('phone: touch buttons work the gear, flaps and brakes', async ({ page }) =>
   await page.locator('#touchBrakes').tap();
   await expect(page.locator('#txtBrakes')).toHaveText('SET');
 });
+
+test('phone: the landing coach fits between the header and the touch deck, off the horizon', async ({ page }) => {
+  await startFlight(page);
+  await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
+  const coach = await page.locator('#coach').boundingBox();
+  for (const id of ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons']) {
+    expect(overlaps(coach, await page.locator(id).boundingBox()), `coach vs ${id}`).toBe(false);
+  }
+  expect(overlaps(coach, { x: 0, y: 844 * 0.4, width: 390, height: 844 * 0.2 }), 'coach covers the horizon').toBe(false);
+  expect(coach.x).toBeGreaterThanOrEqual(0);
+  expect(coach.x + coach.width).toBeLessThanOrEqual(390);
+  const skip = await page.locator('#btnCoachSkip').boundingBox();
+  expect(skip.height).toBeGreaterThanOrEqual(44);
+  expect(skip.width).toBeGreaterThanOrEqual(44);
+  await page.locator('#btnCoachSkip').tap();
+  await expect(page.locator('#coach')).toBeHidden();
+});

@@ -16,6 +16,7 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey } from './missions.js';
 import { gradeLanding, loadBest, recordBest } from './landing.js';
+import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
   flareSinkMps, elevatorForPitch, throttleForSpeed, sideslipYawAccel, trimAoaDeg,
@@ -97,6 +98,7 @@ const sim = {
   rwySelectTimer: 0,
   pad: null,
   inputSource: 'keyboard',
+  papiWhite: null, // white lamps on the active runway's PAPI (null = no runway ahead)
 };
 
 // Math vectors
@@ -707,6 +709,45 @@ document.getElementById('btnKeepRolling').addEventListener('click', () => {
   document.getElementById('resultsCard').classList.add('hidden');
 });
 
+// --- First-flight coach (coach.js) -------------------------------------------------
+// Enabled for this page from the modal's checkbox (ticked on a first visit); runs only on
+// the default final and finishes at touchdown, where the results card takes over.
+const coach = createCoach();
+let coachEnabled = false;
+let coachShown = undefined; // prompt key on screen, to touch the DOM only on change
+let coachDoneS = 0;
+const COACH_DONE_SHOW_S = 4;
+const coachInput = { aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false };
+
+function resetCoach() {
+  Object.assign(coach, createCoach());
+  coachDoneS = 0;
+}
+
+function updateCoach(dt) {
+  let prompt = null;
+  if (coachEnabled && sim.missionKey === COACH_MISSION) {
+    coachInput.aglFt = sim.aglFt;
+    coachInput.vsiFpm = sim.vsiFpm;
+    coachInput.papiWhite = sim.papiWhite;
+    coachInput.throttle = sim.throttle;
+    coachInput.onGround = sim.onGround;
+    coachInput.autopilot = sim.apMaster || sim.apApproach;
+    stepCoach(coach, coachInput, dt);
+    if (coach.done) coachDoneS += dt;
+    prompt = coach.done && coachDoneS > COACH_DONE_SHOW_S ? null : coach.prompt;
+  }
+  if (prompt === coachShown) return;
+  coachShown = prompt;
+  document.getElementById('coach').classList.toggle('hidden', prompt === null);
+  if (prompt !== null) document.getElementById('txtCoach').textContent = COACH_PROMPTS[prompt];
+}
+
+document.getElementById('btnCoachSkip').addEventListener('click', () => {
+  coachEnabled = false;
+  document.getElementById('chkCoach').checked = false;
+});
+
 // --- Weather -----------------------------------------------------------------------
 const WX_IDS = 'KDFW,KDAL,KADS,KAFW,KFTW,KGKY';
 let cloudDeck = null;
@@ -1080,9 +1121,11 @@ function updatePapi() {
   papiLamps.geometry.attributes.color.needsUpdate = true;
 
   const txt = document.getElementById('txtPapiStatus');
+  sim.papiWhite = null;
   if (!sim.activeEnd) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
   const ap = sim.approach;
   const numWhite = papiWhiteLights(Math.atan2(sim.pos.y - sim.activeEnd.thrY, Math.max(10, ap.distM + AIM_POINT_M)) * RAD_TO_DEG);
+  sim.papiWhite = numWhite;
   if (numWhite === 2) {
     txt.textContent = 'ON GLIDESLOPE';
     txt.className = 'text-emerald-400 font-bold ml-1';
@@ -1344,6 +1387,7 @@ function loadScenario(key) {
   sim.landingGraded = false;
   sim.airborneTime = 0;
   sim.lastLanding = null;
+  resetCoach();
   document.getElementById('resultsCard').classList.add('hidden');
 
   if (mission.kind === 'final') {
@@ -1514,6 +1558,11 @@ document.getElementById('btnCloseModal').addEventListener('click', () => {
 });
 document.getElementById('btnStartFlight').addEventListener('click', () => {
   if (document.getElementById('chkAutoSound').checked) audio.init();
+  coachEnabled = document.getElementById('chkCoach').checked;
+  if (coachEnabled) {
+    resetCoach();
+    try { markCoachSeen(window.localStorage); } catch { /* storage unavailable */ }
+  }
   // The (billable) Google session starts only when someone actually flies, once per page.
   if (photorealAllowed(window.location)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   document.getElementById('onboardingModal').classList.add('hidden');
@@ -1780,6 +1829,7 @@ function renderLoop(time) {
 
   updateGamepad();
   step6DofPhysics(dt);
+  if (!sim.paused) updateCoach(dt);
   syncWeatherUI(dt);
   updateCamera();
   terrainLod.update(dt, camera);
@@ -1864,6 +1914,9 @@ function populateMissionSelect() {
 
 function boot() {
   populateMissionSelect();
+  let seen = false;
+  try { seen = coachSeen(window.localStorage); } catch { /* storage unavailable: coach on */ }
+  document.getElementById('chkCoach').checked = !seen;
   fetchWeather();
   setInterval(fetchWeather, 10 * 60 * 1000);
   buildSatelliteTerrain();
