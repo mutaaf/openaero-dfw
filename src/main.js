@@ -175,10 +175,28 @@ textureLoader.crossOrigin = 'anonymous';
 // depth-tested as usual.
 const GROUND_ORDER = { base: -6, z12: -5, z13: -4, runway: -3, marking: -2 };
 
+// The ground is unlit: satellite imagery already carries real sunlight, and since three r151
+// Lambert lights every pixel, which on a full-screen ground costs more than everything else
+// combined on software GL. Each ground material is tinted with exactly what Lambert would
+// give a flat, up-facing surface under the current lights (applyGroundLight), so it looks
+// the same at a fraction of the cost.
+const groundMats = [];
+const _tint = new THREE.Color();
+const _sunTint = new THREE.Color();
+const _sunDir = new THREE.Vector3();
 function groundMaterial(opts, order) {
-  const m = new THREE.MeshLambertMaterial({ ...opts, depthWrite: false, side: THREE.DoubleSide });
+  const m = new THREE.MeshBasicMaterial({ ...opts, depthWrite: false, side: THREE.DoubleSide });
   m.userData.order = order;
+  m.userData.baseColor = m.color.clone();
+  groundMats.push(m);
+  applyGroundLight(m);
   return m;
+}
+function applyGroundLight(only) {
+  const nDotL = Math.max(0, _sunDir.copy(sunLight.position).normalize().y);
+  _sunTint.copy(sunLight.color).multiplyScalar(sunLight.intensity * nDotL);
+  _tint.copy(ambientLight.color).multiplyScalar(ambientLight.intensity).add(_sunTint).multiplyScalar(1 / Math.PI);
+  for (const m of only ? [only] : groundMats) m.color.copy(m.userData.baseColor).multiply(_tint);
 }
 
 function addTileLayer(zoom, radius, order, skip) {
@@ -1334,6 +1352,7 @@ function toggleTimeOfDay() {
     ambientLight.intensity = 0.25 * LIGHT_SCALE;
     sunLight.intensity = 0.15 * LIGHT_SCALE;
   }
+  applyGroundLight();
   applySky();
 }
 
