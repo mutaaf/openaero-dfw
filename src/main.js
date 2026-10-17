@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import './styles.css';
 import {
   M_TO_FT, MPS_TO_KTS, NM_TO_M, DEG_TO_RAD, RAD_TO_DEG, GRAVITY,
-  SPEED_OF_SOUND_KTS, DFW_ORIGIN_LAT, DFW_ORIGIN_LON, FIELD_ELEV_FT,
+  SPEED_OF_SOUND_KTS,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 import { DOWNTOWN_DALLAS } from './runways.js';
@@ -24,7 +24,8 @@ import {
   parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents,
   fogDensityForVisibility, metarAgeMinutes, flowForWind,
 } from './weather.js';
-import { latLonToTile, tilePlacement, esriTileUrl } from './geo.js';
+import { createTerrainLod } from './terrainLod.js';
+import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl } from './terrain.js';
 import {
   dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning,
@@ -54,6 +55,7 @@ const sim = {
   throttle: 0.44, elevInput: 0, aileronInput: 0, rudderInput: 0,
   flapsIndex: 2, flapAngles: [0, 10, 25, 40],
   gearDown: true, brakesOn: false, onGround: false,
+  groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
 
   // Autopilot
   apMaster: false, apHdgHold: false, apAltHold: false, apApproach: false,
@@ -110,7 +112,7 @@ const mapCanvas = document.getElementById('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
 
 let renderer, scene, camera, ambientLight, sunLight;
-let aircraftRoot, terrainGroup;
+let aircraftRoot, terrainGroup, terrainLod;
 let animRefs = { prop: null, flame: null, fanL: null, fanR: null };
 let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order)
 
@@ -165,27 +167,35 @@ function updateAudioButton() {
   }
 }
 
-const textureLoader = new THREE.TextureLoader();
-textureLoader.crossOrigin = 'anonymous';
-
-// Ground layering: everything flat on the ground (base plane, imagery, runway surfaces,
-// markings) is drawn first, in renderOrder, without writing depth. Nothing is ever below
-// the ground, so it can't wrongly hide anything — and two coplanar layers can never
-// depth-fight, at any distance (ticket 0002). Aircraft, buildings and lights draw after,
-// depth-tested as usual.
-const GROUND_ORDER = { base: -6, z12: -5, z13: -4, runway: -3, marking: -2 };
+// Real ground (terrain.js): one height model for physics and drawing. The streamed imagery
+// (terrainLod.js) is draped on it and writes depth, so hills hide what is behind them.
+// Surfaces lying on the imagery use polygon offset, which scales with depth precision and
+// so holds at any distance (ticket 0002): the runway surface and markings are pulled in
+// front of the imagery, the base plane is pushed behind everything.
+const ground = createGround(RUNWAYS_GEOM);
+const GROUND_ORDER = { imagery: -5, base: -4, runway: -3, marking: -2 }; // base after imagery: depth rejects it
+const GROUND_OFFSET = { base: 8, runway: -2, marking: -4 };
 
 // The ground is unlit: satellite imagery already carries real sunlight, and since three r151
 // Lambert lights every pixel, which on a full-screen ground costs more than everything else
 // combined on software GL. Each ground material is tinted with exactly what Lambert would
-// give a flat, up-facing surface under the current lights (applyGroundLight), so it looks
-// the same at a fraction of the cost.
+// give a flat, up-facing surface under the current lights (applyGroundLight); terrain
+// relief gets its shading baked into vertex colours (terrainLod.js).
 const groundMats = [];
 const _tint = new THREE.Color();
 const _sunTint = new THREE.Color();
 const _sunDir = new THREE.Vector3();
-function groundMaterial(opts, order) {
-  const m = new THREE.MeshBasicMaterial({ ...opts, depthWrite: false, side: THREE.DoubleSide });
+function groundMaterial(opts, order, offsetKey) {
+  const off = GROUND_OFFSET[offsetKey] ?? 0;
+  const decal = off < 0; // runway surface and markings: drawn over the imagery, no depth write
+  const m = new THREE.MeshBasicMaterial({
+    ...opts,
+    depthWrite: !decal,
+    side: decal ? THREE.DoubleSide : THREE.FrontSide,
+    polygonOffset: off !== 0,
+    polygonOffsetFactor: Math.sign(off),
+    polygonOffsetUnits: off,
+  });
   m.userData.order = order;
   m.userData.baseColor = m.color.clone();
   groundMats.push(m);
@@ -197,39 +207,7 @@ function applyGroundLight(only) {
   _sunTint.copy(sunLight.color).multiplyScalar(sunLight.intensity * nDotL);
   _tint.copy(ambientLight.color).multiplyScalar(ambientLight.intensity).add(_sunTint).multiplyScalar(1 / Math.PI);
   for (const m of only ? [only] : groundMats) m.color.copy(m.userData.baseColor).multiply(_tint);
-}
-
-function addTileLayer(zoom, radius, order, skip) {
-  const centerTile = latLonToTile(DFW_ORIGIN_LAT, DFW_ORIGIN_LON, zoom);
-  for (let dx = -radius; dx <= radius; dx++) {
-    for (let dy = -radius; dy <= radius; dy++) {
-      const tileX = centerTile.x + dx;
-      const tileY = centerTile.y + dy;
-      if (skip && skip(tileX, tileY)) continue;
-
-      // NW and SE corners for geographic placement (geo.js)
-      const { widthM, lengthM, posX, posZ } = tilePlacement(tileX, tileY, zoom);
-      const tileMat = groundMaterial({ color: 0xffffff }, order);
-      const tileMesh = new THREE.Mesh(new THREE.PlaneGeometry(widthM, lengthM), tileMat);
-      tileMesh.rotation.x = -Math.PI / 2;
-      tileMesh.position.set(posX, 0, posZ);
-      tileMesh.renderOrder = order;
-      terrainGroup.add(tileMesh);
-
-      // Esri World Imagery tile service
-      textureLoader.load(
-        esriTileUrl(zoom, tileX, tileY),
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace; // imagery is sRGB-encoded
-          tex.anisotropy = 4;
-          tileMat.map = tex;
-          tileMat.needsUpdate = true;
-        },
-        undefined,
-        () => { tileMat.color.setHex(0x233827); }, // offline / rate-limited fallback
-      );
-    }
-  }
+  if (!only) terrainLod?.setTint(_tint);
 }
 
 // Append an axis-aligned quad (in a runway's local frame) to a flat position array,
@@ -241,7 +219,10 @@ function pushQuad(arr, ox, oz, rot, lx, lz, w, l, y) {
   for (const i of [0, 2, 1, 0, 3, 2]) arr.push(world[i][0], y, world[i][1]);
 }
 
+// Runway surfaces sit on the ground model, which on a runway is the plane through its
+// surveyed end elevations (so the quads follow the real slope; no DEM needed).
 function flatMesh(positions, material, order) {
+  for (let i = 0; i < positions.length; i += 3) positions[i + 1] += ground.heightAt(positions[i], positions[i + 2]);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   g.computeVertexNormals();
@@ -278,8 +259,10 @@ function buildRunways() {
     });
     for (const side of [-1, 1]) pushQuad(marks, r.cx, r.cz, rot, side * (r.widthM / 2 - 1), 0, 0.9, r.lengthM, 0);
   }
-  scene.add(flatMesh(surface, groundMaterial({ color: 0x1c2029 }, GROUND_ORDER.runway), GROUND_ORDER.runway));
-  const markMat = new THREE.MeshBasicMaterial({ color: 0xf1f5f9, depthWrite: false, side: THREE.DoubleSide });
+  scene.add(flatMesh(surface, groundMaterial({ color: 0x1c2029 }, GROUND_ORDER.runway, 'runway'), GROUND_ORDER.runway));
+  const markMat = new THREE.MeshBasicMaterial({
+    color: 0xf1f5f9, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: GROUND_OFFSET.marking,
+  });
   scene.add(flatMesh(marks, markMat, GROUND_ORDER.marking));
 
   // PAPI: four lamps left of every runway end, abeam the aiming point. Drawn as one
@@ -293,8 +276,8 @@ function buildRunways() {
       const off = e.widthM / 2 + 15 + i * 9;
       const k = (ei * 4 + i) * 3;
       lampPos[k] = e.thrX + d.x * AIM_POINT_M + left.x * off;
-      lampPos[k + 1] = 1.5;
       lampPos[k + 2] = e.thrZ + d.z * AIM_POINT_M + left.z * off;
+      lampPos[k + 1] = ground.heightAt(lampPos[k], lampPos[k + 2]) + 1.5;
       lampCol[k] = 1; lampCol[k + 1] = 0.13; lampCol[k + 2] = 0.13;
     }
   });
@@ -309,18 +292,23 @@ function buildSatelliteTerrain() {
   terrainGroup = new THREE.Group();
 
   // Base regional fallback ground plane
-  const basePlane = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), groundMaterial({ color: 0x1b281f }, GROUND_ORDER.base));
+  // Below the lowest DEM point, beyond the imagery ring.
+  const basePlane = new THREE.Mesh(new THREE.PlaneGeometry(160000, 160000), groundMaterial({ color: 0x1b281f }, GROUND_ORDER.base, 'base'));
   basePlane.rotation.x = -Math.PI / 2;
+  basePlane.position.y = -90;
   basePlane.renderOrder = GROUND_ORDER.base;
   terrainGroup.add(basePlane);
 
-  // Esri satellite imagery: a zoom-13 core (~37 km square around KDFW) and a zoom-12 ring
-  // (~74 km) so Alliance, Meacham and Arlington sit on real imagery too.
-  const core = latLonToTile(DFW_ORIGIN_LAT, DFW_ORIGIN_LON, 13);
-  const inCore = (x13, y13) => Math.abs(x13 - core.x) <= 4 && Math.abs(y13 - core.y) <= 4;
-  addTileLayer(12, 4, GROUND_ORDER.z12, (x, y) =>
-    inCore(2 * x, 2 * y) && inCore(2 * x + 1, 2 * y) && inCore(2 * x, 2 * y + 1) && inCore(2 * x + 1, 2 * y + 1));
-  addTileLayer(13, 4, GROUND_ORDER.z13);
+  // Esri satellite imagery, streamed by distance: ~2 m/px under the aircraft, coarse at the
+  // horizon, ±60 km around DFW (terrainLod.js + tileTree.js).
+  terrainLod = createTerrainLod({
+    scene: terrainGroup, ground, renderOrder: GROUND_ORDER.imagery,
+    maxZoom: window.innerWidth < 700 ? 15 : 16,
+    anisotropy: Math.min(4, renderer?.capabilities.getMaxAnisotropy() || 1),
+    sunDir: sunLight.position.clone().normalize(),
+  });
+  applyGroundLight();
+  loadDem();
 
   scene.add(terrainGroup);
   buildRunways();
@@ -370,6 +358,7 @@ function buildSatelliteTerrain() {
     dallas.add(bldg);
   }
   scene.add(dallas);
+  landmarks.push(dallas);
 
   // Margaret Hunt Hill Bridge Arch
   const bridgeGroup = new THREE.Group();
@@ -380,11 +369,39 @@ function buildSatelliteTerrain() {
   bridgeArch.rotation.y = Math.PI / 2;
   bridgeGroup.add(bridgeArch);
   scene.add(bridgeGroup);
+  landmarks.push(bridgeGroup);
 
   // Arlington AT&T Stadium
   const att = new THREE.Mesh(new THREE.CylinderGeometry(150, 130, 55, 24), new THREE.MeshLambertMaterial({ color: 0xcbd5e1 }));
   att.position.set(-2400, 27.5, 9600);
   scene.add(att);
+  landmarks.push(att);
+  seatLandmarks();
+}
+
+// Landmarks stand on the real ground; their own y is the height above it.
+const landmarks = [];
+function seatLandmarks() {
+  for (const o of landmarks) {
+    if (o.userData.baseY === undefined) o.userData.baseY = o.position.y;
+    o.position.y = o.userData.baseY + ground.heightAt(o.position.x, o.position.z);
+  }
+}
+
+// The baked elevation grid (scripts/bake-terrain.mjs): gzip, decompressed natively.
+// Until it arrives the ground is flat at y 0 away from the airports (runways are already
+// at their real heights), so nothing waits on it.
+async function loadDem() {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}${DEM_URL_PATH}`);
+    if (!res.ok || !res.body || typeof DecompressionStream === 'undefined') return;
+    const raw = await new Response(res.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    ground.setDem(decodeDem(new Uint8Array(raw)));
+    terrainLod.redrape();
+    seatLandmarks();
+  } catch (err) {
+    console.warn('Terrain elevation unavailable, flying on flat ground:', err.message);
+  }
 }
 
 function buildAircraft(type) {
@@ -706,7 +723,7 @@ function refreshWeather() {
       cloudDeck.rotation.x = -Math.PI / 2;
       scene.add(cloudDeck);
     }
-    cloudDeck.position.y = base * 0.3048;
+    cloudDeck.position.y = (sim.activeEnd ? sim.activeEnd.thrY : 0) + base * 0.3048;
     cloudDeck.material.opacity = sim.wx.ceilingCover === 'BKN' ? 0.55 : 0.88;
     cloudDeck.visible = true;
   } else if (cloudDeck) {
@@ -721,7 +738,7 @@ function updateWind(dt) {
   sim.simTime += dt;
   const wx = sim.wx;
   sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
-  const h = Math.max(0, sim.pos.y - sim.spec.gearHeight);
+  const h = Math.max(0, sim.pos.y - sim.groundY - sim.spec.gearHeight);
   const surface = Math.sqrt(Math.min(1, h / 30));
   const w = windVector(wx.windDirDeg, sim.windNowKts * 0.514444 * surface);
   sim.windVec.set(w.x, 0, w.z);
@@ -765,6 +782,7 @@ function syncWeatherUI(dt) {
 
 function step6DofPhysics(dt) {
   if (sim.paused) return;
+  sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   updateWind(dt);
 
   // Sub-stepping: at least 3 per frame and never longer than 1/60 s each, so the
@@ -803,6 +821,7 @@ function step6DofPhysics(dt) {
 }
 
 function integrateSubStep(dt) {
+  sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   const spec = sim.spec;
 
   // Pilot Input Controls: touch/drag stick > gamepad > keyboard (input.js)
@@ -854,7 +873,7 @@ function integrateSubStep(dt) {
     if (sim.apApproach && sim.activeEnd) {
       const ap = approachGeometry(sim.activeEnd, sim.pos);
       holdHeading(sim.activeEnd.hdgT + localizerInterceptDeg(ap.crossM));
-      const wheelH = sim.pos.y - spec.gearHeight;
+      const wheelH = sim.pos.y - sim.groundY - spec.gearHeight;
       const gsMps = Math.max(20, Math.hypot(sim.vel.x, sim.vel.z));
       if (wheelH > 15) {
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM));
@@ -900,7 +919,7 @@ function integrateSubStep(dt) {
   const cl = liftCoefficient(spec, aoaRad, sim.flapsIndex);
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
-  const groundEffect = groundEffectFactor(sim.pos.y, spec.wingSpanM);
+  const groundEffect = groundEffectFactor(sim.pos.y - sim.groundY, spec.wingSpanM);
   const cd = dragCoefficient(spec, cl, sim.gearDown, sim.flapsIndex, groundEffect);
 
   const liftForce = cl * qDyn * spec.wingAreaM2;
@@ -915,9 +934,11 @@ function integrateSubStep(dt) {
   const totalForceWorld = _v2.set(fBodyX, fBodyY, fBodyZ).applyQuaternion(sim.quat);
   totalForceWorld.y -= spec.massKg * GRAVITY;
 
-  // Ground Spring-Damper Suspension
-  const gh = spec.gearHeight;
-  if (sim.pos.y <= gh) {
+  // Ground Spring-Damper Suspension, on the real ground under the aircraft (terrain.js)
+  // 1 cm contact tolerance: on a sloped runway, sub-nanometre drift along the slope changes
+  // the ground height by ~1e-13 m, which must not count as lifting off.
+  const gh = sim.groundY + spec.gearHeight;
+  if (sim.pos.y <= gh + 0.01) {
     const penetration = gh - sim.pos.y;
     const kSpring = spec.massKg * 85;
     const kDamper = spec.massKg * 9;
@@ -996,8 +1017,8 @@ function integrateSubStep(dt) {
   }
 
   // Telemetry derivatives
-  sim.aglFt = Math.max(0, Math.round(sim.pos.y * M_TO_FT));
-  sim.mslFt = Math.round(sim.aglFt + (sim.activeEnd ? sim.activeEnd.elevFt : FIELD_ELEV_FT));
+  sim.aglFt = Math.max(0, Math.round((sim.pos.y - sim.groundY) * M_TO_FT));
+  sim.mslFt = Math.round(yToFtMsl(sim.pos.y));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
   sim.gLoad = 1.0 + (accel.y / GRAVITY);
 
@@ -1015,7 +1036,7 @@ function updatePapi() {
   RUNWAY_ENDS.forEach((e, ei) => {
     const g = approachGeometry(e, sim.pos);
     const distToPapi = Math.max(10, g.distM + AIM_POINT_M);
-    const white = g.distM > -AIM_POINT_M ? papiWhiteLights(Math.atan2(sim.pos.y, distToPapi) * RAD_TO_DEG) : 0;
+    const white = g.distM > -AIM_POINT_M ? papiWhiteLights(Math.atan2(sim.pos.y - e.thrY, distToPapi) * RAD_TO_DEG) : 0;
     // Lamps are numbered outward from the runway; the inboard lamps turn red first.
     for (let i = 0; i < 4; i++) {
       const k = (ei * 4 + i) * 3;
@@ -1028,7 +1049,7 @@ function updatePapi() {
   const txt = document.getElementById('txtPapiStatus');
   if (!sim.activeEnd) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
   const ap = sim.approach;
-  const numWhite = papiWhiteLights(Math.atan2(sim.pos.y, Math.max(10, ap.distM + AIM_POINT_M)) * RAD_TO_DEG);
+  const numWhite = papiWhiteLights(Math.atan2(sim.pos.y - sim.activeEnd.thrY, Math.max(10, ap.distM + AIM_POINT_M)) * RAD_TO_DEG);
   if (numWhite === 2) {
     txt.textContent = 'ON GLIDESLOPE';
     txt.className = 'text-emerald-400 font-bold ml-1';
@@ -1094,7 +1115,7 @@ function updateCamera() {
 
   } else if (mode === 4) {
     // 5. KDFW ATC Tower Cab View (96m tower)
-    camera.position.set(-960, 96, -80);
+    camera.position.set(-960, ground.heightAt(-960, -80) + 96, -80);
     camera.lookAt(sim.pos);
     camera.up.set(0, 1, 0);
 
@@ -1104,6 +1125,11 @@ function updateCamera() {
     camera.position.copy(sim.pos).add(tailOffset);
     camera.lookAt(sim.pos.clone().add(_v2.set(0, 1.2, -40).applyQuaternion(sim.quat)));
     camera.up.set(0, 1, 0);
+  }
+  // External cameras never dip under the terrain (hills, or a chase cam on the runway).
+  if (mode !== 0) {
+    const floor = ground.heightAt(camera.position.x, camera.position.z) + 1.5;
+    if (camera.position.y < floor) camera.position.y = floor;
   }
 }
 
@@ -1304,7 +1330,7 @@ function loadScenario(key) {
   } else if (mission.kind === 'takeoff') {
     const end = runwayEnd(mission.airport, mission.rwy);
     const s = takeoffSpawn(end);
-    sim.pos.set(s.pos.x, sim.spec.gearHeight, s.pos.z);
+    sim.pos.set(s.pos.x, ground.heightAt(s.pos.x, s.pos.z) + sim.spec.gearHeight, s.pos.z);
     sim.vel.set(0, 0, 0);
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0;
@@ -1325,6 +1351,7 @@ function loadScenario(key) {
     sim.onGround = false;
     sim.activeEnd = null;
   }
+  sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
   document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
 }
@@ -1717,6 +1744,7 @@ function renderLoop(time) {
   step6DofPhysics(dt);
   syncWeatherUI(dt);
   updateCamera();
+  terrainLod.update(dt, camera);
   renderer.render(scene, camera);
   renderHud();
   renderRadar();
@@ -1742,12 +1770,17 @@ window.openaeroDebug = () => {
     distM: sim.approach.distM,
     heightAbovePathM: sim.approach.heightAbovePathM,
     pos: { x: sim.pos.x, y: sim.pos.y, z: sim.pos.z },
+    groundY: sim.groundY,
+    aglFt: sim.aglFt,
+    mslFt: sim.mslFt,
     onGround: sim.onGround,
     iasKts: sim.iasKts,
     gsKts: sim.gsKts,
     wxLive: sim.wx.live,
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,
+    terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
+    render: renderer ? { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles } : null,
   };
 };
 

@@ -6,7 +6,8 @@ anything. `CLAUDE.md` points here.
 ## 1 · Product vision
 
 OpenAero DFW is a browser flight simulator set over the real Dallas-Fort Worth metroplex:
-real satellite imagery underneath, real airports where they actually are, real weather
+real satellite imagery draped on the real terrain underneath (a photoreal 3D city when
+the Google tiles key is configured), real airports at their real elevations, real weather
 overhead, and a 6-DOF flight model that feels believable. It opens in a second, needs no
 install or account, and runs on a laptop, a phone, or with a gamepad.
 
@@ -95,6 +96,13 @@ src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA.
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,
                     angVel.y + = nose left, angVel.z + = roll left.
 src/geo.js          Web Mercator tile math, lat/lon → sim metres, Esri tile URLs
+src/terrain.js      the one ground truth: baked DEM (public/terrain/dfw-dem-v1.bin, from
+                    AWS Terrain Tiles via scripts/bake-terrain.mjs) + every runway
+                    flattened onto the plane through its surveyed end elevations.
+                    ground.heightAt(x, z) → sim Y; physics, AGL, runways, PAPIs read it
+src/tileTree.js     quadtree LOD selection for the streamed imagery (pure, tested)
+src/terrainLod.js   streamed Esri imagery draped on terrain.js: per-tile height grids with
+                    skirts, hillshade in vertex colours, load queue, LRU cache
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
                     GPWS callouts, warnings, heading math
 src/input.js        keyboard state → control targets, virtual stick mapping
@@ -110,14 +118,21 @@ tests/unit/         Vitest for the pure modules
 tests/e2e/          Playwright: smoke, controls, missions, phone, perf probe
 ```
 
-World frame: metres from the KDFW origin, +X east, +Y up, **−Z north**. The ground is
-drawn as layers with `depthWrite: false` in a fixed `renderOrder` (base → z12 imagery →
-z13 imagery → runway surface → markings), so coplanar ground layers can never
-depth-fight; everything above the ground depth-tests normally. Approach guidance
+World frame: metres from the KDFW origin, +X east, +Y up, **−Z north**. **Y is height
+above KDFW's field elevation (606 ft MSL)**, not above the local ground: Love Field's
+runways are at y ≈ −40, Alliance's at y ≈ +20–35. Always use `sim.groundY` (terrain under
+the aircraft) for AGL/contact and `end.thrY` (threshold height) for approach geometry and
+PAPIs; never assume the ground is y = 0. The imagery is unlit and draped on the terrain
+and writes depth; runway surfaces/markings are decals over it with negative polygon
+offset (holds at any distance, ticket 0002); ground materials are `MeshBasicMaterial`
+tinted by `applyGroundLight()` (per-pixel Lambert on a full-screen ground is too slow on
+software GL). Approach guidance
 (ILS bars, PAPI text, APR autopilot, DME, NAV1) follows `sim.activeEnd`, re-picked twice
 a second by `selectActiveRunway` from whatever you're lined up on. Loop per frame
 (`renderLoop`): `step6DofPhysics(dt)` (dt capped at 250 ms, split into ≥ 3 sub-steps of
-≤ 1/60 s, so sim time keeps pace with real time down to 4 fps) → `updateCamera` → `renderer.render` → `renderHud` (2D canvas) → `renderRadar`
+≤ 1/60 s, so sim time keeps pace with real time down to 4 fps) → `updateCamera` →
+`terrainLod.update` (re-selects tiles 5x a second) → `renderer.render` → `renderHud`
+(2D canvas) → `renderRadar`
 → `syncUI` (DOM text) → `audio.update`.
 
 ## 5 · Commands

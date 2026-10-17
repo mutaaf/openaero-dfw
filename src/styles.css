@@ -62,7 +62,8 @@ input[type=range] { accent-color: #38bdf8; }
   text-align: right;
   text-decoration: none;
 }
-.imagery-credit:hover { color: #e2e8f0; }
+.imagery-credit a { color: inherit; text-decoration: none; }
+.imagery-credit a:hover { color: #e2e8f0; }
 
 /* Imagery credit: always visible, tucked at the very bottom edge. */
 .imagery-credit {
