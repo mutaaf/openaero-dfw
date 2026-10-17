@@ -86,3 +86,8 @@ input[type=range] { accent-color: #38bdf8; }
 @media (pointer: coarse) {
   header .hud-btn { min-height: 44px; min-width: 44px; }
 }
+
+/* First-flight coach: above the phone touch deck (which pads for the home indicator),
+   above the stick panel on desktop; always below the horizon. */
+#coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { #coach { bottom: 10rem; } }

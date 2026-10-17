@@ -1,12 +1,12 @@
 ---
 id: 0008
 title: Coach a first-time player to a landing in the first 30 seconds
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-16
-pr:
+pr: 22
 ---
 
 ## Why
@@ -24,10 +24,10 @@ landing grade on touchdown. The `#touchdownBanner` markup (sink rate, IAS, G) al
 exists in `index.html` but nothing ever shows it; wire it up so a good landing feels earned. Remember "seen the coach" in `localStorage` (`openaero_coach_v1`).
 
 ## Acceptance criteria
-- [ ] First visit: coach prompts appear on the default mission; a "Skip" control dismisses them
-- [ ] Second visit: the coach doesn't show unless re-enabled from the modal
-- [ ] Touchdown shows a grade derived from sink rate (unit-tested thresholds)
-- [ ] Works at 390x844 and 1280x720
+- [x] First visit: coach prompts appear on the default mission; a "Skip" control dismisses them
+- [x] Second visit: the coach doesn't show unless re-enabled from the modal
+- [x] Touchdown shows a grade derived from sink rate (unit-tested thresholds)
+- [x] Works at 390x844 and 1280x720
 
 ## Test plan
 Unit test the coach state machine and landing grade (pure functions in a new

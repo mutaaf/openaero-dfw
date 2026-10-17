@@ -29,6 +29,12 @@
   <div id="stallAlertBanner" class="hidden pointer-events-none absolute top-28 left-1/2 -translate-x-1/2 z-30 px-5 py-1.5 rounded-xl bg-amber-500/90 border-2 border-amber-200 text-slate-950 font-mono font-extrabold text-xs tracking-widest uppercase shadow-2xl">
     STALL WARNING — ADD POWER / LOWER NOSE
   </div>
+  <!-- First-flight coach (src/coach.js): above the phone touch deck / desktop stick panel, below the horizon -->
+  <div id="coach" class="hidden pointer-events-none absolute inset-x-3 z-30 mx-auto max-w-sm hud-glass rounded-xl pl-3 pr-1 py-1 flex items-center gap-2 font-mono border-amber-300/50" role="status" aria-live="polite">
+    <span class="text-[9px] font-bold uppercase tracking-widest text-amber-300">Coach</span>
+    <span id="txtCoach" class="flex-1 text-xs font-bold text-slate-100"></span>
+    <button id="btnCoachSkip" class="pointer-events-auto hud-btn rounded-lg min-h-[44px] min-w-[44px] px-2 text-[11px] text-slate-300" aria-label="Skip the coach">Skip</button>
+  </div>
   <!-- Landing results card (src/landing.js grades every touchdown) -->
   <div id="resultsCard" class="hidden absolute inset-x-3 top-1/2 -translate-y-1/2 z-40 mx-auto max-w-sm hud-glass rounded-2xl p-4 font-mono text-slate-200 border-emerald-400/50 shadow-2xl" role="dialog" aria-labelledby="txtGrade" aria-live="polite">
     <div class="flex items-center gap-4 border-b border-slate-700/80 pb-3">
@@ -131,10 +137,16 @@
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
-        <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-          <input id="chkAutoSound" type="checkbox" checked class="w-4 h-4 rounded accent-sky-400" />
-          <span>Enable Web Audio Turbines & Altitude Chirps</span>
-        </label>
+        <div class="flex flex-col gap-1.5">
+          <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+            <input id="chkAutoSound" type="checkbox" checked class="w-4 h-4 rounded accent-sky-400" />
+            <span>Enable Web Audio Turbines & Altitude Chirps</span>
+          </label>
+          <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+            <input id="chkCoach" type="checkbox" checked class="w-4 h-4 rounded accent-amber-300" />
+            <span>Landing coach on the 35C final</span>
+          </label>
+        </div>
         <button id="btnStartFlight" class="hud-btn active px-6 py-2.5 min-h-[44px] rounded-xl text-xs font-bold font-mono text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
           ENTER COCKPIT ✈
         </button>
