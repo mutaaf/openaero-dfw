@@ -715,6 +715,7 @@ document.getElementById('btnKeepRolling').addEventListener('click', () => {
 const coach = createCoach();
 let coachEnabled = false;
 let coachShown = undefined; // prompt key on screen, to touch the DOM only on change
+let coachMarked = false; // 'seen' is stored the first time a prompt actually shows
 let coachDoneS = 0;
 const COACH_DONE_SHOW_S = 4;
 const coachInput = { aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false };
@@ -740,12 +741,24 @@ function updateCoach(dt) {
   if (prompt === coachShown) return;
   coachShown = prompt;
   document.getElementById('coach').classList.toggle('hidden', prompt === null);
-  if (prompt !== null) document.getElementById('txtCoach').textContent = COACH_PROMPTS[prompt];
+  if (prompt === null) return;
+  document.getElementById('txtCoach').textContent = COACH_PROMPTS[prompt];
+  if (!coachMarked) {
+    coachMarked = true;
+    try { markCoachSeen(window.localStorage); } catch { /* storage unavailable */ }
+  }
+}
+
+// Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
+function applyCoachChoice() {
+  coachEnabled = document.getElementById('chkCoach').checked;
+  if (coachEnabled) resetCoach();
 }
 
 document.getElementById('btnCoachSkip').addEventListener('click', () => {
   coachEnabled = false;
   document.getElementById('chkCoach').checked = false;
+  updateCoach(0); // hide now, even while paused
 });
 
 // --- Weather -----------------------------------------------------------------------
@@ -1554,15 +1567,12 @@ window.addEventListener('resize', handleResize);
 
 // Modal Triggers
 document.getElementById('btnCloseModal').addEventListener('click', () => {
+  applyCoachChoice();
   document.getElementById('onboardingModal').classList.add('hidden');
 });
 document.getElementById('btnStartFlight').addEventListener('click', () => {
   if (document.getElementById('chkAutoSound').checked) audio.init();
-  coachEnabled = document.getElementById('chkCoach').checked;
-  if (coachEnabled) {
-    resetCoach();
-    try { markCoachSeen(window.localStorage); } catch { /* storage unavailable */ }
-  }
+  applyCoachChoice();
   // The (billable) Google session starts only when someone actually flies, once per page.
   if (photorealAllowed(window.location)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   document.getElementById('onboardingModal').classList.add('hidden');

@@ -4,7 +4,8 @@
 
 export const COACH_KEY = 'openaero_coach_v1';
 export const COACH_MISSION = 'kdfw_35c_final';
-// A prompt stays up at least this long before a same-or-lower-rank prompt replaces it.
+// A same-or-lower-rank prompt replaces the current one only after its condition has held
+// this long (debounce: a one-frame PAPI blip near a lamp boundary changes nothing).
 export const COACH_MIN_HOLD_S = 1.5;
 
 export const COACH_PROMPTS = {
@@ -14,7 +15,7 @@ export const COACH_PROMPTS = {
   sink: 'Sinking fast: raise the nose, add power',
   flare: 'Flare now: ease back on the stick',
   idle: 'Idle the throttle',
-  done: 'Touchdown! Brakes on (B) to stop',
+  done: 'Touchdown! Hold the brakes to stop',
 };
 // Higher rank interrupts at once; guidance about the PAPI shares one rank.
 const RANK = { papi: 1, high: 1, low: 1, sink: 2, flare: 3, idle: 4, done: 5 };
@@ -32,20 +33,23 @@ export function coachTarget(s) {
   return 'papi';
 }
 
-export const createCoach = () => ({ prompt: null, held: 0, flown: false, done: false });
+export const createCoach = () => ({ prompt: null, pending: null, pendingS: 0, flown: false, done: false });
 
 // Advances the coach one frame; mutates and returns c (no per-frame allocation).
 export function stepCoach(c, s, dt) {
   if (c.done) return c;
   if (!s.onGround) c.flown = true;
-  else if (c.flown) { c.done = true; c.prompt = 'done'; c.held = 0; return c; }
-  c.held += dt;
+  else if (c.flown) { c.done = true; c.prompt = 'done'; return c; }
   const target = coachTarget(s);
-  if (target === c.prompt) return c;
-  if (target === null || c.prompt === null || RANK[target] > RANK[c.prompt] || c.held >= COACH_MIN_HOLD_S) {
-    c.prompt = target;
-    c.held = 0;
+  if (target === c.prompt) { c.pending = null; c.pendingS = 0; return c; }
+  // Silence (ground, autopilot) and escalation are immediate; anything else must hold.
+  if (target === null || c.prompt === null || RANK[target] > RANK[c.prompt]) {
+    c.prompt = target; c.pending = null; c.pendingS = 0;
+    return c;
   }
+  if (target !== c.pending) { c.pending = target; c.pendingS = 0; }
+  c.pendingS += dt;
+  if (c.pendingS >= COACH_MIN_HOLD_S) { c.prompt = target; c.pending = null; c.pendingS = 0; }
   return c;
 }
 

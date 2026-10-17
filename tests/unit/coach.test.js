@@ -55,6 +55,30 @@ describe('stepCoach state machine', () => {
     c = stepCoach(c, { ...onPath, papiWhite: 3 }, COACH_MIN_HOLD_S);
     expect(c.prompt).toBe('high');
   });
+  it('a one-frame PAPI blip after a long time on path changes nothing', () => {
+    let c = stepCoach(createCoach(), onPath, 0.1);
+    c = stepCoach(c, onPath, 10);
+    c = stepCoach(c, { ...onPath, papiWhite: 3 }, 0.016);
+    expect(c.prompt).toBe('papi');
+    c = stepCoach(c, onPath, 0.016);
+    c = stepCoach(c, { ...onPath, papiWhite: 3 }, 0.016);
+    expect(c.prompt).toBe('papi');
+  });
+  it('steps down a rank (idle → flare) only once the throttle has stayed idle', () => {
+    let c = stepCoach(createCoach(), { ...onPath, aglFt: 25 }, 0.1);
+    expect(c.prompt).toBe('idle');
+    c = stepCoach(c, { ...onPath, aglFt: 20, throttle: 0 }, 0.5);
+    expect(c.prompt).toBe('idle');
+    c = stepCoach(c, { ...onPath, aglFt: 15, throttle: 0 }, COACH_MIN_HOLD_S);
+    expect(c.prompt).toBe('flare');
+  });
+  it('engaging the autopilot clears the prompt at once, and it returns when released', () => {
+    let c = stepCoach(createCoach(), onPath, 0.1);
+    c = stepCoach(c, { ...onPath, autopilot: true }, 0.016);
+    expect(c.prompt).toBe(null);
+    c = stepCoach(c, onPath, 0.016);
+    expect(c.prompt).toBe('papi');
+  });
   it('escalates to flare and idle at once', () => {
     let c = stepCoach(createCoach(), onPath, 0.1);
     c = stepCoach(c, { ...onPath, aglFt: 45 }, 0.016);
