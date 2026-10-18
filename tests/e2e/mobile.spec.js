@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { BASE, stubTiles, collectErrors, distinctColours } from './helpers.js';
+import { BASE, stubTiles, collectErrors, distinctColours, lowContrastLabels, enterCockpit } from './helpers.js';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -174,4 +174,13 @@ test('phone: the menu has a keyboard path and grabbing the stick folds it (0021)
   await expect(page.locator('#hudMenu')).toBeVisible();
   await page.locator('#touchStick').tap();
   await expect(page.locator('#hudMenu')).toBeHidden();
+});
+
+test('phone: telemetry and touch labels are at least 10 px and reach 4.5:1 (0007)', async ({ page }) => {
+  await stubTiles(page);
+  await enterCockpit(page);
+  expect(await lowContrastLabels(page, '#phoneTelemetry, #touchDeck')).toEqual([]);
+  const sizes = await page.locator('#phoneTelemetry div > div').evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
+  expect(sizes.length).toBe(4);
+  for (const px of sizes) expect(px).toBeGreaterThanOrEqual(10);
 });

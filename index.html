@@ -41,7 +41,7 @@
       <div id="txtGrade" class="text-5xl font-black text-emerald-300 w-20 text-center">A</div>
       <div class="flex-1">
         <div class="text-[10px] uppercase tracking-widest text-slate-400">Landing grade</div>
-        <div class="text-sm font-bold"><span id="txtScore">0</span><span class="text-slate-500">/100</span> · <span id="txtResultRunway" class="text-sky-300">KDFW 35C</span></div>
+        <div class="text-sm font-bold"><span id="txtScore">0</span><span class="text-slate-400">/100</span> · <span id="txtResultRunway" class="text-sky-300">KDFW 35C</span></div>
         <div id="txtBest" class="text-[11px] text-amber-300"></div>
       </div>
     </div>
@@ -54,18 +54,18 @@
   </div>
 
   <!-- Onboarding & Flight Academy Modal -->
-  <div id="onboardingModal" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-200">
-    <div class="hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-slate-200 border-sky-400/40 shadow-2xl">
+  <div id="onboardingModal" role="dialog" aria-modal="true" aria-labelledby="txtModalTitle" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-200">
+    <div id="modalPanel" tabindex="-1" class="outline-none hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-slate-200 border-sky-400/40 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-700/80 pb-3">
         <div class="flex items-center gap-2.5">
-          <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping" aria-hidden="true"></span>
           <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 -ml-6"></span>
           <div>
-            <h1 class="text-sm sm:text-base font-bold text-sky-300 tracking-wider font-mono">DALLAS 6-DOF SATELLITE SIMULATOR PRO</h1>
+            <h1 id="txtModalTitle" class="text-sm sm:text-base font-bold text-sky-300 tracking-wider font-mono">DALLAS 6-DOF SATELLITE SIMULATOR PRO</h1>
             <p class="text-[11px] text-slate-400">Real satellite imagery • Real runways • Today's METAR weather when online</p>
           </div>
         </div>
-        <button id="btnCloseModal" class="hud-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white">✕ CLOSE</button>
+        <button id="btnCloseModal" aria-label="Close (Esc)" class="hud-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white">✕ CLOSE</button>
       </div>
 
       <p class="text-xs text-slate-300 leading-relaxed">
@@ -169,10 +169,10 @@
       <button id="btnMenu" class="hud-btn pointer-events-auto rounded-xl min-h-[44px] min-w-[44px] px-2 text-[11px] font-mono font-bold text-sky-300" aria-label="Menu" aria-expanded="false" aria-controls="hudMenu">☰ Menu</button>
       <!-- Phone telemetry strip (the EICAS and moving map are desktop-only) -->
       <div id="phoneTelemetry" class="flex-1 hud-glass pointer-events-auto rounded-xl px-2 py-1 grid grid-cols-4 gap-1 text-center font-mono text-[10px]">
-        <div><div class="text-slate-500 text-[8px]">IAS</div><b id="txtPhoneIas" class="text-slate-100">140</b></div>
-        <div><div class="text-slate-500 text-[8px]">AGL FT</div><b id="txtPhoneAgl" class="text-emerald-300">1270</b></div>
-        <div><div class="text-slate-500 text-[8px]">V/S FPM</div><b id="txtPhoneVs" class="text-sky-300">-700</b></div>
-        <div><div class="text-slate-500 text-[8px]">PAPI</div><b id="txtPhonePapi" class="text-emerald-400">ON GS</b></div>
+        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">IAS</div><b id="txtPhoneIas" class="text-slate-100">140</b></div>
+        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">AGL FT</div><b id="txtPhoneAgl" class="text-emerald-300">1270</b></div>
+        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">V/S FPM</div><b id="txtPhoneVs" class="text-sky-300">-700</b></div>
+        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">PAPI</div><b id="txtPhonePapi" class="text-emerald-400">ON GS</b></div>
       </div>
     </div>
 
@@ -188,7 +188,7 @@
 
         <div class="hidden lg:flex items-center gap-1 font-mono">
           <label for="selAircraft" class="text-[10px] text-slate-400 font-bold">PLANE:</label>
-          <select id="selAircraft" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-200 focus:outline-none">
+          <select id="selAircraft" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-slate-200">
             <option value="b738">Boeing 737-800 NG</option>
             <option value="c172">Cessna 172S Skyhawk</option>
             <option value="f16">F-16C Fighting Falcon</option>
@@ -197,7 +197,7 @@
 
         <div class="hidden lg:flex items-center gap-1 font-mono">
           <label for="selScenario" class="text-[10px] text-slate-400 font-bold">MISSION:</label>
-          <select id="selScenario" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-amber-300 focus:outline-none">
+          <select id="selScenario" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-amber-300">
             <option value="kdfw_35c_final">KDFW RWY 35C (4 NM ILS Final)</option>
           </select>
         </div>
@@ -283,15 +283,15 @@
     <!-- Secondary Flight Surfaces -->
     <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-slate-800 text-center text-[10px]">
       <button id="btnGear" class="hud-btn active p-1.5 rounded-lg flex flex-col items-center">
-        <span class="text-slate-400 text-[8px]">GEAR (G)</span>
+        <span class="text-slate-400 text-[10px]">GEAR (G)</span>
         <span id="txtGear" class="font-bold text-emerald-400">DOWN 3 GRN</span>
       </button>
       <button id="btnFlaps" class="hud-btn p-1.5 rounded-lg flex flex-col items-center">
-        <span class="text-slate-400 text-[8px]">FLAPS (F)</span>
+        <span class="text-slate-400 text-[10px]">FLAPS (F)</span>
         <span id="txtFlaps" class="font-bold text-sky-300">25°</span>
       </button>
       <button id="btnBrakes" class="hud-btn p-1.5 rounded-lg flex flex-col items-center">
-        <span class="text-slate-400 text-[8px]">BRAKES (B)</span>
+        <span class="text-slate-400 text-[10px]">BRAKES (B)</span>
         <span id="txtBrakes" class="font-bold">OFF</span>
       </button>
     </div>
@@ -303,7 +303,7 @@
         <span>AIL: <b id="meterAil" class="text-sky-300">0%</b></span>
         <span>RUD: <b id="meterRud" class="text-sky-300">0%</b></span>
       </div>
-      <div class="text-[8px] text-slate-500 leading-tight">
+      <div class="w-0 min-w-full text-[10px] text-slate-400 leading-tight">
         High-Res Satellite Tiles Streamed • Press 'M' for Mouse-Yoke flight
       </div>
     </div>
@@ -355,15 +355,15 @@
 
     <div class="grid grid-cols-3 gap-1 text-center text-[10px]">
       <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
-        <div class="text-slate-500 text-[8px]">IAS / GS</div>
+        <div class="text-slate-400 text-[10px]">IAS / GS</div>
         <div id="txtIasGs" class="text-slate-200 font-bold">140/122K</div>
       </div>
       <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
-        <div class="text-slate-500 text-[8px]">ALT (MSL)</div>
+        <div class="text-slate-400 text-[10px]">ALT (MSL)</div>
         <div id="txtAltMsl" class="text-sky-300 font-bold">1880 FT</div>
       </div>
       <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
-        <div class="text-slate-500 text-[8px]">RADAR AGL</div>
+        <div class="text-slate-400 text-[10px]">RADAR AGL</div>
         <div id="txtAltAgl" class="text-emerald-300 font-bold">1274 FT</div>
       </div>
     </div>
