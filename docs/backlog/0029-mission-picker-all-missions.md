@@ -1,7 +1,7 @@
 ---
 id: 0029
 title: Start screen lists every mission, grouped by airport, with your best grade
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: content
