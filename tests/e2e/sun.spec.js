@@ -60,9 +60,11 @@ test('defaults to the real sun and cycles Now / Dawn / Noon / Dusk / Night', asy
 });
 
 test('forcing Night darkens the sky; Noon is bright', async ({ page }) => {
+  const errors = collectErrors(page);
   await enterCockpit(page);
   await setMode(page, 'Noon');
   await expect.poll(() => skyLuminance(page), { timeout: 15_000 }).toBeGreaterThan(100);
   await setMode(page, 'Night');
   await expect.poll(() => skyLuminance(page), { timeout: 15_000 }).toBeLessThan(40);
+  expect(errors).toEqual([]);
 });

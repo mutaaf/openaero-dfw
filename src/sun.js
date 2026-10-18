@@ -102,7 +102,7 @@ export function sunPreset(mode, date, latDeg, lonDeg) {
 const SKY_KEYS = [
   { el: -18, sky: 0x020617, fog: 0x0f172a, ambient: 0x1e293b, ambientIntensity: 0.25, sun: 0x000000, sunIntensity: 0 },
   { el: -6, sky: 0x1e1b4b, fog: 0x312e81, ambient: 0x475569, ambientIntensity: 0.32, sun: 0x000000, sunIntensity: 0 },
-  { el: 0, sky: 0xf97316, fog: 0x7c2d12, ambient: 0xfed7aa, ambientIntensity: 0.55, sun: 0xffa45c, sunIntensity: 0.45 },
+  { el: 0, sky: 0xf97316, fog: 0x7c2d12, ambient: 0xfed7aa, ambientIntensity: 0.55, sun: 0xffa45c, sunIntensity: 0 },
   { el: 3, sky: 0xfb9a5b, fog: 0xa8623f, ambient: 0xfed7aa, ambientIntensity: 0.62, sun: 0xffb877, sunIntensity: 0.7 },
   { el: 8, sky: 0x7cb8f0, fog: 0xc2a07a, ambient: 0xfde6c8, ambientIntensity: 0.72, sun: 0xffd9a0, sunIntensity: 1.0 },
   { el: 25, sky: 0x38bdf8, fog: 0x94a3b8, ambient: 0xdbeafe, ambientIntensity: 0.85, sun: 0xfffbeb, sunIntensity: 1.4 },

@@ -129,6 +129,11 @@ describe('skyForSun', () => {
     }
   });
 
+  it('no direct sun from below the horizon (twilight is ambient only)', () => {
+    for (let e = -30; e <= 0; e += 0.5) expect(skyForSun(e).sunIntensity).toBe(0);
+    expect(skyForSun(1).sunIntensity).toBeGreaterThan(0);
+  });
+
   it('a sun at the horizon paints a warm sky', () => {
     const s = skyForSun(1);
     expect((s.sky >> 16) & 255).toBeGreaterThan(s.sky & 255); // more red than blue
