@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import './styles.css';
 import {
   M_TO_FT, MPS_TO_KTS, NM_TO_M, DEG_TO_RAD, RAD_TO_DEG, GRAVITY,
-  SPEED_OF_SOUND_KTS,
+  SPEED_OF_SOUND_KTS, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 import { DOWNTOWN_DALLAS } from './runways.js';
@@ -36,6 +36,7 @@ import {
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
+import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 
 // --- Simulation State ---
 const sim = {
@@ -154,6 +155,9 @@ scene.add(ambientLight);
 sunLight = new THREE.DirectionalLight(0xfffbeb, 1.4 * LIGHT_SCALE);
 sunLight.position.set(-4500, 7500, 3500);
 scene.add(sunLight);
+// The real sun over DFW (sun.js), placed by placeSun() before the terrain bakes its relief.
+const sun = { elevationDeg: 50, azimuthDeg: 210 };
+const _sunVec = { x: 0, y: 0, z: 0 };
 
 const audio = createAudio(sim, updateAudioButton);
 
@@ -312,7 +316,7 @@ function buildSatelliteTerrain() {
     scene: terrainGroup, ground, renderOrder: GROUND_ORDER.imagery,
     maxZoom: window.innerWidth < 700 ? 15 : 16,
     anisotropy: Math.min(4, renderer?.capabilities.getMaxAnisotropy() || 1),
-    sunDir: sunLight.position.clone().normalize(),
+    sunDir: reliefSunDir(),
   });
   applyGroundLight();
   loadDem();
@@ -765,8 +769,9 @@ document.getElementById('btnCoachSkip').addEventListener('click', () => {
 // --- Weather -----------------------------------------------------------------------
 const WX_IDS = 'KDFW,KDAL,KADS,KAFW,KFTW,KGKY';
 let cloudDeck = null;
-const skyBase = new THREE.Color(0x38bdf8);   // set by the time-of-day preset
+const skyBase = new THREE.Color(0x38bdf8);   // set by the sun (applySun)
 const OVERCAST_GREY = new THREE.Color(0x9aa5b1);
+placeSun();
 
 // Sky = time-of-day colour, greyed by how much of it a low deck covers.
 function applySky() {
@@ -1448,33 +1453,40 @@ function loadScenario(key) {
   document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
 }
 
-function toggleTimeOfDay() {
-  sim.timeOfDayMode = (sim.timeOfDayMode + 1) % 3;
-  const badge = document.getElementById('txtTimeBadge');
-  if (sim.timeOfDayMode === 0) {
-    badge.textContent = 'Day';
-    skyBase.setHex(0x38bdf8);
-    scene.fog.color.setHex(0x94a3b8);
-    ambientLight.color.setHex(0xdbeafe);
-    ambientLight.intensity = 0.85 * LIGHT_SCALE;
-    sunLight.intensity = 1.4 * LIGHT_SCALE;
-  } else if (sim.timeOfDayMode === 1) {
-    badge.textContent = 'Sunset';
-    skyBase.setHex(0xf97316);
-    scene.fog.color.setHex(0x7c2d12);
-    ambientLight.color.setHex(0xfed7aa);
-    ambientLight.intensity = 0.6 * LIGHT_SCALE;
-    sunLight.intensity = 0.9 * LIGHT_SCALE;
-  } else {
-    badge.textContent = 'Night';
-    skyBase.setHex(0x020617);
-    scene.fog.color.setHex(0x0f172a);
-    ambientLight.color.setHex(0x1e293b);
-    ambientLight.intensity = 0.25 * LIGHT_SCALE;
-    sunLight.intensity = 0.15 * LIGHT_SCALE;
-  }
+// Time of day (ticket 0014): Now (the real sun over DFW, followed minute by minute), or
+// today's Dawn / Noon / Dusk / Night. The sun sets light direction, light colours, sky and haze.
+function placeSun() {
+  Object.assign(sun, sunPreset(TIME_MODES[sim.timeOfDayMode], new Date(), DFW_ORIGIN_LAT, DFW_ORIGIN_LON));
+  sunDirection(sun, _sunVec);
+  sunLight.position.set(_sunVec.x, _sunVec.y, _sunVec.z).multiplyScalar(10000);
+  const look = skyForSun(sun.elevationDeg);
+  sunLight.color.setHex(look.sun);
+  sunLight.intensity = look.sunIntensity * LIGHT_SCALE;
+  ambientLight.color.setHex(look.ambient);
+  ambientLight.intensity = look.ambientIntensity * LIGHT_SCALE;
+  skyBase.setHex(look.sky);
+  scene.fog.color.setHex(look.fog);
+}
+
+// Terrain relief is baked into vertex colours once per tile, so it takes the boot-time sun,
+// held at least 20° up: a grazing or night sun would blacken every slope facing away.
+function reliefSunDir() {
+  const d = sunDirection({ elevationDeg: Math.max(20, sun.elevationDeg), azimuthDeg: sun.azimuthDeg });
+  return new THREE.Vector3(d.x, d.y, d.z);
+}
+
+function applySun() {
+  placeSun();
   applyGroundLight();
   applySky();
+  const mode = TIME_MODES[sim.timeOfDayMode];
+  document.getElementById('txtTimeBadge').textContent = mode;
+  document.getElementById('btnTimeOfDay').title = `Sun: ${mode} (${Math.round(sun.elevationDeg)}° up). Cycle Now / Dawn / Noon / Dusk / Night`;
+}
+
+function toggleTimeOfDay() {
+  sim.timeOfDayMode = (sim.timeOfDayMode + 1) % TIME_MODES.length;
+  applySun();
 }
 
 function syncUI() {
@@ -1899,6 +1911,7 @@ window.openaeroDebug = () => {
     iasKts: sim.iasKts,
     gsKts: sim.gsKts,
     wxLive: sim.wx.live,
+    sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
@@ -1930,6 +1943,8 @@ function boot() {
   document.getElementById('chkCoach').checked = !seen;
   fetchWeather();
   setInterval(fetchWeather, 10 * 60 * 1000);
+  applySun();
+  setInterval(() => { if (TIME_MODES[sim.timeOfDayMode] === 'Now') applySun(); }, 60 * 1000);
   buildSatelliteTerrain();
   buildAircraft('b738');
   // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap.

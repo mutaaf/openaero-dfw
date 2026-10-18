@@ -1,12 +1,12 @@
 ---
 id: 0014
 title: Real sun position and sky from the current time in Dallas
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-16
-pr:
+pr: 27
 ---
 
 ## Why
@@ -19,9 +19,9 @@ directional light and sky gradient/haze driven by sun elevation; the button beco
 "Now / Dawn / Noon / Dusk / Night", defaulting to Now (America/Chicago).
 
 ## Acceptance criteria
-- [ ] Unit test: solar noon elevation in Dallas on the June solstice is ~80.6° (±0.5°)
-- [ ] Unit test: sun is below the horizon at local midnight
-- [ ] e2e: forcing Night darkens the sky (sampled pixel luminance below a threshold)
+- [x] Unit test: solar noon elevation in Dallas on the June solstice is ~80.6° (±0.5°)
+- [x] Unit test: sun is below the horizon at local midnight
+- [x] e2e: forcing Night darkens the sky (sampled pixel luminance below a threshold)
 
 ## Test plan
 Vitest against published NOAA values; Playwright pixel sampling.
