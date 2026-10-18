@@ -18,3 +18,4 @@ One line per shipped change, newest last: `YYYY-MM-DD · #<ticket> · <player-fa
 2026-10-17 · #0028 · Deep links: ?airport=KDAL, ?mission=downtown_skyline and ?view=terrain pick your flight straight from a link (the site launcher uses them); Start flight is still your tap
 2026-10-18 · #0014 · The sun over DFW is real: light, sky and haze follow the actual time in Dallas (Now), or pick today's Dawn, Noon, Dusk or Night
 2026-10-18 · #0017 · The throttle slider now follows the autothrottle and gamepad, so it always matches the N1 readout.
+2026-10-18 · #0018 · Today's crosswind challenge: when live METARs are in, a new mission puts you on a 4 NM final to the DFW-area runway with the strongest real crosswind right now (no tailwind), and the results card shows your drift angle at touchdown

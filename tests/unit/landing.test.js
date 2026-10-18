@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gradeLanding, loadBest, recordBest, BEST_KEY } from '../../src/landing.js';
+import { gradeLanding, loadBest, recordBest, BEST_KEY, driftAngleDeg } from '../../src/landing.js';
 
 const good = { vsFpm: -110, crossM: 0.8, pastThresholdM: 320, runwayLengthM: 4085, runwayWidthM: 45.7, pitchDeg: 3.5, bankDeg: 0.5, iasKts: 140, vrefKts: 136 };
 
@@ -68,5 +68,31 @@ describe('personal bests', () => {
     const bad = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
     expect(loadBest(bad)).toEqual({ v: 1, missions: {} });
     expect(recordBest(bad, 'm', { score: 90, grade: 'A' }, 1).isNewBest).toBe(true);
+  });
+});
+
+describe('crab / de-crab (crosswind challenge)', () => {
+  it('drift is heading minus ground track, + = nose right of track', () => {
+    expect(driftAngleDeg(0, 0, -70)).toBeCloseTo(0);
+    // Tracking north (−Z) with the nose 5° right: crabbed into a wind from the right.
+    expect(driftAngleDeg(5, 0, -70)).toBeCloseTo(5);
+    // Tracking 180 (+Z), nose at 175: 5° left.
+    expect(driftAngleDeg(175, 0, 70)).toBeCloseTo(-5);
+    // Across north: heading 358, track 002.
+    const vx = Math.sin(2 * Math.PI / 180) * 70, vz = -Math.cos(2 * Math.PI / 180) * 70;
+    expect(driftAngleDeg(358, vx, vz)).toBeCloseTo(-4);
+    expect(driftAngleDeg(90, 0, 0)).toBe(0);
+  });
+  it('adds an unweighted note: full marks at ≤3°, score unchanged', () => {
+    const plain = gradeLanding(good);
+    const decrabbed = gradeLanding({ ...good, driftDeg: 2.5 });
+    const crabbed = gradeLanding({ ...good, driftDeg: -9 });
+    expect(decrabbed.factors.map((f) => f.key)).toEqual(['rate', 'centreline', 'zone', 'flare', 'speed', 'crab']);
+    expect(decrabbed.factors[5].score).toBe(100);
+    expect(decrabbed.factors[5].value).toBe('2.5° drift (not scored)');
+    expect(crabbed.factors[5].score).toBeLessThan(50);
+    expect(decrabbed.score).toBe(plain.score);
+    expect(crabbed.score).toBe(plain.score);
+    expect(plain.factors).toHaveLength(5);
   });
 });

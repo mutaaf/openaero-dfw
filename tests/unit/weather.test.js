@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseMetar, windVector, gustFactor, runwayWindComponents, fogDensityForVisibility,
-  scenarioWeather, metarAgeMinutes, flowForWind,
+  scenarioWeather, metarAgeMinutes, flowForWind, pickCrosswindRunway,
 } from '../../src/weather.js';
+import { RUNWAY_ENDS } from '../../src/airports.js';
+import { crosswindMission, missionByKey } from '../../src/missions.js';
 
 const DFW = {
   icaoId: 'KDFW', obsTime: 1792183980, rawOb: 'METAR KDFW 162053Z 35023G32KT 10SM FEW050 BKN250 18/03 A3041',
@@ -84,5 +86,56 @@ describe('fog and labels', () => {
     expect(flowForWind(350, 15)).toBe('NORTH');
     expect(flowForWind(170, 12)).toBe('SOUTH');
     expect(flowForWind(null, 2)).toBe('SOUTH');
+  });
+});
+
+describe('pickCrosswindRunway (today\'s crosswind challenge)', () => {
+  const live = (icao, wdir, wspd) => parseMetar({ ...DFW, icaoId: icao, wdir, wspd, wgst: null });
+  it('KDFW 27015KT picks a 17/18 or 35/36 end with ~15 kt crosswind and no tailwind', () => {
+    const p = pickCrosswindRunway({ KDFW: live('KDFW', 270, 15) }, RUNWAY_ENDS);
+    expect(p.end.airport).toBe('KDFW');
+    expect(p.end.ident).toMatch(/^(17|18|35|36)/);
+    expect(Math.abs(p.crosswindKts)).toBeCloseTo(15, 0);
+    expect(p.headwindKts).toBeGreaterThanOrEqual(0);
+    // Ties on the whole knot go to the longest runway: 18L (13,401 ft).
+    expect(p.end.ident).toBe('18L');
+    expect(p.crosswindKts).toBeGreaterThan(0); // heading south, a west wind is from the right
+  });
+  it('never picks a tailwind end and compares fields', () => {
+    // KDFW 36010 is all headwind on 35/36; KDAL 22012 is ~11.9 kt across 13/31 from the right on 13L/13R.
+    const p = pickCrosswindRunway({ KDFW: live('KDFW', 360, 10), KDAL: live('KDAL', 220, 12) }, RUNWAY_ENDS);
+    expect(p.end.airport).toBe('KDAL');
+    expect(['13L', '13R']).toContain(p.end.ident);
+    expect(p.end.ident).toBe('13R'); // 8,800 ft beats 7,752 ft at the same 12 kt
+    expect(p.headwindKts).toBeGreaterThanOrEqual(0);
+  });
+  it('with no live METARs (or calm/variable wind) nothing is offered', () => {
+    expect(pickCrosswindRunway({}, RUNWAY_ENDS)).toBeNull();
+    expect(pickCrosswindRunway({ KDFW: scenarioWeather() }, RUNWAY_ENDS)).toBeNull();
+    expect(pickCrosswindRunway({ KDFW: live('KDFW', 'VRB', 5) }, RUNWAY_ENDS)).toBeNull();
+    expect(pickCrosswindRunway({ KDFW: live('KDFW', 0, 0) }, RUNWAY_ENDS)).toBeNull();
+    expect(crosswindMission(null)).toBeNull();
+  });
+  it('skips a tailwind end even when its crosswind is bigger, and stale observations', () => {
+    const ends = [
+      { airport: 'KXXX', ident: 'A', hdgT: 0, lengthM: 2000 },   // wind 120/20: 17.3 kt XW, 10 kt tailwind
+      { airport: 'KXXX', ident: 'B', hdgT: 150, lengthM: 2000 }, // 10 kt XW from the left, 17.3 kt headwind
+      { airport: 'KXXX', ident: 'C', hdgT: 330, lengthM: 3000 }, // same 10 kt XW, tailwind
+    ];
+    const wx = live('KXXX', 120, 20);
+    const p = pickCrosswindRunway({ KXXX: wx }, ends);
+    expect(p.end.ident).toBe('B');
+    expect(p.crosswindKts).toBeCloseTo(-10, 6);
+    const tie = [{ ...ends[1], ident: 'B1', lengthM: 1500 }, { ...ends[1], ident: 'B2', lengthM: 2500 }];
+    expect(pickCrosswindRunway({ KXXX: wx }, tie).end.ident).toBe('B2');
+    expect(pickCrosswindRunway({ KXXX: wx }, ends, wx.obsTime + 60 * 60).end.ident).toBe('B');
+    expect(pickCrosswindRunway({ KXXX: wx }, ends, wx.obsTime + 120 * 60)).toBeNull();
+  });
+  it('the mission is a 4 NM final labelled with the runway and crosswind', () => {
+    const m = crosswindMission(pickCrosswindRunway({ KDFW: live('KDFW', 270, 15) }, RUNWAY_ENDS));
+    expect(m).toMatchObject({ key: 'crosswind_today', kind: 'final', airport: 'KDFW', rwy: '18L', distNm: 4 });
+    expect(m.label).toBe("Today's crosswind: KDFW 18L, 15 kt from the right");
+    expect(missionByKey('crosswind_today', [m])).toBe(m);
+    expect(missionByKey('crosswind_today').key).toBe('kdfw_35c_final');
   });
 });

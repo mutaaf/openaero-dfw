@@ -1,12 +1,12 @@
 ---
 id: 0018
 title: Today's crosswind challenge — the worst real crosswind runway in DFW, graded
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-16
-pr:
+pr: 29
 ---
 
 ## Why

@@ -86,6 +86,7 @@ function buildEnd(rwy, end, other) {
     hdgT: end.hdgT,
     elevFt: end.elevFt,
     widthM: rwy.widthFt * FT,
+    lengthM: rwy.lengthFt * FT,
     endX: p.x, endZ: p.z,
     thrX: p.x + d.x * disp,
     thrZ: p.z + d.z * disp,

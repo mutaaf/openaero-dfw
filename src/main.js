@@ -14,9 +14,9 @@ import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
 } from './airports.js';
-import { MISSIONS, missionByKey } from './missions.js';
+import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest } from './landing.js';
+import { gradeLanding, loadBest, recordBest, driftAngleDeg } from './landing.js';
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
@@ -24,7 +24,7 @@ import {
 } from './autopilot.js';
 import {
   parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents,
-  fogDensityForVisibility, metarAgeMinutes, flowForWind,
+  fogDensityForVisibility, metarAgeMinutes, flowForWind, pickCrosswindRunway,
 } from './weather.js';
 import { createTerrainLod } from './terrainLod.js';
 import { createPhotoreal, photorealAllowed } from './photoreal.js';
@@ -77,6 +77,10 @@ const sim = {
   // Weather (weather.js): today's METARs from the edge Worker, or labelled scenario weather
   wx: scenarioWeather(),
   wxByIcao: {},
+  // Today's crosswind challenge (ticket 0018): exists only while live METARs do
+  crosswindMission: null,
+  dynamicMissions: [],
+  loadedMission: null,
   windVec: new THREE.Vector3(),
   windNowKts: 0,
   simTime: 0,
@@ -668,6 +672,7 @@ function checkTouchdown(dt) {
     bankDeg: _euler.z * RAD_TO_DEG,
     iasKts: sim.iasKts,
     vrefKts: sim.spec.vrefKts,
+    driftDeg: sim.missionKey === CROSSWIND_KEY ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : undefined,
   });
   sim.lastLanding = {
     pastThresholdM: -g.distM, crossM: g.crossM, vsFpm: sim.lastAirVsi,
@@ -675,7 +680,9 @@ function checkTouchdown(dt) {
     grade: result.grade, score: result.score, runway: end.id,
   };
   let best = { isNewBest: false, best: null };
-  try { best = recordBest(window.localStorage, sim.missionKey, result); } catch { /* storage unavailable */ }
+  // The crosswind challenge moves runway with the weather: its best is kept per runway end.
+  const bestKey = sim.missionKey === CROSSWIND_KEY ? `${CROSSWIND_KEY}:${end.id}` : sim.missionKey;
+  try { best = recordBest(window.localStorage, bestKey, result); } catch { /* storage unavailable */ }
   showResults(result, best, end);
 }
 
@@ -795,6 +802,30 @@ async function fetchWeather() {
     // Offline: keep the last real weather, or the labelled scenario weather.
   }
   refreshWeather();
+  refreshCrosswindMission();
+}
+
+// Re-pick today's crosswind challenge from the live METARs. A flight already under way keeps
+// its runway (sim.activeEnd); the new pick applies from the next load / Fly again.
+function refreshCrosswindMission() {
+  const m = crosswindMission(pickCrosswindRunway(sim.wxByIcao, RUNWAY_ENDS, Date.now() / 1000));
+  sim.crosswindMission = m;
+  // Flying the challenge when it disappears: Fly again keeps the runway you were flying.
+  const flying = sim.missionKey === CROSSWIND_KEY && sim.loadedMission ? [sim.loadedMission] : [];
+  sim.dynamicMissions = m ? [m] : flying;
+  const sel = document.getElementById('selScenario');
+  let opt = sel.querySelector(`option[value="${CROSSWIND_KEY}"]`);
+  if (m) {
+    if (!opt) { opt = document.createElement('option'); opt.value = CROSSWIND_KEY; sel.prepend(opt); }
+    opt.textContent = m.label;
+  } else if (opt && sim.missionKey !== CROSSWIND_KEY) {
+    opt.remove();
+  }
+  const btn = document.getElementById('btnCrosswindToday');
+  if (m) document.getElementById('txtCrosswindToday').textContent = m.label.replace("Today's crosswind: ", '');
+  if (!m) btn.classList.remove('active');
+  btn.classList.toggle('hidden', !m);
+  btn.classList.toggle('flex', !!m);
 }
 
 // The weather for where you are flying: the active runway's field, else DFW, else scenario.
@@ -1395,8 +1426,9 @@ function renderRadar() {
 }
 
 function loadScenario(key) {
-  const mission = missionByKey(key);
+  const mission = missionByKey(key, sim.dynamicMissions);
   sim.missionKey = mission.key;
+  sim.loadedMission = mission;
   sim.brakesOn = false;
   sim.apMaster = false;
   sim.apApproach = false;
@@ -1900,10 +1932,11 @@ function updateDebugOverlay(dt) {
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {
   _euler.setFromQuaternion(sim.quat, 'YXZ');
-  const m = missionByKey(sim.missionKey);
+  const m = sim.loadedMission || missionByKey(sim.missionKey);
   return {
     mission: sim.missionKey,
     missionRunway: m.kind === 'tour' ? null : `${m.airport}_${m.rwy}`,
+    crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
     activeRunway: sim.activeEnd ? sim.activeEnd.id : null,
     runwayHdgT: sim.activeEnd ? sim.activeEnd.hdgT : null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,

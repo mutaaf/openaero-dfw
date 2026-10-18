@@ -17,4 +17,19 @@ export const MISSIONS = [
   { key: 'att_stadium', label: 'Arlington AT&T Stadium', kind: 'tour', pos: [-2400, 480, 12500], speedMps: 100, hdg: 0, throttle: 0.62 },
 ];
 
-export const missionByKey = (key) => MISSIONS.find((m) => m.key === key) || MISSIONS[0];
+// `extra`: missions that exist only some days (today's crosswind challenge).
+export const missionByKey = (key, extra = []) =>
+  extra.find((m) => m.key === key) || MISSIONS.find((m) => m.key === key) || MISSIONS[0];
+
+export const CROSSWIND_KEY = 'crosswind_today';
+
+// Today's crosswind challenge (ticket 0018) from pickCrosswindRunway(): a 4 NM final on that
+// end, labelled with the live crosswind. Null when there is no pick (no live weather).
+export function crosswindMission(pick) {
+  if (!pick) return null;
+  const kts = Math.round(Math.abs(pick.crosswindKts));
+  return {
+    key: CROSSWIND_KEY, kind: 'final', airport: pick.end.airport, rwy: pick.end.ident, distNm: 4,
+    label: `Today's crosswind: ${pick.end.airport} ${pick.end.ident}, ${kts} kt from the ${pick.crosswindKts > 0 ? 'right' : 'left'}`,
+  };
+}

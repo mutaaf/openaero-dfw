@@ -94,7 +94,8 @@ src/constants.js    units, KDFW origin, field elevation
 src/aircraft.js     aircraft database (mass, wing, lift/drag, thrust, V-speeds, damping)
 src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
                     thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns
-src/missions.js     mission catalogue (approaches by runway end, tours by spawn)
+src/missions.js     mission catalogue (approaches by runway end, tours by spawn) + the dynamic
+                    crosswind_today mission (weather.js pickCrosswindRunway, live METARs only)
 src/runways.js      downtown landmark origin (moving to landmarks.js with ticket 0010)
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
 src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +
