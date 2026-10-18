@@ -1,7 +1,7 @@
 ---
 id: 0020
 title: Call "unstabilized" and "go around" on a bad approach, and grade it
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity

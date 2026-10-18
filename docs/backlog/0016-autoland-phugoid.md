@@ -2,7 +2,7 @@
 id: 0016
 title: Smooth the autoland's long-period pitch/speed oscillation
 status: ready
-priority: P2
+priority: P1
 size: S
 lens: player-feel
 created: 2026-10-16
