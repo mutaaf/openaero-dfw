@@ -98,3 +98,5 @@ input[type=range] { accent-color: #38bdf8; }
   #hudMenu { display: none; }
   #hudMenu.open { display: flex; }
 }
+/* The coach card yields to the open menu sheet (they meet in phone landscape). */
+.hud-menu-open #coach { visibility: hidden; }
