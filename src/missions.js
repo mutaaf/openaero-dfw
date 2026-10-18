@@ -1,5 +1,8 @@
 // Mission catalogue. Approaches and takeoffs are defined by a real runway end (airports.js);
-// tours keep explicit spawns. The <select> and mission loader are built from this table.
+// tours spawn a few km south of their landmark (landmarks.js), heading straight at it. The
+// <select> and mission loader are built from this table.
+import { DOWNTOWN_DALLAS, ATT_STADIUM } from './landmarks.js';
+
 export const MISSIONS = [
   { key: 'kdfw_35c_final', label: 'KDFW RWY 35C (4 NM ILS Final)', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4 },
   { key: 'kdfw_35c_flare', label: 'KDFW 35C Flare Challenge (1 NM)', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 1 },
@@ -13,8 +16,8 @@ export const MISSIONS = [
   { key: 'kafw_34l_final', label: 'KAFW Alliance 34L', kind: 'final', airport: 'KAFW', rwy: '34L', distNm: 5 },
   { key: 'kftw_16_final', label: 'KFTW Meacham 16', kind: 'final', airport: 'KFTW', rwy: '16', distNm: 4 },
   { key: 'kgky_34_final', label: 'KGKY Arlington 34', kind: 'final', airport: 'KGKY', rwy: '34', distNm: 3 },
-  { key: 'downtown_skyline', label: 'Downtown Dallas Skyline Tour', kind: 'tour', pos: [17600, 520, 13000], speedMps: 108, hdg: 0, throttle: 0.65 },
-  { key: 'att_stadium', label: 'Arlington AT&T Stadium', kind: 'tour', pos: [-2400, 480, 12500], speedMps: 100, hdg: 0, throttle: 0.62 },
+  { key: 'downtown_skyline', label: 'Downtown Dallas Skyline Tour', kind: 'tour', pos: [DOWNTOWN_DALLAS.x, 520, DOWNTOWN_DALLAS.z + 3200], speedMps: 108, hdg: 0, throttle: 0.65 },
+  { key: 'att_stadium', label: 'Arlington AT&T Stadium', kind: 'tour', pos: [ATT_STADIUM.x, 480, ATT_STADIUM.z + 2900], speedMps: 100, hdg: 0, throttle: 0.62 },
 ];
 
 // `extra`: missions that exist only some days (today's crosswind challenge).

@@ -1,7 +1,7 @@
 ---
 id: 0010
 title: Put Dallas landmarks at their true coordinates
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
@@ -20,8 +20,8 @@ real heights, converted through `geo.js`; the buildings and the moving-map "DALL
 use it. Skyline and AT&T missions spawn relative to the real positions.
 
 ## Acceptance criteria
-- [ ] Unit test: each landmark's sim position matches its lat/lon via geo.js within 10 m
-- [ ] e2e: the skyline mission loads with downtown ahead (within ±15° of the nose)
+- [x] Unit test: each landmark's sim position matches its lat/lon via geo.js within 10 m
+- [x] e2e: the skyline mission loads with downtown ahead (within ±15° of the nose)
 
 ## Test plan
 Vitest for the table; a mission e2e assertion on bearing to downtown.
