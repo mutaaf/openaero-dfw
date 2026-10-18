@@ -1,12 +1,12 @@
 ---
 id: 0021
 title: Collapse the phone's four-panel top HUD stack so the sky is playable
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-17
-pr:
+pr: 30
 ---
 
 ## Why

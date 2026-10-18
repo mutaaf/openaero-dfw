@@ -91,3 +91,10 @@ input[type=range] { accent-color: #38bdf8; }
    above the stick panel on desktop; always below the horizon. */
 #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
 @media (min-width: 1024px) { #coach { bottom: 10rem; } }
+
+/* Phone/tablet (below lg): the top HUD is one row (☰ Menu + telemetry strip); brand,
+   missions, camera, sound, pause, reset and the weather line open as a sheet under it. */
+@media (max-width: 1023.98px) {
+  #hudMenu { display: none; }
+  #hudMenu.open { display: flex; }
+}

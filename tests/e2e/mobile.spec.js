@@ -111,3 +111,41 @@ test('phone: the landing coach fits between the header and the touch deck, off t
   await page.locator('#btnCoachSkip').tap();
   await expect(page.locator('#coach')).toBeHidden();
 });
+
+test('phone: the top HUD is one slim row, clear of the tapes and the horizon (0021)', async ({ page }) => {
+  await startFlight(page);
+  const header = await page.locator('#phoneHeader').boundingBox();
+  expect(header.y + header.height, 'top HUD bottom').toBeLessThanOrEqual(110);
+  // The canvas HUD's topmost box is the heading arc at cy - 145; the tapes start at cy - 90.
+  expect(header.y + header.height).toBeLessThan(844 / 2 - 145);
+  expect(overlaps(header, { x: 0, y: 844 * 0.4, width: 390, height: 844 * 0.2 })).toBe(false);
+  await expect(page.locator('#hudMenu')).toBeHidden();
+  await expect(page.locator('#txtPhoneAgl')).toBeVisible();
+  const menu = await page.locator('#btnMenu').boundingBox();
+  expect(menu.width).toBeGreaterThanOrEqual(44);
+  expect(menu.height).toBeGreaterThanOrEqual(44);
+});
+
+test('phone: every folded control is one tap behind ☰ Menu; Pause pauses (0021)', async ({ page }) => {
+  await startFlight(page);
+  await page.locator('#btnMenu').tap();
+  await expect(page.locator('#btnMenu')).toHaveAttribute('aria-expanded', 'true');
+  for (const id of ['#btnOpenMissions', '#btnCamera', '#btnAudio', '#btnPause', '#btnReset', '#wxBadge']) {
+    await expect(page.locator(id), `${id} in the sheet`).toBeVisible();
+  }
+  const sheet = await page.locator('#hudMenu').boundingBox();
+  expect(sheet.x).toBeGreaterThanOrEqual(0);
+  expect(sheet.x + sheet.width).toBeLessThanOrEqual(390);
+  await page.locator('#btnPause').tap();
+  await expect(page.locator('#btnPause')).toHaveText('RESUME');
+  const agl = await page.locator('#txtPhoneAgl').textContent();
+  await page.waitForTimeout(1_000);
+  expect(await page.locator('#txtPhoneAgl').textContent(), 'frozen while paused').toBe(agl);
+  // Touching the view folds the sheet away again; Missions opens the picker and folds it too.
+  await page.locator('#simCanvas').tap({ position: { x: 195, y: 400 } });
+  await expect(page.locator('#hudMenu')).toBeHidden();
+  await page.locator('#btnMenu').tap();
+  await page.locator('#btnOpenMissions').tap();
+  await expect(page.locator('#onboardingModal')).toBeVisible();
+  await expect(page.locator('#hudMenu')).toBeHidden();
+});
