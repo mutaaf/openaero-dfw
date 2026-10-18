@@ -2,7 +2,9 @@ import { test, expect } from '@playwright/test';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0025: a phone held sideways. Runs in the `phone` project (touch, mobile).
-const SIZES = [{ width: 844, height: 390 }, { width: 667, height: 375 }];
+// The ticket's two sizes, plus the narrowest phones the landscape query also matches.
+const SIZES = [{ width: 844, height: 390 }, { width: 667, height: 375 }, { width: 640, height: 360 }, { width: 568, height: 320 }];
+const ALERTS = ['#masterAlertBanner', '#stallAlertBanner'];
 const CONTROLS = ['#btnMenu', '#phoneTelemetry', '#touchThrottle', '#touchStick', '#touchButtons', '#coach'];
 
 const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
@@ -25,8 +27,10 @@ for (const vp of SIZES) {
     test('HUD and controls never overlap each other or the horizon (0025)', async ({ page }, info) => {
       const errors = collectErrors(page);
       await startFlight(page);
+      // Both alerts forced on (the sim toggles .hidden every frame, so override it).
+      await page.addStyleTag({ content: `${ALERTS.map((a) => `${a}.hidden`).join(', ')} { display: block !important; }` });
       const boxes = [];
-      for (const id of CONTROLS) {
+      for (const id of [...CONTROLS, ...ALERTS]) {
         const b = await page.locator(id).boundingBox();
         expect(b, `${id} visible`).not.toBeNull();
         expect(b.x, `${id} left edge`).toBeGreaterThanOrEqual(0);
@@ -35,19 +39,29 @@ for (const vp of SIZES) {
         expect(b.y + b.height, `${id} bottom edge`).toBeLessThanOrEqual(vp.height);
         boxes.push([id, b]);
       }
+      // The canvas TRK box (renderHud via headingBoxTop: max(cy - 145, 72), 104x24 centred).
+      const cx = vp.width / 2, cy = vp.height / 2;
+      boxes.push(['TRK box', { x: cx - 52, y: Math.max(cy - 145, 72), width: 104, height: 24 }]);
+      // Alerts take the coach's slot on purpose (GPWS over stall over coach).
+      const sharesSlot = (a, b) => [a, b].every((id) => id === '#coach' || ALERTS.includes(id));
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
+          if (sharesSlot(boxes[i][0], boxes[j][0])) continue;
           expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
         }
       }
+      const z = (id) => page.locator(id).evaluate((e) => Number(getComputedStyle(e).zIndex));
+      expect(await z('#masterAlertBanner')).toBeGreaterThan(await z('#stallAlertBanner'));
+      expect(await z('#stallAlertBanner')).toBeGreaterThan(await z('#coach'));
       // The centre 40% x 30% around the horizon is free of DOM overlays.
       const centre = { x: vp.width * 0.3, y: vp.height * 0.35, width: vp.width * 0.4, height: vp.height * 0.3 };
       for (const [id, b] of boxes) expect(overlaps(b, centre), `${id} covers the horizon`).toBe(false);
-      // The canvas HUD's speed and altitude tapes (renderHud: cx - 175 … cx + 186, cy - 90 … cy + 90)
-      // stay unobstructed by the controls.
-      const cx = vp.width / 2, cy = vp.height / 2;
-      const tapes = { x: cx - 175, y: cy - 90, width: 361, height: 180 };
-      for (const [id, b] of boxes) expect(overlaps(b, tapes), `${id} covers the tapes`).toBe(false);
+      // The canvas HUD's speed and altitude tapes (renderHud: cx - 175 … cx - 131 and
+      // cx + 130 … cx + 186, cy - 90 … cy + 90) stay unobstructed.
+      const tapes = [{ x: cx - 175, y: cy - 90, width: 44, height: 180 }, { x: cx + 130, y: cy - 90, width: 56, height: 180 }];
+      for (const [id, b] of boxes) {
+        for (const t of tapes) expect(overlaps(b, t), `${id} covers a tape`).toBe(false);
+      }
       // Every touch target is at least 44 px.
       const targets = await page.locator('#touchButtons button, #btnMenu, #btnCoachSkip').evaluateAll((els) =>
         els.map((e) => { const r = e.getBoundingClientRect(); return [e.id, r.width, r.height]; }));
