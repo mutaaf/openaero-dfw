@@ -100,3 +100,49 @@ input[type=range] { accent-color: #38bdf8; }
 }
 /* The coach card yields to the open menu sheet (they meet in phone landscape). */
 .hud-menu-open #coach { visibility: hidden; }
+
+/* Phone held sideways (ticket 0025): the canvas tapes fill most of the height, so the
+   controls go to the edges. Throttle on the left edge, a stick on the right sized to
+   clear the altitude tape, the four function buttons as one row under the tapes, the
+   coach in the top bar beside a narrower telemetry strip (fixed widths, so the coach's
+   left edge never depends on font metrics). GPWS and stall alerts take the coach's slot,
+   over it, GPWS on top. Notch-side insets come in through --safe-left/right (0 while the
+   browser letterboxes the notch; ready for viewport-fit=cover). */
+:root {
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+@media (orientation: landscape) and (max-height: 480px) and (max-width: 1023.98px) {
+  #phoneHeader {
+    --tel-w: clamp(12rem, 45vw - 6rem, 16rem);
+    left: max(0.5rem, var(--safe-left));
+    right: auto;
+    max-width: calc(100% - max(0.5rem, var(--safe-left)) - max(0.5rem, var(--safe-right)));
+  }
+  #btnMenu { flex: none; width: 4.5rem; overflow: hidden; white-space: nowrap; }
+  #phoneTelemetry { flex: none; width: var(--tel-w); }
+  /* The sheet stops above the function-button row; touching the stick folds it. */
+  #hudMenu.open { max-height: calc(100dvh - 8.5rem); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; }
+  #touchDeck > div {
+    padding-left: max(0.75rem, var(--safe-left));
+    padding-right: max(0.75rem, var(--safe-right));
+  }
+  #touchButtons { flex-direction: row; }
+  /* Right of the altitude tape (it ends at cx + 186 px), 128 px at most. */
+  #touchStick {
+    width: clamp(3.5rem, 50vw - 190px - max(0.75rem, var(--safe-right)), 8rem);
+    height: clamp(3.5rem, 50vw - 190px - max(0.75rem, var(--safe-right)), 8rem);
+  }
+  #coach, #masterAlertBanner, #stallAlertBanner {
+    top: max(0.5rem, env(safe-area-inset-top));
+    bottom: auto;
+    left: calc(max(0.5rem, var(--safe-left)) + 4.5rem + 0.375rem + clamp(12rem, 45vw - 6rem, 16rem) + 0.5rem);
+    right: max(0.5rem, var(--safe-right));
+    max-width: 24rem;
+    margin: 0 0 0 auto;
+    transform: none;
+  }
+  #masterAlertBanner, #stallAlertBanner { text-align: center; white-space: normal; }
+  #stallAlertBanner { z-index: 34; }
+  #masterAlertBanner { z-index: 35; }
+}

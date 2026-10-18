@@ -37,6 +37,7 @@ import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint }
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
+import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
 
 // --- Simulation State ---
 const sim = {
@@ -1336,12 +1337,13 @@ function renderHud() {
   hudCtx.fillText(`${sim.mslFt}`, cx + 136, cy + 4);
 
   // Heading Arc
-  hudCtx.strokeRect(cx - 52, cy - 145, 104, 24);
+  const hdgTop = headingBoxTop(cy);
+  hudCtx.strokeRect(cx - 52, hdgTop, 104, HEADING_BOX_H);
   hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(cx - 52, cy - 145, 104, 24);
+  hudCtx.fillRect(cx - 52, hdgTop, 104, HEADING_BOX_H);
   hudCtx.fillStyle = '#38bdf8';
   hudCtx.textAlign = 'center';
-  hudCtx.fillText(`TRK ${String(hdgDeg).padStart(3, '0')}°`, cx, cy - 129);
+  hudCtx.fillText(`TRK ${String(hdgDeg).padStart(3, '0')}°`, cx, hdgTop + 16);
 
   // ILS Guidance Crosshairs
   // Fly-to bars: the localizer bar sits where the centreline is (left when you're right of

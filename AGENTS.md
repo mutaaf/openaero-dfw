@@ -122,6 +122,8 @@ src/terrainLod.js   streamed Esri imagery draped on terrain.js: per-tile height 
                     skirts, hillshade in vertex colours, load queue, LRU cache
 src/sun.js          real sun (NOAA solar position) over DFW, Now/Dawn/Noon/Dusk/Night presets,
                     sky/haze/light colours by sun elevation (pure, tested)
+src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
+                    phone's top bar in landscape; pure, tested)
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
                     GPWS callouts, warnings, heading math
 src/input.js        keyboard state → control targets, virtual stick mapping
