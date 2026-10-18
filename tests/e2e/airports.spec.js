@@ -22,6 +22,12 @@ test('every approach mission starts lined up on its real runway', async ({ page 
 test('the runway is visible ahead on a 4 NM final (no depth-fight with the imagery)', async ({ page }) => {
   await enterCockpit(page);
   await page.selectOption('#selScenario', 'kdfw_35c_final');
+  // The real sun ("Now") tints the ground and runway by the hour in Dallas; this test is
+  // about depth, not light, so fly it at Noon (CI failed at 08:28 CDT, passed at 05:51).
+  for (let i = 0; i < 5 && (await page.locator('#txtTimeBadge').textContent()) !== 'Noon'; i++) {
+    await page.locator('#btnTimeOfDay').click();
+  }
+  await expect(page.locator('#txtTimeBadge')).toHaveText('Noon');
   await page.click('#btnPause');
   await page.waitForTimeout(800);
   await page.addStyleTag({ content: 'body * { visibility: hidden !important; } #simCanvas { visibility: visible !important; }' });

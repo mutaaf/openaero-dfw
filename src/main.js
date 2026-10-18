@@ -9,7 +9,7 @@ import {
   SPEED_OF_SOUND_KTS, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
-import { DOWNTOWN_DALLAS } from './runways.js';
+import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
@@ -339,69 +339,72 @@ function buildSatelliteTerrain() {
   scene.add(terrainGroup);
   buildRunways();
 
-  // 3D Downtown Dallas Landmark Architecture
-  const dallas = new THREE.Group();
-  dallas.position.set(DOWNTOWN_DALLAS.x, 0, DOWNTOWN_DALLAS.z);
+  // Stand-in landmarks at their true coordinates and heights (landmarks.js). Each one is a
+  // top-level object so seatLandmarks() stands it on its own ground, not a neighbour's.
+  const place = (key, obj) => {
+    const p = landmarkPos(key);
+    obj.position.x = p.x; obj.position.z = p.z;
+    obj.userData.landmark = key;
+    scene.add(obj);
+    landmarks.push(obj);
+    return obj;
+  };
+  const tower = (key, w, color) => {
+    const h = LANDMARKS[key].heightM;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), new THREE.MeshLambertMaterial({ color }));
+    m.position.y = h / 2;
+    return place(key, m);
+  };
 
   // Bank of America Plaza with emerald green perimeter outline
-  const boa = new THREE.Mesh(new THREE.BoxGeometry(58, 281, 58), new THREE.MeshLambertMaterial({ color: 0x1e293b }));
-  boa.position.set(0, 140.5, 0);
-  dallas.add(boa);
-  const neon = new THREE.Mesh(new THREE.BoxGeometry(60, 281, 2), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
-  neon.position.set(0, 140.5, 30);
-  dallas.add(neon);
+  const boa = tower('bankOfAmericaPlaza', 58, 0x1e293b);
+  const neon = new THREE.Mesh(new THREE.BoxGeometry(60, LANDMARKS.bankOfAmericaPlaza.heightM, 2), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+  neon.position.z = 30;
+  boa.add(neon);
+  const named = [boa, tower('jpmorganChaseTower', 48, 0x334155), tower('renaissanceTower', 48, 0x0f293a),
+    tower('comericaBankTower', 52, 0x3d352e)];
 
-  // JPMorgan Chase Tower with sky keyhole
-  const chaseBase = new THREE.Mesh(new THREE.BoxGeometry(48, 160, 48), new THREE.MeshLambertMaterial({ color: 0x334155 }));
-  chaseBase.position.set(220, 80, -250);
-  dallas.add(chaseBase);
-  const chaseTop = new THREE.Mesh(new THREE.BoxGeometry(48, 35, 48), new THREE.MeshLambertMaterial({ color: 0x334155 }));
-  chaseTop.position.set(220, 207, -250);
-  dallas.add(chaseTop);
+  // Reunion Tower: shaft up to the geodesic ball at the top
+  const reunionH = LANDMARKS.reunionTower.heightM;
+  const reunion = new THREE.Group();
+  const rShaft = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, reunionH - 36, 12), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
+  rShaft.position.y = (reunionH - 36) / 2;
+  reunion.add(rShaft);
+  const rBall = new THREE.Mesh(new THREE.SphereGeometry(18, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true }));
+  rBall.position.y = reunionH - 18;
+  reunion.add(rBall);
+  named.push(place('reunionTower', reunion));
 
-  // Reunion Tower with geodesic sphere
-  const rShaft = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, 145, 12), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
-  rShaft.position.set(-650, 72.5, 500);
-  dallas.add(rShaft);
-  const rBall = new THREE.Mesh(new THREE.SphereGeometry(22, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true }));
-  rBall.position.set(-650, 155, 500);
-  dallas.add(rBall);
-
-  // Comerica & Renaissance Towers
-  const ren = new THREE.Mesh(new THREE.BoxGeometry(48, 240, 48), new THREE.MeshLambertMaterial({ color: 0x0f293a }));
-  ren.position.set(180, 120, -180);
-  dallas.add(ren);
-  const com = new THREE.Mesh(new THREE.BoxGeometry(52, 230, 52), new THREE.MeshLambertMaterial({ color: 0x3d352e }));
-  com.position.set(420, 115, -40);
-  dallas.add(com);
-
+  // Generic towers fill the core between Reunion and the Chase tower (north-east of BoA),
+  // clear of the named ones.
   for (let i = 0; i < 24; i++) {
     const ang = i * 0.92;
     const rad = 180 + (i % 5) * 110;
+    const x = DOWNTOWN_DALLAS.x + 250 + Math.cos(ang) * rad, z = DOWNTOWN_DALLAS.z - 250 + Math.sin(ang) * rad;
+    if (named.some((o) => Math.max(Math.abs(o.position.x - x), Math.abs(o.position.z - z)) < 60)) continue;
     const bh = 80 + (i * 27) % 110;
     const bldg = new THREE.Mesh(new THREE.BoxGeometry(36, bh, 36), new THREE.MeshLambertMaterial({ color: i % 2 === 0 ? 0x1e293b : 0x273549 }));
-    bldg.position.set(Math.cos(ang) * rad, bh / 2, Math.sin(ang) * rad);
-    dallas.add(bldg);
+    bldg.position.set(x, bh / 2, z);
+    scene.add(bldg);
+    landmarks.push(bldg);
   }
-  scene.add(dallas);
-  landmarks.push(dallas);
 
-  // Margaret Hunt Hill Bridge Arch
+  // Margaret Hunt Hill Bridge: one arch over the 184 m main span, along the deck
+  const bridge = LANDMARKS.margaretHuntHillBridge;
   const bridgeGroup = new THREE.Group();
-  bridgeGroup.position.set(15800, 0, 9600);
-  bridgeGroup.rotation.y = 0.45;
-  const bridgeArch = new THREE.Mesh(new THREE.TorusGeometry(110, 3.5, 8, 32, Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  bridgeArch.position.y = 15;
+  bridgeGroup.rotation.y = -bridge.spanBearingDeg * DEG_TO_RAD;
+  const archR = 92;
+  const bridgeArch = new THREE.Mesh(new THREE.TorusGeometry(archR, 3.5, 8, 32, Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  bridgeArch.scale.y = bridge.heightM / archR;
   bridgeArch.rotation.y = Math.PI / 2;
   bridgeGroup.add(bridgeArch);
-  scene.add(bridgeGroup);
-  landmarks.push(bridgeGroup);
+  place('margaretHuntHillBridge', bridgeGroup);
 
-  // Arlington AT&T Stadium
-  const att = new THREE.Mesh(new THREE.CylinderGeometry(150, 130, 55, 24), new THREE.MeshLambertMaterial({ color: 0xcbd5e1 }));
-  att.position.set(-2400, 27.5, 9600);
-  scene.add(att);
-  landmarks.push(att);
+  // Arlington AT&T Stadium: a drum up to the top of its roof arches (no detailed model)
+  const attH = LANDMARKS.attStadium.heightM;
+  const att = new THREE.Mesh(new THREE.CylinderGeometry(150, 130, attH, 24), new THREE.MeshLambertMaterial({ color: 0xcbd5e1 }));
+  att.position.y = attH / 2;
+  place('attStadium', att);
   seatLandmarks();
 }
 
@@ -2020,6 +2023,8 @@ window.openaeroDebug = () => {
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,
+    landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
+      { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
     photoreal: photoreal ? {
       ...photoreal.state,

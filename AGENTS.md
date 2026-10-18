@@ -96,7 +96,8 @@ src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY
                     thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns
 src/missions.js     mission catalogue (approaches by runway end, tours by spawn) + the dynamic
                     crosswind_today mission (weather.js pickCrosswindRunway, live METARs only)
-src/runways.js      downtown landmark origin (moving to landmarks.js with ticket 0010)
+src/landmarks.js    Dallas landmarks at true lat/lon (cited) + real heights, via geo.js;
+                    DOWNTOWN_DALLAS (map dot, skyline tour), ATT_STADIUM
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
 src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +
                     versioned personal bests
