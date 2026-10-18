@@ -35,6 +35,19 @@ test('ILS autoland flies the short final to an upright touchdown on the runway',
   expect(td.pitchDeg).toBeLessThan(10);
   expect(td.vsFpm).toBeGreaterThan(-600);          // not a crash
   expect(td.vsFpm).toBeLessThan(-20);              // a real sink rate was measured (not lost to the ground clamp)
+  // The autothrottle moved the throttle; the slider must agree with the readout (ticket 0017).
+  await expect.poll(async () => {
+    const pct = parseInt(await page.locator('#txtThrottle').textContent(), 10);
+    return Number(await page.locator('#rngThrottle').inputValue()) - pct;
+  }, { timeout: 5_000 }).toBe(0);
+});
+
+test('dragging the throttle slider sets the throttle', async ({ page }) => {
+  await enterCockpit(page);
+  await page.locator('#rngThrottle').fill('80');
+  await expect(page.locator('#txtThrottle')).toHaveText('80%');
+  await page.waitForTimeout(500);
+  expect(await page.locator('#rngThrottle').inputValue()).toBe('80');
 });
 
 test('ILS autoland holds the localizer and glideslope from 4 NM', async ({ page }) => {

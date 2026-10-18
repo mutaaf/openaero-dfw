@@ -17,3 +17,4 @@ One line per shipped change, newest last: `YYYY-MM-DD · #<ticket> · <player-fa
 2026-10-17 · #0008 · First flight gets a coach: on the KDFW 35C final, short prompts read the PAPI, your height and sink rate ("keep two white, two red", "you're high", "flare now", "idle the throttle") until touchdown hands you the grade; skippable, shown once, re-enable it from the start screen
 2026-10-17 · #0028 · Deep links: ?airport=KDAL, ?mission=downtown_skyline and ?view=terrain pick your flight straight from a link (the site launcher uses them); Start flight is still your tap
 2026-10-18 · #0014 · The sun over DFW is real: light, sky and haze follow the actual time in Dallas (Now), or pick today's Dawn, Noon, Dusk or Night
+2026-10-18 · #0017 · The throttle slider now follows the autothrottle and gamepad, so it always matches the N1 readout.

@@ -1,12 +1,12 @@
 ---
 id: 0017
 title: Keep the throttle slider in sync when the autopilot or gamepad moves the throttle
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-16
-pr:
+pr: 28
 ---
 
 ## Why
@@ -20,9 +20,9 @@ by ≥1% and the slider is not the focused/dragged element (`document.activeElem
 never fights a user drag. Cache the element lookup while there.
 
 ## Acceptance criteria
-- [ ] e2e: after ILS autoland touchdown on the flare challenge, `#rngThrottle` value equals the `#txtThrottle` percentage
-- [ ] e2e: with a fake gamepad holding RT, the slider value rises
-- [ ] Dragging the slider still sets the throttle (existing behaviour)
+- [x] e2e: after ILS autoland touchdown on the flare challenge, `#rngThrottle` value equals the `#txtThrottle` percentage
+- [x] e2e: with a fake gamepad holding RT, the slider value rises
+- [x] Dragging the slider still sets the throttle (existing behaviour)
 
 ## Test plan
 Extend `tests/e2e/gamepad.spec.js` and `tests/e2e/flight.spec.js` with slider assertions.

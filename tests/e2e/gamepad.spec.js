@@ -37,8 +37,21 @@ test('a gamepad stick flies the aircraft and its buttons work the systems', asyn
   await page.waitForTimeout(200);
   await expect(page.locator('#txtFlaps')).toHaveText('40°');
 
-  // RT spools the engines.
+  // RT spools the engines, and the desktop slider follows (ticket 0017), even when the
+  // player last used it (a range input keeps focus after a click).
+  await page.locator('#rngThrottle').fill('44');
+  await expect(page.locator('#rngThrottle')).toBeFocused();
   const before = parseInt(await page.locator('#txtThrottle').textContent(), 10);
+  const sliderBefore = Number(await page.locator('#rngThrottle').inputValue());
   await page.evaluate(() => { window.__pad.buttons[7] = { pressed: true, value: 1 }; });
   await expect.poll(async () => parseInt(await page.locator('#txtThrottle').textContent(), 10), { timeout: 5_000 }).toBeGreaterThan(before + 5);
+  await expect.poll(async () => Number(await page.locator('#rngThrottle').inputValue()), { timeout: 5_000 }).toBeGreaterThan(sliderBefore + 5);
+
+  // An arrow key steps from where the throttle is now, never back to a stale slider value.
+  await page.evaluate(() => { window.__pad.buttons[7] = { pressed: false, value: 0 }; });
+  await page.waitForTimeout(300);
+  const now = parseInt(await page.locator('#txtThrottle').textContent(), 10);
+  await page.locator('#rngThrottle').press('ArrowDown');
+  const after = parseInt(await page.locator('#txtThrottle').textContent(), 10);
+  expect(Math.abs(after - (now - 1))).toBeLessThanOrEqual(1);
 });
