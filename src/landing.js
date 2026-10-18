@@ -15,7 +15,8 @@ function curve(x, pts) {
 const WEIGHTS = { rate: 0.35, centreline: 0.2, zone: 0.2, flare: 0.15, speed: 0.1 };
 
 // t: { vsFpm (negative = descending), crossM, pastThresholdM, runwayLengthM, runwayWidthM,
-//      pitchDeg (nose up +), bankDeg, iasKts, vrefKts }
+//      pitchDeg (nose up +), bankDeg, iasKts, vrefKts, driftDeg? }
+// driftDeg (crosswind challenge only) adds a "Crab / de-crab" note; it is not weighted.
 export function gradeLanding(t) {
   const sink = Math.max(0, -t.vsFpm);
   const cross = Math.abs(t.crossM);
@@ -33,8 +34,13 @@ export function gradeLanding(t) {
     { key: 'speed', label: 'Speed', value: `${Math.round(t.iasKts)} kt (Vref ${t.vrefKts})`,
       score: curve(t.iasKts - t.vrefKts, [[-20, 20], [-5, 100], [10, 100], [30, 30]]) },
   ];
+  if (typeof t.driftDeg === 'number') {
+    const drift = Math.abs(t.driftDeg);
+    factors.push({ key: 'crab', label: 'Crab / de-crab', value: `${drift.toFixed(1)}° drift (not scored)`,
+      score: curve(drift, [[0, 100], [3, 100], [10, 30], [15, 0]]) });
+  }
   for (const f of factors) f.score = Math.round(f.score);
-  const score = Math.round(factors.reduce((s, f) => s + f.score * WEIGHTS[f.key], 0));
+  const score = Math.round(factors.reduce((s, f) => s + f.score * (WEIGHTS[f.key] || 0), 0));
 
   let grade = score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';
   let reason = null;
@@ -44,6 +50,14 @@ export function gradeLanding(t) {
   else if (t.pastThresholdM < 0) { grade = 'D'; reason = 'Touched down short of the runway.'; }
   else if (offRunway) { grade = 'D'; reason = 'Touched down off the runway.'; }
   return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason };
+}
+
+// Drift angle at touchdown: nose heading minus ground track (degrees, + = nose right of the
+// track, the crab into a wind from the right). Velocity in the sim frame (+X east, −Z north).
+export function driftAngleDeg(headingDeg, vx, vz) {
+  if (!vx && !vz) return 0;
+  const track = Math.atan2(vx, -vz) * 180 / Math.PI;
+  return ((headingDeg - track) % 360 + 540) % 360 - 180;
 }
 
 const EMPTY = () => ({ v: 1, missions: {} });

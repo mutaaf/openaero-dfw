@@ -72,6 +72,28 @@ export function runwayWindComponents(fromDeg, windKts, runwayHdgDeg) {
   return { headwindKts: windKts * Math.cos(a), crosswindKts: windKts * Math.sin(a) };
 }
 
+// Today's crosswind challenge (ticket 0018): of every runway end whose field has a live
+// METAR, the one with the strongest crosswind and no tailwind (headwind ≥ 0). Crosswinds are
+// compared to the whole knot, ties go to the longer runway. Null when nothing qualifies
+// (no live weather, calm or variable wind, or under 1 kt of crosswind anywhere). With nowS,
+// observations older than 90 minutes are not "today's" wind and are skipped.
+export function pickCrosswindRunway(metarsByIcao, ends, nowS = null) {
+  let best = null;
+  for (const end of ends) {
+    const wx = metarsByIcao[end.airport];
+    if (!wx || !wx.live || wx.windDirDeg === null || wx.windDirDeg === undefined || !wx.windKts) continue;
+    if (nowS !== null && wx.obsTime && nowS - wx.obsTime > 90 * 60) continue;
+    const c = runwayWindComponents(wx.windDirDeg, wx.windKts, end.hdgT);
+    if (c.headwindKts < 0) continue;
+    const xw = Math.round(Math.abs(c.crosswindKts));
+    if (xw < 1) continue;
+    if (!best || xw > best.xw || (xw === best.xw && (end.lengthM || 0) > (best.end.lengthM || 0))) {
+      best = { end, xw, crosswindKts: c.crosswindKts, headwindKts: c.headwindKts };
+    }
+  }
+  return best && { end: best.end, crosswindKts: best.crosswindKts, headwindKts: best.headwindKts };
+}
+
 // FogExp2 density so the fog reaches ~90% at the reported visibility. "10+" SM is treated
 // as 25 km so the imagery stays readable on a clear day.
 export function fogDensityForVisibility(sm) {
