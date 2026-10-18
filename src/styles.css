@@ -100,3 +100,35 @@ input[type=range] { accent-color: #38bdf8; }
 }
 /* The coach card yields to the open menu sheet (they meet in phone landscape). */
 .hud-menu-open #coach { visibility: hidden; }
+
+/* Phone held sideways (ticket 0025): the canvas tapes fill most of the height, so the
+   controls go to the edges. Throttle on the left edge, a slimmer stick on the right, the
+   four function buttons as one row under the tapes, the coach in the top bar beside a
+   narrower telemetry strip. Notch-side insets come in through --safe-left/right. */
+:root {
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+@media (orientation: landscape) and (max-height: 480px) and (max-width: 1023.98px) {
+  #phoneHeader {
+    left: max(0.5rem, var(--safe-left));
+    right: auto;
+    max-width: calc(100% - max(0.5rem, var(--safe-left)) - max(0.5rem, var(--safe-right)));
+  }
+  #phoneTelemetry { flex: none; width: 16rem; }
+  #hudMenu.open { max-height: calc(100dvh - 7rem); overflow-y: auto; overscroll-behavior: contain; }
+  #touchDeck > div {
+    padding-left: max(0.75rem, var(--safe-left));
+    padding-right: max(0.75rem, var(--safe-right));
+  }
+  #touchButtons { flex-direction: row; }
+  #touchStick { width: 8rem; height: 8rem; }
+  #coach {
+    top: max(0.5rem, env(safe-area-inset-top));
+    bottom: auto;
+    left: auto;
+    right: max(0.5rem, var(--safe-right));
+    margin: 0;
+    width: min(24rem, calc(100% - 22rem - var(--safe-left) - var(--safe-right)));
+  }
+}

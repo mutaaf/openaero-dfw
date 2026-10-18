@@ -1,12 +1,12 @@
 ---
 id: 0025
 title: Make the phone landscape (844x390) layout flyable
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: accessibility
 created: 2026-10-17
-pr:
+pr: 32
 ---
 
 ## Why
@@ -24,10 +24,10 @@ centre), top stack collapsed into one slim bar, coach banner above the horizon b
 and below the top bar, HUD tapes unobstructed. Touch targets stay ≥44 px.
 
 ## Acceptance criteria
-- [ ] At 844x390 and 667x375 (touch), no two visible HUD/control elements' bounding boxes overlap (except the intended canvas HUD drawing)
-- [ ] The centre 40% width x 30% height around the horizon stays free of DOM overlays
-- [ ] All touch targets ≥44x44 px; no page scroll; safe-area insets respected
-- [ ] 390x844 and 1280x720 layouts unchanged
+- [x] At 844x390 and 667x375 (touch), no two visible HUD/control elements' bounding boxes overlap (except the intended canvas HUD drawing)
+- [x] The centre 40% width x 30% height around the horizon stays free of DOM overlays
+- [x] All touch targets ≥44x44 px; no page scroll; safe-area insets respected
+- [x] 390x844 and 1280x720 layouts unchanged
 
 ## Test plan
 New `tests/e2e/phone-landscape.spec.js`: load at 844x390 with `hasTouch`, enter the cockpit, collect bounding boxes of visible `button`, panels and the coach, assert pairwise non-overlap and the free horizon box; attach a screenshot.

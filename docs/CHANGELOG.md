@@ -20,3 +20,4 @@ One line per shipped change, newest last: `YYYY-MM-DD · #<ticket> · <player-fa
 2026-10-18 · #0017 · The throttle slider now follows the autothrottle and gamepad, so it always matches the N1 readout.
 2026-10-18 · #0018 · Today's crosswind challenge: when live METARs are in, a new mission puts you on a 4 NM final to the DFW-area runway with the strongest real crosswind right now (no tailwind), and the results card shows your drift angle at touchdown
 2026-10-18 · #0021 · On a phone the top of the screen is yours again: one slim row with ☰ Menu and your speed, height, sink rate and PAPI; missions, camera, sound, pause, reset and the weather line live one tap away in the menu
+2026-10-18 · #0025 · Hold your phone sideways and it flies: throttle on the left edge, stick on the right, gear/flaps/brakes/ILS in one row under the tapes, the coach in the top bar, and nothing over the horizon or the speed and altitude tapes
