@@ -1490,13 +1490,15 @@ function toggleTimeOfDay() {
 }
 
 let rngThrottleEl = null;
+let draggingThrottle = false;
 function syncUI() {
   const throttlePct = Math.round(sim.throttle * 100);
   document.getElementById('txtThrottle').textContent = `${throttlePct}%`;
   // Autothrottle and gamepad move sim.throttle too: keep the slider honest, but never
-  // fight a player who is holding it (ticket 0017).
+  // fight a player who is dragging it (ticket 0017). Focus alone doesn't count: a range
+  // input keeps focus after a click, and arrow keys must step from the current throttle.
   const rng = rngThrottleEl || (rngThrottleEl = document.getElementById('rngThrottle'));
-  if (rng !== document.activeElement && Math.abs(Number(rng.value) - throttlePct) >= 1) rng.value = throttlePct;
+  if (!draggingThrottle && Math.abs(Number(rng.value) - throttlePct) >= 1) rng.value = throttlePct;
   document.getElementById('txtIasGs').textContent = `${Math.round(sim.iasKts)}/${sim.gsKts}K`;
   document.getElementById('txtAltMsl').textContent = `${sim.mslFt} FT`;
   document.getElementById('txtAltAgl').textContent = `${sim.aglFt} FT`;
@@ -1694,6 +1696,9 @@ document.getElementById('btnBrakes').addEventListener('click', () => {
 document.getElementById('rngThrottle').addEventListener('input', e => {
   sim.throttle = Number(e.target.value) / 100;
 });
+document.getElementById('rngThrottle').addEventListener('pointerdown', () => { draggingThrottle = true; });
+window.addEventListener('pointerup', () => { draggingThrottle = false; });
+window.addEventListener('pointercancel', () => { draggingThrottle = false; });
 document.getElementById('btnIdle').addEventListener('click', () => {
   sim.throttle = 0; document.getElementById('rngThrottle').value = 0;
 });

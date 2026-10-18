@@ -46,7 +46,6 @@ test('dragging the throttle slider sets the throttle', async ({ page }) => {
   await enterCockpit(page);
   await page.locator('#rngThrottle').fill('80');
   await expect(page.locator('#txtThrottle')).toHaveText('80%');
-  // While the slider has focus, the sync never fights the player's hand.
   await page.waitForTimeout(500);
   expect(await page.locator('#rngThrottle').inputValue()).toBe('80');
 });
