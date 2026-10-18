@@ -127,6 +127,7 @@ test('phone: the top HUD is one slim row, clear of the tapes and the horizon (00
 });
 
 test('phone: every folded control is one tap behind ☰ Menu; Pause pauses (0021)', async ({ page }) => {
+  const errors = collectErrors(page);
   await startFlight(page);
   await page.locator('#btnMenu').tap();
   await expect(page.locator('#btnMenu')).toHaveAttribute('aria-expanded', 'true');
@@ -136,8 +137,17 @@ test('phone: every folded control is one tap behind ☰ Menu; Pause pauses (0021
   const sheet = await page.locator('#hudMenu').boundingBox();
   expect(sheet.x).toBeGreaterThanOrEqual(0);
   expect(sheet.x + sheet.width).toBeLessThanOrEqual(390);
+  for (const id of ['#touchStick', '#touchThrottle', '#touchButtons']) {
+    expect(overlaps(sheet, await page.locator(id).boundingBox()), `sheet vs ${id}`).toBe(false);
+  }
+  const targets = await page.locator('#hudMenu button').evaluateAll((els) => els
+    .filter((e) => e.offsetParent).map((e) => { const r = e.getBoundingClientRect(); return [e.id, r.width, r.height]; }));
+  expect(targets.length).toBeGreaterThanOrEqual(5);
+  for (const [id, w, h] of targets) { expect(w, id).toBeGreaterThanOrEqual(44); expect(h, id).toBeGreaterThanOrEqual(44); }
   await page.locator('#btnPause').tap();
   await expect(page.locator('#btnPause')).toHaveText('RESUME');
+  // With the sheet folded the always-visible button still says the sim is paused.
+  await expect(page.locator('#btnMenu')).toContainText('PAUSED');
   const agl = await page.locator('#txtPhoneAgl').textContent();
   await page.waitForTimeout(1_000);
   expect(await page.locator('#txtPhoneAgl').textContent(), 'frozen while paused').toBe(agl);
@@ -147,5 +157,21 @@ test('phone: every folded control is one tap behind ☰ Menu; Pause pauses (0021
   await page.locator('#btnMenu').tap();
   await page.locator('#btnOpenMissions').tap();
   await expect(page.locator('#onboardingModal')).toBeVisible();
+  await expect(page.locator('#hudMenu')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('phone: the menu has a keyboard path and grabbing the stick folds it (0021)', async ({ page }) => {
+  await startFlight(page);
+  await page.locator('#btnMenu').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#hudMenu')).toBeVisible();
+  await page.locator('#btnCamera').focus();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#hudMenu')).toBeHidden();
+  await expect(page.locator('#btnMenu')).toBeFocused();
+  await page.locator('#btnMenu').tap();
+  await expect(page.locator('#hudMenu')).toBeVisible();
+  await page.locator('#touchStick').tap();
   await expect(page.locator('#hudMenu')).toBeHidden();
 });

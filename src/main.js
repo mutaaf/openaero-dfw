@@ -1638,13 +1638,21 @@ document.getElementById('btnOpenMissions').addEventListener('click', () => {
 // Phone top HUD (ticket 0021): ☰ Menu opens the folded bars as a sheet (CSS shows #hudMenu
 // always from lg up). Picking a mission, resetting or touching the view closes it.
 function setHudMenu(open) {
-  document.getElementById('hudMenu').classList.toggle('open', open);
-  document.getElementById('btnMenu').setAttribute('aria-expanded', String(open));
+  const menu = document.getElementById('hudMenu');
+  const btn = document.getElementById('btnMenu');
+  // Focus inside a sheet that is about to vanish goes back to the button that opens it.
+  if (!open && menu.contains(document.activeElement) && btn.offsetParent) btn.focus();
+  menu.classList.toggle('open', open);
+  btn.setAttribute('aria-expanded', String(open));
+  document.body.classList.toggle('hud-menu-open', open);
 }
 document.getElementById('btnMenu').addEventListener('click', () => {
   setHudMenu(!document.getElementById('hudMenu').classList.contains('open'));
 });
-document.getElementById('simCanvas').addEventListener('pointerdown', () => setHudMenu(false));
+for (const id of ['simCanvas', 'touchStick', 'touchThrottle']) {
+  document.getElementById(id).addEventListener('pointerdown', () => setHudMenu(false));
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setHudMenu(false); });
 
 document.querySelectorAll('.btnMission').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1707,6 +1715,11 @@ document.getElementById('btnTimeOfDay').addEventListener('click', toggleTimeOfDa
 document.getElementById('btnPause').addEventListener('click', () => {
   sim.paused = !sim.paused;
   document.getElementById('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
+  // Pause/Resume lives in the folded menu on phones: say so on the button that's always shown.
+  const menuBtn = document.getElementById('btnMenu');
+  menuBtn.textContent = sim.paused ? '☰ PAUSED' : '☰ Menu';
+  menuBtn.classList.toggle('text-red-400', sim.paused);
+  menuBtn.classList.toggle('text-sky-300', !sim.paused);
 });
 
 document.getElementById('btnReset').addEventListener('click', () => {
