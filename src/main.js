@@ -1632,7 +1632,19 @@ document.getElementById('btnStartFlight').addEventListener('click', () => {
 });
 document.getElementById('btnOpenMissions').addEventListener('click', () => {
   document.getElementById('onboardingModal').classList.remove('hidden');
+  setHudMenu(false);
 });
+
+// Phone top HUD (ticket 0021): ☰ Menu opens the folded bars as a sheet (CSS shows #hudMenu
+// always from lg up). Picking a mission, resetting or touching the view closes it.
+function setHudMenu(open) {
+  document.getElementById('hudMenu').classList.toggle('open', open);
+  document.getElementById('btnMenu').setAttribute('aria-expanded', String(open));
+}
+document.getElementById('btnMenu').addEventListener('click', () => {
+  setHudMenu(!document.getElementById('hudMenu').classList.contains('open'));
+});
+document.getElementById('simCanvas').addEventListener('pointerdown', () => setHudMenu(false));
 
 document.querySelectorAll('.btnMission').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1699,6 +1711,7 @@ document.getElementById('btnPause').addEventListener('click', () => {
 
 document.getElementById('btnReset').addEventListener('click', () => {
   loadScenario(document.getElementById('selScenario').value);
+  setHudMenu(false);
 });
 
 // Autopilot Buttons
