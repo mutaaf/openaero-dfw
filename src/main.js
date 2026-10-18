@@ -1489,8 +1489,14 @@ function toggleTimeOfDay() {
   applySun();
 }
 
+let rngThrottleEl = null;
 function syncUI() {
-  document.getElementById('txtThrottle').textContent = `${Math.round(sim.throttle * 100)}%`;
+  const throttlePct = Math.round(sim.throttle * 100);
+  document.getElementById('txtThrottle').textContent = `${throttlePct}%`;
+  // Autothrottle and gamepad move sim.throttle too: keep the slider honest, but never
+  // fight a player who is holding it (ticket 0017).
+  const rng = rngThrottleEl || (rngThrottleEl = document.getElementById('rngThrottle'));
+  if (rng !== document.activeElement && Math.abs(Number(rng.value) - throttlePct) >= 1) rng.value = throttlePct;
   document.getElementById('txtIasGs').textContent = `${Math.round(sim.iasKts)}/${sim.gsKts}K`;
   document.getElementById('txtAltMsl').textContent = `${sim.mslFt} FT`;
   document.getElementById('txtAltAgl').textContent = `${sim.aglFt} FT`;
