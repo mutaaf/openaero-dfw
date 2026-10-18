@@ -9,7 +9,7 @@ import {
   SPEED_OF_SOUND_KTS, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
-import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS, ATT_STADIUM } from './landmarks.js';
+import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
@@ -339,68 +339,72 @@ function buildSatelliteTerrain() {
   scene.add(terrainGroup);
   buildRunways();
 
-  // Downtown Dallas: stand-in towers at their true coordinates and heights (landmarks.js),
-  // in a group anchored on Bank of America Plaza.
-  const dallas = new THREE.Group();
-  dallas.position.set(DOWNTOWN_DALLAS.x, 0, DOWNTOWN_DALLAS.z);
+  // Stand-in landmarks at their true coordinates and heights (landmarks.js). Each one is a
+  // top-level object so seatLandmarks() stands it on its own ground, not a neighbour's.
+  const place = (key, obj) => {
+    const p = landmarkPos(key);
+    obj.position.x = p.x; obj.position.z = p.z;
+    obj.userData.landmark = key;
+    scene.add(obj);
+    landmarks.push(obj);
+    return obj;
+  };
   const tower = (key, w, color) => {
-    const p = landmarkPos(key), h = LANDMARKS[key].heightM;
+    const h = LANDMARKS[key].heightM;
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), new THREE.MeshLambertMaterial({ color }));
-    m.position.set(p.x - DOWNTOWN_DALLAS.x, h / 2, p.z - DOWNTOWN_DALLAS.z);
-    dallas.add(m);
-    return m;
+    m.position.y = h / 2;
+    return place(key, m);
   };
 
   // Bank of America Plaza with emerald green perimeter outline
   const boa = tower('bankOfAmericaPlaza', 58, 0x1e293b);
-  const neon = new THREE.Mesh(new THREE.BoxGeometry(60, boa.geometry.parameters.height, 2), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
-  neon.position.set(boa.position.x, boa.position.y, boa.position.z + 30);
-  dallas.add(neon);
-  tower('jpmorganChaseTower', 48, 0x334155);
-  tower('renaissanceTower', 48, 0x0f293a);
-  tower('comericaBankTower', 52, 0x3d352e);
+  const neon = new THREE.Mesh(new THREE.BoxGeometry(60, LANDMARKS.bankOfAmericaPlaza.heightM, 2), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+  neon.position.z = 30;
+  boa.add(neon);
+  const named = [boa, tower('jpmorganChaseTower', 48, 0x334155), tower('renaissanceTower', 48, 0x0f293a),
+    tower('comericaBankTower', 52, 0x3d352e)];
 
   // Reunion Tower: shaft up to the geodesic ball at the top
-  const reunion = landmarkPos('reunionTower'), reunionH = LANDMARKS.reunionTower.heightM;
-  const rx = reunion.x - DOWNTOWN_DALLAS.x, rz = reunion.z - DOWNTOWN_DALLAS.z;
+  const reunionH = LANDMARKS.reunionTower.heightM;
+  const reunion = new THREE.Group();
   const rShaft = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, reunionH - 36, 12), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
-  rShaft.position.set(rx, (reunionH - 36) / 2, rz);
-  dallas.add(rShaft);
+  rShaft.position.y = (reunionH - 36) / 2;
+  reunion.add(rShaft);
   const rBall = new THREE.Mesh(new THREE.SphereGeometry(18, 16, 16), new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true }));
-  rBall.position.set(rx, reunionH - 18, rz);
-  dallas.add(rBall);
+  rBall.position.y = reunionH - 18;
+  reunion.add(rBall);
+  named.push(place('reunionTower', reunion));
 
-  // Generic towers fill the core between Reunion and the Chase tower (north-east of BoA).
+  // Generic towers fill the core between Reunion and the Chase tower (north-east of BoA),
+  // clear of the named ones.
   for (let i = 0; i < 24; i++) {
     const ang = i * 0.92;
     const rad = 180 + (i % 5) * 110;
+    const x = DOWNTOWN_DALLAS.x + 250 + Math.cos(ang) * rad, z = DOWNTOWN_DALLAS.z - 250 + Math.sin(ang) * rad;
+    if (named.some((o) => Math.max(Math.abs(o.position.x - x), Math.abs(o.position.z - z)) < 60)) continue;
     const bh = 80 + (i * 27) % 110;
     const bldg = new THREE.Mesh(new THREE.BoxGeometry(36, bh, 36), new THREE.MeshLambertMaterial({ color: i % 2 === 0 ? 0x1e293b : 0x273549 }));
-    bldg.position.set(250 + Math.cos(ang) * rad, bh / 2, -250 + Math.sin(ang) * rad);
-    dallas.add(bldg);
+    bldg.position.set(x, bh / 2, z);
+    scene.add(bldg);
+    landmarks.push(bldg);
   }
-  scene.add(dallas);
-  landmarks.push(dallas);
 
-  // Margaret Hunt Hill Bridge arch, spanning along the deck over the Trinity
-  const bridge = LANDMARKS.margaretHuntHillBridge, bridgeAt = landmarkPos('margaretHuntHillBridge');
+  // Margaret Hunt Hill Bridge: one arch over the 184 m main span, along the deck
+  const bridge = LANDMARKS.margaretHuntHillBridge;
   const bridgeGroup = new THREE.Group();
-  bridgeGroup.position.set(bridgeAt.x, 0, bridgeAt.z);
   bridgeGroup.rotation.y = -bridge.spanBearingDeg * DEG_TO_RAD;
-  const archR = 110;
+  const archR = 92;
   const bridgeArch = new THREE.Mesh(new THREE.TorusGeometry(archR, 3.5, 8, 32, Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  bridgeArch.position.y = bridge.heightM - archR;
+  bridgeArch.scale.y = bridge.heightM / archR;
   bridgeArch.rotation.y = Math.PI / 2;
   bridgeGroup.add(bridgeArch);
-  scene.add(bridgeGroup);
-  landmarks.push(bridgeGroup);
+  place('margaretHuntHillBridge', bridgeGroup);
 
-  // Arlington AT&T Stadium (up to the top of its roof arches)
+  // Arlington AT&T Stadium: a drum up to the top of its roof arches (no detailed model)
   const attH = LANDMARKS.attStadium.heightM;
   const att = new THREE.Mesh(new THREE.CylinderGeometry(150, 130, attH, 24), new THREE.MeshLambertMaterial({ color: 0xcbd5e1 }));
-  att.position.set(ATT_STADIUM.x, attH / 2, ATT_STADIUM.z);
-  scene.add(att);
-  landmarks.push(att);
+  att.position.y = attH / 2;
+  place('attStadium', att);
   seatLandmarks();
 }
 
@@ -2019,6 +2023,8 @@ window.openaeroDebug = () => {
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,
+    landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
+      { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
     photoreal: photoreal ? {
       ...photoreal.state,

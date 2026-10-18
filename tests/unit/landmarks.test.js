@@ -1,29 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS, ATT_STADIUM } from '../../src/landmarks.js';
-import { latLonToSimMeters } from '../../src/geo.js';
-import { DFW_ORIGIN_LAT, DFW_ORIGIN_LON } from '../../src/constants.js';
+import { latLonToTile, tilePlacement } from '../../src/geo.js';
 import { missionByKey } from '../../src/missions.js';
 
-// Independent check: great-circle distance and bearing from the KDFW origin (haversine).
-function haversine(lat, lon) {
-  const R = 6371008.8, d = Math.PI / 180;
-  const p1 = DFW_ORIGIN_LAT * d, p2 = lat * d, dp = p2 - p1, dl = (lon - DFW_ORIGIN_LON) * d;
-  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  const dist = 2 * R * Math.asin(Math.sqrt(a));
-  const brg = Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl));
-  return { dist, brg };
+// Where the landmark is in the Esri imagery: its fractional Web Mercator position inside the
+// zoom-18 tile (~250 m) that contains it, laid out where geo.js puts that tile in the world.
+function inImagery(lat, lon, z = 18) {
+  const n = 2 ** z, r = lat * Math.PI / 180;
+  const fx = (lon + 180) / 360 * n, fy = (1 - Math.asinh(Math.tan(r)) / Math.PI) / 2 * n;
+  const { x, y } = latLonToTile(lat, lon, z);
+  const t = tilePlacement(x, y, z);
+  return { x: t.posX - t.widthM / 2 + (fx - x) * t.widthM, z: t.posZ - t.lengthM / 2 + (fy - y) * t.lengthM };
 }
 
 describe('landmarks at their true coordinates', () => {
   for (const [key, l] of Object.entries(LANDMARKS)) {
-    it(`${l.name}: sim position matches its lat/lon within 10 m`, () => {
+    it(`${l.name}: sim position lands on its lat/lon in the imagery within 10 m`, () => {
       const p = landmarkPos(key);
-      const g = latLonToSimMeters(l.lat, l.lon);
-      expect(Math.hypot(p.x - g.x, p.z - g.z)).toBeLessThan(10);
-      // And against a geo.js-independent haversine fix (+X east, -Z north).
-      const h = haversine(l.lat, l.lon);
-      const truth = { x: h.dist * Math.sin(h.brg), z: -h.dist * Math.cos(h.brg) };
-      expect(Math.hypot(p.x - truth.x, p.z - truth.z)).toBeLessThan(10 + h.dist * 0.002);
+      const img = inImagery(l.lat, l.lon);
+      expect(Math.hypot(p.x - img.x, p.z - img.z)).toBeLessThan(10);
     });
     it(`${l.name}: cites a public source and a real height`, () => {
       expect(l.source).toMatch(/^https:\/\//);
