@@ -1620,21 +1620,53 @@ function handleResize() {
 
 window.addEventListener('resize', handleResize);
 
-// Modal Triggers
-document.getElementById('btnCloseModal').addEventListener('click', () => {
+// Modal Triggers. The modal is a dialog (ticket 0007): Tab stays inside it while it is open,
+// Escape closes it, and focus goes back to whatever opened it.
+const onboardingModal = document.getElementById('onboardingModal');
+let modalOpener = null;
+function openModal(opener) {
+  modalOpener = opener;
+  onboardingModal.classList.remove('hidden');
+  document.getElementById('modalPanel').focus({ preventScroll: true });
+}
+// Focus goes back to the opener only when the modal was dismissed from the keyboard (Esc,
+// or ✕ activated with Enter/Space); after a mouse/touch close or ENTER COCKPIT nothing
+// keeps focus, so a flight key can't land on a HUD button.
+function closeModal(restoreFocus = false) {
+  onboardingModal.classList.add('hidden');
+  // On phones the Missions button lives in the folded menu: fall back to ☰ Menu.
+  const back = restoreFocus && [modalOpener, document.getElementById('btnMenu')].find((el) => el?.offsetParent);
+  if (back) back.focus({ preventScroll: true });
+  else document.activeElement?.blur();
+  modalOpener = null;
+}
+const modalOpen = () => !onboardingModal.classList.contains('hidden');
+document.getElementById('btnCloseModal').addEventListener('click', (e) => {
   applyCoachChoice();
-  document.getElementById('onboardingModal').classList.add('hidden');
+  closeModal(e.detail === 0);
 });
 document.getElementById('btnStartFlight').addEventListener('click', () => {
   if (document.getElementById('chkAutoSound').checked) audio.init();
   applyCoachChoice();
   // The (billable) Google session starts only when someone actually flies, once per page.
   if (photorealAllowed(window.location) && !terrainOnly(window.location.search)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
-  document.getElementById('onboardingModal').classList.add('hidden');
+  closeModal();
 });
-document.getElementById('btnOpenMissions').addEventListener('click', () => {
-  document.getElementById('onboardingModal').classList.remove('hidden');
+document.getElementById('btnOpenMissions').addEventListener('click', (e) => {
   setHudMenu(false);
+  openModal(e.currentTarget);
+});
+document.addEventListener('keydown', (e) => {
+  if (!modalOpen()) return;
+  if (e.key === 'Escape') { document.getElementById('btnCloseModal').click(); return; }
+  if (e.key !== 'Tab') return;
+  const items = [...onboardingModal.querySelectorAll('button, input, select, a[href]')]
+    .filter((el) => !el.disabled && el.offsetParent);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  const inside = onboardingModal.contains(document.activeElement) && document.activeElement !== document.getElementById('modalPanel');
+  if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
 });
 
 // Phone top HUD (ticket 0021): ☰ Menu opens the folded bars as a sheet (CSS shows #hudMenu
@@ -1892,6 +1924,8 @@ window.addEventListener('wheel', e => {
 // Keyboard Listeners
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
+  // Space is a flight key (center controls): it must not also press a focused HUD button.
+  if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
   if (e.code === 'KeyG') { if (!sim.onGround) sim.gearDown = !sim.gearDown; }
   else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % sim.flapAngles.length; }
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }

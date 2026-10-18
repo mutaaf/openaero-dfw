@@ -1,12 +1,12 @@
 ---
 id: 0007
 title: Meet the accessibility floor (reduced motion, contrast, keyboard)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: accessibility
 created: 2026-10-16
-pr:
+pr: 33
 ---
 
 ## Why
@@ -24,10 +24,10 @@ and the modal and panel buttons have no visible focus ring.
   closes on Escape.
 
 ## Acceptance criteria
-- [ ] With `reducedMotion: 'reduce'`, no element has a running CSS animation (e2e)
-- [ ] The modal can be completed with keyboard alone (Tab to "ENTER COCKPIT", Enter)
-- [ ] Escape closes the modal
-- [ ] Spot-checked HUD label colours reach 4.5:1 against their panel background
+- [x] With `reducedMotion: 'reduce'`, no element has a running CSS animation (e2e)
+- [x] The modal can be completed with keyboard alone (Tab to "ENTER COCKPIT", Enter)
+- [x] Escape closes the modal
+- [x] Spot-checked HUD label colours reach 4.5:1 against their panel background
 
 ## Test plan
 Playwright with `page.emulateMedia({ reducedMotion: 'reduce' })` asserting

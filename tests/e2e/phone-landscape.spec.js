@@ -95,6 +95,13 @@ for (const vp of SIZES) {
       }
       await expect(page.locator('#btnPause')).toBeVisible();
     });
+
+    test('the top bar stays one slim row with 10 px labels (0007)', async ({ page }) => {
+      await startFlight(page);
+      const tel = await page.locator('#phoneTelemetry').boundingBox();
+      expect(tel.height).toBeLessThanOrEqual(44);
+      expect(tel.y + tel.height).toBeLessThanOrEqual(60);
+    });
   });
 }
 
