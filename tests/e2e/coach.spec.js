@@ -39,10 +39,13 @@ test('the coach stays out of other missions and steps aside for the autopilot', 
   await enterCockpit(page);
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
   await page.click('#btnApApr');
-  await expect(page.locator('#coach')).toBeHidden();
+  // The coach steps aside: the autopilot tutor takes the card while it flies.
+  await expect(page.locator('#txtCoachLabel')).toHaveText('Autopilot', { timeout: 5_000 });
+  await expect(page.locator('#btnTakeover')).toBeVisible();
   await page.click('#btnApApr');
   await page.click('#btnApMaster'); // ILS on set AP master; both off hands the aircraft back
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator('#txtCoachLabel')).toHaveText('Coach');
   await page.selectOption('#selScenario', 'kdfw_35c_flare');
   await page.waitForTimeout(2_000);
   await expect(page.locator('#coach')).toBeHidden();

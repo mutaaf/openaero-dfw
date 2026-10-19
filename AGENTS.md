@@ -79,7 +79,8 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    away a player's data; tolerate storage that throws (private mode). Photoreal keeps only
    our own bookkeeping: `openaero_g3dt_usage_v1` (lifetime root/reuse counts) and
    `openaero_g3dt_block_v1` (quota/forbidden back-off, no key, no Google content). The
-   first-flight coach remembers `openaero_coach_v1 = { v: 1, seen, at }` (`src/coach.js`).
+   first-flight coach remembers `openaero_coach_v1 = { v: 1, seen, at }` (`src/coach.js`);
+   the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`).
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
    every control has a keyboard path; text meets 4.5:1 contrast on HUD backgrounds.
 
@@ -103,6 +104,8 @@ src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/
                     versioned personal bests
 src/coach.js        first-flight coach on the default final: prompts from PAPI, AGL,
                     sink rate and throttle (pure state machine) + seen flag
+src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
+                    state machine like coach.js); shown in the coach card, spoken, Your turn
 src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign
                     conventions (pinned by tests):** aileron + = roll right, elevator + =
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,

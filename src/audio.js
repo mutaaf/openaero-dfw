@@ -151,5 +151,8 @@ export function createAudio(sim, onStateChange) {
     if (stallGain) stallGain.gain.value = 0;
   }
 
-  return { init, update, mute, callout, get started() { return audioCtx !== null; } };
+  // The autopilot tutor's voice: queued, never interrupting a callout.
+  const teach = (text) => say(text, { interrupt: false });
+
+  return { init, update, mute, callout, teach, get started() { return audioCtx !== null; } };
 }

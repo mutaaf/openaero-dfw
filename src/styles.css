@@ -162,3 +162,10 @@ input[type=range] { accent-color: #38bdf8; }
   .hud-btn:hover, .hud-btn:active { transform: none; }
   .scanlines { display: none; }
 }
+
+/* The autopilot is moving these controls (src/apTutor.js "show and teach"). */
+.ap-flying { box-shadow: 0 0 0 2px rgb(252 211 77 / 0.85), 0 0 14px rgb(252 211 77 / 0.45); }
+.ap-flying::after {
+  content: 'AP'; position: absolute; top: 4px; right: 6px;
+  font: 700 9px/1 ui-monospace, monospace; color: rgb(252 211 77); letter-spacing: 0.08em;
+}
