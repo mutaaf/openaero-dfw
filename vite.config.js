@@ -27,7 +27,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
   },
   test: {
-    include: ['tests/unit/**/*.test.js'],
+    include: ['tests/unit/**/*.test.js', 'tests/flight/**/*.test.js'],
     environment: 'node',
   },
 });
