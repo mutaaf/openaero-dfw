@@ -133,6 +133,13 @@ export function createAudio(sim, onStateChange) {
     checkGpwsWarning();
   }
 
+  // One-off callouts from the sim (the stabilized gate, ticket 0020): queued behind the
+  // altitude callout that fires at the same height, a low chirp when speech is unavailable.
+  function callout(text) {
+    if (!audioCtx || !sim.audioEnabled) return;
+    if (!say(text, { interrupt: false })) chirp(440, 0.3);
+  }
+
   // Hard-mute every voice (used when the player switches sound off).
   function mute() {
     if (engineGain) engineGain.gain.value = 0;
@@ -140,5 +147,5 @@ export function createAudio(sim, onStateChange) {
     if (stallGain) stallGain.gain.value = 0;
   }
 
-  return { init, update, mute, get started() { return audioCtx !== null; } };
+  return { init, update, mute, callout, get started() { return audioCtx !== null; } };
 }

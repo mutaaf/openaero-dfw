@@ -125,7 +125,8 @@ src/sun.js          real sun (NOAA solar position) over DFW, Now/Dawn/Noon/Dusk/
                     sky/haze/light colours by sun elevation (pure, tested)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
                     phone's top bar in landscape; pure, tested)
-src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
+src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
+                    approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, warnings, heading math
 src/input.js        keyboard state → control targets, virtual stick mapping
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)

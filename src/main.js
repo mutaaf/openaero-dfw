@@ -32,6 +32,7 @@ import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl } from './terrain.js';
 import {
   dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning,
+  stabilizedGate, isImc, locDeviationDots, gsDeviationDots, GATE_VMC_FT, GATE_IMC_FT,
 } from './aero.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
@@ -95,6 +96,10 @@ const sim = {
   lastLanding: null,
   audioEnabled: false,
   lastCalloutIdx: -1,
+  // Stabilized-approach gate (ticket 0020): armed above the gate, evaluated once on the way down
+  gateArmed: false,
+  gate: null, // { gateHeight, stable, failing[] } for this approach, or null
+  gateShownUntil: 0, // sim time until which the HUD shows the verdict
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
   stick: { x: 0, y: 0, active: false },
@@ -651,6 +656,35 @@ function buildAircraft(type) {
   scene.add(aircraftRoot);
 }
 
+// --- Stabilized-approach gate (ticket 0020) ----------------------------------------
+// Armed while the aircraft is well above the gate (500 ft above the runway in VMC, 1,000 ft
+// in IMC) and evaluated once as it descends through it on an approach. Climbing back above
+// the gate (a go-around) re-arms it for the next approach. Scalars only, per frame.
+const gateInput = { iasKt: 0, vref: 0, vsFpm: 0, gearDown: true, flapsOk: true, glideDevDots: 0, locDevDots: 0, vmc: true };
+function checkStabilizedGate() {
+  const end = sim.activeEnd;
+  if (!end || sim.onGround) return;
+  const vmc = !isImc(sim.wx);
+  const gateFt = vmc ? GATE_VMC_FT : GATE_IMC_FT;
+  const aaeFt = (sim.pos.y - end.thrY) * M_TO_FT;
+  if (aaeFt > gateFt + 100) { sim.gateArmed = true; return; }
+  if (!sim.gateArmed || aaeFt > gateFt || sim.vel.y >= 0 || sim.approach.distM <= 0) return;
+  sim.gateArmed = false;
+  const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
+  const runwayM = geom ? geom.lengthM - end.displacedM : 3000;
+  gateInput.iasKt = sim.iasKts;
+  gateInput.vref = sim.spec.vrefKts;
+  gateInput.vsFpm = sim.vsiFpm;
+  gateInput.gearDown = sim.gearDown;
+  gateInput.flapsOk = sim.flapsIndex >= 2; // 25° or 40°: landing flaps
+  gateInput.glideDevDots = gsDeviationDots(sim.approach.heightAbovePathM, sim.approach.distM + AIM_POINT_M);
+  gateInput.locDevDots = locDeviationDots(sim.approach.crossM, sim.approach.distM + runwayM + 300);
+  gateInput.vmc = vmc;
+  sim.gate = stabilizedGate(gateInput);
+  sim.gateShownUntil = sim.simTime + 6;
+  if (!sim.gate.stable) audio.callout('unstabilized');
+}
+
 // --- Landing grade ---------------------------------------------------------------
 function checkTouchdown(dt) {
   if (!sim.onGround) {
@@ -683,16 +717,17 @@ function checkTouchdown(dt) {
     pastThresholdM: -g.distM, crossM: g.crossM, vsFpm: sim.lastAirVsi,
     pitchDeg: _euler.x * RAD_TO_DEG, bankRightDeg: -_euler.z * RAD_TO_DEG,
     grade: result.grade, score: result.score, runway: end.id,
+    stabilized: sim.gate ? sim.gate.stable : null,
   };
   let best = { isNewBest: false, best: null };
   // The crosswind challenge moves runway with the weather: its best is kept per runway end.
   const bestKey = sim.missionKey === CROSSWIND_KEY ? `${CROSSWIND_KEY}:${end.id}` : sim.missionKey;
   try { best = recordBest(window.localStorage, bestKey, result); } catch { /* storage unavailable */ }
-  showResults(result, best, end);
+  showResults(result, best, end, sim.gate);
 }
 
 const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
-function showResults(result, best, end) {
+function showResults(result, best, end, gate) {
   const card = document.getElementById('resultsCard');
   const gradeEl = document.getElementById('txtGrade');
   gradeEl.textContent = result.grade;
@@ -705,6 +740,14 @@ function showResults(result, best, end) {
   const bestEl = document.getElementById('txtBest');
   if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
   else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';
+  // Not scored: the stabilized-gate verdict (null when the mission started below the gate).
+  const gateEl = document.getElementById('txtStabilized');
+  gateEl.classList.toggle('hidden', !gate);
+  if (gate) {
+    gateEl.textContent = gate.stable ? `Stabilized at ${gate.gateHeight} ft ✓`
+      : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ').toLowerCase()}`;
+    gateEl.className = `text-[11px] font-bold pt-2 ${gate.stable ? 'text-emerald-300' : 'text-amber-300'}`;
+  }
   const list = document.getElementById('resultsFactors');
   list.innerHTML = '';
   for (const f of result.factors) {
@@ -946,6 +989,7 @@ function step6DofPhysics(dt) {
   // Approach target + PAPI lamps
   updateActiveRunway(dt);
   updatePapi();
+  checkStabilizedGate();
   checkTouchdown(dt);
 }
 
@@ -1379,7 +1423,26 @@ function renderHud() {
     hudCtx.setLineDash([]);
   }
 
+  // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
+  if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(cx, cy);
+
   hudCtx.restore();
+}
+
+function drawGateVerdict(cx, cy) {
+  const g = sim.gate;
+  const y = cy + 92;
+  hudCtx.textAlign = 'center';
+  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+  hudCtx.fillRect(cx - 120, y - 16, 240, g.stable ? 24 : 40);
+  hudCtx.font = 'bold 14px monospace';
+  hudCtx.fillStyle = g.stable ? '#6ee7b7' : '#fcd34d';
+  hudCtx.fillText(g.stable ? 'STABILIZED' : 'UNSTABILIZED', cx, y + 1);
+  if (!g.stable) {
+    hudCtx.font = 'bold 12px monospace';
+    hudCtx.fillText(g.failing.join(' · '), cx, y + 18);
+  }
+  hudCtx.font = '12px monospace';
 }
 
 function renderRadar() {
@@ -1461,6 +1524,9 @@ function loadScenario(key) {
   sim.apApproach = false;
   resetApFilters();
   sim.lastCalloutIdx = -1;
+  sim.gateArmed = false;
+  sim.gate = null;
+  sim.gateShownUntil = 0;
   sim.angVel.set(0, 0, 0);
   sim.rwySelectTimer = 0;
   sim.landingGraded = false;
@@ -2047,6 +2113,7 @@ window.openaeroDebug = () => {
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,
+    stabilizedGate: sim.gate ? { ...sim.gate, failing: [...sim.gate.failing] } : null,
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
       { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
