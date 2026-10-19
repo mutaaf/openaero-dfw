@@ -37,6 +37,7 @@ import {
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
+import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
@@ -1711,6 +1712,7 @@ window.addEventListener('resize', handleResize);
 // Escape closes it, and focus goes back to whatever opened it.
 const onboardingModal = document.getElementById('onboardingModal');
 let modalOpener = null;
+let cockpitEntered = false; // the start screen was dismissed once (ticket 0032)
 function openModal(opener) {
   modalOpener = opener;
   refreshMissionBests();
@@ -1721,6 +1723,7 @@ function openModal(opener) {
 // or ✕ activated with Enter/Space); after a mouse/touch close or ENTER COCKPIT nothing
 // keeps focus, so a flight key can't land on a HUD button.
 function closeModal(restoreFocus = false) {
+  cockpitEntered = true; // ENTER COCKPIT, ✕ or Esc: the flight is under way
   onboardingModal.classList.add('hidden');
   // On phones the Missions button lives in the folded menu: fall back to ☰ Menu.
   const back = restoreFocus && [modalOpener, document.getElementById('btnMenu')].find((el) => el?.offsetParent);
@@ -1833,14 +1836,28 @@ document.getElementById('btnMouseYoke').addEventListener('click', () => {
 
 document.getElementById('btnTimeOfDay').addEventListener('click', toggleTimeOfDay);
 
-document.getElementById('btnPause').addEventListener('click', () => {
-  sim.paused = !sim.paused;
+function setPaused(paused) {
+  sim.paused = paused;
+  audio.pause(paused);
   document.getElementById('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
   // Pause/Resume lives in the folded menu on phones: say so on the button that's always shown.
   const menuBtn = document.getElementById('btnMenu');
   menuBtn.textContent = sim.paused ? '☰ PAUSED' : '☰ Menu';
+  menuBtn.setAttribute('aria-label', sim.paused ? 'Menu, paused' : 'Menu');
   menuBtn.classList.toggle('text-red-400', sim.paused);
   menuBtn.classList.toggle('text-sky-300', !sim.paused);
+}
+document.getElementById('btnPause').addEventListener('click', () => {
+  setPaused(!sim.paused);
+  if (!sim.paused) setHudMenu(false); // on a phone, Resume puts the view back
+});
+
+// Ticket 0032: switching tabs or locking the phone pauses the flight (also behind the
+// Missions modal mid-flight, where the sim keeps running). Coming back does not resume it:
+// the player taps Resume, so a landing never starts without them. Before the first ENTER
+// COCKPIT nothing is flying and there is no sound yet.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && !sim.paused && cockpitEntered) setPaused(true);
 });
 
 document.getElementById('btnReset').addEventListener('click', () => {
@@ -2034,6 +2051,8 @@ document.getElementById('btnAudio').addEventListener('click', () => {
   }
 });
 
+const wakeLock = createWakeLock();
+const resultsCard = document.getElementById('resultsCard');
 let lastTime = performance.now();
 // Longest frame the sim catches up on (a hidden tab or a stall beyond this is skipped).
 const MAX_FRAME_S = 0.25;
@@ -2044,13 +2063,17 @@ function renderLoop(time) {
   lastTime = time;
   // Frames behind the modal, paused or hidden are not load; resScale also drops lone stalls.
   // (Photoreal tile LOD follows the CSS size, not the pixel ratio: nothing else to resize.)
-  if (sim.paused || document.hidden || modalOpen()) {
+  const idle = sim.paused || document.hidden || modalOpen();
+  if (idle) {
     if (resCounting) resetResScale(resScale);
     resCounting = false;
   } else {
     resCounting = true;
     if (stepResScale(resScale, frameMs)) renderer.setPixelRatio(resScale.ratio); // drawing buffer only
   }
+
+  // Keep the screen awake while flying (released when paused, hidden, in a modal or on results).
+  wakeLock.sync(!idle && resultsCard.classList.contains('hidden'));
 
   updateGamepad();
   step6DofPhysics(dt);
@@ -2121,6 +2144,9 @@ window.openaeroDebug = () => {
     aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
     pixelRatio: resScale.ratio,
+    paused: sim.paused,
+    audio: audio.state,
+    wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,

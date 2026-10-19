@@ -1,12 +1,12 @@
 ---
 id: 0032
 title: Pause when the tab is hidden, keep the phone screen awake while flying
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: tech-health
 created: 2026-10-18
-pr:
+pr: 47
 ---
 
 ## Why
@@ -26,12 +26,12 @@ Wake Lock is now supported in Chrome, Safari and Firefox
   silently skip where unsupported or rejected. No new hosts, no storage.
 
 ## Acceptance criteria
-- [ ] Dispatching hidden visibility pauses the sim; sim time and aircraft position do not
+- [x] Dispatching hidden visibility pauses the sim; sim time and aircraft position do not
       advance while hidden, and return shows PAUSED
-- [ ] Returning visible does not unpause
-- [ ] Wake lock is requested while flying and released when paused (stubbed `navigator.wakeLock`)
-- [ ] No console errors when `navigator.wakeLock` is missing or rejects
-- [ ] Works at 390x844 and 1280x720; no frame-time regression
+- [x] Returning visible does not unpause
+- [x] Wake lock is requested while flying and released when paused (stubbed `navigator.wakeLock`)
+- [x] No console errors when `navigator.wakeLock` is missing or rejects
+- [x] Works at 390x844 and 1280x720; no frame-time regression
 
 ## Test plan
 e2e: stub `navigator.wakeLock`, start flight, assert request; override `document.hidden`/
