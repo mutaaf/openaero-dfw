@@ -14,7 +14,7 @@ import {
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES,
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
-import { missionFromLink, terrainOnly, stripDeepLink } from './deeplink.js';
+import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
 import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades } from './landing.js';
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
@@ -1153,7 +1153,7 @@ function integrateSubStep(dt) {
     const rollRateRight = -sim.angVel.z;
     const pitchRateUp = sim.angVel.x;
     const holdHeading = (hdgDeg) => {
-      const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg));
+      const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg), sim.tasKts * 0.514444);
       sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight);
     };
     // Fly a flight-path angle: pitch = path + current angle of attack.
@@ -1194,8 +1194,10 @@ function integrateSubStep(dt) {
     }
   }
 
-  // Forces, moments and integration (flightModel.js, pure and flight-tested headless)
-  stepFlightModel(sim, spec, dt);
+  // Forces, moments and integration (flightModel.js, pure and flight-tested headless), or
+  // JSBSim under ?fdm=jsbsim once it has loaded, for the airframes it has a model of.
+  if (jsbsim && jsbsim.flies(sim.aircraftKey)) jsbsim.step(sim, spec, dt);
+  else stepFlightModel(sim, spec, dt);
 
   // Telemetry derivatives
   sim.aglFt = Math.max(0, Math.round((sim.pos.y - sim.groundY) * M_TO_FT));
@@ -1837,7 +1839,23 @@ document.getElementById('btnCloseModal').addEventListener('click', (e) => {
   applyCoachChoice();
   closeModal(e.detail === 0);
 });
+// ?fdm=jsbsim: the Cessna flies on JSBSim (WASM, LGPL, src/fdm/), fetched only once someone
+// starts flying so it never touches boot. Until it arrives (or if it can't load) the
+// built-in model flies; the adapter picks up from wherever the aircraft is.
+const jsbsimWanted = fdmFromLink(window.location.search) === 'jsbsim';
+let jsbsim = null;
+let jsbsimLoading = false;
+function loadJsbsimOnce() {
+  if (!jsbsimWanted || jsbsimLoading) return;
+  jsbsimLoading = true;
+  import('./fdm/loadJsbsim.js')
+    .then((m) => m.loadJsbsim(import.meta.env.BASE_URL))
+    .then((f) => { jsbsim = f; })
+    .catch((e) => console.warn('[openaero] JSBSim unavailable, flying the built-in model:', e));
+}
+
 document.getElementById('btnStartFlight').addEventListener('click', () => {
+  loadJsbsimOnce();
   if (document.getElementById('chkAutoSound').checked) audio.init();
   applyCoachChoice();
   // The (billable) Google session starts only when someone actually flies, once per page.
@@ -1896,6 +1914,12 @@ document.getElementById('selAircraft').addEventListener('change', e => {
   document.getElementById('txtAircraftTitle').textContent = sim.spec.name;
   buildAircraft(sim.aircraftKey);
 });
+// ?fdm=jsbsim flies the Cessna, the airframe with a JSBSim model so far.
+if (jsbsimWanted) {
+  const sel = document.getElementById('selAircraft');
+  sel.value = 'c172';
+  sel.dispatchEvent(new Event('change'));
+}
 
 document.getElementById('selScenario').addEventListener('change', e => {
   loadScenario(e.target.value);
@@ -2235,6 +2259,8 @@ window.openaeroDebug = () => {
     distM: sim.approach.distM,
     heightAbovePathM: sim.approach.heightAbovePathM,
     pos: { x: sim.pos.x, y: sim.pos.y, z: sim.pos.z },
+    aircraft: sim.aircraftKey,
+    fdm: jsbsim && jsbsim.flies(sim.aircraftKey) ? 'jsbsim' : 'builtin',
     groundY: sim.groundY,
     aglFt: sim.aglFt,
     mslFt: sim.mslFt,

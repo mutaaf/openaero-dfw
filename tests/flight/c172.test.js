@@ -6,12 +6,16 @@
 // A card the model does not yet meet is a KNOWN GAP: `it.fails` keeps the gate green
 // while the gap exists and turns it red the day the model is fixed, so the fixing PR
 // must promote the card to `it` (and the gap can never silently come back).
-import { describe, it, expect } from 'vitest';
+//
+// Every card flies twice: flightModel.js (the game's default) and JSBSim (src/fdm/jsbsim.js
+// flying our public/jsbsim/ C172, ?fdm=jsbsim in the game). Gaps are per model.
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
-import { elevatorForPitch, aileronForBank } from "../../src/autopilot.js";
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, attitude } from './harness.js';
+import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
+import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, attitude, useFdm } from './harness.js';
+import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -29,7 +33,19 @@ function stallKts(flaps) {
 
 const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), c172, 10, speedHoldPilot(() => 74), vsFpm, 60);
 
-describe('Cessna 172S vs POH', () => {
+// JSBSim's known gaps (measured, PR #48):
+//  - lift-off 56 kt: the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
+//    proportional only), so the wing reaches lift-off speed later.
+//  - brakes 138 m: main-wheel brakes only, load moves to the nose wheel, 0.36 g. The 0.45 μ
+//    reference is flightModel.js's assumption, not the POH; the POH landing-roll card that
+//    should replace it is ticket 0051.
+const GAPS = { flightModel: new Set(), jsbsim: new Set(['takeoff', 'brakes']) };
+
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
+  beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
+  afterAll(() => useFdm(null));
+  const card = (id) => (GAPS[model].has(id) ? it.fails : it);
+
   it('stalls clean near 53 KCAS (POH: 48 KIAS / 53 KCAS, ±10%)', () => {
     within(stallKts(0), 53, 0.10);
   });
@@ -43,13 +59,13 @@ describe('Cessna 172S vs POH', () => {
   });
 
   // POH short-field technique: flaps 10, full power, rotate nose-high, lift off at 51 KIAS.
-  it('short-field ground roll near 960 ft, lift-off near 51 kt (POH, ±15%)', () => {
+  card('takeoff')('short-field ground roll near 960 ft, lift-off near 51 kt (POH, ±15%)', () => {
     const { rollFt, liftoffKts } = shortFieldTakeoff(c172, 0);
     within(rollFt, 960, 0.15);
     within(liftoffKts, 51, 0.08);
   });
 
-  it('brakes stop the aircraft from 58 kt in about 100 m (μ 0.45 ≈ 0.43 g)', () => {
+  card('brakes')('brakes stop the aircraft from 58 kt in about 100 m (μ 0.45 ≈ 0.43 g)', () => {
     const b = makeBody(c172);
     b.vel.set(0, 0, -30);
     b.brakesOn = true;
@@ -87,7 +103,9 @@ describe('Cessna 172S vs POH', () => {
 // FAA Airplane Flying Handbook (FAA-H-8083-3C) ch. 5 / Pilot's Handbook (FAA-H-8083-25B)
 // ch. 5: in a level coordinated turn rate = g·tan(bank)/V (= 1091·tan(bank)/V[kt] °/s) and
 // load factor = 1/cos(bank). The model must turn like that, whatever its own drag says.
-describe('Cessna 172S level turns vs FAA handbook', () => {
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S level turns vs FAA handbook (${model})`, () => {
+  beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
+  afterAll(() => useFdm(null));
   function levelTurn(bankDeg, kts) {
     const b = makeBody(c172, { kts, altM: 1500, throttle: 0.75 });
     const alt0 = b.pos.y;
