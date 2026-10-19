@@ -50,17 +50,28 @@ test('dragging the throttle slider sets the throttle', async ({ page }) => {
   expect(await page.locator('#rngThrottle').inputValue()).toBe('80');
 });
 
-test('ILS autoland holds the localizer and glideslope from 4 NM', async ({ page }) => {
+test('ILS autoland holds the localizer and glideslope from 4 NM, pitch steady', async ({ page }) => {
   test.setTimeout(120_000);
   await enterCockpit(page);
   await page.selectOption('#selScenario', 'kdal_31r_final');
   await page.click('#btnApApr');
-  const t0 = Date.now();
-  while (Date.now() - t0 < 12_000) {
+  // Windows in sim seconds: CI's software GL can fall behind wall time.
+  const t0 = (await snap(page)).simTime;
+  const pitches = [];
+  for (;;) {
     const s = await snap(page);
+    const t = s.simTime - t0;
+    if (t > 45) break;
     expect(Math.abs(s.crossM), 'localizer').toBeLessThan(20);
     expect(Math.abs(s.heightAbovePathM), 'glideslope').toBeLessThan(20);
     expect(Math.abs(s.bankRightDeg), 'wings').toBeLessThan(30);
-    await page.waitForTimeout(500);
+    if (t > 10) pitches.push(s.pitchDeg);
+    await page.waitForTimeout(250);
   }
+  expect(pitches.length).toBeGreaterThan(20);
+  // Ticket 0016: no autothrottle/glidepath phugoid. Before the fix pitch swung −2.5°…+6.3°
+  // with a ~28 s period; it must stay within ±1.5° of its mean after the first 10 s.
+  const mean = pitches.reduce((a, b) => a + b, 0) / pitches.length;
+  const worst = Math.max(...pitches.map((p) => Math.abs(p - mean)));
+  expect(worst, `pitch spread around ${mean.toFixed(2)}°`).toBeLessThan(1.5);
 });

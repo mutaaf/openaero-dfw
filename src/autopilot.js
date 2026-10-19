@@ -3,6 +3,8 @@
 //   aileron +  = roll right          elevator + = nose down        rudder + = yaw right
 //   bank / roll-rate "right" +       pitch / pitch-rate "up" +     cross-track + = right
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const GS_KI = 0.01;                  // glidepath integral, deg per m·s
+const AT_KI = 0.015, AT_KP = 0.03;   // autothrottle: throttle/s per kt error, per kt/s trend
 
 // Localizer: heading offset (deg) to turn back onto the centreline.
 export const localizerInterceptDeg = (crossM) => clamp(-crossM * 0.5, -25, 25);
@@ -14,8 +16,10 @@ export const bankCommandForHeading = (hdgErrDeg) => clamp(hdgErrDeg * 2.5, -25, 
 export const aileronForBank = (bankCmdDeg, bankRightDeg, rollRateRight) =>
   clamp((bankCmdDeg - bankRightDeg) * 0.05 - rollRateRight * 0.8, -0.6, 0.6);
 
-// Glideslope: flight-path angle command (deg) from height above the 3° path (m).
-export const glidepathGammaDeg = (heightAbovePathM) => clamp(-3 - heightAbovePathM * 0.12, -6, -0.5);
+// Glideslope: flight-path angle command (deg) from height above the 3° path (m), plus a
+// small integral (m·s) that trims out a standing offset.
+export const glidepathGammaDeg = (heightAbovePathM, integralMs = 0) =>
+  clamp(-3 - heightAbovePathM * 0.12 - integralMs * GS_KI, -6, -0.5);
 
 // Flare: target vertical speed (m/s, negative = down) from wheel height (m).
 export const flareSinkMps = (wheelHeightM) => -Math.max(0.8, wheelHeightM * 0.2);
@@ -33,9 +37,11 @@ export function trimAoaDeg(spec, iasMps, flapsIndex, rho = 1.225) {
   return ((clNeeded - clZero) / spec.clAlpha) * 180 / Math.PI;
 }
 
-// Autothrottle: nudge throttle towards the target speed.
-export const throttleForSpeed = (iasKts, targetKts, throttle, dt) =>
-  clamp(throttle + (targetKts - iasKts) * 0.015 * dt, 0, 1);
+// Autothrottle: PI on airspeed, in rate form. The speed error integrates into the throttle;
+// the speed trend (kt/s, + = accelerating) is the proportional term, so the throttle leads
+// a speed change instead of chasing it a phugoid half-cycle late.
+export const throttleForSpeed = (iasKts, targetKts, throttle, dt, iasRateKtsPerS = 0) =>
+  clamp(throttle + ((targetKts - iasKts) * AT_KI - iasRateKtsPerS * AT_KP) * dt, 0, 1);
 
 // Directional (weathervane) stability: body yaw acceleration from sideslip (rad).
 // Positive body yaw (angVel.y) is nose-left, so drifting right yaws with a negative term.

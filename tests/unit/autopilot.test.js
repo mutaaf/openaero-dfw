@@ -30,6 +30,11 @@ describe('vertical laws', () => {
     expect(glidepathGammaDeg(-30)).toBeGreaterThan(-3);
     expect(glidepathGammaDeg(-500)).toBeLessThan(0);
   });
+  it('a standing offset above the path builds a steeper command over time (integral)', () => {
+    expect(glidepathGammaDeg(2, 50)).toBeLessThan(glidepathGammaDeg(2, 0));
+    expect(glidepathGammaDeg(-2, -50)).toBeGreaterThan(glidepathGammaDeg(-2, 0));
+    expect(glidepathGammaDeg(0, -1e6)).toBeLessThan(0);
+  });
   it('flare: sink rate shrinks as the wheels near the runway', () => {
     expect(flareSinkMps(12)).toBeLessThan(flareSinkMps(3));
     expect(flareSinkMps(0)).toBeLessThan(0);
@@ -44,6 +49,12 @@ describe('vertical laws', () => {
     expect(throttleForSpeed(120, 140, 0.4, 0.1)).toBeGreaterThan(0.4);
     expect(throttleForSpeed(160, 140, 0.4, 0.1)).toBeLessThan(0.4);
     expect(throttleForSpeed(10, 140, 0.99, 10)).toBeLessThanOrEqual(1);
+  });
+  it('autothrottle leads the speed trend: accelerating → less throttle than steady', () => {
+    // On speed but gaining 2 kt/s: pull power now, before the overshoot (ticket 0016).
+    expect(throttleForSpeed(140, 140, 0.5, 0.1, 2)).toBeLessThan(0.5);
+    expect(throttleForSpeed(140, 140, 0.5, 0.1, -2)).toBeGreaterThan(0.5);
+    expect(throttleForSpeed(140, 140, 0.5, 0.1)).toBe(0.5);
   });
 });
 
