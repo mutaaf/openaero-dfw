@@ -17,6 +17,7 @@
     "check:fast": "node scripts/check-backlog.mjs && npm test && npm run build"
   },
   "dependencies": {
+    "@0x62/jsbsim-wasm": "1.2.4-beta.4",
     "3d-tiles-renderer": "0.5.3",
     "three": "0.186.1"
   },

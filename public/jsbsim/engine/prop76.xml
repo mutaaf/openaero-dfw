@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<!--
+  Fixed-pitch two-blade 76 in propeller (McCauley 1A170E/JHA7660 on the 172S, POH
+  Section 1). Thrust and power coefficients vs advance ratio J = V/(nD), shaped like the
+  NACA TR-640 fixed-pitch data (Hartman & Biermann, 1938, public domain) and pinned to
+  three measured points of the real aircraft:
+    J 0     CT 0.083  2070 N static thrust (Atlantis Press C172 static-thrust study)
+    J 0.48  CT 0.074  730 fpm at Vy 74 KIAS (POH Fig. 5-6)
+    J 0.75  CT 0.049  126 KTAS at full throttle, sea level (POH Section 1)
+  with CP from the engine power at each point. Written for OpenAero DFW; MIT.
+-->
+<propeller name="prop76">
+  <ixx unit="SLUG*FT2">1.67</ixx>
+  <diameter unit="IN">76</diameter>
+  <numblades>2</numblades>
+  <gearratio>1</gearratio>
+  <table name="C_THRUST" type="internal">
+    <tableData>
+      0.00   0.0830
+      0.20   0.0810
+      0.40   0.0770
+      0.50   0.0738
+      0.60   0.0670
+      0.70   0.0560
+      0.75   0.0488
+      0.80   0.0410
+      0.90   0.0240
+      1.00   0.0060
+      1.10  -0.0120
+      1.20  -0.0300
+      1.40  -0.0650
+      2.00  -0.1500
+    </tableData>
+  </table>
+  <table name="C_POWER" type="internal">
+    <tableData>
+      0.00   0.0616
+      0.20   0.0600
+      0.40   0.0570
+      0.50   0.0545
+      0.60   0.0510
+      0.70   0.0470
+      0.75   0.0448
+      0.80   0.0410
+      0.90   0.0300
+      1.00   0.0160
+      1.10   0.0000
+      1.20  -0.0180
+      1.40  -0.0550
+      2.00  -0.1500
+    </tableData>
+  </table>
+</propeller>

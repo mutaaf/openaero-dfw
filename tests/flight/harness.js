@@ -10,6 +10,11 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
 
+// The flight model under test: null flies flightModel.js; useFdm(jsbsim) flies JSBSim
+// (src/fdm/jsbsim.js, loaded in Node by jsbsimNode.js) through the same cards.
+let fdm = null;
+export const useFdm = (f) => { fdm = f; };
+
 // A body heading north, in trim at `kts` indicated when airborne, or parked on the runway.
 export function makeBody(spec, { kts = 0, altM = 0, flaps = 0, gearDown = true, throttle = 0 } = {}) {
   const onGround = altM <= 0;
@@ -22,6 +27,8 @@ export function makeBody(spec, { kts = 0, altM = 0, flaps = 0, gearDown = true, 
     flapsIndex: flaps, gearDown, brakesOn: false, apMaster: true,
     windVec: new Vector3(), groundY: 0, onGround,
     pitchCmd: 0, t: 0, distM: 0,
+    // In trim at `kts` from the first call: a pilot that read 0 kt here yanked the stick.
+    iasKts: onGround ? 0 : kts,
   };
   if (!onGround && kts > 0) {
     const aoa = trimAoaDeg(spec, kts * KTS_TO_MPS, flaps);
@@ -45,7 +52,8 @@ export function fly(body, spec, seconds, pilot, until) {
   for (let i = 0; i < n; i++) {
     pilot?.(body, DT);
     const x0 = body.pos.x, z0 = body.pos.z;
-    stepFlightModel(body, spec, DT);
+    if (fdm) fdm.step(body, spec, DT);
+    else stepFlightModel(body, spec, DT);
     body.distM += Math.hypot(body.pos.x - x0, body.pos.z - z0);
     body.t += DT;
     if (until?.(body)) break;

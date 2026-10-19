@@ -1,0 +1,497 @@
+<?xml version="1.0"?>
+<!--
+  Cessna 172S Skyhawk for JSBSim, written for OpenAero DFW from published data (MIT, like
+  the rest of the repository; not derived from the GPL c172x/c172p files).
+
+  Sources:
+    POH   Cessna 172S Pilot's Operating Handbook: dimensions, weights, CG envelope,
+          control travel (Sections 1, 6), stall speeds and performance (Section 5).
+    ROSK  Roskam, Airplane Flight Dynamics and Automatic Flight Controls, Part I,
+          Appendix B, Cessna 172 cruise stability and control derivatives; moments of
+          inertia ~2300 lb (Ixx 948, Iyy 1346, Izz 1967 slug·ft²).
+    OAERO src/aircraft.js + src/aero.js: the lift curve, flap increments and drag polar
+          already fitted to the POH cards in tests/flight/c172.test.js, so both flight
+          models fly the same airframe and the cards compare their dynamics.
+
+  Structural frame: inches, X aft from the firewall datum, Y right, Z up.
+-->
+<fdm_config name="c172" version="2.0" release="BETA">
+  <fileheader>
+    <author>OpenAero DFW</author>
+    <description>Cessna 172S, 2550 lb, from the POH and Roskam (see header comment)</description>
+    <license licenseName="MIT" licenseURL="https://opensource.org/licenses/MIT"/>
+  </fileheader>
+
+  <metrics>
+    <wingarea unit="FT2">174</wingarea>
+    <wingspan unit="FT">36.1</wingspan>
+    <chord unit="FT">4.9</chord>
+    <htailarea unit="FT2">21.9</htailarea>
+    <htailarm unit="FT">14.3</htailarm>
+    <vtailarea unit="FT2">16.5</vtailarea>
+    <vtailarm unit="FT">15.7</vtailarm>
+    <location name="AERORP" unit="IN"><x>43.2</x><y>0</y><z>36.5</z></location>
+    <location name="EYEPOINT" unit="IN"><x>37</x><y>-9</y><z>48</z></location>
+    <location name="VRP" unit="IN"><x>43.2</x><y>0</y><z>36.5</z></location>
+  </metrics>
+
+  <mass_balance>
+    <ixx unit="SLUG*FT2">948</ixx>
+    <iyy unit="SLUG*FT2">1346</iyy>
+    <izz unit="SLUG*FT2">1967</izz>
+    <ixz unit="SLUG*FT2">0</ixz>
+    <emptywt unit="LBS">1663</emptywt>
+    <location name="CG" unit="IN"><x>39.5</x><y>0</y><z>36.5</z></location>
+    <pointmass name="Front seats">
+      <weight unit="LBS">340</weight>
+      <location unit="IN"><x>37</x><y>0</y><z>36</z></location>
+    </pointmass>
+    <pointmass name="Rear seat and baggage">
+      <weight unit="LBS">229</weight>
+      <location unit="IN"><x>73</x><y>0</y><z>36</z></location>
+    </pointmass>
+  </mass_balance>
+
+  <!-- Wheels 48 in below the CG; nose and mains at their POH weighing arms. Struts sized for
+       about 2 in of static compression, so the aircraft rests level and a hard stop on the
+       main-wheel brakes doesn't bottom the nose oleo. -->
+  <ground_reactions>
+    <contact type="BOGEY" name="NOSE">
+      <location unit="IN"><x>-6.8</x><y>0</y><z>-11.5</z></location>
+      <static_friction>0.8</static_friction>
+      <dynamic_friction>0.5</dynamic_friction>
+      <rolling_friction>0.03</rolling_friction>
+      <spring_coeff unit="LBS/FT">4000</spring_coeff>
+      <damping_coeff unit="LBS/FT/SEC">450</damping_coeff>
+      <max_steer unit="DEG">10</max_steer>
+      <brake_group>NONE</brake_group>
+      <retractable>0</retractable>
+    </contact>
+    <contact type="BOGEY" name="LEFT_MAIN">
+      <location unit="IN"><x>58.2</x><y>-50</y><z>-11.5</z></location>
+      <static_friction>0.8</static_friction>
+      <dynamic_friction>0.5</dynamic_friction>
+      <rolling_friction>0.03</rolling_friction>
+      <spring_coeff unit="LBS/FT">5400</spring_coeff>
+      <damping_coeff unit="LBS/FT/SEC">600</damping_coeff>
+      <max_steer unit="DEG">0</max_steer>
+      <brake_group>LEFT</brake_group>
+      <retractable>0</retractable>
+    </contact>
+    <contact type="BOGEY" name="RIGHT_MAIN">
+      <location unit="IN"><x>58.2</x><y>50</y><z>-11.5</z></location>
+      <static_friction>0.8</static_friction>
+      <dynamic_friction>0.5</dynamic_friction>
+      <rolling_friction>0.03</rolling_friction>
+      <spring_coeff unit="LBS/FT">5400</spring_coeff>
+      <damping_coeff unit="LBS/FT/SEC">600</damping_coeff>
+      <max_steer unit="DEG">0</max_steer>
+      <brake_group>RIGHT</brake_group>
+      <retractable>0</retractable>
+    </contact>
+    <!-- Tail tie-down ring: touches at 15° nose-up on the mains (tail strike). -->
+    <contact type="STRUCTURE" name="TAIL">
+      <location unit="IN"><x>188</x><y>0</y><z>23.3</z></location>
+      <static_friction>0.8</static_friction>
+      <dynamic_friction>0.5</dynamic_friction>
+      <spring_coeff unit="LBS/FT">20000</spring_coeff>
+      <damping_coeff unit="LBS/FT/SEC">1000</damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="LEFT_WINGTIP">
+      <location unit="IN"><x>45</x><y>-216</y><z>94</z></location>
+      <static_friction>0.8</static_friction>
+      <dynamic_friction>0.5</dynamic_friction>
+      <spring_coeff unit="LBS/FT">10000</spring_coeff>
+      <damping_coeff unit="LBS/FT/SEC">2000</damping_coeff>
+    </contact>
+    <contact type="STRUCTURE" name="RIGHT_WINGTIP">
+      <location unit="IN"><x>45</x><y>216</y><z>94</z></location>
+      <static_friction>0.8</static_friction>
+      <dynamic_friction>0.5</dynamic_friction>
+      <spring_coeff unit="LBS/FT">10000</spring_coeff>
+      <damping_coeff unit="LBS/FT/SEC">2000</damping_coeff>
+    </contact>
+  </ground_reactions>
+
+  <propulsion>
+    <engine file="io360">
+      <location unit="IN"><x>-19.7</x><y>0</y><z>26.6</z></location>
+      <orient unit="DEG"><pitch>0</pitch><roll>0</roll><yaw>0</yaw></orient>
+      <feed>0</feed>
+      <feed>1</feed>
+      <thruster file="prop76">
+        <location unit="IN"><x>-37.7</x><y>0</y><z>26.6</z></location>
+        <orient unit="DEG"><pitch>0</pitch><roll>0</roll><yaw>0</yaw></orient>
+        <sense>1</sense>
+        <p_factor>0</p_factor>
+      </thruster>
+    </engine>
+    <!-- 53 gal usable (POH): 159 lb a side. -->
+    <tank type="FUEL">
+      <location unit="IN"><x>48</x><y>-56</y><z>59.4</z></location>
+      <capacity unit="LBS">168</capacity>
+      <contents unit="LBS">159</contents>
+    </tank>
+    <tank type="FUEL">
+      <location unit="IN"><x>48</x><y>56</y><z>59.4</z></location>
+      <capacity unit="LBS">168</capacity>
+      <contents unit="LBS">159</contents>
+    </tank>
+  </propulsion>
+
+  <!--
+    Command conventions match OpenAero's sim inputs: elevator +1 = stick forward (nose
+    down), aileron +1 = roll right, rudder +1 = yaw right. Travel from POH Section 1:
+    elevator 28° up / 23° down, ailerons 20° up / 15° down (17.5° mean), rudder ±21.7°
+    (17.7° left, 16.3° right on the S; symmetric mean used), flaps 0–30° in 10° notches.
+  -->
+  <flight_control name="c172">
+    <channel name="Pitch">
+      <summer name="fcs/pitch-sum">
+        <input>fcs/elevator-cmd-norm</input>
+        <input>fcs/pitch-trim-cmd-norm</input>
+        <clipto><min>-1</min><max>1</max></clipto>
+      </summer>
+      <aerosurface_scale name="fcs/elevator-pos-rad">
+        <input>fcs/pitch-sum</input>
+        <range><min>-0.4887</min><max>0.4014</max></range>
+        <output>fcs/elevator-pos-rad</output>
+      </aerosurface_scale>
+    </channel>
+    <channel name="Roll">
+      <summer name="fcs/roll-sum">
+        <input>fcs/aileron-cmd-norm</input>
+        <input>fcs/roll-trim-cmd-norm</input>
+        <clipto><min>-1</min><max>1</max></clipto>
+      </summer>
+      <aerosurface_scale name="fcs/aileron-pos-rad">
+        <input>fcs/roll-sum</input>
+        <range><min>-0.3054</min><max>0.3054</max></range>
+        <output>fcs/left-aileron-pos-rad</output>
+      </aerosurface_scale>
+    </channel>
+    <channel name="Yaw">
+      <summer name="fcs/yaw-sum">
+        <input>fcs/rudder-cmd-norm</input>
+        <input>fcs/yaw-trim-cmd-norm</input>
+        <clipto><min>-1</min><max>1</max></clipto>
+      </summer>
+      <aerosurface_scale name="fcs/rudder-pos-rad">
+        <input>fcs/yaw-sum</input>
+        <range><min>-0.3787</min><max>0.3787</max></range>
+        <output>fcs/rudder-pos-rad</output>
+      </aerosurface_scale>
+    </channel>
+    <channel name="Flaps">
+      <kinematic name="fcs/flaps-control">
+        <input>fcs/flap-cmd-norm</input>
+        <traverse>
+          <setting><position>0</position><time>0</time></setting>
+          <setting><position>10</position><time>3</time></setting>
+          <setting><position>20</position><time>3</time></setting>
+          <setting><position>30</position><time>3</time></setting>
+        </traverse>
+        <output>fcs/flap-pos-deg</output>
+      </kinematic>
+    </channel>
+  </flight_control>
+
+  <aerodynamics>
+    <!-- Ground effect weakens the tip vortices: induced drag only, the same factor as
+         src/aero.js groundEffectFactor (McCormick), h = CG height over span. -->
+    <function name="aero/function/ground-effect-factor-drag">
+      <pow>
+        <quotient>
+          <product><value>16</value><property>aero/h_b-cg-ft</property></product>
+          <sum><value>1</value><product><value>16</value><property>aero/h_b-cg-ft</property></product></sum>
+        </quotient>
+        <value>2</value>
+      </pow>
+    </function>
+
+    <axis name="LIFT">
+      <!-- OAERO: CL = 0.35 + 4.8·α + flap ΔCL [0, .19, .30, .40], stall at 14.1/14.1/13.7/13.3°,
+           exponential drop after (the POH stall-speed fit). -->
+      <function name="aero/coefficient/CLalpha">
+        <description>Lift due to alpha and flaps</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <table>
+            <independentVar lookup="row">aero/alpha-rad</independentVar>
+            <independentVar lookup="column">fcs/flap-pos-deg</independentVar>
+            <tableData>
+                          0       10       20       30
+              -0.30  -0.8790  -0.7250  -0.6190  -0.5260
+              -0.20  -0.6100  -0.4200  -0.3100  -0.2100
+              -0.10  -0.1300   0.0600   0.1700   0.2700
+               0.00   0.3500   0.5400   0.6500   0.7500
+               0.10   0.8300   1.0200   1.1300   1.2300
+               0.15   1.0700   1.2600   1.3700   1.4700
+               0.20   1.3100   1.5000   1.6100   1.7100
+               0.22   1.4060   1.5960   1.7060   1.8060
+               0.23   1.4540   1.6440   1.7540   1.8540
+               0.24   1.5020   1.6920   1.7956   1.8430
+               0.25   1.5260   1.7130   1.7711   1.8155
+               0.26   1.5115   1.6912   1.7458   1.7872
+               0.28   1.4791   1.6450   1.6931   1.7291
+               0.30   1.4428   1.5959   1.6382   1.6693
+               0.35   1.3396   1.4650   1.4953   1.5165
+               0.40   1.2265   1.3291   1.3503   1.3642
+               0.50   0.9960   1.0648   1.0742   1.0789
+               0.60   0.7842   0.8303   0.8334   0.8334
+               0.80   0.4571   0.4778   0.4763   0.4735
+               1.00   0.2524   0.2617   0.2598   0.2573
+            </tableData>
+          </table>
+        </product>
+      </function>
+      <function name="aero/coefficient/CLde">
+        <description>Lift due to elevator (ROSK CLδe 0.43; trailing edge down adds lift)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>fcs/elevator-pos-rad</property>
+          <value>0.43</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/CLq">
+        <description>Lift due to pitch rate (ROSK CLq 3.9)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>velocities/q-aero-rad_sec</property>
+          <property>aero/ci2vel</property>
+          <value>3.9</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/CLadot">
+        <description>Lift due to alpha rate (ROSK CLα̇ 1.7)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>aero/alphadot-rad_sec</property>
+          <property>aero/ci2vel</property>
+          <value>1.7</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="DRAG">
+      <!-- OAERO: CD0 0.018 airframe + 0.018 fixed gear; flaps 0.012 a notch. The idle
+           propeller's windmill drag comes from prop76's negative thrust, not a CD. -->
+      <function name="aero/coefficient/CD0">
+        <description>Parasite drag, airframe and fixed gear</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <value>0.036</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/CDflap">
+        <description>Flap drag</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>fcs/flap-pos-deg</property>
+          <value>0.0012</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/CDi">
+        <description>Induced drag, k = 1/(π·AR·e), AR 7.45, e 0.78, in ground effect</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>aero/function/ground-effect-factor-drag</property>
+          <value>0.0548</value>
+          <property>aero/cl-squared</property>
+        </product>
+      </function>
+      <function name="aero/coefficient/CDbeta">
+        <description>Drag due to sideslip (ROSK CDβ 0.17)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <abs><property>aero/beta-rad</property></abs>
+          <value>0.17</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="SIDE">
+      <function name="aero/coefficient/CYb">
+        <description>Side force due to sideslip (ROSK CYβ −0.31)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>aero/beta-rad</property>
+          <value>-0.31</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/CYdr">
+        <description>Side force due to rudder (ROSK |CYδr| 0.187; right rudder pushes the tail left)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>fcs/rudder-pos-rad</property>
+          <value>-0.187</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="ROLL">
+      <function name="aero/coefficient/Clb">
+        <description>Dihedral effect (ROSK Clβ −0.089)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/beta-rad</property>
+          <value>-0.089</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Clp">
+        <description>Roll damping (ROSK Clp −0.47)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/p-aero-rad_sec</property>
+          <value>-0.47</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Clr">
+        <description>Roll due to yaw rate (ROSK Clr 0.096)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/r-aero-rad_sec</property>
+          <value>0.096</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Clda">
+        <description>Roll due to aileron (ROSK Clδa 0.178)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/left-aileron-pos-rad</property>
+          <value>0.178</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cldr">
+        <description>Roll due to rudder (ROSK Clδr 0.0147)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/rudder-pos-rad</property>
+          <value>0.0147</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="PITCH">
+      <function name="aero/coefficient/Cmalpha">
+        <description>Static stability (ROSK Cmα −0.89), trimmed at α 0 with neutral elevator</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>aero/alpha-rad</property>
+          <value>-0.89</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cmde">
+        <description>Pitch due to elevator (ROSK Cmδe −1.28; trailing edge down noses down)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>fcs/elevator-pos-rad</property>
+          <value>-1.28</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cmq">
+        <description>Pitch damping (ROSK Cmq −12.4)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>aero/ci2vel</property>
+          <property>velocities/q-aero-rad_sec</property>
+          <value>-12.4</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cmadot">
+        <description>Pitch due to alpha rate (ROSK Cmα̇ −5.2)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/cbarw-ft</property>
+          <property>aero/ci2vel</property>
+          <property>aero/alphadot-rad_sec</property>
+          <value>-5.2</value>
+        </product>
+      </function>
+    </axis>
+
+    <axis name="YAW">
+      <function name="aero/coefficient/Cnb">
+        <description>Weathercock stability (ROSK Cnβ 0.065)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/beta-rad</property>
+          <value>0.065</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cnp">
+        <description>Yaw due to roll rate (ROSK Cnp −0.03)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/p-aero-rad_sec</property>
+          <value>-0.03</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cnr">
+        <description>Yaw damping (ROSK Cnr −0.099)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>aero/bi2vel</property>
+          <property>velocities/r-aero-rad_sec</property>
+          <value>-0.099</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cnda">
+        <description>Adverse yaw from the ailerons (ROSK |Cnδa| 0.0216; rolling right yaws the nose left)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/left-aileron-pos-rad</property>
+          <value>-0.0216</value>
+        </product>
+      </function>
+      <function name="aero/coefficient/Cndr">
+        <description>Yaw due to rudder (ROSK |Cnδr| 0.0657; +rudder yaws right)</description>
+        <product>
+          <property>aero/qbar-psf</property>
+          <property>metrics/Sw-sqft</property>
+          <property>metrics/bw-ft</property>
+          <property>fcs/rudder-pos-rad</property>
+          <value>0.0657</value>
+        </product>
+      </function>
+    </axis>
+  </aerodynamics>
+</fdm_config>

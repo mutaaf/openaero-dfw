@@ -23,6 +23,9 @@ export function missionFromLink(search) {
 /** `?view=terrain` asks for the free terrain map: no Google session this visit. */
 export const terrainOnly = (search) => new URLSearchParams(search).get('view') === 'terrain';
 
+/** `?fdm=jsbsim` flies the Cessna on JSBSim (src/fdm/) instead of flightModel.js. */
+export const fdmFromLink = (search) => (new URLSearchParams(search).get('fdm') === 'jsbsim' ? 'jsbsim' : 'builtin');
+
 /** The search string without the one-shot params (a refresh starts at the default mission). */
 export function stripDeepLink(search) {
   const p = new URLSearchParams(search);

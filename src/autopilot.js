@@ -11,8 +11,14 @@ const AT_KI = 0.015, AT_KP = 0.03;   // autothrottle: throttle/s per kt error, p
 // Localizer: heading offset (deg) to turn back onto the centreline.
 export const localizerInterceptDeg = (crossM) => clamp(-crossM * 0.5, -25, 25);
 
-// Heading hold: bank command (deg) from heading error (deg, + = need to turn right).
-export const bankCommandForHeading = (hdgErrDeg) => clamp(hdgErrDeg * 2.5, -25, 25);
+// Heading hold: bank command (deg) from heading error (deg, + = need to turn right) at true
+// airspeed `tasMps`. It commands a turn rate (HDG_RATE per second of heading error) and banks
+// for it, tan φ = V·ω/g, so the loop is the same at any speed: a fixed bank per degree
+// (2.5°/° before) turned twice as fast at a Cessna's 67 kt as at the 737's 145 and the
+// heading swung ±20° (tests/flight/c172.test.js). 0.33/s is the old gain at 145 kt.
+const HDG_RATE = 0.33;
+export const bankCommandForHeading = (hdgErrDeg, tasMps = 75) =>
+  clamp(Math.atan((tasMps * hdgErrDeg * HDG_RATE * Math.PI / 180) / 9.80665) * 180 / Math.PI, -25, 25);
 
 // Bank hold: aileron from bank error with roll-rate damping (rate in rad/s).
 export const aileronForBank = (bankCmdDeg, bankRightDeg, rollRateRight) =>

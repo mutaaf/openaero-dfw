@@ -166,6 +166,11 @@ src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box 
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
                     integration on a `body` (main.js passes `sim`). Pure: flown headless by
                     tests/flight/ against published performance data
+src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFlightModel on
+                    JSBSim (LGPL WASM, own chunk, lazy after Start flight); trims the
+                    elevator on spawn, lever→plate throttle map. fdm/loadJsbsim.js loads it
+                    in the browser, tests/flight/jsbsimNode.js in Node. The aircraft it flies
+                    is our own MIT data: public/jsbsim/ (C172 from POH + Roskam)
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/√θ power lapse,
@@ -230,7 +235,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 197 kB gzipped at boot (2026-10-19: 196.95 kB after 0042's assist levels, raised from 196 to 197; 195.02 kB after 0032's wake lock + pause on hide (+0.43 kB after trimming to locals and dropping a per-frame duplicate), raised from 195 to 196; 194.6 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
+Budgets: JS ≤ 198 kB gzipped at boot (2026-10-19: 197.25 kB with the ?fdm=jsbsim hook and the turn-rate heading hold (+0.3 kB), raised from 197 to 198; JSBSim itself is a lazy chunk, 4.6 kB JS + 493 kB WASM gz, fetched only with ?fdm=jsbsim; 196.95 kB after 0042's assist levels, raised from 196 to 197; 195.02 kB after 0032's wake lock + pause on hide (+0.43 kB after trimming to locals and dropping a per-frame duplicate), raised from 195 to 196; 194.6 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
 from 180 for photoreal: three is one module, so the core classes the lazy glTF/3D-tiles
 chunk needs are hoisted into the entry chunk; 3d-tiles-renderer + Draco load only when
 photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.
