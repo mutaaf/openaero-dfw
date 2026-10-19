@@ -125,6 +125,9 @@ src/sun.js          real sun (NOAA solar position) over DFW, Now/Dawn/Noon/Dusk/
                     sky/haze/light colours by sun elevation (pure, tested)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
                     phone's top bar in landscape; pure, tested)
+src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
+                    integration on a `body` (main.js passes `sim`). Pure: flown headless by
+                    tests/flight/ against published performance data
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, warnings, heading math
@@ -153,7 +156,7 @@ software GL). Approach guidance
 (ILS bars, PAPI text, APR autopilot, DME, NAV1) follows `sim.activeEnd`, re-picked twice
 a second by `selectActiveRunway` from whatever you're lined up on. Loop per frame
 (`renderLoop`): `step6DofPhysics(dt)` (dt capped at 250 ms, split into ≥ 3 sub-steps of
-≤ 1/60 s, so sim time keeps pace with real time down to 4 fps) → `updateCamera` →
+≤ 1/60 s, each: input + autopilot in main.js → `stepFlightModel`, so sim time keeps pace with real time down to 4 fps) → `updateCamera` →
 `terrainLod.update` (re-selects tiles 5x a second) → `renderer.render` → `renderHud`
 (2D canvas) → `renderRadar`
 → `syncUI` (DOM text) → `audio.update`.

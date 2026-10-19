@@ -5,8 +5,7 @@
 import * as THREE from 'three';
 import './styles.css';
 import {
-  M_TO_FT, MPS_TO_KTS, NM_TO_M, DEG_TO_RAD, RAD_TO_DEG, GRAVITY,
-  SPEED_OF_SOUND_KTS, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
+  M_TO_FT, NM_TO_M, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
@@ -20,7 +19,7 @@ import { gradeLanding, loadBest, recordBest, driftAngleDeg } from './landing.js'
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
-  flareSinkMps, elevatorForPitch, throttleForSpeed, sideslipYawAccel, trimAoaDeg,
+  flareSinkMps, elevatorForPitch, throttleForSpeed, trimAoaDeg,
 } from './autopilot.js';
 import {
   parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents,
@@ -30,7 +29,6 @@ import { createTerrainLod } from './terrainLod.js';
 import { createPhotoreal, photorealAllowed } from './photoreal.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl } from './terrain.js';
 import {
-  dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT,
 } from './aero.js';
@@ -39,6 +37,7 @@ import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
+import { stepFlightModel } from './flightModel.js';
 
 // --- Simulation State ---
 const sim = {
@@ -686,7 +685,7 @@ function checkStabilizedGate() {
   gate.runway = end.id;
   gate.iasKt = Math.round(sim.iasKts);
   // HUD lines, 3 items each, built here so drawing them allocates nothing.
-  sim.gateLines = [0, 3].map((i) => gate.failing.slice(i, i + 3).join(' · ')).filter(Boolean);
+  sim.gateLines = [0, 3].map((i) => gate.failing.slice(i, i + 3).join(' · '));
   sim.gateShownUntil = sim.simTime + 6;
   if (!gate.stable) audio.callout('unstabilized, go around');
 }
@@ -751,7 +750,7 @@ function showResults(result, best, end, gate) {
   gateEl.classList.toggle('hidden', !gate);
   if (gate) {
     gateEl.textContent = gate.stable ? `Stabilized at ${gate.gateHeight} ft ✓`
-      : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ').toLowerCase()}`;
+      : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ')}`;
     gateEl.classList.toggle('text-emerald-300', gate.stable); // over the amber default (later in the CSS)
   }
   const list = document.getElementById('resultsFactors');
@@ -1087,133 +1086,14 @@ function integrateSubStep(dt) {
     }
   }
 
-  // Transform the AIR-RELATIVE velocity to the body frame: u (fwd), v (right), w (down).
-  // Aerodynamics see the air mass, not the ground (weather.js wind, gusts included).
-  const invQuat = _q1.copy(sim.quat).invert();
-  const bodyVel = _v1.copy(sim.vel).sub(sim.windVec).applyQuaternion(invQuat);
-  const u = -bodyVel.z;
-  const v = bodyVel.x;
-  const w = -bodyVel.y;
-
-  const airspeed = Math.max(0.1, bodyVel.length());
-  sim.tasKts = airspeed * MPS_TO_KTS;
-  sim.iasKts = sim.tasKts;
-  sim.gsKts = Math.round(Math.hypot(sim.vel.x, sim.vel.z) * MPS_TO_KTS);
-  sim.mach = sim.tasKts / SPEED_OF_SOUND_KTS;
-
-  // Angle of Attack (AoA) and Sideslip (Beta)
-  const aoaRad = Math.atan2(w, Math.max(u, 0.1));
-  sim.aoaDeg = aoaRad * RAD_TO_DEG;
-  sim.betaDeg = Math.asin(THREE.MathUtils.clamp(v / airspeed, -1, 1)) * RAD_TO_DEG;
-
-  const qDyn = dynamicPressure(airspeed);
-
-  // Aerodynamic Lift & Drag Curves with Post-Stall Drop (aero.js)
-  const cl = liftCoefficient(spec, aoaRad, sim.flapsIndex);
-
-  // Induced Drag Polar + Ground Effect Factor (aero.js)
-  const groundEffect = groundEffectFactor(sim.pos.y - sim.groundY, spec.wingSpanM);
-  const cd = dragCoefficient(spec, cl, sim.gearDown, sim.flapsIndex, groundEffect);
-
-  const liftForce = cl * qDyn * spec.wingAreaM2;
-  const dragForce = cd * qDyn * spec.wingAreaM2;
-  const thrustForce = sim.throttle * spec.maxThrustN;
-
-  // Body Forces
-  const fBodyX = -dragForce * (v / airspeed);
-  const fBodyY = liftForce;
-  const fBodyZ = -thrustForce + dragForce;
-
-  const totalForceWorld = _v2.set(fBodyX, fBodyY, fBodyZ).applyQuaternion(sim.quat);
-  totalForceWorld.y -= spec.massKg * GRAVITY;
-
-  // Ground Spring-Damper Suspension, on the real ground under the aircraft (terrain.js)
-  // 1 cm contact tolerance: on a sloped runway, sub-nanometre drift along the slope changes
-  // the ground height by ~1e-13 m, which must not count as lifting off.
-  const gh = sim.groundY + spec.gearHeight;
-  if (sim.pos.y <= gh + 0.01) {
-    const penetration = gh - sim.pos.y;
-    const kSpring = spec.massKg * 85;
-    const kDamper = spec.massKg * 9;
-    const normalForce = Math.max(0, penetration * kSpring - sim.vel.y * kDamper);
-
-    totalForceWorld.y += normalForce;
-    sim.onGround = true;
-
-    // Tyres: rolling resistance (μ·N, brakes μ 0.45) along the nose, and a stiff side
-    // force across it so the aircraft rolls where it points instead of skating sideways.
-    // (The prototype used friction ∝ speed, which capped the takeoff roll near 75 kt.)
-    const fwd = _v3.set(0, 0, -1).applyQuaternion(sim.quat);
-    fwd.y = 0;
-    fwd.normalize();
-    const vAlong = sim.vel.x * fwd.x + sim.vel.z * fwd.z;
-    const vSideX = sim.vel.x - fwd.x * vAlong;
-    const vSideZ = sim.vel.z - fwd.z * vAlong;
-    const mu = sim.brakesOn ? 0.45 : 0.02;
-    const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
-    totalForceWorld.x += fwd.x * roll;
-    totalForceWorld.z += fwd.z * roll;
-    const sideMax = 0.8 * normalForce;
-    totalForceWorld.x += THREE.MathUtils.clamp(-vSideX * spec.massKg * 4, -sideMax, sideMax);
-    totalForceWorld.z += THREE.MathUtils.clamp(-vSideZ * spec.massKg * 4, -sideMax, sideMax);
-  } else {
-    sim.onGround = false;
-  }
-
-  const accel = totalForceWorld.divideScalar(spec.massKg);
-  sim.vel.addScaledVector(accel, dt);
-  sim.pos.addScaledVector(sim.vel, dt);
-
-  // Sink rate at the moment of contact, captured before the ground clamp zeroes it.
-  if (!sim.onGround) sim.lastAirVsi = Math.round(sim.vel.y * M_TO_FT * 60);
-
-  if (sim.pos.y < gh) {
-    sim.pos.y = gh;
-    if (sim.vel.y < 0) sim.vel.y = 0;
-  }
-
-  // Angular Moments & Inertial Damping
-  const qRate = (-sim.elevInput * (spec.pitchAuthority ?? 1.8) - sim.angVel.x * spec.pitchDamping) * (airspeed / 120);
-  // aileron + rolls right (negative body z rate); see autopilot.js for the conventions
-  const pRate = (-sim.aileronInput * (spec.rollAuthority ?? 2.8) - sim.angVel.z * spec.rollDamping) * (airspeed / 120);
-  // Rudder + directional stability: the nose weathervanes into the relative wind, so a
-  // banked aircraft actually turns.
-  const betaRad = Math.asin(THREE.MathUtils.clamp(v / airspeed, -1, 1));
-  const rRate = (-sim.rudderInput * 1.2 + sideslipYawAccel(betaRad) - sim.angVel.y * spec.yawDamping) * (airspeed / 120);
-
-  sim.angVel.x += qRate * dt;
-  sim.angVel.y += rRate * dt;
-  sim.angVel.z += pRate * dt;
-
-  if (Math.abs(sim.aileronInput) < 0.05 && !sim.apMaster) {
-    sim.angVel.z -= sim.angVel.z * 1.5 * dt;
-  }
-
-  // Integrate Orientation Quaternion
-  const deltaRot = _q1.set(
-    sim.angVel.x * dt * 0.5,
-    sim.angVel.y * dt * 0.5,
-    sim.angVel.z * dt * 0.5,
-    1.0
-  ).normalize();
-  sim.quat.multiply(deltaRot).normalize();
-
-  // On the ground the gear and tail limit pitch: no rotating past the tailstrike angle.
-  if (sim.onGround) {
-    _euler.setFromQuaternion(sim.quat, 'YXZ');
-    const maxP = (spec.maxGroundPitchDeg ?? 15) * DEG_TO_RAD;
-    if (_euler.x > maxP || _euler.x < -0.05) {
-      _euler.x = THREE.MathUtils.clamp(_euler.x, -0.05, maxP);
-      sim.quat.setFromEuler(_euler);
-      if ((_euler.x >= maxP && sim.angVel.x > 0) || (_euler.x <= -0.05 && sim.angVel.x < 0)) sim.angVel.x = 0;
-    }
-  }
+  // Forces, moments and integration (flightModel.js, pure and flight-tested headless)
+  stepFlightModel(sim, spec, dt);
 
   // Telemetry derivatives
   sim.aglFt = Math.max(0, Math.round((sim.pos.y - sim.groundY) * M_TO_FT));
   sim.mslFt = Math.round(yToFtMsl(sim.pos.y));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
-  sim.gLoad = 1.0 + (accel.y / GRAVITY);
+  sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
 
   // Warning alerts
   const stallWarning = isStallWarning(sim.iasKts, spec.stallCleanKts, sim.onGround);
@@ -1438,7 +1318,7 @@ function renderHud() {
 function drawGateVerdict(cx, cy) {
   const g = sim.gate;
   const y = cy + 92;
-  const lines = g.stable ? 0 : sim.gateLines.length;
+  const lines = Math.ceil(g.failing.length / 3);
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
   hudCtx.fillRect(cx - 120, y - 16, 240, 24 + lines * 16);
