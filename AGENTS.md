@@ -11,7 +11,12 @@ the Google tiles key is configured), real airports at their real elevations, rea
 overhead, and a 6-DOF flight model that feels believable. It opens in a second, needs no
 install or account, and runs on a laptop, a phone, or with a gamepad.
 
-It must be **approachable for a casual player and rewarding for a pilot**. A first-timer
+It must be **approachable for a kid and rewarding for a pilot**, and the people it has
+to impress are holding an iPhone, an iPad or an Android phone. Ramp-up is a dial, not a
+fork: assist levels take a first-timer from a forgiving, coached flight to the raw
+airplane, over the same physics. And it must be **accurate in a way anyone can check**:
+the flight model is flown headless against published performance data on every change,
+and the gaps are written down, not hidden. A first-timer
 should be on a stabilized final to DFW within 30 seconds and land it, guided by a coach,
 the PAPI and the velocity vector, then see a grade that makes them want one more go.
 Someone who flies for real should recognise the place and the procedures: runway
@@ -19,6 +24,13 @@ thresholds and headings you can check against a chart, a 3° glidepath, believab
 V-speeds, today's METAR pushing the aircraft around, GPWS callouts with the real cadence.
 
 ### The 10x pillars (north star; the Scout steers here, in roughly this order)
+
+0. **Physics you can check.** Every flight-model claim has a flight test card in
+   `tests/flight/` against a cited source (POH, manufacturer airport-planning data, FAA
+   and NASA references). Known gaps are `it.fails` cards with a ticket; closing one is
+   progress you can measure. Every object that moves in the world (aircraft, gear,
+   control surfaces, ground vehicles, traffic, windsocks) moves by its own physics, not
+   by keyframes.
 
 1. **Flyable on any device.** Touch (on-screen stick + throttle, multi-touch, ≥44px
    targets, no page scroll), gamepad, keyboard, mouse. The HUD never overlaps itself at
@@ -38,6 +50,16 @@ V-speeds, today's METAR pushing the aircraft around, GPWS callouts with the real
 5. **A world that looks right.** Sun position from the actual time in Dallas (day, dusk,
    night with runway and city lights), better sky and haze, sharper imagery near the
    aircraft, and a current three.js underneath.
+
+**Package the best; don't rebuild what exists.** Prefer a maintained, permissively
+licensed open-source library or asset over writing our own (flight dynamics, rigid-body
+physics, atmosphere, glTF models, compression). Bundle it from npm or vendor it (never a
+runtime CDN), lazy-load anything heavy after boot (WASM, models, textures), avoid
+multithreaded WASM builds (COOP/COEP would break the cross-origin imagery), and check
+the license first: MIT/BSD/Apache/Zlib/CC0/CC-BY are fine; LGPL only as a separately
+loaded, replaceable module with its notice; GPL code or data needs the operator (open a
+`proposal/` PR). Credit every third-party asset in `public/CREDITS.md` and on screen
+where its license asks.
 
 Prefer depth over breadth: making the DFW world truer and the flying feel better beats
 adding aircraft or modes. Never claim something is "live" or "real" unless it is.
@@ -199,13 +221,18 @@ photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `d
 
 ## 6 · The agents
 
-Three cloud routines run this repo with no human in the loop (see `agents/prompts/`):
+Four cloud routines run this repo with no human in the loop (see `agents/prompts/`):
 
 | Agent | Job | Branch prefix |
 |---|---|---|
 | Scout | Plays the build, researches, grooms and refills `docs/backlog/` | `scout/` |
 | Builder | Ships the top ready ticket test-first, merges on green, verifies live | `build/`, `fix/` |
 | Keeper | Dependencies, perf budget, refactors, prompt tuning, red-main backstop | `keep/` |
+| Validator | Independently checks merged work: flight test cards vs published data, iPhone/iPad/Android device runs, a first-timer and a pilot play-through; files gaps, reverts regressions | `fix/`, `scout/` |
+
+Nobody validates their own work. Before merge the Builder runs a three-reviewer
+validation panel (flight physics, device + performance, first-timer); after merge the
+Validator measures again from the outside.
 
 The operator controls them via `agents/control.json` (pause, per-agent enable, focus,
 caps) and their schedules at https://claude.ai/code/routines (frequency).
@@ -214,7 +241,9 @@ caps) and their schedules at https://claude.ai/code/routines (frequency).
 
 - [ ] `npm run check` green locally and in CI
 - [ ] Test added that fails without the change
-- [ ] Screenshot checked at 1280x720 and 390x844
+- [ ] Flight-model changes: `tests/flight` green, a card for the new behaviour, no card regressed
+- [ ] Validation panel run (Builder § 7); findings fixed and listed in the PR body
+- [ ] Screenshot checked at 1280x720, 390x844, 844x390 and 820x1180 (iPad)
 - [ ] No new runtime hosts, no new console errors, frame budget held
 - [ ] Ticket marked `shipped` with PR number; `docs/CHANGELOG.md` line added
 - [ ] Lesson appended to `docs/LESSONS.md` if one was learned
