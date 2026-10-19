@@ -24,6 +24,23 @@ for (const vp of SIZES) {
   test.describe(`phone landscape ${vp.width}x${vp.height}`, () => {
     test.use({ viewport: vp, hasTouch: true, isMobile: true });
 
+    test('the mission picker keeps ENTER COCKPIT on screen and scrolls its cards (0029)', async ({ page }) => {
+      await stubTiles(page);
+      await page.goto(BASE);
+      const box = await page.locator('#btnStartFlight').boundingBox();
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(vp.height);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      const sc = await page.locator('#modalScroll').evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
+      expect(sc.ch).toBeGreaterThanOrEqual(80);
+      expect(sc.sh).toBeGreaterThan(sc.ch);
+      const last = page.locator('#missionList .btnMission').last();
+      await last.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
+      await last.tap();
+      await expect(last).toHaveClass(/active/);
+    });
+
     test('HUD and controls never overlap each other or the horizon (0025)', async ({ page }, info) => {
       const errors = collectErrors(page);
       await startFlight(page);

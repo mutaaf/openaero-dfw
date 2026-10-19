@@ -57,8 +57,8 @@
 
   <!-- Onboarding & Flight Academy Modal -->
   <div id="onboardingModal" role="dialog" aria-modal="true" aria-labelledby="txtModalTitle" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-200">
-    <div id="modalPanel" tabindex="-1" class="outline-none hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-slate-200 border-sky-400/40 shadow-2xl">
-      <div class="flex items-center justify-between border-b border-slate-700/80 pb-3">
+    <div id="modalPanel" tabindex="-1" class="outline-none hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-2xl p-4 sm:p-6 flex flex-col gap-3 text-slate-200 border-sky-400/40 shadow-2xl">
+      <div class="shrink-0 flex items-center justify-between border-b border-slate-700/80 pb-3">
         <div class="flex items-center gap-2.5">
           <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping" aria-hidden="true"></span>
           <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 -ml-6"></span>
@@ -70,46 +70,20 @@
         <button id="btnCloseModal" aria-label="Close (Esc)" class="hud-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white">✕ CLOSE</button>
       </div>
 
+      <!-- Everything between the title and ENTER COCKPIT scrolls inside the modal; the button stays pinned -->
+      <div id="modalScroll" class="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-1 px-1 flex flex-col gap-4">
       <p class="text-xs text-slate-300 leading-relaxed">
         Captain, welcome to the Dallas-Fort Worth airspace! Powered by <b class="text-sky-300">real high-resolution satellite imagery</b> covering DFW, Love Field, and Downtown Dallas, combined with a <b>full 6-Degree-of-Freedom (6-DOF) flight dynamics model</b> with genuine aerodynamic lift/drag polars, ground effect float, and FAA runway elevations.
       </p>
 
-      <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">Quick-Select Flight Mission:</div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        <button data-scenario="kdfw_35c_final" class="btnMission hud-btn active p-3 rounded-xl text-left flex flex-col gap-1 border-emerald-500/50">
-          <div class="flex items-center justify-between font-bold text-emerald-300">
-            <span>✈ 1. Stabilized Landing (KDFW 35C)</span>
-            <span class="text-[9px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-300">RECOMMENDED</span>
-          </div>
-          <div class="text-[10px] text-slate-400">4 NM out lined up on Runway 35C. Follow the green HUD velocity vector and 4-light PAPI!</div>
-        </button>
-
-        <button data-scenario="kdfw_35c_flare" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
-          <div class="font-bold text-amber-300">🎯 Flare Challenge (KDFW 35C)</div>
-          <div class="text-[10px] text-slate-400">One mile out, 300 ft up. Grease it: every landing is graded and your best is saved.</div>
-        </button>
-
-        <button data-scenario="kdfw_takeoff" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
-          <div class="font-bold text-sky-300">🛫 2. Takeoff Roll (KDFW 35C)</div>
-          <div class="text-[10px] text-slate-400">Hold brakes, spool engines to 100% TO/GA, release brakes and rotate at 142 KTS.</div>
-        </button>
-
-        <button data-scenario="downtown_skyline" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
-          <div class="font-bold text-amber-300">🏙 3. Downtown Dallas Skyline</div>
-          <div class="text-[10px] text-slate-400">Fly past Bank of America Plaza, Reunion Tower, and through the JPMorgan Chase Tower sky window.</div>
-        </button>
-
-        <button id="btnCrosswindToday" data-scenario="crosswind_today" class="btnMission hud-btn hidden p-3 rounded-xl text-left flex-col gap-1 border-amber-400/50">
-          <div class="flex items-center justify-between font-bold text-amber-300">
+      <!-- Mission picker (ticket 0029): generated from src/missions.js by buildMissionPicker() -->
+      <div id="missionList" class="flex flex-col gap-3 text-xs">
+        <button id="btnCrosswindToday" data-scenario="crosswind_today" class="btnMission hud-btn hidden p-3 min-h-[44px] rounded-xl text-left flex-col gap-1 border-amber-400/50">
+          <div class="flex items-center justify-between gap-2 font-bold text-amber-300">
             <span>🌬 Today's Crosswind Challenge</span>
-            <span class="text-[9px] bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-300">LIVE METAR</span>
+            <span class="flex items-center gap-1.5"><span class="missionBest text-[10px] font-mono text-emerald-300"></span><span class="text-[9px] bg-amber-500/20 px-1.5 py-0.5 rounded text-amber-300">LIVE METAR</span></span>
           </div>
           <div class="text-[10px] text-slate-400"><span id="txtCrosswindToday" class="text-slate-200"></span>. The strongest real crosswind in DFW right now: crab on final, de-crab in the flare.</div>
-        </button>
-
-        <button data-scenario="kdal_31r_final" class="btnMission hud-btn p-3 rounded-xl text-left flex flex-col gap-1">
-          <div class="font-bold text-purple-300">🛬 4. Love Field Approach (KDAL 31R)</div>
-          <div class="text-[10px] text-slate-400">Crosswind approach over Dallas urban centers into Runway 31R.</div>
         </button>
       </div>
 
@@ -146,22 +120,25 @@
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
-        <div class="flex flex-col gap-1.5">
-          <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-            <input id="chkAutoSound" type="checkbox" checked class="w-4 h-4 rounded accent-sky-400" />
-            <span>Enable Web Audio Turbines & Altitude Chirps</span>
-          </label>
-          <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-            <input id="chkCoach" type="checkbox" checked class="w-4 h-4 rounded accent-amber-300" />
-            <span>Landing coach on the 35C final</span>
-          </label>
-          <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
-            <input id="chkTutor" type="checkbox" checked class="w-4 h-4 rounded accent-amber-300" />
-            <span>Autopilot explains what it's doing</span>
-          </label>
-        </div>
-        <button id="btnStartFlight" class="hud-btn active px-6 py-2.5 min-h-[44px] rounded-xl text-xs font-bold font-mono text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
+      <div class="flex flex-col gap-1.5">
+        <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+          <input id="chkAutoSound" type="checkbox" checked class="w-4 h-4 rounded accent-sky-400" />
+          <span>Enable Web Audio Turbines & Altitude Chirps</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+          <input id="chkCoach" type="checkbox" checked class="w-4 h-4 rounded accent-amber-300" />
+          <span>Landing coach on the 35C final</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
+          <input id="chkTutor" type="checkbox" checked class="w-4 h-4 rounded accent-amber-300" />
+          <span>Autopilot explains what it's doing</span>
+        </label>
+      </div>
+      </div>
+
+      <div class="shrink-0 flex items-center justify-between gap-3 border-t border-slate-700/80 pt-3">
+        <div class="min-w-0 truncate text-[11px] font-mono text-slate-400">Selected: <b id="txtPickedMission" class="text-slate-100"></b></div>
+        <button id="btnStartFlight" class="shrink-0 whitespace-nowrap hud-btn active px-6 py-2.5 min-h-[44px] rounded-xl text-xs font-bold font-mono text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
           ENTER COCKPIT ✈
         </button>
       </div>

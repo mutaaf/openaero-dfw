@@ -74,6 +74,17 @@ export function loadBest(storage) {
   }
 }
 
+// Every stored personal-best grade as { missionKey: grade } (ticket 0029: the mission picker).
+// Read-only; storage that throws or holds junk reads as no bests.
+export function bestGrades(storage) {
+  const out = {};
+  if (!storage) return out;
+  for (const [key, b] of Object.entries(loadBest(storage).missions)) {
+    if (typeof b?.grade === 'string') out[key] = b.grade;
+  }
+  return out;
+}
+
 // Records a result if it beats the stored best. Returns { isNewBest, best, previous }.
 export function recordBest(storage, missionKey, result, now = Date.now()) {
   const data = loadBest(storage);

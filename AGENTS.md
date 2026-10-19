@@ -95,7 +95,8 @@ src/constants.js    units, KDFW origin, field elevation
 src/aircraft.js     aircraft database (mass, wing, lift/drag, thrust, V-speeds, damping)
 src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
                     thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns
-src/missions.js     mission catalogue (approaches by runway end, tours by spawn) + the dynamic
+src/missions.js     mission catalogue (approaches by runway end, tours by spawn, a blurb each;
+                    groupMissions() builds the start-screen picker, ticket 0029) + the dynamic
                     crosswind_today mission (weather.js pickCrosswindRunway, live METARs only)
 src/landmarks.js    Dallas landmarks at true lat/lon (cited) + real heights, via geo.js;
                     DOWNTOWN_DALLAS (map dot, skyline tour), ATT_STADIUM
@@ -197,7 +198,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 195 kB gzipped at boot (2026-10-19: 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
+Budgets: JS ≤ 195 kB gzipped at boot (2026-10-19: 194.5 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
 from 180 for photoreal: three is one module, so the core classes the lazy glTF/3D-tiles
 chunk needs are hoisted into the entry chunk; 3d-tiles-renderer + Draco load only when
 photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.

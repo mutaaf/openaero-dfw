@@ -42,6 +42,31 @@ test('phone: the start button is reachable without scrolling the page', async ({
   expect(box.height).toBeGreaterThanOrEqual(44);
 });
 
+test('phone: ENTER COCKPIT is pinned on screen and the mission cards scroll inside the modal (0029)', async ({ page }) => {
+  await stubTiles(page);
+  await page.goto(BASE);
+  const start = page.locator('#btnStartFlight');
+  // No scrollIntoView: the button must already be inside the viewport.
+  const box = await start.boundingBox();
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(844);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  const scroller = await page.locator('#modalScroll').evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
+  expect(scroller.sh).toBeGreaterThan(scroller.ch);
+  // Scroll to the last card: the button stays put and the page never scrolls.
+  const last = page.locator('#missionList .btnMission').last();
+  await last.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await start.boundingBox()).toEqual(box);
+  const lb = await last.boundingBox();
+  expect(lb.height).toBeGreaterThanOrEqual(44);
+  await last.tap();
+  await expect(last).toHaveClass(/active/);
+  await page.screenshot({ path: test.info().outputPath('picker-390.png') });
+  await start.tap();
+  await expect(page.locator('#onboardingModal')).toBeHidden();
+});
+
 test('phone: two thumbs fly — stick deflects the surfaces while the throttle moves', async ({ page }) => {
   await startFlight(page);
   const stick = await page.locator('#touchStick').boundingBox();
