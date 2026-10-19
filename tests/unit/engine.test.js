@@ -16,6 +16,17 @@ describe('piston prop', () => {
     const hot = airAt(0, 25);
     expect(pistonPowerLapse(hot.pressurePa, hot.tempK)).toBeGreaterThan(0.95);
   });
+  it('a fixed-pitch prop runs out of thrust in a dive instead of holding it past the table', () => {
+    const at80 = engineThrust(DB.c172, 1, 80, sl, 0.24, 0);
+    expect(engineThrust(DB.c172, 1, 100, sl, 0.3, 0)).toBeLessThan(at80 * 0.6);
+    expect(engineThrust(DB.c172, 1, 130, sl, 0.38, 0)).toBeCloseTo(0, 6);
+  });
+  it('piston power answers the throttle almost at once, even from idle', () => {
+    let n = 0, t = 0;
+    const dt = 1 / 60;
+    while (n < 0.95 && t < 5) { n = spoolEngine(DB.c172, n, 1, dt); t += dt; }
+    expect(t).toBeLessThan(1);
+  });
   it('at idle the windmilling prop is drag, growing with dynamic pressure', () => {
     expect(engineThrust(DB.c172, 0, 35, sl, 0.1, 750)).toBeLessThan(0);
     expect(engineThrust(DB.c172, 0, 50, sl, 0.15, 1500)).toBeLessThan(engineThrust(DB.c172, 0, 35, sl, 0.1, 750));

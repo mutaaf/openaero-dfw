@@ -50,9 +50,10 @@ export function inducedDragK(spec) {
 // Total drag coefficient: parasite + gear + flaps + induced. Ground effect weakens the
 // wingtip vortices, so it scales only the induced term (McCormick), not skin friction.
 // Flap drag per notch: a per-airframe table when the airframe has one, else 0.012 a notch.
+// Fixed gear (spec.fixedGear) is always down.
 export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect) {
   const flapCd = spec.flapCd ? spec.flapCd[flapsIndex] ?? 0 : flapsIndex * 0.012;
-  return spec.cd0 + (gearDown ? 0.018 : 0) + flapCd + inducedDragK(spec) * cl * cl * groundEffect;
+  return spec.cd0 + (gearDown || spec.fixedGear ? 0.018 : 0) + flapCd + inducedDragK(spec) * cl * cl * groundEffect;
 }
 
 // Heading error in degrees, wrapped to [-180, 180].

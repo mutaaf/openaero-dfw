@@ -73,6 +73,10 @@ describe('dragCoefficient', () => {
     const f16 = { ...b738, flapCd: undefined }; // no table: 0.012 per notch
     expect(dragCoefficient(f16, 0.5, false, 3, 1) - dragCoefficient(f16, 0.5, false, 0, 1)).toBeCloseTo(0.036, 10);
   });
+  it('fixed gear is always down: the C172 cannot shed its gear drag', () => {
+    const c172 = AIRCRAFT_DATABASE.c172;
+    expect(dragCoefficient(c172, 0.3, false, 0, 1)).toBeCloseTo(dragCoefficient(c172, 0.3, true, 0, 1), 10);
+  });
   it('includes induced drag k·CL²', () => {
     const k = inducedDragK(b738);
     expect(dragCoefficient(b738, 1, false, 0, 1)).toBeCloseTo(b738.cd0 + k, 10);

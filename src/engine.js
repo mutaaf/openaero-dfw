@@ -48,7 +48,7 @@ export function spoolEngine(spec, n, throttle, dt) {
   const e = spec.engine;
   if (!e) return throttle;
   // Jets accelerate slowly from idle (τ grows as n falls), decelerate at the base rate.
-  const tau = throttle > n ? e.spoolTau * (1 + 2 * (1 - n) * (1 - n)) : e.spoolTau;
+  const tau = throttle > n && e.type === 'turbofan' ? e.spoolTau * (1 + 2 * (1 - n) * (1 - n)) : e.spoolTau;
   return n + (throttle - n) * Math.min(1, dt / tau);
 }
 

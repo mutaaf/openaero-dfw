@@ -50,6 +50,7 @@ export const AIRCRAFT_DATABASE = {
     // Airframe CD0 0.018 + fixed gear 0.018 (aero.js) = 0.036: the drag at which 1680 N of
     // thrust (~82% prop efficiency on 134 kW) gives the POH's 126 KTAS at sea level.
     cd0: 0.018,
+    fixedGear: true,
     cl0: 0.35,
     clAlpha: 4.8,
     clMaxFlaps: 1.95,
@@ -63,8 +64,9 @@ export const AIRCRAFT_DATABASE = {
     // C172 (211 kg, Atlantis Press static-thrust study); 38 m/s: what the POH's 730 fpm at
     // Vy needs on this drag polar; 65 m/s: what 126 KTAS max speed needs. Flat at first:
     // the fixed-pitch prop unloads and gains RPM (static ~2300 rpm) as it speeds up.
+    // 124 m/s: the 65→80 slope carried on to zero (a diving fixed-pitch prop unloads).
     // windmillCd: the idle prop's drag, from the POH's ~9:1 glide at 68 KIAS.
-    engine: { type: 'piston-prop', thrustTableN: [[0, 2070], [20, 2100], [38, 2105], [50, 1960], [65, 1680], [80, 1250]], windmillCd: 0.0188, spoolTau: 0.3 },
+    engine: { type: 'piston-prop', thrustTableN: [[0, 2070], [20, 2100], [38, 2105], [50, 1960], [65, 1680], [80, 1250], [124, 0]], windmillCd: 0.0188, spoolTau: 0.3 },
     vrefKts: 62,
     vrKts: 55,
     stallCleanKts: 48,

@@ -1469,7 +1469,7 @@ function loadScenario(key) {
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), yaw);
     sim.throttle = mission.throttle;
     sim.flapsIndex = 0;
-    sim.gearDown = false;
+    sim.gearDown = !!sim.spec.fixedGear;
     sim.onGround = false;
     sim.activeEnd = null;
   }
@@ -1701,6 +1701,7 @@ document.querySelectorAll('.btnMission').forEach(btn => {
 document.getElementById('selAircraft').addEventListener('change', e => {
   sim.aircraftKey = e.target.value;
   sim.spec = AIRCRAFT_DATABASE[sim.aircraftKey];
+  if (sim.spec.fixedGear) sim.gearDown = true;
   document.getElementById('txtAircraftTitle').textContent = sim.spec.name;
   buildAircraft(sim.aircraftKey);
 });
@@ -1774,7 +1775,7 @@ document.getElementById('btnApApr').addEventListener('click', () => {
 
 // Controls Surfaces
 document.getElementById('btnGear').addEventListener('click', () => {
-  if (!sim.onGround) sim.gearDown = !sim.gearDown;
+  if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown;
 });
 document.getElementById('btnFlaps').addEventListener('click', () => {
   sim.flapsIndex = (sim.flapsIndex + 1) % sim.flapAngles.length;
@@ -1925,7 +1926,7 @@ window.addEventListener('keydown', e => {
   keys[e.code] = true;
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
-  if (e.code === 'KeyG') { if (!sim.onGround) sim.gearDown = !sim.gearDown; }
+  if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
   else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % sim.flapAngles.length; }
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (e.code === 'KeyC') { document.getElementById('btnCamera').click(); }
