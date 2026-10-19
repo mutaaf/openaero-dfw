@@ -4,16 +4,11 @@
 // Feature-detected and best-effort: unsupported, rejected or system-released locks are
 // silent (no console output); a rejected request is retried only when flying starts again.
 
-// Flying = in the cockpit, not paused, the tab visible and no results card up.
-// Positional booleans: it runs every frame, so no options object is allocated.
-export function wantWakeLock(paused, hidden, modalOpen, resultsOpen) {
-  return !paused && !hidden && !modalOpen && !resultsOpen;
-}
-
+// Wanted = flying: in the cockpit, not paused, the tab visible, no results card up.
 export function createWakeLock(nav = typeof navigator !== 'undefined' ? navigator : undefined) {
   const api = typeof nav?.wakeLock?.request === 'function' ? nav.wakeLock : null;
   const lock = { held: false, sync };
-  let sentinel = null, wanted = false, pending = false, armed = true;
+  let sentinel = null, wanted = false, pending = false, armed = true, rearmed = false;
   const drop = (s) => s.release().catch(() => {}); // a second release just resolves
 
   function request() {
@@ -24,12 +19,13 @@ export function createWakeLock(nav = typeof navigator !== 'undefined' ? navigato
       if (!wanted) return drop(s);
       sentinel = s;
       lock.held = true;
-      // The system lets go on its own (tab hidden, battery saver): allow one fresh request.
+      // The system lets go on its own (tab hidden, battery saver): one fresh request per
+      // flying stretch, so a device that revokes at once can't loop request/release.
       s.onrelease = () => {
         if (sentinel !== s) return;
         sentinel = null;
-        armed = true;
         lock.held = false;
+        if (!rearmed) armed = rearmed = true;
       };
     }, () => { pending = false; });
   }
@@ -38,7 +34,7 @@ export function createWakeLock(nav = typeof navigator !== 'undefined' ? navigato
     if (!api) return;
     if (want !== wanted) {
       wanted = want;
-      if (want) armed = true;
+      if (want) { armed = true; rearmed = false; }
       else if (sentinel) {
         const s = sentinel;
         sentinel = null;

@@ -124,6 +124,28 @@ test.describe('hidden tab and wake lock', () => {
     expect((await debug(page)).paused).toBe(false);
   });
 
+  test('closing the start screen with ✕ (not ENTER COCKPIT) still pauses on hide', async ({ page }) => {
+    await page.goto(BASE);
+    await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+    await page.locator('#btnCloseModal').click();
+    await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
+    await setHidden(page, true);
+    expect((await debug(page)).paused).toBe(true);
+  });
+
+  test('on a phone, Resume closes the menu sheet and the menu button is labelled paused', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await fly(page);
+    await setHidden(page, true);
+    await setHidden(page, false);
+    await expect(page.locator('#btnMenu')).toHaveAttribute('aria-label', 'Menu, paused');
+    await page.locator('#btnMenu').click();
+    await page.locator('#btnPause').click();
+    expect((await debug(page)).paused).toBe(false);
+    await expect(page.locator('#btnMenu')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#btnMenu')).toHaveAttribute('aria-label', 'Menu');
+  });
+
   test('mid-flight behind the Missions modal, hiding still pauses and silences', async ({ page }) => {
     await fly(page);
     await expect.poll(async () => (await debug(page)).audio).toBe('running');

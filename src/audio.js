@@ -87,7 +87,7 @@ export function createAudio(sim, onStateChange) {
   // Speak a callout. Altitude callouts interrupt a stale one (they must be on time);
   // follow-ups like "retard" queue behind.
   function say(text, { interrupt = true } = {}) {
-    if (!audioCtx || !sim.audioEnabled) return false;
+    if (!audioCtx || !sim.audioEnabled || sim.paused) return false;
     if (!synth || typeof SpeechSynthesisUtterance === 'undefined') return false;
     try {
       if (interrupt && synth.cancel) synth.cancel();

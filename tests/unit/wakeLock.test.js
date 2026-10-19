@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wantWakeLock, createWakeLock } from '../../src/wakeLock.js';
+import { createWakeLock } from '../../src/wakeLock.js';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -26,17 +26,6 @@ function fakeNav({ reject = false, throws = false } = {}) {
   };
   return { nav: { wakeLock }, log };
 }
-
-describe('wantWakeLock', () => {
-  it('is held only while flying: not paused, visible, no modal, no results card', () => {
-    expect(wantWakeLock(false, false, false, false)).toBe(true);
-    for (let i = 0; i < 4; i++) {
-      const args = [false, false, false, false];
-      args[i] = true; // paused, hidden, modal open, results open
-      expect(wantWakeLock(...args)).toBe(false);
-    }
-  });
-});
 
 describe('createWakeLock', () => {
   it('requests once when flying starts and releases when it stops', async () => {
@@ -112,5 +101,14 @@ describe('createWakeLock', () => {
     await flush();
     expect(log.requests).toBe(2);
     expect(wl.held).toBe(true);
+    // A device that keeps revoking it gets no loop: no third request this stretch...
+    log.sentinels[1].systemRelease();
+    for (let i = 0; i < 10; i++) { wl.sync(true); await flush(); }
+    expect(log.requests).toBe(2);
+    // ...but the next time flying starts it tries again.
+    wl.sync(false);
+    wl.sync(true);
+    await flush();
+    expect(log.requests).toBe(3);
   });
 });
