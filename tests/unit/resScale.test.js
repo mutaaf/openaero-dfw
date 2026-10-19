@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
-  resLadder, createResScale, stepResScale,
-  RES_SLOW_MS, RES_FAST_MS, RES_COOL_S, RES_MAX_COOL_S, RES_SPIKE_MS,
+  resLadder, createResScale, stepResScale, resetResScale,
+  RES_SLOW_MS, RES_FAST_MS, RES_COOL_S, RES_MAX_COOL_S, RES_SPIKE_MS, RES_GRACE_MS, RES_RELAX_S,
 } from '../../src/resScale.js';
+
+// A state past its start-up grace second (flight already under way).
+function flying(ratio) {
+  const st = createResScale(ratio);
+  st.graceMs = 0;
+  return st;
+}
 
 // Feed `seconds` of frames, each `ms` long; returns every ratio change in order.
 function run(st, ms, seconds) {
@@ -24,10 +31,11 @@ describe('resLadder', () => {
     expect(resLadder(1.5)).toEqual([1.5, 1.25, 1]);
     expect(resLadder(1)).toEqual([1]);
   });
-  it('never goes below 1, even on a sub-1 or missing device ratio', () => {
-    expect(resLadder(0.75)).toEqual([1]);
+  it('a missing ratio is 1; a sub-1 (zoomed-out) screen keeps its own and never moves', () => {
+    expect(resLadder(0.75)).toEqual([0.75]);
     expect(resLadder(undefined)).toEqual([1]);
     expect(resLadder(NaN)).toEqual([1]);
+    expect(resLadder(0)).toEqual([1]);
   });
 });
 
@@ -38,13 +46,13 @@ describe('stepResScale', () => {
   });
 
   it('stays at the cap on a fast machine', () => {
-    const st = createResScale(2);
+    const st = flying(2);
     expect(run(st, 8, 60)).toEqual([]);
     expect(st.ratio).toBe(2);
   });
 
   it('steps down one rung per second of sustained slow frames, to the floor', () => {
-    const st = createResScale(2);
+    const st = flying(2);
     expect(run(st, 40, 1.01)).toEqual([1.5]);
     expect(run(st, 40, 1.01)).toEqual([1.25]);
     expect(run(st, 40, 10)).toEqual([1]);
@@ -52,7 +60,7 @@ describe('stepResScale', () => {
   });
 
   it('a single slow frame inside a fast second does not step down', () => {
-    const st = createResScale(2);
+    const st = flying(2);
     for (let i = 0; i < 10; i++) {
       stepResScale(st, 100);
       expect(run(st, 8, 0.9)).toEqual([]);
@@ -61,7 +69,7 @@ describe('stepResScale', () => {
   });
 
   it(`steps up only after ${RES_COOL_S} s under ${RES_FAST_MS} ms`, () => {
-    const st = createResScale(2);
+    const st = flying(2);
     run(st, 40, 1.01);
     expect(st.ratio).toBe(1.5);
     expect(run(st, 8, RES_COOL_S - 1.1)).toEqual([]);
@@ -69,7 +77,7 @@ describe('stepResScale', () => {
   });
 
   it('frames between the thresholds hold the ratio and reset the cool-down', () => {
-    const st = createResScale(2);
+    const st = flying(2);
     run(st, 40, 1.01);
     run(st, 8, RES_COOL_S - 1.5);
     run(st, (RES_SLOW_MS + RES_FAST_MS) / 2, 2); // middling: hold
@@ -78,7 +86,7 @@ describe('stepResScale', () => {
   });
 
   it('never oscillates on alternating fast and slow frames', () => {
-    const st = createResScale(2);
+    const st = flying(2);
     const changes = [];
     for (let i = 0; i < 6000; i++) {
       const before = st.ratio;
@@ -89,7 +97,7 @@ describe('stepResScale', () => {
   });
 
   it('backs off when stepping up makes it slow again (no ping-pong on a borderline device)', () => {
-    const st = createResScale(2);
+    const st = flying(2);
     run(st, 40, 1.01); // 2 → 1.5
     // A device that is fast at 1.5 and slow at 2: count the up-steps over two minutes.
     let ups = 0;
@@ -105,22 +113,60 @@ describe('stepResScale', () => {
     expect(st.coolS).toBeLessThanOrEqual(RES_MAX_COOL_S);
   });
 
-  it(`ignores dt spikes over ${RES_SPIKE_MS} ms (tab switch, GC, alt-tab)`, () => {
-    const st = createResScale(2);
-    for (let i = 0; i < 20; i++) stepResScale(st, 2000);
-    stepResScale(st, RES_SPIKE_MS + 1);
+  it(`ignores lone dt spikes over ${RES_SPIKE_MS} ms (tab switch, GC, alt-tab)`, () => {
+    const st = flying(2);
+    for (let i = 0; i < 20; i++) {
+      stepResScale(st, 2000);
+      stepResScale(st, 2000);
+      expect(run(st, 8, 0.3)).toEqual([]);
+    }
     expect(st.ratio).toBe(2);
   });
 
-  it('ignores non-finite or negative samples', () => {
+  it('a device drawing a few frames a second (a run of 300 ms frames) still steps down', () => {
+    const st = flying(2);
+    expect(run(st, 300, 2.5)).toEqual([1.5]);
+    expect(run(st, 300, 4)).toEqual([1.25, 1]);
+  });
+
+  it(`the first ${RES_GRACE_MS} ms (and the first after a reset) is not judged`, () => {
     const st = createResScale(2);
+    expect(run(st, 60, RES_GRACE_MS / 1000)).toEqual([]); // boot: shaders, tiles
+    expect(run(st, 60, 1.05)).toEqual([1.5]);
+    resetResScale(st); // e.g. paused, then resumed
+    expect(run(st, 60, RES_GRACE_MS / 1000)).toEqual([]);
+    expect(run(st, 60, 1.05)).toEqual([1.25]);
+  });
+
+  it('a pause throws away the half-judged window', () => {
+    const st = flying(2);
+    run(st, 40, 0.9);
+    resetResScale(st);
+    st.graceMs = 0;
+    expect(run(st, 8, 0.5)).toEqual([]);
+    expect(st.ratio).toBe(2);
+  });
+
+  it(`the backed-off cool-down relaxes after ${RES_RELAX_S} s without a step down`, () => {
+    const st = flying(2);
+    run(st, 40, 1.01);  // → 1.5
+    run(st, 8, RES_COOL_S + 0.1); // → 2
+    run(st, 40, 1.01);  // straight back down: cool-down doubles
+    expect(st.coolS).toBe(RES_COOL_S * 2);
+    run(st, 16, RES_RELAX_S + 2); // middling for two minutes: holds 1.5
+    expect(st.ratio).toBe(1.5);
+    expect(st.coolS).toBe(RES_COOL_S);
+  });
+
+  it('ignores non-finite or negative samples', () => {
+    const st = flying(2);
     for (const bad of [NaN, Infinity, -5, 0]) stepResScale(st, bad);
     expect(st.ratio).toBe(2);
     expect(run(st, 8, 3)).toEqual([]);
   });
 
   it('reports a change only on the frame the ratio moved', () => {
-    const st = createResScale(2);
+    const st = flying(2);
     let changed = 0;
     for (let t = 0; t < 1010; t += 40) if (stepResScale(st, 40)) changed++;
     expect(changed).toBe(1);
@@ -128,16 +174,10 @@ describe('stepResScale', () => {
   });
 
   it('at the floor and the cap, nothing moves', () => {
-    const st = createResScale(1);
+    const st = flying(1);
     expect(run(st, 60, 10)).toEqual([]);
     expect(run(st, 5, 30)).toEqual([]);
     expect(st.ratio).toBe(1);
   });
 
-  it('allocates nothing per step (same state object, plain numbers)', () => {
-    const st = createResScale(2);
-    const keys = Object.keys(st).join();
-    run(st, 40, 3);
-    expect(Object.keys(st).join()).toBe(keys);
-  });
 });

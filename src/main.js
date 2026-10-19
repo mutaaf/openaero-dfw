@@ -40,7 +40,7 @@ import { createAudio } from './audio.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
-import { createResScale, stepResScale } from './resScale.js';
+import { createResScale, stepResScale, resetResScale } from './resScale.js';
 
 // --- Simulation State ---
 const sim = {
@@ -140,6 +140,7 @@ let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order
 
 // Render resolution: the device's pixel ratio capped at 2, stepped down on slow frames (0026).
 const resScale = createResScale(window.devicePixelRatio || 1);
+let resCounting = false;
 
 try {
   renderer = new THREE.WebGLRenderer({
@@ -2040,10 +2041,14 @@ function renderLoop(time) {
   const frameMs = time - lastTime;
   const dt = Math.min(frameMs / 1000, MAX_FRAME_S);
   lastTime = time;
-  // Paused or hidden frames are not load; resScale also drops stalls over 250 ms.
-  if (!sim.paused && !document.hidden && stepResScale(resScale, frameMs)) {
-    renderer.setPixelRatio(resScale.ratio); // resizes the drawing buffer, CSS size unchanged
-    photoreal?.resize();
+  // Frames behind the modal, paused or hidden are not load; resScale also drops lone stalls.
+  // (Photoreal tile LOD follows the CSS size, not the pixel ratio: nothing else to resize.)
+  if (sim.paused || document.hidden || modalOpen()) {
+    if (resCounting) resetResScale(resScale);
+    resCounting = false;
+  } else {
+    resCounting = true;
+    if (stepResScale(resScale, frameMs)) renderer.setPixelRatio(resScale.ratio); // drawing buffer only
   }
 
   updateGamepad();

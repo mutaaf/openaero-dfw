@@ -12,11 +12,15 @@ export const RES_WINDOW_MS = 1000; // frames are judged one second at a time
 export const RES_COOL_S = 5;       // seconds of fast frames before stepping up
 export const RES_MAX_COOL_S = 60;
 export const RES_PROBE_S = 3;      // slow again this soon after a step up: back off
-export const RES_SPIKE_MS = 250;   // longer frames are stalls (tab switch, GC), not load
+export const RES_SPIKE_MS = 250;   // a longer frame is a stall (tab switch, GC), not load...
+export const RES_SPIKE_RUN = 3;    // ...unless this many come in a row: then it is load
+export const RES_GRACE_MS = 1000;  // after a reset (flight start, unpause) the first second is loading
+export const RES_RELAX_S = 120;    // this long without stepping down: the cool-down backs off no more
 
-// The rungs this device can use: its own ratio capped at 2, then every lower step, floor 1.
+// The rungs this device can use: its own ratio capped at 2, then every lower step, floor 1
+// (a zoomed-out screen under 1 keeps its own ratio and never moves).
 export function resLadder(deviceRatio) {
-  const top = Math.min(Math.max(Number.isFinite(deviceRatio) ? deviceRatio : 1, 1), RES_STEPS[0]);
+  const top = Math.min(deviceRatio > 0 && Number.isFinite(deviceRatio) ? deviceRatio : 1, RES_STEPS[0]);
   return [top, ...RES_STEPS.filter((r) => r < top)];
 }
 
@@ -31,12 +35,34 @@ export function createResScale(deviceRatio) {
     fastS: 0,          // consecutive fast seconds
     coolS: RES_COOL_S, // fast seconds needed to step up (backs off)
     sinceUpS: Infinity,
+    sinceDownS: 0,
+    longRun: 0,        // consecutive frames over RES_SPIKE_MS
+    graceMs: RES_GRACE_MS,
   };
+}
+
+// Frames stop counting (modal, pause, hidden tab): drop the partial window and let the
+// first second after resuming pass unjudged (shader compiles, tile loads).
+export function resetResScale(st) {
+  st.winMs = 0;
+  st.winN = 0;
+  st.fastS = 0;
+  st.longRun = 0;
+  st.graceMs = RES_GRACE_MS;
 }
 
 // One rendered frame of `dtMs`. Returns true on the frame the ratio changes.
 export function stepResScale(st, dtMs) {
-  if (!(dtMs > 0) || dtMs > RES_SPIKE_MS) return false;
+  if (!(dtMs > 0)) return false;
+  if (dtMs > RES_SPIKE_MS) {
+    // One stall is ignored; a run of them is a device drawing at a few fps: count it.
+    if (++st.longRun < RES_SPIKE_RUN) return false;
+    dtMs = RES_SPIKE_MS;
+  } else st.longRun = 0;
+  if (st.graceMs > 0) {
+    st.graceMs -= dtMs;
+    return false;
+  }
   st.winMs += dtMs;
   st.winN++;
   if (st.winMs < RES_WINDOW_MS) return false;
@@ -46,11 +72,14 @@ export function stepResScale(st, dtMs) {
   st.winMs = 0;
   st.winN = 0;
   st.sinceUpS += windowS;
+  st.sinceDownS += windowS;
+  if (st.sinceDownS >= RES_RELAX_S) st.coolS = RES_COOL_S;
 
   if (avg > RES_SLOW_MS) {
     st.fastS = 0;
     if (st.rung >= st.ladder.length - 1) return false;
     if (st.sinceUpS <= RES_PROBE_S) st.coolS = Math.min(st.coolS * 2, RES_MAX_COOL_S);
+    st.sinceDownS = 0;
     st.ratio = st.ladder[++st.rung];
     return true;
   }
