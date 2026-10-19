@@ -76,6 +76,25 @@
         Captain, welcome to the Dallas-Fort Worth airspace! Powered by <b class="text-sky-300">real high-resolution satellite imagery</b> covering DFW, Love Field, and Downtown Dallas, combined with a <b>full 6-Degree-of-Freedom (6-DOF) flight dynamics model</b> with genuine aerodynamic lift/drag polars, ground effect float, and FAA runway elevations.
       </p>
 
+      <!-- Assist level (ticket 0042): same physics, more or less help; main.js setAssist() -->
+      <div id="assistPicker" role="group" aria-labelledby="txtAssistTitle" class="flex flex-col gap-1.5">
+        <div id="txtAssistTitle" class="text-[11px] font-mono font-bold text-sky-300">WHO'S FLYING?</div>
+        <div class="grid grid-cols-3 gap-2">
+          <button data-assist="kid" aria-pressed="false" class="btnAssist hud-btn min-h-[64px] rounded-xl p-2 flex flex-col items-center justify-center gap-0.5 text-center">
+            <span class="text-2xl leading-none" aria-hidden="true">🧒</span><span class="text-sm font-bold text-slate-100">Kid</span>
+            <span class="text-[11px] leading-tight text-slate-200">Hard to crash; let go on a final and it lands</span>
+          </button>
+          <button data-assist="learner" aria-pressed="false" class="btnAssist hud-btn min-h-[64px] rounded-xl p-2 flex flex-col items-center justify-center gap-0.5 text-center">
+            <span class="text-2xl leading-none" aria-hidden="true">🎓</span><span class="text-sm font-bold text-slate-100">Learner</span>
+            <span class="text-[11px] leading-tight text-slate-200">Won't tip over or stall; you fly the rest</span>
+          </button>
+          <button data-assist="pilot" aria-pressed="false" class="btnAssist hud-btn min-h-[64px] rounded-xl p-2 flex flex-col items-center justify-center gap-0.5 text-center">
+            <span class="text-2xl leading-none" aria-hidden="true">✈️</span><span class="text-sm font-bold text-slate-100">Pilot</span>
+            <span class="text-[11px] leading-tight text-slate-200">The raw airplane, no help</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Mission picker (ticket 0029): generated from src/missions.js by buildMissionPicker() -->
       <div id="missionList" class="flex flex-col gap-3 text-xs">
         <button id="btnCrosswindToday" data-scenario="crosswind_today" class="btnMission hud-btn hidden p-3 min-h-[44px] rounded-xl text-left flex-col gap-1 border-amber-400/50">

@@ -1,12 +1,12 @@
 ---
 id: 0042
 title: Assist levels Kid · Learner · Pilot over the same physics
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-18
-pr:
+pr: 49
 ---
 
 ## Why
@@ -26,11 +26,11 @@ nose-drop, a hard landing bounces and resets instead of crashing, big friendly p
 per level.
 
 ## Acceptance criteria
-- [ ] Unit tests: in Kid, full stick for 10 s never exceeds 30° bank or stalls
-- [ ] e2e: Kid level on the default final, touch only, lands with a grade (no crash)
-- [ ] Pilot level is byte-for-byte today's input path (existing e2e unchanged)
-- [ ] Start-screen picker readable and tappable at 390x844, 844x390, 820x1180
-- [ ] No frame-time regression (e2e perf probe within budget)
+- [x] Unit tests: in Kid, full stick for 10 s never exceeds 30° bank or stalls
+- [x] e2e: Kid level on the default final, touch only, lands with a grade (no crash)
+- [x] Pilot level is byte-for-byte today's input path (existing e2e unchanged)
+- [x] Start-screen picker readable and tappable at 390x844, 844x390, 820x1180
+- [x] No frame-time regression (e2e perf probe within budget)
 
 ## Test plan
 `tests/unit/assists.test.js` (envelope, coordination, auto-throttle); an e2e per level.

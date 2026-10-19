@@ -16,14 +16,17 @@ export const COACH_PROMPTS = {
   flare: 'Flare now: ease back on the stick',
   idle: 'Idle the throttle',
   done: 'Touchdown! Hold the brakes to stop',
+  // Kid level (assists.js flies the power and the flare): one prompt, nothing to contradict it
+  kid: 'Let go of the stick: the plane lines up and lands',
 };
 // Higher rank interrupts at once; guidance about the PAPI shares one rank.
-const RANK = { papi: 1, high: 1, low: 1, sink: 2, flare: 3, idle: 4, done: 5 };
+const RANK = { papi: 1, high: 1, low: 1, kid: 1, sink: 2, flare: 3, idle: 4, done: 5 };
 
 // s: { aglFt, vsiFpm, papiWhite (0..4, null = no runway ahead), throttle (0..1),
-//      onGround, autopilot }
+//      onGround, autopilot, kid (Kid assist level: the airplane flies power and flare) }
 export function coachTarget(s) {
   if (s.onGround || s.autopilot) return null;
+  if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : 'kid';
   if (s.aglFt < 30 && s.throttle > 0.05) return 'idle';
   if (s.aglFt < 50) return 'flare';
   if (s.papiWhite === null || s.papiWhite === undefined) return null;

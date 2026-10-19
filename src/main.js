@@ -32,8 +32,12 @@ import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './t
 import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, stallWarningKts,
-  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT,
+  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg,
 } from './aero.js';
+import {
+  ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
+  autoConfigure, kidTargetKts, kidLocalizerBankDeg, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
+} from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
@@ -109,6 +113,10 @@ const sim = {
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
   stick: { x: 0, y: 0, active: false },
+  mouseStick: { x: 0, y: 0 }, // direct mouse yoke position (M), read by the assists
+
+  // Assist level (assists.js, ticket 0042): 'kid' | 'learner' | 'pilot' (raw)
+  assist: DEFAULT_ASSIST,
 
   // Approach guidance target (airports.js); re-picked twice a second from what you're lined up on
   activeEnd: null,
@@ -701,7 +709,9 @@ function checkStabilizedGate() {
 }
 
 // --- Landing grade ---------------------------------------------------------------
+let softResetAt = null; // Kid soft landing: sim time at which the mission restarts
 function checkTouchdown(dt) {
+  if (softResetAt !== null && sim.simTime >= softResetAt) { softResetAt = null; loadScenario(sim.missionKey); return; }
   if (!sim.onGround) {
     sim.airborneTime += dt;
     if (sim.aglFt > 50) sim.landingGraded = false;
@@ -712,6 +722,7 @@ function checkTouchdown(dt) {
   sim.landingGraded = true;
   sim.airborneTime = 0;
   const end = sim.activeEnd || selectActiveRunway(RUNWAY_ENDS, sim.pos, 0, null);
+  const assist = assistConfig(sim.assist);
   if (!end) return;
   const g = approachGeometry(end, sim.pos);
   const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
@@ -728,6 +739,14 @@ function checkTouchdown(dt) {
     vrefKts: sim.spec.vrefKts,
     driftDeg: sim.missionKey === CROSSWIND_KEY ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : undefined,
   });
+  // Kid: a hard landing bounces and starts the approach again instead of crashing.
+  if (result.grade === 'CRASH' && assist && assist.softLanding) {
+    sim.vel.y = Math.max(sim.vel.y, 2.5);
+    coach.done = true; coach.prompt = null; // no "Touchdown!" over the bounce
+    showToast(`Boing! ${result.reason} Let's try again!`);
+    softResetAt = sim.simTime + 2; // counted in sim time: a pause holds it
+    return;
+  }
   sim.lastLanding = {
     pastThresholdM: -g.distM, crossM: g.crossM, vsFpm: sim.lastAirVsi,
     pitchDeg: _euler.x * RAD_TO_DEG, bankRightDeg: -_euler.z * RAD_TO_DEG,
@@ -736,7 +755,8 @@ function checkTouchdown(dt) {
   };
   let best = { isNewBest: false, best: null };
   // The crosswind challenge moves runway with the weather: its best is kept per runway end.
-  const bestKey = sim.missionKey === CROSSWIND_KEY ? `${CROSSWIND_KEY}:${end.id}` : sim.missionKey;
+  // Kid and Learner keep their own bests (assists.js); Pilot keeps the mission's key.
+  const bestKey = assistBestKey(sim.missionKey === CROSSWIND_KEY ? `${CROSSWIND_KEY}:${end.id}` : sim.missionKey, sim.assist);
   try { best = recordBest(window.localStorage, bestKey, result); } catch { /* storage unavailable */ }
   showResults(result, best, end, sim.gate && sim.gate.runway === end.id ? sim.gate : null);
 }
@@ -755,6 +775,8 @@ function showResults(result, best, end, gate) {
   const bestEl = document.getElementById('txtBest');
   if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
   else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';
+  // Kid and Learner bests are their own (assists.js): say which level this grade is for.
+  if (bestEl.textContent && sim.assist !== 'pilot') bestEl.textContent = `${sim.assist === 'kid' ? 'Kid' : 'Learner'} level · ${bestEl.textContent}`;
   // Not scored: the stabilized-gate verdict (null when the mission started below the gate).
   const gateEl = document.getElementById('txtStabilized');
   gateEl.classList.toggle('hidden', !gate);
@@ -793,7 +815,7 @@ let coachShown = undefined; // prompt key on screen, to touch the DOM only on ch
 let coachMarked = false; // 'seen' is stored the first time a prompt actually shows
 let coachDoneS = 0;
 const COACH_DONE_SHOW_S = 4;
-const coachInput = { aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false };
+const coachInput = { aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false };
 
 function resetCoach() {
   Object.assign(coach, createCoach());
@@ -839,6 +861,7 @@ function updateCoach(dt) {
     coachInput.throttle = sim.throttle;
     coachInput.onGround = sim.onGround;
     coachInput.autopilot = sim.apMaster || sim.apApproach;
+    coachInput.kid = sim.assist === 'kid';
     stepCoach(coach, coachInput, dt);
     if (coach.done) coachDoneS += dt;
     prompt = coach.done && coachDoneS > COACH_DONE_SHOW_S ? null : coach.prompt;
@@ -1106,14 +1129,20 @@ function integrateSubStep(dt) {
     document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
   }
 
+  const assist = sim.apMaster ? null : assistConfig(sim.assist);
   if (sim.mouseYoke && targets.source === 'keyboard') {
-    targetRoll = sim.aileronInput;
-    targetPitch = sim.elevInput;
+    targetRoll = assist ? sim.mouseStick.x : sim.aileronInput;
+    targetPitch = assist ? sim.mouseStick.y : sim.elevInput;
   }
 
-  sim.elevInput = THREE.MathUtils.lerp(sim.elevInput, targetPitch, dt * 10);
-  sim.aileronInput = THREE.MathUtils.lerp(sim.aileronInput, targetRoll, dt * 10);
-  sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, targetYaw, dt * 10);
+  if (assist) {
+    applyAssists(assist, targetPitch, targetRoll, targetYaw, dt);
+  } else {
+    resetAssistState(assistState);
+    sim.elevInput = THREE.MathUtils.lerp(sim.elevInput, targetPitch, dt * 10);
+    sim.aileronInput = THREE.MathUtils.lerp(sim.aileronInput, targetRoll, dt * 10);
+    sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, targetYaw, dt * 10);
+  }
 
   // Autopilot / ILS coupling (control laws in autopilot.js; signs pinned by unit tests)
   if (sim.apMaster) {
@@ -1133,13 +1162,7 @@ function integrateSubStep(dt) {
       sim.elevInput = elevatorForPitch(Math.min(9.5, gammaDeg + sim.aoaDeg), pitchDeg, pitchRateUp);
     };
 
-    // Filtered airspeed trend (kt/s) for the autothrottle's proportional term. A jump of
-    // > 5 kt in one sub-step is a teleport (mission load), not flight: skip that sample.
-    if (sim.apPrevIasKts !== null && dt > 0) {
-      const dIas = sim.iasKts - sim.apPrevIasKts;
-      if (Math.abs(dIas) < 5) sim.apIasRate += (dIas / dt - sim.apIasRate) * Math.min(1, dt / 0.5);
-    }
-    sim.apPrevIasKts = sim.iasKts;
+    updateIasTrend(dt);
 
     if (sim.apApproach && sim.activeEnd) {
       const ap = approachGeometry(sim.activeEnd, sim.pos);
@@ -1479,6 +1502,82 @@ function renderRadar() {
 
 // Autothrottle: the model's trim throttle for this speed and path, plus corrections.
 const _apAir = {};
+// Filtered airspeed trend (kt/s) for the autothrottle's proportional term. A jump of
+// > 5 kt in one sub-step is a teleport (mission load), not flight: skip that sample.
+function updateIasTrend(dt) {
+  if (sim.apPrevIasKts !== null && dt > 0) {
+    const dIas = sim.iasKts - sim.apPrevIasKts;
+    if (Math.abs(dIas) < 5) sim.apIasRate += (dIas / dt - sim.apIasRate) * Math.min(1, dt / 0.5);
+  }
+  sim.apPrevIasKts = sim.iasKts;
+}
+
+// Kid / Learner (assists.js): shape the stick into the envelope; Kid also flies the
+// throttle, gear and flaps. Pilot never comes here. Reuses module-scope objects.
+const assistState = createAssistState();
+const _assistIn = {};
+const _assistOut = { elev: 0, ail: 0, rud: 0 };
+const _assistCfg = { gearDown: true, flapsIndex: 0 };
+function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
+  const spec = sim.spec;
+  _euler.setFromQuaternion(sim.quat, 'YXZ');
+  const wheelHeightM = sim.pos.y - sim.groundY - spec.gearHeight;
+  const gsMps = Math.hypot(sim.vel.x, sim.vel.z);
+  _assistIn.pitchIn = pitchIn; _assistIn.rollIn = rollIn; _assistIn.yawIn = yawIn;
+  _assistIn.pitchDeg = _euler.x * RAD_TO_DEG;
+  _assistIn.bankRightDeg = -_euler.z * RAD_TO_DEG;
+  _assistIn.pitchRateUp = sim.angVel.x;
+  _assistIn.rollRateRight = -sim.angVel.z;
+  _assistIn.aoaDeg = sim.aoaDeg;
+  _assistIn.betaDeg = sim.betaDeg;
+  _assistIn.stallAoaDeg = stallAoaDeg(spec, sim.flapsIndex);
+  _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
+  _assistIn.onGround = sim.onGround;
+  _assistIn.wheelHeightM = wheelHeightM;
+  _assistIn.airspeedMps = sim.tasKts * 0.514444;
+  const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround, sim.aglFt);
+  // Kid hands-off guide: level flight, or the localizer and glidepath on a final ahead.
+  _assistIn.guideBankDeg = 0;
+  _assistIn.guideGammaDeg = 0;
+  const ap = sim.approach;
+  if (departing) {
+    _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off: climb away, wings level
+  } else if (sim.activeEnd && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500) {
+    const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
+    if (Math.abs(headingError(sim.activeEnd.hdgT, curHdg)) < 45) {
+      _assistIn.guideBankDeg = kidLocalizerBankDeg(sim.activeEnd.hdgT, curHdg, ap.crossM);
+      _assistIn.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
+    }
+  }
+  shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
+  if (sim.onGround) {
+    // The takeoff roll's stick, power and the stop are the player's, smoothed like Pilot's.
+    sim.elevInput = THREE.MathUtils.lerp(sim.elevInput, _assistOut.elev, dt * 10);
+    sim.aileronInput = THREE.MathUtils.lerp(sim.aileronInput, _assistOut.ail, dt * 10);
+    sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, _assistOut.rud, dt * 10);
+    return;
+  }
+  sim.elevInput = _assistOut.elev;
+  sim.aileronInput = _assistOut.ail;
+  sim.rudderInput = _assistOut.rud;
+  if (cfg.autoConfig) {
+    _assistCfg.gearDown = sim.gearDown; _assistCfg.flapsIndex = sim.flapsIndex;
+    autoConfigure(spec, sim, _assistCfg);
+    sim.gearDown = _assistCfg.gearDown; sim.flapsIndex = _assistCfg.flapsIndex;
+  }
+  if (cfg.autoThrottle) {
+    updateIasTrend(dt);
+    if (departing) {
+      sim.throttle = 1; // full power until 1,000 ft
+    } else if (wheelHeightM > 8) {
+      const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
+      sim.throttle = autoThrottle(kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
+    } else {
+      sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
+    }
+  }
+}
+
 function autoThrottle(targetKts, gammaDeg, dt) {
   airAt(sim.pos.y + sim.mslOffsetM, sim.isaDevC, sim.altimInHg, _apAir);
   const ff = trimThrottle(sim.spec, targetKts * 0.514444, sim.flapsIndex, gammaDeg, sim.gearDown, _apAir);
@@ -1501,6 +1600,8 @@ function loadScenario(key) {
   sim.apMaster = false;
   sim.apApproach = false;
   resetApFilters();
+  resetAssistState(assistState);
+  softResetAt = null;
   sim.lastCalloutIdx = -1;
   Object.assign(sim.gateState, { armed: false, armFt: GATE_VMC_FT, done: false });
   sim.gate = null;
@@ -2005,8 +2106,9 @@ window.addEventListener('mousemove', e => {
 
     const normX = (e.clientX / window.innerWidth) * 2 - 1;
     const normY = (e.clientY / window.innerHeight) * 2 - 1;
-    sim.aileronInput = THREE.MathUtils.clamp(normX * 1.5, -1, 1);
-    sim.elevInput = THREE.MathUtils.clamp(normY * 1.5, -1, 1);
+    sim.mouseStick.x = THREE.MathUtils.clamp(normX * 1.5, -1, 1);
+    sim.mouseStick.y = THREE.MathUtils.clamp(normY * 1.5, -1, 1);
+    if (!assistConfig(sim.assist)) { sim.aileronInput = sim.mouseStick.x; sim.elevInput = sim.mouseStick.y; }
   } else if (isCanvasOrbiting) {
     const dx = e.clientX - prevMouseX;
     const dy = e.clientY - prevMouseY;
@@ -2118,6 +2220,7 @@ window.openaeroDebug = () => {
   const m = sim.loadedMission || missionByKey(sim.missionKey);
   return {
     mission: sim.missionKey,
+    assist: sim.assist,
     simTime: sim.simTime,
     missionRunway: m.kind === 'tour' ? null : `${m.airport}_${m.rwy}`,
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
@@ -2227,12 +2330,34 @@ function refreshMissionBests() {
       const m = sim.crosswindMission;
       key = m ? `${CROSSWIND_KEY}:${runwayEnd(m.airport, m.rwy).id}` : null;
     }
-    const grade = (key && grades[key]) || null;
+    const grade = (key && grades[assistBestKey(key, sim.assist)]) || null;
     const el = btn.querySelector('.missionBest');
     el.textContent = grade ? `Best ${grade}` : '';
     el.className = `missionBest shrink-0 text-[10px] font-mono ${grade ? `rounded bg-slate-950/80 px-1.5 py-0.5 ${GRADE_COLOURS[grade]}` : ''}`;
   }
 }
+// Assist level picker on the start screen (ticket 0042): three big buttons, remembered.
+function setAssist(level, remember = true) {
+  if (!ASSIST_LEVELS.includes(level)) return;
+  const changed = sim.assist !== level;
+  sim.assist = level;
+  for (const btn of document.querySelectorAll('#assistPicker .btnAssist')) {
+    const on = btn.dataset.assist === level;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+  document.body.classList.toggle('assist-kid', level === 'kid');
+  resetAssistState(assistState);
+  if (remember) { try { saveAssist(window.localStorage, level); } catch { /* storage unavailable */ } }
+  refreshMissionBests();
+  // A new level starts the flight over: a landing is graded and kept under the level it was
+  // flown at, and no surface is left where the other input path put it.
+  if (remember && changed) loadScenario(sim.missionKey);
+}
+for (const btn of document.querySelectorAll('#assistPicker .btnAssist')) {
+  btn.addEventListener('click', () => setAssist(btn.dataset.assist));
+}
+
 function syncMissionPicker(mission) {
   for (const btn of document.querySelectorAll('#missionList .btnMission')) {
     btn.classList.toggle('active', btn.dataset.scenario === mission.key);
@@ -2249,6 +2374,7 @@ function boot() {
   document.getElementById('chkCoach').checked = !seen;
   try { tutorEnabled = tutorOn(window.localStorage); } catch { /* storage unavailable: tutor on */ }
   document.getElementById('chkTutor').checked = tutorEnabled;
+  try { setAssist(loadAssist(window.localStorage), false); } catch { setAssist(DEFAULT_ASSIST, false); }
   fetchWeather();
   setInterval(fetchWeather, 10 * 60 * 1000);
   applySun();

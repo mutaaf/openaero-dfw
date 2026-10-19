@@ -102,7 +102,10 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    our own bookkeeping: `openaero_g3dt_usage_v1` (lifetime root/reuse counts) and
    `openaero_g3dt_block_v1` (quota/forbidden back-off, no key, no Google content). The
    first-flight coach remembers `openaero_coach_v1 = { v: 1, seen, at }` (`src/coach.js`);
-   the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`).
+   the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`); the assist
+   level `openaero_assist_v1 = { v: 1, level, at }` (`src/assists.js`). Kid and Learner keep
+   their personal bests under `<missionKey>@kid` / `@learner` in `openaero_best`; Pilot keeps
+   the plain mission key.
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
    every control has a keyboard path; text meets 4.5:1 contrast on HUD backgrounds.
 
@@ -127,6 +130,11 @@ src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/
                     versioned personal bests
 src/coach.js        first-flight coach on the default final: prompts from PAPI, AGL,
                     sink rate and throttle (pure state machine) + seen flag
+src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes the pilot's
+                    input before stepFlightModel (physics untouched): bank/pitch/AoA
+                    envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,
+                    no-dive floor, auto-flare; main.js adds Kid's autothrottle, gear/flaps
+                    and soft landing. Pilot never calls in (pure, flown headless in tests)
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn
 src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign
@@ -222,7 +230,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 196 kB gzipped at boot (2026-10-19: 195.02 kB after 0032's wake lock + pause on hide (+0.43 kB after trimming to locals and dropping a per-frame duplicate), raised from 195 to 196; 194.6 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
+Budgets: JS ≤ 197 kB gzipped at boot (2026-10-19: 196.95 kB after 0042's assist levels, raised from 196 to 197; 195.02 kB after 0032's wake lock + pause on hide (+0.43 kB after trimming to locals and dropping a per-frame duplicate), raised from 195 to 196; 194.6 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
 from 180 for photoreal: three is one module, so the core classes the lazy glTF/3D-tiles
 chunk needs are hoisted into the entry chunk; 3d-tiles-renderer + Draco load only when
 photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.
