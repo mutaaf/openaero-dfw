@@ -17,6 +17,7 @@ import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY } from './missi
 import { missionFromLink, terrainOnly, stripDeepLink } from './deeplink.js';
 import { gradeLanding, loadBest, recordBest, driftAngleDeg } from './landing.js';
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
+import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
   flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
@@ -793,9 +794,39 @@ function resetCoach() {
   coachDoneS = 0;
 }
 
+const AP_GLOW_IDS = ['touchStick', 'touchThrottle', 'virtualStickPad'];
+let apGlowShown = false;
+
+// --- Autopilot tutor (apTutor.js): while the autopilot flies it explains itself in the
+// coach's card, speaks when sound is on, and offers "Your turn" (hand-over to the coach).
+const tutor = createTutor();
+let tutorEnabled = true;
+let coachHandover = false; // the player took over from the autopilot on a final
+const tutorInput = {
+  apMaster: false, apApproach: false, apHdgHold: false, apAltHold: false, onGround: false,
+  aglFt: 0, crossM: 0, heightAbovePathM: 0, iasKts: 0, targetKts: 0,
+};
+const tutorVals = { targetKts: 0, hdgDeg: 0, altFt: 0 };
+
+function updateTutor(dt) {
+  if (!tutorEnabled) { tutor.caption = null; return null; }
+  tutorInput.apMaster = sim.apMaster;
+  tutorInput.apApproach = sim.apApproach;
+  tutorInput.apHdgHold = sim.apHdgHold;
+  tutorInput.apAltHold = sim.apAltHold;
+  tutorInput.onGround = sim.onGround;
+  tutorInput.aglFt = sim.aglFt;
+  tutorInput.crossM = sim.approach.crossM;
+  tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
+  tutorInput.iasKts = sim.iasKts;
+  tutorInput.targetKts = sim.spec.vrefKts + 5;
+  stepTutor(tutor, tutorInput, dt);
+  return tutor.caption;
+}
+
 function updateCoach(dt) {
   let prompt = null;
-  if (coachEnabled && sim.missionKey === COACH_MISSION) {
+  if (coachEnabled && (sim.missionKey === COACH_MISSION || coachHandover)) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -806,10 +837,26 @@ function updateCoach(dt) {
     if (coach.done) coachDoneS += dt;
     prompt = coach.done && coachDoneS > COACH_DONE_SHOW_S ? null : coach.prompt;
   }
-  if (prompt === coachShown) return;
-  coachShown = prompt;
-  document.getElementById('coach').classList.toggle('hidden', prompt === null);
-  if (prompt === null) return;
+  // The coach is silent while the autopilot flies, so the tutor takes its card then.
+  const caption = updateTutor(dt);
+  const key = caption ? `ap:${caption}` : prompt;
+  if (key === coachShown) return;
+  coachShown = key;
+  document.getElementById('coach').classList.toggle('hidden', key === null);
+  document.getElementById('btnTakeover').classList.toggle('hidden', !caption);
+  if (key === null) return;
+  document.getElementById('txtCoachLabel').textContent = caption ? 'Autopilot' : 'Coach';
+  document.getElementById('btnCoachSkip').setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
+  if (caption) {
+    tutorVals.targetKts = sim.spec.vrefKts + 5;
+    tutorVals.hdgDeg = String(Math.round(sim.targetHdgDeg) % 360).padStart(3, '0');
+    tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
+    const text = TUTOR_TEXT[caption](tutorVals);
+    document.getElementById('txtCoach').textContent = text;
+    // The GPWS callouts own the last 100 ft; the tutor speaks above them.
+    if (sim.aglFt > 100 || caption === 'rollout') audio.teach(text);
+    return;
+  }
   document.getElementById('txtCoach').textContent = COACH_PROMPTS[prompt];
   if (!coachMarked) {
     coachMarked = true;
@@ -819,14 +866,38 @@ function updateCoach(dt) {
 
 // Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
 function applyCoachChoice() {
+  tutorEnabled = document.getElementById('chkTutor').checked;
+  try { setTutorOn(window.localStorage, tutorEnabled); } catch { /* storage unavailable */ }
   coachEnabled = document.getElementById('chkCoach').checked;
   if (coachEnabled) resetCoach();
 }
 
 document.getElementById('btnCoachSkip').addEventListener('click', () => {
-  coachEnabled = false;
-  document.getElementById('chkCoach').checked = false;
+  if (tutor.caption) {
+    tutorEnabled = false;
+    document.getElementById('chkTutor').checked = false;
+    try { setTutorOn(window.localStorage, false); } catch { /* storage unavailable */ }
+  } else {
+    coachEnabled = false;
+    document.getElementById('chkCoach').checked = false;
+  }
   updateCoach(0); // hide now, even while paused
+});
+
+// "Your turn": the autopilot lets go; on a final the coach picks up from here.
+document.getElementById('btnTakeover').addEventListener('click', () => {
+  sim.apMaster = false;
+  sim.apApproach = false;
+  sim.apHdgHold = false;
+  sim.apAltHold = false;
+  resetApFilters();
+  if (sim.activeEnd && !sim.onGround) {
+    coachEnabled = true;
+    coachHandover = true;
+    resetCoach();
+  }
+  showToast('You have control');
+  updateCoach(0);
 });
 
 // --- Weather -----------------------------------------------------------------------
@@ -1431,6 +1502,8 @@ function loadScenario(key) {
   sim.airborneTime = 0;
   sim.lastLanding = null;
   resetCoach();
+  coachHandover = false;
+  Object.assign(tutor, createTutor());
   document.getElementById('resultsCard').classList.add('hidden');
 
   if (mission.kind === 'final') {
@@ -1575,6 +1648,12 @@ function syncUI() {
     const kx = sim.aileronInput * 36;
     const ky = sim.elevInput * 36;
     knob.style.transform = `translate(${kx}px, ${ky}px)`;
+  }
+
+  // Show the autopilot's hands: light the stick and throttle while it flies them.
+  if (sim.apMaster !== apGlowShown) {
+    apGlowShown = sim.apMaster;
+    for (const id of AP_GLOW_IDS) document.getElementById(id)?.classList.toggle('ap-flying', sim.apMaster);
   }
 
   // Phone layout (touch deck + telemetry strip)
@@ -2055,6 +2134,8 @@ function boot() {
   let seen = false;
   try { seen = coachSeen(window.localStorage); } catch { /* storage unavailable: coach on */ }
   document.getElementById('chkCoach').checked = !seen;
+  try { tutorEnabled = tutorOn(window.localStorage); } catch { /* storage unavailable: tutor on */ }
+  document.getElementById('chkTutor').checked = tutorEnabled;
   fetchWeather();
   setInterval(fetchWeather, 10 * 60 * 1000);
   applySun();
