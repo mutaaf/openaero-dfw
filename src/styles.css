@@ -169,3 +169,6 @@ input[type=range] { accent-color: #38bdf8; }
   content: 'AP'; position: absolute; top: 4px; right: 6px;
   font: 700 9px/1 ui-monospace, monospace; color: rgb(252 211 77); letter-spacing: 0.08em;
 }
+
+/* Kid assist level (ticket 0042): big, friendly coach prompts */
+.assist-kid #txtCoach { font-size: 1rem; line-height: 1.35rem; }
