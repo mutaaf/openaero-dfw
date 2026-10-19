@@ -15,7 +15,7 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGradeFor } from './landing.js';
+import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades } from './landing.js';
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
 import {
@@ -2171,6 +2171,7 @@ function buildMissionPicker() {
     section.append(head, grid);
     list.appendChild(section);
   }
+  if (!crosswindCard.isConnected) list.prepend(crosswindCard);
 }
 function missionCard(m, recommended) {
   const btn = document.createElement('button');
@@ -2192,18 +2193,18 @@ function missionCard(m, recommended) {
 }
 // Personal bests are re-read whenever the picker opens (a landing may have set a new one).
 function refreshMissionBests() {
-  let storage = null;
-  try { storage = window.localStorage; } catch { /* storage unavailable: no grades */ }
+  let grades = {};
+  try { grades = bestGrades(window.localStorage); } catch { /* storage unavailable: no grades */ }
   for (const btn of document.querySelectorAll('#missionList .btnMission')) {
     let key = btn.dataset.scenario;
     if (key === CROSSWIND_KEY) {
       const m = sim.crosswindMission;
       key = m ? `${CROSSWIND_KEY}:${runwayEnd(m.airport, m.rwy).id}` : null;
     }
-    const grade = key ? bestGradeFor(storage, key) : null;
+    const grade = (key && grades[key]) || null;
     const el = btn.querySelector('.missionBest');
     el.textContent = grade ? `Best ${grade}` : '';
-    el.className = `missionBest shrink-0 text-[10px] font-mono ${GRADE_COLOURS[grade] || ''}`;
+    el.className = `missionBest shrink-0 text-[10px] font-mono ${grade ? `rounded bg-slate-950/80 px-1.5 py-0.5 ${GRADE_COLOURS[grade]}` : ''}`;
   }
 }
 function syncMissionPicker(mission) {

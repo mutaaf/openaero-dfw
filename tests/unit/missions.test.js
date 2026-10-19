@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MISSIONS, RECOMMENDED_KEY, groupMissions } from '../../src/missions.js';
-import { BEST_KEY, bestGradeFor } from '../../src/landing.js';
+import { BEST_KEY, bestGrades } from '../../src/landing.js';
 
 describe('groupMissions (0029)', () => {
   const groups = groupMissions(MISSIONS);
@@ -41,19 +41,19 @@ describe('groupMissions (0029)', () => {
   });
 });
 
-describe('bestGradeFor (0029)', () => {
+describe('bestGrades (0029)', () => {
   const store = (raw) => ({ getItem: (k) => (k === BEST_KEY ? raw : null) });
 
-  it('reads the stored grade, nothing when none', () => {
+  it('reads the stored grades, nothing when none', () => {
     const s = store(JSON.stringify({ v: 1, missions: { kdfw_35c_final: { score: 91, grade: 'A', at: 1 } } }));
-    expect(bestGradeFor(s, 'kdfw_35c_final')).toBe('A');
-    expect(bestGradeFor(s, 'kdal_31r_final')).toBeNull();
+    expect(bestGrades(s)).toEqual({ kdfw_35c_final: 'A' });
+    expect(bestGrades(store(null))).toEqual({});
   });
 
   it('tolerates storage that throws or holds junk', () => {
-    expect(bestGradeFor({ getItem: () => { throw new Error('private'); } }, 'kdfw_35c_final')).toBeNull();
-    expect(bestGradeFor(store('{not json'), 'kdfw_35c_final')).toBeNull();
-    expect(bestGradeFor(null, 'kdfw_35c_final')).toBeNull();
-    expect(bestGradeFor(store(JSON.stringify({ v: 1, missions: { k: { grade: 7 } } })), 'k')).toBeNull();
+    expect(bestGrades({ getItem: () => { throw new Error('private'); } })).toEqual({});
+    expect(bestGrades(store('{not json'))).toEqual({});
+    expect(bestGrades(null)).toEqual({});
+    expect(bestGrades(store(JSON.stringify({ v: 1, missions: { k: { grade: 7 }, n: null } })))).toEqual({});
   });
 });

@@ -1,6 +1,6 @@
 // Ticket 0029: the start screen lists every mission, grouped by airport, with your best grade.
 import { test, expect } from '@playwright/test';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, stubMetar, collectErrors, lowContrastLabels, TEST_METAR } from './helpers.js';
 import { MISSIONS } from '../../src/missions.js';
 
 const cards = (page) => page.locator('#missionList .btnMission:not(#btnCrosswindToday)');
@@ -68,4 +68,25 @@ test('the picker at 1280x720 keeps ENTER COCKPIT on screen', async ({ page }) =>
   const box = await page.locator('#btnStartFlight').boundingBox();
   expect(box.y + box.height).toBeLessThanOrEqual(720);
   await page.screenshot({ path: test.info().outputPath('picker-1280.png') });
+});
+
+test('grades of every colour reach 4.5:1, on the active card too', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openaero_best', JSON.stringify({ v: 1, missions: {
+    kdfw_35c_final: { score: 98, grade: 'S', at: 1 }, kdfw_35c_flare: { score: 90, grade: 'A', at: 1 },
+    kdfw_17c_final: { score: 80, grade: 'B', at: 1 }, kdfw_36l_final: { score: 70, grade: 'C', at: 1 },
+    kdfw_13r_final: { score: 50, grade: 'D', at: 1 } } })));
+  await page.goto(BASE);
+  await expect(page.locator('#missionList .missionBest:not(:empty)')).toHaveCount(5);
+  expect(await lowContrastLabels(page, '#missionList')).toEqual([]);
+});
+
+test('today\'s crosswind card shows the best for today\'s runway', async ({ page }) => {
+  await page.unroute('**/openaero/api/metar*');
+  // KDFW 27015KT: the challenge is 18L (see crosswind.spec.js).
+  await stubMetar(page, [{ ...TEST_METAR, wdir: 270, wspd: 15, rawOb: 'METAR KDFW 161953Z 27015KT 10SM FEW250 24/10 A3002' }]);
+  await page.addInitScript(() => localStorage.setItem('openaero_best', JSON.stringify({ v: 1, missions: {
+    'crosswind_today:KDFW_18L': { score: 81, grade: 'B', at: 1 }, 'crosswind_today:KDFW_36R': { score: 99, grade: 'S', at: 1 } } })));
+  await page.goto(BASE);
+  await expect(page.locator('#btnCrosswindToday')).toBeVisible();
+  await expect(page.locator('#btnCrosswindToday .missionBest')).toHaveText('Best B');
 });
