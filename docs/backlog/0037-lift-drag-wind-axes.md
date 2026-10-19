@@ -1,7 +1,7 @@
 ---
 id: 0037
 title: Apply lift and drag in wind axes, not body axes
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity
@@ -25,11 +25,11 @@ re-check and re-tune what leaned on the old behaviour: `trimAoaDeg` spawn trim, 
 autoland/autothrottle gains in `autopilot.js`, the coach, and `tests/e2e/flight.spec.js`.
 
 ## Acceptance criteria
-- [ ] `tests/flight/c172.test.js` glide card promoted from `it.fails` to `it` and passing (9.1:1 ±15%)
-- [ ] All other flight cards still pass or remain documented gaps; none regress
-- [ ] Autoland on KDFW 35C still lands (e2e `flight.spec.js`), coach final still flyable
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
-- [ ] No frame-time regression (e2e perf probe within budget)
+- [x] `tests/flight/c172.test.js` glide card promoted from `it.fails` to `it` and passing (9.1:1 ±15%)
+- [x] All other flight cards still pass or remain documented gaps; none regress
+- [x] Autoland on KDFW 35C still lands (e2e `flight.spec.js`), coach final still flyable
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] No frame-time regression (e2e perf probe within budget)
 
 ## Test plan
 Promote the glide card; add a unit test that at α = 10° with zero thrust the

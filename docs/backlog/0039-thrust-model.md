@@ -1,7 +1,7 @@
 ---
 id: 0039
 title: Thrust that falls off with airspeed and density (prop and turbofan)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
@@ -24,11 +24,12 @@ first-order spool (N1 time constant, slower near idle). `stepFlightModel` reads 
 from it. Engine sound pitch follows N1/RPM.
 
 ## Acceptance criteria
-- [ ] Flight card "short-field ground roll near 960 ft" promoted to `it` and passing
-- [ ] Sea-level Vy climb card still passes (730 fpm ±15%)
-- [ ] 737 idle→TOGA reaches 90% thrust in 5–8 s (unit test)
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
-- [ ] No frame-time regression (e2e perf probe within budget)
+- [x] Flight card "short-field ground roll near 960 ft" promoted to `it` and passing
+- [x] Flight card "climbs much slower at 10,000 ft" promoted to `it` and passing (needs the density lapse; moved here from 0038)
+- [x] Sea-level Vy climb card still passes (730 fpm ±15%)
+- [x] 737 idle→TOGA reaches 90% thrust in 5–8 s (unit test)
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] No frame-time regression (e2e perf probe within budget)
 
 ## Test plan
 `tests/unit/engine.test.js` (lapse curves, spool time); promote the takeoff card.

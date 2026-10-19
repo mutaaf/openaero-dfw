@@ -2,6 +2,8 @@
 // conventions pinned down by tests/unit/autopilot.test.js:
 //   aileron +  = roll right          elevator + = nose down        rudder + = yaw right
 //   bank / roll-rate "right" +       pitch / pitch-rate "up" +     cross-track + = right
+import { flapDeltaCl } from './aero.js';
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const GS_KI = 0.01;                  // glidepath integral, deg per m·s
 const AT_KI = 0.015, AT_KP = 0.03;   // autothrottle: throttle/s per kt error, per kt/s trend
@@ -33,7 +35,7 @@ export const elevatorForPitch = (pitchCmdDeg, pitchDeg, pitchRateUp) =>
 export function trimAoaDeg(spec, iasMps, flapsIndex, rho = 1.225) {
   const q = 0.5 * rho * iasMps * iasMps;
   const clNeeded = (spec.massKg * 9.80665) / (q * spec.wingAreaM2);
-  const clZero = spec.cl0 + flapsIndex * (spec.flapClPerNotch ?? 0.28);
+  const clZero = spec.cl0 + flapDeltaCl(spec, flapsIndex);
   return ((clNeeded - clZero) / spec.clAlpha) * 180 / Math.PI;
 }
 
@@ -42,6 +44,20 @@ export function trimAoaDeg(spec, iasMps, flapsIndex, rho = 1.225) {
 // a speed change instead of chasing it a phugoid half-cycle late.
 export const throttleForSpeed = (iasKts, targetKts, throttle, dt, iasRateKtsPerS = 0) =>
   clamp(throttle + ((targetKts - iasKts) * AT_KI - iasRateKtsPerS * AT_KP) * dt, 0, 1);
+
+// Autothrottle with feed-forward: start from the throttle the flight model says holds the
+// target speed on the commanded path (flightModel.js trimThrottle), then correct with
+// proportional (speed error), rate (speed trend) and a slow integral (`state.trim`, which
+// soaks up wind and model error). Feed-forward is what keeps it calm with a spooling jet:
+// the loop no longer has to discover the right power through the engine's lag.
+// Integral time ~30 s (KP/KI), about a jet's speed time constant m·V/2D on a final, so it
+// trims out steady error without winding up into the phugoid.
+export const ATF_KP = 0.012, ATF_KD = 0.04, ATF_KI = 0.0004;
+export function autothrottleCommand(ffThrottle, state, iasKts, targetKts, iasRateKtsPerS, dt) {
+  const err = targetKts - iasKts;
+  state.trim = clamp(state.trim + err * ATF_KI * dt, -0.3, 0.3);
+  return clamp(ffThrottle + err * ATF_KP - iasRateKtsPerS * ATF_KD + state.trim, 0, 1);
+}
 
 // Directional (weathervane) stability: body yaw acceleration from sideslip (rad).
 // Positive body yaw (angVel.y) is nose-left, so drifting right yaws with a negative term.

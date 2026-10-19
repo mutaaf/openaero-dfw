@@ -9,17 +9,32 @@ export function dynamicPressure(airspeedMps, rho = RHO_SEA_LEVEL) {
   return 0.5 * rho * airspeedMps * airspeedMps;
 }
 
+// Flap lift increment and stall angle for a flap notch: per-notch tables when the airframe
+// has them (fitted to the POH stall speeds), else 0.28 per notch (the prototype's value).
+export const flapDeltaCl = (spec, flapsIndex) =>
+  (spec.flapCl ? spec.flapCl[flapsIndex] ?? 0 : flapsIndex * (spec.flapClPerNotch ?? 0.28));
+export const stallAoaDeg = (spec, flapsIndex) => spec.alphaStallDegByFlap?.[flapsIndex] ?? spec.alphaStallDeg;
+
 // Lift coefficient: linear lift curve + flap increment, with an exponential post-stall drop.
 export function liftCoefficient(spec, aoaRad, flapsIndex) {
-  // Flap lift increment per notch is per airframe (default 0.28, the prototype's value).
-  let cl = spec.cl0 + spec.clAlpha * aoaRad + flapsIndex * (spec.flapClPerNotch ?? 0.28);
-  const stallAngleRad = spec.alphaStallDeg * DEG_TO_RAD;
+  let cl = spec.cl0 + spec.clAlpha * aoaRad + flapDeltaCl(spec, flapsIndex);
+  const stallAngleRad = stallAoaDeg(spec, flapsIndex) * DEG_TO_RAD;
   if (Math.abs(aoaRad) > stallAngleRad) {
     const excess = Math.abs(aoaRad) - stallAngleRad;
     cl *= Math.exp(-excess * 4.0);
   }
   return cl;
 }
+
+// 1 g stall speed (indicated, kt) for a flap setting, from CLmax.
+export function stallSpeedKts(spec, flapsIndex) {
+  const clMax = spec.cl0 + spec.clAlpha * stallAoaDeg(spec, flapsIndex) * DEG_TO_RAD + flapDeltaCl(spec, flapsIndex);
+  return Math.sqrt((2 * spec.massKg * 9.80665) / (RHO_SEA_LEVEL * spec.wingAreaM2 * clMax)) / 0.514444;
+}
+
+// The stall warning sounds 5 kt above the current configuration's stall speed (FAR 23.207
+// asks for at least 5 kt of warning).
+export const stallWarningKts = (spec, flapsIndex) => stallSpeedKts(spec, flapsIndex) + 5;
 
 // Ground-effect factor on drag (McCormick-style, 1 = out of ground effect).
 export function groundEffectFactor(heightM, wingSpanM) {
@@ -32,9 +47,12 @@ export function inducedDragK(spec) {
   return 1 / (Math.PI * spec.aspectRatio * spec.oswaldEfficiency);
 }
 
-// Total drag coefficient: parasite + gear + flaps + induced, scaled by ground effect.
+// Total drag coefficient: parasite + gear + flaps + induced. Ground effect weakens the
+// wingtip vortices, so it scales only the induced term (McCormick), not skin friction.
+// Flap drag per notch: a per-airframe table when the airframe has one, else 0.012 a notch.
 export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect) {
-  return (spec.cd0 + (gearDown ? 0.018 : 0) + (flapsIndex * 0.012) + inducedDragK(spec) * cl * cl) * groundEffect;
+  const flapCd = spec.flapCd ? spec.flapCd[flapsIndex] ?? 0 : flapsIndex * 0.012;
+  return spec.cd0 + (gearDown ? 0.018 : 0) + flapCd + inducedDragK(spec) * cl * cl * groundEffect;
 }
 
 // Heading error in degrees, wrapped to [-180, 180].

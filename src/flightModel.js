@@ -5,18 +5,24 @@
 // `body` carries the state and the control positions under the same names as main.js's
 // `sim`: pos, vel, quat, angVel (world frame, see autopilot.js for the sign conventions),
 // elevInput, aileronInput, rudderInput, throttle, flapsIndex, gearDown, brakesOn, apMaster,
-// windVec (air-mass velocity) and groundY (terrain height under the aircraft). The step
-// writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY.
+// windVec (air-mass velocity) and groundY (terrain height under the aircraft); optional
+// air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
+// writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY,
+// sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn).
 import { Vector3, Quaternion, Euler, MathUtils } from 'three';
-import { MPS_TO_KTS, M_TO_FT, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, SPEED_OF_SOUND_KTS } from './constants.js';
+import { MPS_TO_KTS, M_TO_FT, DEG_TO_RAD, RAD_TO_DEG, GRAVITY } from './constants.js';
+import { airAt } from './atmosphere.js';
+import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
-import { sideslipYawAccel } from './autopilot.js';
+import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
 const _v3 = new Vector3();
+const _v4 = new Vector3();
 const _q1 = new Quaternion();
 const _euler = new Euler(0, 0, 0, 'YXZ');
+const _air = {};
 
 export function stepFlightModel(body, spec, dt) {
   // Transform the AIR-RELATIVE velocity to the body frame: u (fwd), v (right), w (down).
@@ -27,18 +33,22 @@ export function stepFlightModel(body, spec, dt) {
   const v = bodyVel.x;
   const w = -bodyVel.y;
 
+  // The air here: ISA + today's temperature and altimeter (atmosphere.js).
+  const air = airAt(body.pos.y + (body.mslOffsetM ?? 0), body.isaDevC ?? 0, body.altimInHg ?? 29.92, _air);
+  body.sigma = air.sigma;
+
   const airspeed = Math.max(0.1, bodyVel.length());
   body.tasKts = airspeed * MPS_TO_KTS;
-  body.iasKts = body.tasKts;
+  body.iasKts = body.tasKts * Math.sqrt(air.sigma); // EAS ≈ CAS below Mach 0.3
   body.gsKts = Math.round(Math.hypot(body.vel.x, body.vel.z) * MPS_TO_KTS);
-  body.mach = body.tasKts / SPEED_OF_SOUND_KTS;
+  body.mach = airspeed / air.speedOfSoundMps;
 
   // Angle of Attack (AoA) and Sideslip (Beta)
   const aoaRad = Math.atan2(w, Math.max(u, 0.1));
   body.aoaDeg = aoaRad * RAD_TO_DEG;
   body.betaDeg = Math.asin(MathUtils.clamp(v / airspeed, -1, 1)) * RAD_TO_DEG;
 
-  const qDyn = dynamicPressure(airspeed);
+  const qDyn = dynamicPressure(airspeed, air.rho);
 
   // Aerodynamic Lift & Drag Curves with Post-Stall Drop (aero.js)
   const cl = liftCoefficient(spec, aoaRad, body.flapsIndex);
@@ -49,12 +59,17 @@ export function stepFlightModel(body, spec, dt) {
 
   const liftForce = cl * qDyn * spec.wingAreaM2;
   const dragForce = cd * qDyn * spec.wingAreaM2;
-  const thrustForce = body.throttle * spec.maxThrustN;
+  body.engineN = spoolEngine(spec, body.engineN ?? body.throttle, body.throttle, dt);
+  const thrustForce = engineThrust(spec, body.engineN, airspeed, air, body.mach, qDyn);
 
-  // Body Forces
-  const fBodyX = -dragForce * (v / airspeed);
-  const fBodyY = liftForce;
-  const fBodyZ = -thrustForce + dragForce;
+  // Lift is perpendicular to the relative wind (in the plane of the body's lateral axis),
+  // drag is along it; both built in body axes from the air-relative velocity direction.
+  // Thrust acts along the nose. (Body-axis lift leaned aft by α and acted as drag.)
+  const vHat = _v3.copy(bodyVel).divideScalar(airspeed);
+  const liftDir = _v4.set(1, 0, 0).cross(vHat).normalize();
+  const fBodyX = liftDir.x * liftForce - vHat.x * dragForce;
+  const fBodyY = liftDir.y * liftForce - vHat.y * dragForce;
+  const fBodyZ = liftDir.z * liftForce - vHat.z * dragForce - thrustForce;
 
   const totalForceWorld = _v2.set(fBodyX, fBodyY, fBodyZ).applyQuaternion(body.quat);
   totalForceWorld.y -= spec.massKg * GRAVITY;
@@ -67,7 +82,10 @@ export function stepFlightModel(body, spec, dt) {
     const penetration = gh - body.pos.y;
     const kSpring = spec.massKg * 85;
     const kDamper = spec.massKg * 9;
-    const normalForce = Math.max(0, penetration * kSpring - body.vel.y * kDamper);
+    // The gear carries whatever the wing doesn't (the contact is also held by the position
+    // clamp below, so the spring alone sees ~no compression and would carry ~nothing, which
+    // left rolling friction and the brakes with no load), or more while it absorbs a sink.
+    const normalForce = Math.max(0, penetration * kSpring - body.vel.y * kDamper, -totalForceWorld.y);
 
     totalForceWorld.y += normalForce;
     body.onGround = true;
@@ -81,7 +99,7 @@ export function stepFlightModel(body, spec, dt) {
     const vAlong = body.vel.x * fwd.x + body.vel.z * fwd.z;
     const vSideX = body.vel.x - fwd.x * vAlong;
     const vSideZ = body.vel.z - fwd.z * vAlong;
-    const mu = body.brakesOn ? 0.45 : 0.02;
+    const mu = body.brakesOn ? 0.45 : 0.03; // Raymer: rolling μ 0.03 on concrete/asphalt
     const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
     totalForceWorld.x += fwd.x * roll;
     totalForceWorld.z += fwd.z * roll;
@@ -141,4 +159,18 @@ export function stepFlightModel(body, spec, dt) {
       if ((_euler.x >= maxP && body.angVel.x > 0) || (_euler.x <= -0.05 && body.angVel.x < 0)) body.angVel.x = 0;
     }
   }
+}
+
+// Throttle that holds `iasMps` on a steady flight path of `gammaDeg` (negative = descent)
+// at the trim angle of attack, out of ground effect: thrust·cos α = D + W·sin γ. Spawns use
+// it so a final starts in trim whatever the drag polar and engine are. `air` is the
+// atmosphere there (airAt; indicated airspeed in, so lift and drag don't depend on it).
+export function trimThrottle(spec, iasMps, flapsIndex, gammaDeg, gearDown = true, air = airAt(0)) {
+  const aoaRad = trimAoaDeg(spec, iasMps, flapsIndex) * DEG_TO_RAD;
+  const cl = liftCoefficient(spec, aoaRad, flapsIndex);
+  const q = dynamicPressure(iasMps);
+  const drag = dragCoefficient(spec, cl, gearDown, flapsIndex, 1) * q * spec.wingAreaM2;
+  const thrust = (drag + spec.massKg * GRAVITY * Math.sin(gammaDeg * DEG_TO_RAD)) / Math.cos(aoaRad);
+  const tas = iasMps / Math.sqrt(air.sigma);
+  return throttleForThrust(spec, thrust, tas, air, tas / air.speedOfSoundMps, q);
 }

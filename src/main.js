@@ -19,7 +19,7 @@ import { gradeLanding, loadBest, recordBest, driftAngleDeg } from './landing.js'
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
-  flareSinkMps, elevatorForPitch, throttleForSpeed, trimAoaDeg,
+  flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
 } from './autopilot.js';
 import {
   parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents,
@@ -27,9 +27,10 @@ import {
 } from './weather.js';
 import { createTerrainLod } from './terrainLod.js';
 import { createPhotoreal, photorealAllowed } from './photoreal.js';
-import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl } from './terrain.js';
+import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './terrain.js';
+import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
-  headingError, papiWhiteLights, isStallWarning, isGpwsWarning,
+  headingError, papiWhiteLights, isStallWarning, isGpwsWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT,
 } from './aero.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
@@ -37,7 +38,7 @@ import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
-import { stepFlightModel } from './flightModel.js';
+import { stepFlightModel, trimThrottle } from './flightModel.js';
 
 // --- Simulation State ---
 const sim = {
@@ -61,10 +62,12 @@ const sim = {
   flapsIndex: 2, flapAngles: [0, 10, 25, 40],
   gearDown: true, brakesOn: false, onGround: false,
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
+  // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
+  mslOffsetM: REF_ELEV_M, isaDevC: 0, altimInHg: 29.92, sigma: 1,
 
   // Autopilot
   apMaster: false, apHdgHold: false, apAltHold: false, apApproach: false,
-  apPrevIasKts: null, apIasRate: 0, apGsIntegral: 0, apGsEndId: null, // autothrottle / glidepath filter state
+  apPrevIasKts: null, apIasRate: 0, apGsIntegral: 0, apGsEndId: null, apAt: { trim: 0 }, // autothrottle / glidepath filter state
   targetHdgDeg: 360, targetAltFt: 1880,
 
   // Camera System
@@ -889,6 +892,8 @@ function currentWeather() {
 
 function refreshWeather() {
   sim.wx = currentWeather();
+  sim.isaDevC = isaDeviationC(sim.wx.tempC, REF_ELEV_M);
+  sim.altimInHg = sim.wx.altimInHg || 29.92;
   scene.fog.density = fogDensityForVisibility(sim.wx.visibilitySm);
   const base = sim.wx.ceilingFt;
   if (base !== null && base <= 12000) {
@@ -1069,11 +1074,11 @@ function integrateSubStep(dt) {
           sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
         }
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral));
-        sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 5, sim.throttle, dt, sim.apIasRate);
+        sim.throttle = autoThrottle(spec.vrefKts + 5, -3, dt);
       } else {
         // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
         holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
-        if (wheelH > 8) sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 3, sim.throttle, dt * 3);
+        if (wheelH > 8) sim.throttle = autoThrottle(spec.vrefKts + 3, -1.5, dt);
         else sim.throttle = Math.max(0, sim.throttle - dt * 0.5);
       }
       if (sim.onGround) { sim.elevInput = 0; sim.throttle = 0; }
@@ -1096,7 +1101,7 @@ function integrateSubStep(dt) {
   sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
 
   // Warning alerts
-  const stallWarning = isStallWarning(sim.iasKts, spec.stallCleanKts, sim.onGround);
+  const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapsIndex), sim.onGround);
   const gpwsWarning = isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround);
   document.getElementById('stallAlertBanner').classList.toggle('hidden', !stallWarning);
   document.getElementById('masterAlertBanner').classList.toggle('hidden', !gpwsWarning);
@@ -1392,9 +1397,18 @@ function renderRadar() {
   mapCtx.restore();
 }
 
+// Autothrottle: the model's trim throttle for this speed and path, plus corrections.
+const _apAir = {};
+function autoThrottle(targetKts, gammaDeg, dt) {
+  airAt(sim.pos.y + sim.mslOffsetM, sim.isaDevC, sim.altimInHg, _apAir);
+  const ff = trimThrottle(sim.spec, targetKts * 0.514444, sim.flapsIndex, gammaDeg, sim.gearDown, _apAir);
+  return autothrottleCommand(ff, sim.apAt, sim.iasKts, targetKts, sim.apIasRate, dt);
+}
+
 function resetApFilters() {
   sim.apPrevIasKts = null;
   sim.apIasRate = 0;
+  sim.apAt.trim = 0;
   sim.apGsIntegral = 0;
   sim.apGsEndId = null;
 }
@@ -1421,15 +1435,17 @@ function loadScenario(key) {
 
   if (mission.kind === 'final') {
     const end = runwayEnd(mission.airport, mission.rwy);
-    const vApp = (sim.spec.vrefKts + 5) * 0.514444;
-    const s = approachSpawn(end, mission.distNm, vApp);
+    const vApp = (sim.spec.vrefKts + 5) * 0.514444; // indicated
+    const airThr = airAt(end.thrY + REF_ELEV_M, sim.isaDevC, sim.altimInHg);
+    const vTas = tasFromIas(vApp, airThr.sigma);
+    const s = approachSpawn(end, mission.distNm, vTas);
     sim.pos.set(s.pos.x, s.pos.y, s.pos.z);
     sim.vel.set(s.vel.x, s.vel.y, s.vel.z);
     sim.flapsIndex = 2;
     // Spawn in trim: pitch = trim AoA − 3° path, so the final starts stable, not sinking.
     const pitch = (trimAoaDeg(sim.spec, vApp, sim.flapsIndex) - 3) * DEG_TO_RAD;
     sim.quat.setFromEuler(_euler.set(pitch, s.yawRad, 0, 'YXZ'));
-    sim.throttle = 0.44;
+    sim.throttle = trimThrottle(sim.spec, vApp, sim.flapsIndex, -3, true, airThr);
     sim.gearDown = true;
     sim.onGround = false;
     sim.activeEnd = end;
@@ -1457,6 +1473,7 @@ function loadScenario(key) {
     sim.onGround = false;
     sim.activeEnd = null;
   }
+  sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   photoreal?.noteSessionReuse(); // a new mission keeps the same Google session (usage counter)
   if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
@@ -1993,6 +2010,10 @@ window.openaeroDebug = () => {
     onGround: sim.onGround,
     iasKts: sim.iasKts,
     gsKts: sim.gsKts,
+    throttle: sim.throttle,
+    engineN: sim.engineN,
+    flapsIndex: sim.flapsIndex,
+    aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
