@@ -36,7 +36,7 @@ import {
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
-  autoConfigure, kidTargetKts, kidLocalizerBankDeg, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, kidTargetKts, kidLocalizerBankDeg, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
@@ -1534,12 +1534,15 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;
   _assistIn.wheelHeightM = wheelHeightM;
-  _assistIn.gsMps = gsMps;
+  _assistIn.airspeedMps = sim.tasKts * 0.514444;
+  const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround, sim.aglFt);
   // Kid hands-off guide: level flight, or the localizer and glidepath on a final ahead.
   _assistIn.guideBankDeg = 0;
   _assistIn.guideGammaDeg = 0;
   const ap = sim.approach;
-  if (sim.activeEnd && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500) {
+  if (departing) {
+    _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off: climb away, wings level
+  } else if (sim.activeEnd && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500) {
     const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
     if (Math.abs(headingError(sim.activeEnd.hdgT, curHdg)) < 45) {
       _assistIn.guideBankDeg = kidLocalizerBankDeg(sim.activeEnd.hdgT, curHdg, ap.crossM);
@@ -1547,11 +1550,16 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     }
   }
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
+  if (sim.onGround) {
+    // The takeoff roll's stick, power and the stop are the player's, smoothed like Pilot's.
+    sim.elevInput = THREE.MathUtils.lerp(sim.elevInput, _assistOut.elev, dt * 10);
+    sim.aileronInput = THREE.MathUtils.lerp(sim.aileronInput, _assistOut.ail, dt * 10);
+    sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, _assistOut.rud, dt * 10);
+    return;
+  }
   sim.elevInput = _assistOut.elev;
   sim.aileronInput = _assistOut.ail;
   sim.rudderInput = _assistOut.rud;
-
-  if (sim.onGround) return; // the takeoff roll's power and the stop are the player's
   if (cfg.autoConfig) {
     _assistCfg.gearDown = sim.gearDown; _assistCfg.flapsIndex = sim.flapsIndex;
     autoConfigure(spec, sim, _assistCfg);
@@ -1559,7 +1567,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   }
   if (cfg.autoThrottle) {
     updateIasTrend(dt);
-    if (wheelHeightM > 8) {
+    if (departing) {
+      sim.throttle = 1; // full power until 1,000 ft
+    } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       sim.throttle = autoThrottle(kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
     } else {

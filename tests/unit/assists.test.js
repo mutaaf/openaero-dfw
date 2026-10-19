@@ -3,7 +3,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import {
   ASSIST_KEY, ASSIST_CONFIG, DEFAULT_ASSIST, assistConfig, createAssistState, shapeControls,
-  autoConfigure, kidTargetKts, kidLocalizerBankDeg, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, kidTargetKts, kidLocalizerBankDeg, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
 import { Euler } from 'three';
@@ -27,7 +27,7 @@ function flyAssisted(spec, level, { pitchIn = 0, rollIn = 0, yawIn = 0, seconds 
     Object.assign(s, {
       pitchIn, rollIn, yawIn, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex), tailstrikeDeg: spec.maxGroundPitchDeg ?? 15,
-      onGround: !!x.onGround, wheelHeightM: x.pos.y - spec.gearHeight, gsMps: Math.hypot(x.vel.x, x.vel.z),
+      onGround: !!x.onGround, wheelHeightM: x.pos.y - spec.gearHeight, airspeedMps: (x.tasKts ?? 0) * 0.514444,
       guideBankDeg: 0, guideGammaDeg: 0,
     });
     shapeControls(cfg, st, s, dt, out);
@@ -55,14 +55,16 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
       it(`${name}: full ${dir} stick for 10 s never passes 30° bank or stalls`, () => {
         const r = flyAssisted(spec, 'kid', { ...trim, pitchIn, rollIn });
         expect(r.maxBank).toBeLessThanOrEqual(30);
-        expect(r.maxAoaOverStall).toBeLessThan(0);
+        expect(r.maxAoaOverStall).toBeLessThan(-1); // a margin left, not just "not stalled"
         expect(r.maxPitch).toBeLessThanOrEqual(ASSIST_CONFIG.kid.pitchUpMaxDeg + 1);
         expect(r.minPitch).toBeGreaterThanOrEqual(ASSIST_CONFIG.kid.pitchDownMaxDeg - 1);
       });
     }
     it(`${name}: full aft stick at idle, flaps out (a stall entry) is a nose-drop, not a stall`, () => {
       const r = flyAssisted(spec, 'kid', { kts: spec.vrefKts + 10, flaps: 2, throttle: 0, pitchIn: -1, seconds: 20 });
-      expect(r.maxAoaOverStall).toBeLessThan(0);
+      expect(r.maxAoaOverStall).toBeLessThan(-1);
+      const l = flyAssisted(spec, 'learner', { kts: spec.vrefKts + 10, flaps: 2, throttle: 0, pitchIn: -1, seconds: 20 });
+      expect(l.maxAoaOverStall).toBeLessThan(-0.5);
     });
   }
 
@@ -70,7 +72,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
     const r = flyAssisted(AIRCRAFT_DATABASE.c172, 'learner', { kts: 90, throttle: 0.6, pitchIn: -1, rollIn: 1 });
     expect(r.maxBank).toBeGreaterThan(32);
     expect(r.maxBank).toBeLessThanOrEqual(45);
-    expect(r.maxAoaOverStall).toBeLessThan(0);
+    expect(r.maxAoaOverStall).toBeLessThan(-0.5);
   });
 
   it('letting go levels the wings and holds the pitch (auto-trim)', () => {
@@ -84,7 +86,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
       const { pitchDeg, bankRightDeg } = attitude(x);
       Object.assign(s, {
         pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
-        aoaDeg: x.aoaDeg, betaDeg: x.betaDeg, stallAoaDeg: stallAoaDeg(spec, 0), tailstrikeDeg: 15, onGround: false, wheelHeightM: 1000, gsMps: 45,
+        aoaDeg: x.aoaDeg, betaDeg: x.betaDeg, stallAoaDeg: stallAoaDeg(spec, 0), tailstrikeDeg: 15, onGround: false, wheelHeightM: 1000, airspeedMps: 45,
         guideBankDeg: 0, guideGammaDeg: 0,
       });
       shapeControls(cfg, st, s, dt, out);
@@ -102,7 +104,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
     const out = {};
     shapeControls(assistConfig('kid'), createAssistState(), {
       pitchIn: 0, rollIn: 0, yawIn: 0.8, pitchDeg: 2, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
-      aoaDeg: 4, betaDeg: 5, stallAoaDeg: 14, onGround: false, wheelHeightM: 300, gsMps: 50, guideBankDeg: 0, guideGammaDeg: 0,
+      aoaDeg: 4, betaDeg: 5, stallAoaDeg: 14, onGround: false, wheelHeightM: 300, airspeedMps: 50, guideBankDeg: 0, guideGammaDeg: 0,
     }, 1 / 120, out);
     expect(out.rud).toBe(0.8);
   });
@@ -113,7 +115,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
     st.pitchHoldDeg = 5;
     shapeControls(assistConfig('kid'), st, {
       pitchIn: -0.7, rollIn: 0.2, yawIn: -0.3, pitchDeg: 0, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
-      aoaDeg: 0, betaDeg: 0, stallAoaDeg: 14, onGround: true, wheelHeightM: 0, gsMps: 30,
+      aoaDeg: 0, betaDeg: 0, stallAoaDeg: 14, onGround: true, wheelHeightM: 0, airspeedMps: 30,
     }, 1 / 120, out);
     expect(out).toEqual({ elev: -0.7, ail: 0.2, rud: -0.3 });
     expect(st.pitchHoldDeg).toBeNull();
@@ -122,7 +124,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
   it('Kid auto-flare raises the held pitch near the ground; Learner does not', () => {
     const s = {
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: -1, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
-      aoaDeg: 4, betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 11, onGround: false, wheelHeightM: 4, gsMps: 70, guideBankDeg: 0, guideGammaDeg: 2,
+      aoaDeg: 4, betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 11, onGround: false, wheelHeightM: 4, airspeedMps: 70, guideBankDeg: 0, guideGammaDeg: 2,
     };
     const kid = createAssistState(), learner = createAssistState();
     shapeControls(assistConfig('kid'), kid, s, 1 / 120, {});
@@ -131,7 +133,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
     expect(learner.pitchHoldDeg).toBe(-1);
     // …but never into a tailstrike (737: 11°, kept 2° clear).
     const deep = createAssistState();
-    shapeControls(assistConfig('kid'), deep, { ...s, aoaDeg: 12, stallAoaDeg: 20, gsMps: 30 }, 1 / 120, {});
+    shapeControls(assistConfig('kid'), deep, { ...s, aoaDeg: 12, stallAoaDeg: 20, airspeedMps: 30 }, 1 / 120, {});
     expect(deep.pitchHoldDeg).toBeLessThanOrEqual(9);
   });
 });
@@ -139,7 +141,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
 describe('Kid hands-off guidance', () => {
   const base = {
     pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: -8, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
-    aoaDeg: 4, betaDeg: 0, stallAoaDeg: 20, onGround: false, wheelHeightM: 1000, gsMps: 70, guideBankDeg: 10, guideGammaDeg: -3,
+    aoaDeg: 4, betaDeg: 0, stallAoaDeg: 20, onGround: false, wheelHeightM: 1000, airspeedMps: 70, guideBankDeg: 10, guideGammaDeg: -3,
   };
   it('letting go eases the held pitch toward the guide path at 2°/s and banks toward the guide', () => {
     const st = createAssistState();
@@ -174,7 +176,7 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
         Object.assign(s, {
           pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
           aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, 2), tailstrikeDeg: 15,
-          onGround: false, wheelHeightM: 400, gsMps: 70, guideBankDeg: kidLocalizerBankDeg(0, hdg, x.pos.x), guideGammaDeg: 0,
+          onGround: false, wheelHeightM: 400, airspeedMps: 70, guideBankDeg: kidLocalizerBankDeg(0, hdg, x.pos.x), guideGammaDeg: 0,
         });
         shapeControls(cfg, st, s, dt, out);
         x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
@@ -193,9 +195,22 @@ describe('Kid wings level in the flare', () => {
     const out = {};
     shapeControls(assistConfig('kid'), createAssistState(), {
       pitchIn: 0, rollIn: 1, yawIn: 0, pitchDeg: 3, bankRightDeg: 12, pitchRateUp: 0, rollRateRight: 0,
-      aoaDeg: 5, betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 11, onGround: false, wheelHeightM: 6, gsMps: 70, guideBankDeg: 0, guideGammaDeg: -3,
+      aoaDeg: 5, betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 11, onGround: false, wheelHeightM: 6, airspeedMps: 70, guideBankDeg: 0, guideGammaDeg: -3,
     }, 1 / 120, out);
     expect(out.ail).toBe(-1);
+  });
+});
+
+describe('Kid departure', () => {
+  it('is set on the ground and cleared above 1,000 ft; a final spawn is not departing', () => {
+    const st = createAssistState();
+    expect(st.departing).toBe(false);
+    expect(updateDeparture(st, true, 0)).toBe(true);
+    expect(updateDeparture(st, false, 600)).toBe(true);
+    expect(updateDeparture(st, false, 1100)).toBe(false);
+    updateDeparture(st, true, 0);
+    resetAssistState(st);
+    expect(st.departing).toBe(false);
   });
 });
 
@@ -203,7 +218,7 @@ describe('Kid ground floor', () => {
   it('below ~500 ft a held dive is shallowed to a 4° descent; above it, and in Learner, it is not', () => {
     const s = {
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: -8, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
-      aoaDeg: 4, betaDeg: 0, stallAoaDeg: 20, onGround: false, wheelHeightM: 100, gsMps: 70, guideBankDeg: 0, guideGammaDeg: -12,
+      aoaDeg: 4, betaDeg: 0, stallAoaDeg: 20, onGround: false, wheelHeightM: 100, airspeedMps: 70, guideBankDeg: 0, guideGammaDeg: -12,
     };
     const low = createAssistState();
     shapeControls(assistConfig('kid'), low, s, 1 / 120, {});

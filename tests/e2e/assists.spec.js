@@ -56,6 +56,22 @@ test('Learner: full stick right stays inside 45° of bank', async ({ page }) => 
   expect(maxBank).toBeLessThanOrEqual(45);
 });
 
+test('Kid takeoff: full power, rotate, let go, and it climbs away (no "landing" graded)', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto(BASE);
+  await page.locator('.btnAssist[data-assist="kid"]').click();
+  await page.locator('.btnMission[data-scenario="kdfw_takeoff"]').click();
+  await page.locator('#btnStartFlight').click();
+  await page.click('#btnToga');
+  await expect.poll(async () => (await debug(page)).iasKts, { timeout: 90_000 }).toBeGreaterThan(145);
+  await page.keyboard.down('ArrowUp'); // nose up
+  await expect.poll(async () => (await debug(page)).onGround, { timeout: 20_000 }).toBe(false);
+  await page.keyboard.up('ArrowUp');
+  await expect.poll(async () => (await debug(page)).aglFt, { timeout: 90_000 }).toBeGreaterThan(1000);
+  const d = await debug(page);
+  expect(d.lastLanding).toBeNull();
+});
+
 test.describe('Kid on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

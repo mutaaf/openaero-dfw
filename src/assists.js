@@ -23,11 +23,11 @@ export const DEFAULT_ASSIST = 'pilot';
 
 export const ASSIST_CONFIG = {
   kid: {
-    bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 3,
+    bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 4,
     autoThrottle: true, autoConfig: true, autoFlare: true, softLanding: true, groundFloor: true, handsOff: true,
   },
   learner: {
-    bankMaxDeg: 45, pitchUpMaxDeg: 20, pitchDownMaxDeg: -15, aoaMarginDeg: 2,
+    bankMaxDeg: 45, pitchUpMaxDeg: 20, pitchDownMaxDeg: -15, aoaMarginDeg: 4,
     autoThrottle: false, autoConfig: false, autoFlare: false, softLanding: false, groundFloor: false, handsOff: false,
   },
   pilot: null,
@@ -49,13 +49,21 @@ const FLOOR_GAMMA_DEG = -4;   // …a 4° descent (a 3° glidepath still fits)
 const TAIL_MARGIN_DEG = 2;    // Kid auto-flare keeps the tail this far off the runway
 const GUIDE_RATE_DEG_S = 2;   // Kid hands-off: the held pitch eases toward the guide this fast
 
-export const createAssistState = () => ({ pitchHoldDeg: null });
-export const resetAssistState = (st) => { st.pitchHoldDeg = null; return st; };
+// departing: Kid left the ground (takeoff or touch-and-go) and has not yet reached 1,000 ft:
+// main.js climbs at full power instead of flying the approach speed and the flare retard.
+export const createAssistState = () => ({ pitchHoldDeg: null, departing: false });
+export const resetAssistState = (st) => { st.pitchHoldDeg = null; st.departing = false; return st; };
+export const KID_CLIMB_GAMMA_DEG = 5;
+export function updateDeparture(st, onGround, aglFt) {
+  if (onGround) st.departing = true;
+  else if (aglFt > 1000) st.departing = false;
+  return st.departing;
+}
 
 // One sub-step of input shaping. cfg = assistConfig(level) (never null here).
 // s: { pitchIn, rollIn, yawIn (raw stick targets: pitch + = nose down, roll + = right),
 //      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), aoaDeg, betaDeg,
-//      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, gsMps,
+//      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
 //      localizer bank and glidepath angle on a final) }
 // Writes out.elev, out.ail, out.rud (surface commands, -1..1); returns out. No allocation.
@@ -84,12 +92,15 @@ export function shapeControls(cfg, st, s, dt, out) {
   }
   // Kid auto-flare: near the ground, never less nose-up than the flare's sink-rate profile.
   if (cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M) {
-    const flareGammaDeg = Math.atan2(flareSinkMps(Math.max(0, s.wheelHeightM)), Math.max(20, s.gsMps)) * 180 / Math.PI;
+    // Air-relative path (true airspeed), to match the air-relative angle of attack added to it.
+    const flareGammaDeg = Math.atan2(flareSinkMps(Math.max(0, s.wheelHeightM)), Math.max(20, s.airspeedMps)) * 180 / Math.PI;
     st.pitchHoldDeg = Math.min(Math.max(st.pitchHoldDeg, flareGammaDeg + s.aoaDeg), s.tailstrikeDeg - TAIL_MARGIN_DEG);
   }
   // Angle-of-attack protection: the pitch that would put the wing at its limit on the
   // current flight path (pitch − α + α_max). Over the limit, the nose comes down.
   const aoaMax = s.stallAoaDeg - cfg.aoaMarginDeg;
+  // The loop overshoots α by ~1.5–2° as an idle airplane slows (headless runs), so the
+  // margins are 4°: ~2° of real margin left at worst.
   const pitchAtAoaMax = s.pitchDeg - s.aoaDeg + aoaMax;
   const pitchCmd = Math.min(st.pitchHoldDeg, pitchAtAoaMax);
   if (pitchCmd < st.pitchHoldDeg) st.pitchHoldDeg = Math.max(pitchCmd, cfg.pitchDownMaxDeg * CMD_SHARE);
