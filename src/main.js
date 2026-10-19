@@ -1475,6 +1475,12 @@ function loadScenario(key) {
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
+  // Airborne spawns fly their speed through the air: the wind adds to the ground velocity
+  // (a final with a tailwind starts at its airspeed, not 5 kt slow).
+  if (!sim.onGround) {
+    updateWind(0);
+    sim.vel.add(sim.windVec);
+  }
   photoreal?.noteSessionReuse(); // a new mission keeps the same Google session (usage counter)
   if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
   document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
