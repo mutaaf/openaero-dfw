@@ -26,9 +26,15 @@ at or above `control.json → agents.builder.max_merges_per_day`, end `NOOP: dai
 6. **Ship.** Set the ticket's `status: shipped` and add its PR number, append one line to
    `docs/CHANGELOG.md` (`YYYY-MM-DD · #<ticket> · <player-facing summary>`), commit, push,
    open the PR.
-7. **Self-review.** Spawn a fresh subagent with only the diff and the ticket, and ask it
-   to review adversarially: correctness, invariants in `AGENTS.md`, performance regressions
-   in the render loop, mobile/touch, missing tests. Fix every valid finding.
+7. **Validation panel.** Spawn three fresh subagents in parallel, each given only the
+   diff, the ticket and `AGENTS.md`, each told to try to break the change:
+   - *Flight physics:* is it physically right? Units, signs, frames, sources; run
+     `npm test -- tests/flight`; does any card regress; is a new claim backed by a card?
+   - *Device and performance:* render-loop allocations, frame time, bundle budget, touch
+     at iPhone/iPad/Android sizes in both orientations, safe areas, memory on iOS.
+   - *First-timer:* would a kid manage this with touch alone, and would a pilot believe
+     it? Unclear text, tiny targets, hidden horizon, anything dishonest.
+   Fix every valid finding before merge; list the findings and fixes in the PR body.
 8. **Merge.** Auto-merge squash-merges the PR once CI is green (see `common.md` § 3).
    Watch for the merge. Cloudflare Workers Builds deploys `main` to production on merge.
 9. **Verify live.** Wait ~2 minutes, then

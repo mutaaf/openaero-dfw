@@ -1,12 +1,12 @@
 {
   "_readme": "Operator control panel. Edit this file (GitHub web or mobile is fine) to pause or steer the agents. Every agent reads it first and obeys it. HOW OFTEN each agent runs is set on its routine schedule at https://claude.ai/code/routines, not here.",
   "paused": false,
-  "focus": "",
+  "focus": "Physics you can check: every C172 card now matches the POH (#42); grow tests/flight (737 and F-16 cards with cited data) and never let a card regress. Then: assist levels so a kid can land and a pilot can fly raw (0042), a readable, smooth game on iPhone, iPad and Android with the horizon in view in portrait (0044), detailed open-licensed aircraft models (0045). Package the best open-source libraries and assets instead of rebuilding them.",
   "agents": {
     "scout": {
       "enabled": true,
       "max_new_tickets_per_run": 3,
-      "ready_queue_cap": 10
+      "ready_queue_cap": 14
     },
     "builder": {
       "enabled": true,
@@ -14,6 +14,10 @@
     },
     "keeper": {
       "enabled": true
+    },
+    "validator": {
+      "enabled": true,
+      "max_new_cards_per_run": 2
     }
   },
   "frozen_paths": [
