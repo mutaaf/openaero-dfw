@@ -1,12 +1,12 @@
 ---
 id: 0026
 title: Adaptive render resolution to hold frame rate on slow devices
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: performance
 created: 2026-10-17
-pr:
+pr: 44
 ---
 
 ## Why
@@ -25,10 +25,10 @@ up after ≥5 s under ~13 ms, with hysteresis and a floor of 1. `main.js` applie
 hidden tabs do not count as slow frames.
 
 ## Acceptance criteria
-- [ ] Unit tests: steps down on sustained slow frames, steps up only after the cool-down, never oscillates on alternating samples, respects floor/ceiling, ignores dt spikes >250 ms
-- [ ] `?debug` (or the existing perf probe) shows the current pixel ratio
-- [ ] On a fast machine the ratio stays at the device cap; visuals unchanged
-- [ ] No console errors, HUD canvas stays crisp
+- [x] Unit tests: steps down on sustained slow frames, steps up only after the cool-down, never oscillates on alternating samples, respects floor/ceiling, ignores dt spikes >250 ms
+- [x] `?debug` (or the existing perf probe) shows the current pixel ratio
+- [x] On a fast machine the ratio stays at the device cap; visuals unchanged
+- [x] No console errors, HUD canvas stays crisp
 
 ## Test plan
 `tests/unit/resScale.test.js` for the controller; e2e perf probe still within budget.
