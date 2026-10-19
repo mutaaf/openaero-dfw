@@ -1,12 +1,12 @@
 ---
 id: 0016
 title: Smooth the autoland's long-period pitch/speed oscillation
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-16
-pr:
+pr: 38
 ---
 
 ## Why
@@ -20,9 +20,9 @@ lagged/integral term; pitch on path only), and add a small integral on glidepath
 Tune with the e2e probe logging pitch every 250 ms.
 
 ## Acceptance criteria
-- [ ] KDAL 31R autoland from 4 NM: pitch stays within ±1.5° of its mean after the first 10 s
-- [ ] Localizer/glideslope still within 20 m (flight.spec.js)
-- [ ] Short-final autoland still lands past the threshold on the centreline
+- [x] KDAL 31R autoland from 4 NM: pitch stays within ±1.5° of its mean after the first 10 s
+- [x] Localizer/glideslope still within 20 m (flight.spec.js)
+- [x] Short-final autoland still lands past the threshold on the centreline
 
 ## Test plan
 Extend `tests/e2e/flight.spec.js` with a pitch-variance assertion on the 4 NM approach.
