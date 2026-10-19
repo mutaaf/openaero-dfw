@@ -128,7 +128,8 @@ src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box 
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
                     integration on a `body` (main.js passes `sim`). Pure: flown headless by
                     tests/flight/ against published performance data
-src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
+src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
+                    approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, warnings, heading math
 src/input.js        keyboard state → control targets, virtual stick mapping
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)

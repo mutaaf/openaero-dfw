@@ -83,3 +83,58 @@ export function isStallWarning(iasKts, stallCleanKts, onGround) {
 export function isGpwsWarning(aglFt, vsiFpm, onGround) {
   return aglFt < 450 && vsiFpm < -1400 && !onGround;
 }
+
+// Stabilized-approach gate (ticket 0020; Flight Safety Foundation ALAR Briefing Note 7.1).
+// The gate is 500 ft above the runway in VMC, 1,000 ft in IMC (ceiling under 1,000 ft or
+// visibility under 3 SM). At the gate the aircraft must be on the localizer and glideslope
+// (within 1 dot), between Vref and Vref+20 kt, sinking 1,000 fpm or less, gear down and
+// landing flaps set. Anything else is "unstabilized, go around".
+export const GATE_VMC_FT = 500;
+export const GATE_IMC_FT = 1000;
+// ILS dot sizes: a 5° localizer course is 2 dots each side, a ±0.7° glideslope 2 dots.
+export const LOC_DOT_DEG = 1.25;
+export const GS_DOT_DEG = 0.35;
+
+export function isImc(wx) {
+  return (typeof wx.ceilingFt === 'number' && wx.ceilingFt < 1000) || (wx.visibilitySm ?? 10) < 3;
+}
+
+// Deviation in dots (+ = right of the centreline / above the path) of devM seen from an
+// antenna distM away: the localizer's sits ~300 m past the far end of the runway
+// (LOC_DOT_DEG), the glideslope's abeam the aim point (GS_DOT_DEG).
+export function ilsDots(devM, distM, dotDeg) {
+  return Math.atan2(devM, Math.max(1, distM)) * 180 / Math.PI / dotDeg;
+}
+
+// g: { iasKt, vref, vsFpm (negative = descending), gearDown, flapsOk, glideDevDots,
+//      locDevDots, vmc }. Returns { gateHeight, stable, failing[] } (failing in callout order).
+export function stabilizedGate(g) {
+  const failing = [];
+  if (g.iasKt < g.vref) failing.push('SLOW');
+  else if (g.iasKt > g.vref + 20) failing.push('FAST');
+  if (-g.vsFpm > 1000) failing.push('SINK');
+  if (!g.gearDown) failing.push('GEAR');
+  if (!g.flapsOk) failing.push('FLAPS');
+  if (Math.abs(g.glideDevDots) > 1) failing.push('GLIDESLOPE');
+  if (Math.abs(g.locDevDots) > 1) failing.push('LOCALIZER');
+  return { gateHeight: g.vmc ? GATE_VMC_FT : GATE_IMC_FT, stable: failing.length === 0, failing };
+}
+
+// When to evaluate the gate, once per approach. s = { armed, armFt, done } is mutated.
+// Above the gate the gate arms (and its height is fixed for this approach, so a METAR that
+// turns IMC at 700 ft doesn't evaluate a "1,000 ft" gate at 700 ft). Descending through the
+// armed height evaluates it if the aircraft is on the final (onFinal), else just disarms.
+// After an evaluation it re-arms only 100 ft above the gate (a go-around), not on a bump.
+// Returns 'reset' when a new approach arms after an evaluation, 'evaluate' on the gate frame.
+export function gateStep(s, aaeFt, gateFt, descending, onFinal) {
+  if (aaeFt > (s.done ? gateFt + 100 : gateFt)) {
+    const reset = s.done;
+    s.armed = true; s.armFt = gateFt; s.done = false;
+    return reset ? 'reset' : '';
+  }
+  if (!s.armed || aaeFt > s.armFt || !descending) return '';
+  s.armed = false;
+  if (!onFinal) return '';
+  s.done = true;
+  return 'evaluate';
+}

@@ -1,12 +1,12 @@
 ---
 id: 0020
 title: Call "unstabilized" and "go around" on a bad approach, and grade it
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-17
-pr:
+pr: 41
 ---
 
 ## Why
@@ -29,12 +29,12 @@ item(s) (HUD text and GPWS voice channel from ticket 0013), and records `stabili
 on the landing result. The results card shows "Stabilized at 500 ft ✓/✗". Does not force a go-around.
 
 ## Acceptance criteria
-- [ ] `stabilizedGate` flags each criterion (speed < Vref or > Vref+20, sink > 1,000 fpm, gear/flaps not landing config, > 1 dot deviation) with a unit test per criterion
-- [ ] Gate height is 500 ft in VMC and 1,000 ft in IMC (ceiling < 1,000 ft or vis < 3 SM)
-- [ ] Autoland from the recommended mission passes the gate (e2e)
-- [ ] Results card shows the stabilized verdict; personal-best save data (`openaero_best` v1) is unchanged
-- [ ] Callout is evaluated once per approach, no per-frame allocations
-- [ ] Legible at 390x844 and 1280x720
+- [x] `stabilizedGate` flags each criterion (speed < Vref or > Vref+20, sink > 1,000 fpm, gear/flaps not landing config, > 1 dot deviation) with a unit test per criterion
+- [x] Gate height is 500 ft in VMC and 1,000 ft in IMC (ceiling < 1,000 ft or vis < 3 SM)
+- [x] Autoland from the recommended mission passes the gate (e2e)
+- [x] Results card shows the stabilized verdict; personal-best save data (`openaero_best` v1) is unchanged
+- [x] Callout is evaluated once per approach, no per-frame allocations
+- [x] Legible at 390x844 and 1280x720
 
 ## Test plan
 Unit: table-driven `stabilizedGate` cases. E2E: recommended mission with autoland reports

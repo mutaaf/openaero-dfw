@@ -100,12 +100,15 @@ export function createAudio(sim, onStateChange) {
     } catch (e) { return false; }
   }
 
+  let gateCallAt = -10;
   function checkGpwsCallouts() {
     if (sim.onGround || sim.vel.y >= 0) return;
     const i = gpwsCalloutIndex(sim.aglFt, sim.lastCalloutIdx);
     if (i >= 0 && i < GPWS_ALT_THRESHOLDS.length) {
       sim.lastCalloutIdx = i;
-      if (!say(calloutWord(i))) chirp(587.33, 0.18);
+      // An altitude callout cuts off a stale one, but never the gate's "unstabilized" call
+      // (made the same frame, or just before when the terrain dips under the final).
+      if (!say(calloutWord(i), { interrupt: audioCtx.currentTime - gateCallAt > 2.5 })) chirp(587.33, 0.18);
       if (GPWS_ALT_THRESHOLDS[i] === 20 && sim.throttle > 0.05) say('retard', { interrupt: false });
     }
   }
@@ -133,6 +136,14 @@ export function createAudio(sim, onStateChange) {
     checkGpwsWarning();
   }
 
+  // One-off callouts from the sim (the stabilized gate, ticket 0020): queued behind the
+  // altitude callout that fires at the same height, a low chirp when speech is unavailable.
+  function callout(text) {
+    if (!audioCtx || !sim.audioEnabled) return;
+    gateCallAt = audioCtx.currentTime;
+    if (!say(text, { interrupt: false })) chirp(440, 0.3);
+  }
+
   // Hard-mute every voice (used when the player switches sound off).
   function mute() {
     if (engineGain) engineGain.gain.value = 0;
@@ -140,5 +151,5 @@ export function createAudio(sim, onStateChange) {
     if (stallGain) stallGain.gain.value = 0;
   }
 
-  return { init, update, mute, get started() { return audioCtx !== null; } };
+  return { init, update, mute, callout, get started() { return audioCtx !== null; } };
 }
