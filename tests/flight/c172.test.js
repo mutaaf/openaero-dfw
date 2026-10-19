@@ -10,7 +10,8 @@ import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff } from './harness.js';
+import { elevatorForPitch, aileronForBank } from "../../src/autopilot.js";
+import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, attitude } from './harness.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -81,4 +82,44 @@ describe('Cessna 172S vs POH', () => {
     fly(g, c172, 30, pilot);
     within((g.distM - d0) / (h0 - g.pos.y), 9.1, 0.15);
   });
+});
+
+// FAA Airplane Flying Handbook (FAA-H-8083-3C) ch. 5 / Pilot's Handbook (FAA-H-8083-25B)
+// ch. 5: in a level coordinated turn rate = g·tan(bank)/V (= 1091·tan(bank)/V[kt] °/s) and
+// load factor = 1/cos(bank). The model must turn like that, whatever its own drag says.
+describe('Cessna 172S level turns vs FAA handbook', () => {
+  function levelTurn(bankDeg, kts) {
+    const b = makeBody(c172, { kts, altM: 1500, throttle: 0.75 });
+    const alt0 = b.pos.y;
+    const hold = speedHoldPilot(() => kts);
+    let heading0 = null, t0 = null, tasSum = 0, tanSum = 0, n = 0;
+    const headingDeg = (x) => (Math.atan2(x.vel.x, -x.vel.z) * 180) / Math.PI;
+    let unwrapped = 0, last = headingDeg(b);
+    fly(b, c172, 45, (x, dt) => {
+      // Altitude held with pitch, speed with throttle; bank commanded and rolled in.
+      const bank = Math.min(bankDeg, x.t * 10);
+      const { pitchDeg, bankRightDeg } = attitude(x);
+      const vsErr = x.vel.y * 3.281 * 60;
+      x.pitchTrim = (x.pitchTrim ?? x.pitchCmd) + ((alt0 - x.pos.y) * 0.002 - vsErr * 0.00005) * dt * 20;
+      x.pitchCmd = Math.max(-5, Math.min(20, x.pitchTrim + (alt0 - x.pos.y) * 0.02 - vsErr * 0.001));
+      x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
+      x.aileronInput = aileronForBank(bank, bankRightDeg, -x.angVel.z);
+      x.throttle = Math.max(0.2, Math.min(1, x.throttle + (kts - (x.iasKts ?? kts)) * 0.02 * dt));
+      const h = headingDeg(x);
+      let d = h - last; if (d > 180) d -= 360; if (d < -180) d += 360;
+      unwrapped += d; last = h;
+      if (x.t > 25 && heading0 === null) { heading0 = unwrapped; t0 = x.t; }
+      if (x.t > 25) { tasSum += x.tasKts; tanSum += Math.tan((attitude(x).bankRightDeg * Math.PI) / 180); n++; }
+    });
+    return { rateDegS: (unwrapped - heading0) / (b.t - t0), altErrM: b.pos.y - alt0, tasKts: tasSum / n, tanBank: tanSum / n };
+  }
+  for (const bank of [30, 45]) {
+    // V is true airspeed and bank the one actually flown (the harness pilot rolls in and
+    // holds ~${bank}°), so this checks the model's turn dynamics, not the pilot's accuracy.
+    it(`turns at 1091·tan(bank)/TAS °/s at ~${bank}° bank, 90 KIAS, 5,000 ft (FAA-H-8083-25B, ±10%)`, () => {
+      const { rateDegS, altErrM, tasKts, tanBank } = levelTurn(bank, 90);
+      expect(Math.abs(altErrM)).toBeLessThan(60);
+      within(Math.abs(rateDegS), (1091 * Math.abs(tanBank)) / tasKts, 0.10);
+    });
+  }
 });
