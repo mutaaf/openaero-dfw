@@ -96,16 +96,14 @@ export const LOC_DOT_DEG = 1.25;
 export const GS_DOT_DEG = 0.35;
 
 export function isImc(wx) {
-  return (typeof wx.ceilingFt === 'number' && wx.ceilingFt < 1000) || wx.visibilitySm < 3;
+  return (typeof wx.ceilingFt === 'number' && wx.ceilingFt < 1000) || (wx.visibilitySm ?? 10) < 3;
 }
 
-// Deviation in dots, + = right of the centreline / above the path. The localizer antenna
-// sits ~300 m past the far end of the runway, the glideslope antenna abeam the aim point.
-export function locDeviationDots(crossM, distToLocM) {
-  return Math.atan2(crossM, Math.max(1, distToLocM)) * 180 / Math.PI / LOC_DOT_DEG;
-}
-export function gsDeviationDots(heightAbovePathM, distToGsM) {
-  return Math.atan2(heightAbovePathM, Math.max(1, distToGsM)) * 180 / Math.PI / GS_DOT_DEG;
+// Deviation in dots (+ = right of the centreline / above the path) of devM seen from an
+// antenna distM away: the localizer's sits ~300 m past the far end of the runway
+// (LOC_DOT_DEG), the glideslope's abeam the aim point (GS_DOT_DEG).
+export function ilsDots(devM, distM, dotDeg) {
+  return Math.atan2(devM, Math.max(1, distM)) * 180 / Math.PI / dotDeg;
 }
 
 // g: { iasKt, vref, vsFpm (negative = descending), gearDown, flapsOk, glideDevDots,
@@ -120,4 +118,23 @@ export function stabilizedGate(g) {
   if (Math.abs(g.glideDevDots) > 1) failing.push('GLIDESLOPE');
   if (Math.abs(g.locDevDots) > 1) failing.push('LOCALIZER');
   return { gateHeight: g.vmc ? GATE_VMC_FT : GATE_IMC_FT, stable: failing.length === 0, failing };
+}
+
+// When to evaluate the gate, once per approach. s = { armed, armFt, done } is mutated.
+// Above the gate the gate arms (and its height is fixed for this approach, so a METAR that
+// turns IMC at 700 ft doesn't evaluate a "1,000 ft" gate at 700 ft). Descending through the
+// armed height evaluates it if the aircraft is on the final (onFinal), else just disarms.
+// After an evaluation it re-arms only 100 ft above the gate (a go-around), not on a bump.
+// Returns 'reset' when a new approach arms after an evaluation, 'evaluate' on the gate frame.
+export function gateStep(s, aaeFt, gateFt, descending, onFinal) {
+  if (aaeFt > (s.done ? gateFt + 100 : gateFt)) {
+    const reset = s.done;
+    s.armed = true; s.armFt = gateFt; s.done = false;
+    return reset ? 'reset' : '';
+  }
+  if (!s.armed || aaeFt > s.armFt || !descending) return '';
+  s.armed = false;
+  if (!onFinal) return '';
+  s.done = true;
+  return 'evaluate';
 }
