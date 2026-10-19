@@ -126,6 +126,8 @@ src/terrainLod.js   streamed Esri imagery draped on terrain.js: per-tile height 
                     skirts, hillshade in vertex colours, load queue, LRU cache
 src/sun.js          real sun (NOAA solar position) over DFW, Now/Dawn/Noon/Dusk/Night presets,
                     sky/haze/light colours by sun elevation (pure, tested)
+src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
+                    windows, back up after a fast cool-down that backs off (pure, tested)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
                     phone's top bar in landscape; pure, tested)
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
@@ -195,7 +197,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 195 kB gzipped at boot (2026-10-19: 191.4 kB; raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
+Budgets: JS ≤ 195 kB gzipped at boot (2026-10-19: 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
 from 180 for photoreal: three is one module, so the core classes the lazy glTF/3D-tiles
 chunk needs are hoisted into the entry chunk; 3d-tiles-renderer + Draco load only when
 photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.

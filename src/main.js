@@ -40,6 +40,7 @@ import { createAudio } from './audio.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
+import { createResScale, stepResScale, resetResScale } from './resScale.js';
 
 // --- Simulation State ---
 const sim = {
@@ -137,13 +138,17 @@ const runwayMeshes = []; // runway surface + markings: hidden under the photorea
 let animRefs = { prop: null, flame: null, fanL: null, fanR: null };
 let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order)
 
+// Render resolution: the device's pixel ratio capped at 2, stepped down on slow frames (0026).
+const resScale = createResScale(window.devicePixelRatio || 1);
+let resCounting = false;
+
 try {
   renderer = new THREE.WebGLRenderer({
     canvas: simCanvas,
     antialias: true,
     powerPreference: 'high-performance'
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(resScale.ratio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -2033,8 +2038,18 @@ let lastTime = performance.now();
 const MAX_FRAME_S = 0.25;
 function renderLoop(time) {
   requestAnimationFrame(renderLoop);
-  const dt = Math.min((time - lastTime) / 1000, MAX_FRAME_S);
+  const frameMs = time - lastTime;
+  const dt = Math.min(frameMs / 1000, MAX_FRAME_S);
   lastTime = time;
+  // Frames behind the modal, paused or hidden are not load; resScale also drops lone stalls.
+  // (Photoreal tile LOD follows the CSS size, not the pixel ratio: nothing else to resize.)
+  if (sim.paused || document.hidden || modalOpen()) {
+    if (resCounting) resetResScale(resScale);
+    resCounting = false;
+  } else {
+    resCounting = true;
+    if (stepResScale(resScale, frameMs)) renderer.setPixelRatio(resScale.ratio); // drawing buffer only
+  }
 
   updateGamepad();
   step6DofPhysics(dt);
@@ -2069,7 +2084,8 @@ function updateDebugOverlay(dt) {
   debugTimer = 1;
   const st = photoreal.state, s = photoreal.session;
   debugOverlay.textContent = `3D tiles: ${st.status}${st.reason ? ` (${st.reason})` : ''} · this page: ${s ? s.page.roots : 0} root, ${s ? s.page.reuses : 0} reuses`
-    + ` · this browser: ${s ? s.usage.roots : 0} roots, ${s ? s.usage.reuses : 0} reuses · tiles ${st.visibleTiles} · calib ${st.calibM.toFixed(1)} m`;
+    + ` · this browser: ${s ? s.usage.roots : 0} roots, ${s ? s.usage.reuses : 0} reuses · tiles ${st.visibleTiles} · calib ${st.calibM.toFixed(1)} m`
+    + ` · px ${resScale.ratio}`;
 }
 
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
@@ -2103,6 +2119,7 @@ window.openaeroDebug = () => {
     flapsIndex: sim.flapsIndex,
     aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
+    pixelRatio: resScale.ratio,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,
