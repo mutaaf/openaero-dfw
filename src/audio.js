@@ -2,7 +2,7 @@
 // (speechSynthesis, on-device, no network) with chirps as the fallback.
 // createAudio(sim) binds to the shared sim state; nothing starts until init() runs
 // from a user gesture (browser autoplay policy).
-import { gpwsCalloutIndex, GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, calloutWord } from './aero.js';
+import { gpwsCalloutIndex, GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, calloutWord, stallWarningKts } from './aero.js';
 
 export function createAudio(sim, onStateChange) {
   let audioCtx = null;
@@ -130,7 +130,7 @@ export function createAudio(sim, onStateChange) {
     engineGain.gain.setTargetAtTime(0.04 + sim.throttle * 0.08, now, 0.1);
     const speedRatio = Math.min(sim.iasKts / 260, 1.6);
     windGain.gain.setTargetAtTime(0.015 + speedRatio * 0.065, now, 0.1);
-    const stalling = isStallWarning(sim.iasKts, sim.spec.stallCleanKts, sim.onGround);
+    const stalling = isStallWarning(sim.iasKts, stallWarningKts(sim.spec, sim.flapsIndex), sim.onGround);
     stallGain.gain.setTargetAtTime(stalling ? 0.07 : 0.0, now, 0.05);
     checkGpwsCallouts();
     checkGpwsWarning();

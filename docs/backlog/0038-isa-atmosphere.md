@@ -1,12 +1,12 @@
 ---
 id: 0038
 title: ISA atmosphere with altitude, METAR temperature and altimeter; IAS vs TAS
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-18
-pr:
+pr: 42
 ---
 
 ## Why
@@ -25,12 +25,12 @@ TAS·√(ρ/ρ₀) (equivalent airspeed is fine below Mach 0.3; add compressibil
 Mach uses local a. HUD shows IAS on the tape and TAS/GS in the readouts.
 
 ## Acceptance criteria
-- [ ] Unit tests: ISA ρ at 0/5000/11000/20000 m match the ICAO table within 0.5%
-- [ ] Flight card "climbs much slower at 10,000 ft" promoted to `it` and passing
-- [ ] At FL100 standard day, TAS ≈ IAS × 1.16 (±2%)
-- [ ] A +15 °C METAR lengthens the C172 ground roll vs ISA (density altitude card)
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
-- [ ] No frame-time regression (e2e perf probe within budget)
+- [x] Unit tests: ISA ρ at 0/5000/11000/20000 m match the ICAO table within 0.5%
+- [x] ~~Flight card "climbs much slower at 10,000 ft" promoted~~ moved to 0039: with constant static thrust, thinner air raises excess power (T−D)·TAS, so the card closes only with thrust lapse
+- [x] At FL100 standard day, TAS ≈ IAS × 1.16 (±2%)
+- [x] A +15 °C METAR lengthens the C172 ground roll vs ISA (density altitude card)
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] No frame-time regression (e2e perf probe within budget)
 
 ## Test plan
 `tests/unit/atmosphere.test.js` against ICAO Doc 7488 values; promote the flight card;

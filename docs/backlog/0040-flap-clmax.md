@@ -1,12 +1,12 @@
 ---
 id: 0040
 title: Flap lift increments that match the real stall speeds
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-18
-pr:
+pr: 42
 ---
 
 ## Why
@@ -21,11 +21,11 @@ published stall speeds) and a stall AoA that drops slightly with flaps; `liftCoe
 in `src/aero.js` uses it. Recompute `stallCleanKts`-style warnings per flap setting.
 
 ## Acceptance criteria
-- [ ] Flight card "stalls with full flaps near 48 KCAS" promoted to `it` and passing
-- [ ] Clean stall card still passes
-- [ ] Stall warning fires 5–10 kt above the current configuration's stall speed
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
-- [ ] No frame-time regression (e2e perf probe within budget)
+- [x] Flight card "stalls with full flaps near 48 KCAS" promoted to `it` and passing
+- [x] Clean stall card still passes
+- [x] Stall warning fires 5–10 kt above the current configuration's stall speed
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] No frame-time regression (e2e perf probe within budget)
 
 ## Test plan
 Unit tests in `tests/unit/aero.test.js` for the table; promote the flight card.

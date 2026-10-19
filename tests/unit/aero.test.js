@@ -60,10 +60,22 @@ describe('groundEffectFactor', () => {
 });
 
 describe('dragCoefficient', () => {
+  it('ground effect reduces only the induced drag, never the parasite drag', () => {
+    const k = 1 / (Math.PI * b738.aspectRatio * b738.oswaldEfficiency);
+    expect(dragCoefficient(b738, 0, true, 0, 0.5)).toBeCloseTo(b738.cd0 + 0.018, 10);
+    expect(dragCoefficient(b738, 1, false, 0, 0.5)).toBeCloseTo(b738.cd0 + 0.5 * k, 10);
+  });
+
   it('adds gear and flap drag', () => {
     const clean = dragCoefficient(b738, 0.5, false, 0, 1);
     expect(dragCoefficient(b738, 0.5, true, 0, 1) - clean).toBeCloseTo(0.018, 10);
-    expect(dragCoefficient(b738, 0.5, false, 3, 1) - clean).toBeCloseTo(0.036, 10);
+    expect(dragCoefficient(b738, 0.5, false, 3, 1) - clean).toBeCloseTo(b738.flapCd[3], 10);
+    const f16 = { ...b738, flapCd: undefined }; // no table: 0.012 per notch
+    expect(dragCoefficient(f16, 0.5, false, 3, 1) - dragCoefficient(f16, 0.5, false, 0, 1)).toBeCloseTo(0.036, 10);
+  });
+  it('fixed gear is always down: the C172 cannot shed its gear drag', () => {
+    const c172 = AIRCRAFT_DATABASE.c172;
+    expect(dragCoefficient(c172, 0.3, false, 0, 1)).toBeCloseTo(dragCoefficient(c172, 0.3, true, 0, 1), 10);
   });
   it('includes induced drag k·CL²', () => {
     const k = inducedDragK(b738);
@@ -123,6 +135,18 @@ describe('warnings', () => {
 import { liftCoefficient as lc } from '../../src/aero.js';
 import { AIRCRAFT_DATABASE as DB } from '../../src/aircraft.js';
 describe('flap lift per airframe', () => {
+  it('C172 stall speeds by flap setting match the POH (53 / 50 / 48 KCAS, ±3 kt)', async () => {
+    const { stallSpeedKts } = await import('../../src/aero.js');
+    expect(Math.abs(stallSpeedKts(DB.c172, 0) - 53)).toBeLessThan(3);
+    expect(Math.abs(stallSpeedKts(DB.c172, 1) - 50)).toBeLessThan(3);
+    expect(Math.abs(stallSpeedKts(DB.c172, 3) - 48)).toBeLessThan(3);
+  });
+  it('the stall warning sounds 5 kt above the configuration stall speed', async () => {
+    const { stallSpeedKts, stallWarningKts } = await import('../../src/aero.js');
+    for (const f of [0, 1, 2, 3]) expect(stallWarningKts(DB.c172, f) - stallSpeedKts(DB.c172, f)).toBeCloseTo(5, 6);
+    expect(stallWarningKts(DB.c172, 3)).toBeLessThan(stallWarningKts(DB.c172, 0));
+  });
+
   it('the 737 needs ~4–6° AoA for 1 g at Vref+5 with flaps 25', () => {
     const s = DB.b738;
     const q = 0.5 * 1.225 * ((s.vrefKts + 5) * 0.514444) ** 2;
@@ -133,7 +157,7 @@ describe('flap lift per airframe', () => {
     expect(lc(s, aoaDeg * Math.PI / 180, 2)).toBeCloseTo(clNeeded, 3);
   });
   it('airframes without a value keep the original 0.28 per notch', () => {
-    const s = { ...DB.c172, flapClPerNotch: undefined };
+    const s = { ...DB.f16, flapClPerNotch: undefined, flapCl: undefined };
     expect(lc(s, 0, 2) - lc(s, 0, 0)).toBeCloseTo(0.56, 6);
   });
 });

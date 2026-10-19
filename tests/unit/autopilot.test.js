@@ -77,3 +77,20 @@ describe('trimAoaDeg', () => {
     expect(trimAoaDeg(s, 100, 2)).toBeLessThan(trimAoaDeg(s, 70, 2));
   });
 });
+
+import { autothrottleCommand } from '../../src/autopilot.js';
+describe('autothrottle with feed-forward', () => {
+  it('on speed and steady it flies the feed-forward throttle', () => {
+    expect(autothrottleCommand(0.3, { trim: 0 }, 141, 141, 0, 0.01)).toBeCloseTo(0.3, 6);
+  });
+  it('slow → more power, fast → less, accelerating → less (leads the change)', () => {
+    expect(autothrottleCommand(0.3, { trim: 0 }, 135, 141, 0, 0.01)).toBeGreaterThan(0.3);
+    expect(autothrottleCommand(0.3, { trim: 0 }, 147, 141, 0, 0.01)).toBeLessThan(0.3);
+    expect(autothrottleCommand(0.3, { trim: 0 }, 141, 141, 1, 0.01)).toBeLessThan(0.3);
+  });
+  it('the integral soaks up a steady error, bounded', () => {
+    const st = { trim: 0 };
+    for (let i = 0; i < 1000000; i++) autothrottleCommand(0.3, st, 131, 141, 0, 0.01);
+    expect(st.trim).toBeCloseTo(0.3, 6);
+  });
+});

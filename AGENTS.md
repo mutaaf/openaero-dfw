@@ -128,6 +128,10 @@ src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box 
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
                     integration on a `body` (main.js passes `sim`). Pure: flown headless by
                     tests/flight/ against published performance data
+src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
+                    IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
+src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/√θ power lapse,
+                    windmilling at idle), turbofan (Mach/density lapse, idle, spool lag)
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, warnings, heading math
@@ -188,7 +192,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 190 kB gzipped at boot (2026-10-17: 184 kB, almost all three.js; raised
+Budgets: JS ≤ 195 kB gzipped at boot (2026-10-19: 191.4 kB; raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
 from 180 for photoreal: three is one module, so the core classes the lazy glTF/3D-tiles
 chunk needs are hoisted into the entry chunk; 3d-tiles-renderer + Draco load only when
 photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.
