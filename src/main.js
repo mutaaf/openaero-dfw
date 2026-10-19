@@ -11,11 +11,11 @@ import { AIRCRAFT_DATABASE } from './aircraft.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
-  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M,
+  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES,
 } from './airports.js';
-import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY } from './missions.js';
+import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest, driftAngleDeg } from './landing.js';
+import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGradeFor } from './landing.js';
 import { COACH_MISSION, COACH_PROMPTS, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
 import {
@@ -960,6 +960,7 @@ function refreshCrosswindMission() {
   if (!m) btn.classList.remove('active');
   btn.classList.toggle('hidden', !m);
   btn.classList.toggle('flex', !!m);
+  refreshMissionBests();
 }
 
 // The weather for where you are flying: the active runway's field, else DFW, else scenario.
@@ -1564,6 +1565,7 @@ function loadScenario(key) {
   photoreal?.noteSessionReuse(); // a new mission keeps the same Google session (usage counter)
   if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
   document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
+  syncMissionPicker(mission);
 }
 
 // Time of day (ticket 0014): Now (the real sun over DFW, followed minute by minute), or
@@ -1711,6 +1713,7 @@ const onboardingModal = document.getElementById('onboardingModal');
 let modalOpener = null;
 function openModal(opener) {
   modalOpener = opener;
+  refreshMissionBests();
   onboardingModal.classList.remove('hidden');
   document.getElementById('modalPanel').focus({ preventScroll: true });
 }
@@ -1773,14 +1776,12 @@ for (const id of ['simCanvas', 'touchStick', 'touchThrottle']) {
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setHudMenu(false); });
 
-document.querySelectorAll('.btnMission').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.btnMission').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const scenario = btn.getAttribute('data-scenario');
-    document.getElementById('selScenario').value = scenario;
-    loadScenario(scenario);
-  });
+document.getElementById('missionList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.btnMission');
+  if (!btn) return;
+  const scenario = btn.dataset.scenario;
+  document.getElementById('selScenario').value = scenario;
+  loadScenario(scenario);
 });
 
 // Aircraft Selector
@@ -2148,8 +2149,74 @@ function populateMissionSelect() {
   }
 }
 
+// Start-screen mission picker (ticket 0029): one card per mission, grouped by airport, built
+// from MISSIONS so a new mission needs no HTML. Today's crosswind card (static, shown only
+// with live weather) sits under the recommended flight.
+const PICKER_TITLES = { recommended: 'Recommended first flight', tours: 'Tours' };
+const PICKER_COLOURS = { final: 'text-sky-300', takeoff: 'text-sky-300', tour: 'text-amber-300' };
+function buildMissionPicker() {
+  const list = document.getElementById('missionList');
+  const crosswindCard = document.getElementById('btnCrosswindToday');
+  list.replaceChildren();
+  for (const g of groupMissions(MISSIONS)) {
+    const section = document.createElement('section');
+    section.className = 'flex flex-col gap-1.5';
+    const head = document.createElement('h2');
+    head.className = 'text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono';
+    head.textContent = PICKER_TITLES[g.id] || (AIRPORT_NAMES[g.id] ? `${g.id} · ${AIRPORT_NAMES[g.id]}` : g.id);
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-cols-1 sm:grid-cols-2 gap-2';
+    for (const m of g.missions) grid.appendChild(missionCard(m, g.id === 'recommended'));
+    if (g.id === 'recommended') grid.appendChild(crosswindCard);
+    section.append(head, grid);
+    list.appendChild(section);
+  }
+}
+function missionCard(m, recommended) {
+  const btn = document.createElement('button');
+  btn.className = `btnMission hud-btn p-3 min-h-[44px] rounded-xl text-left flex flex-col gap-1${recommended ? ' border-emerald-500/50' : ''}`;
+  btn.dataset.scenario = m.key;
+  const row = document.createElement('div');
+  row.className = 'flex items-center justify-between gap-2 font-bold';
+  const title = document.createElement('span');
+  title.className = recommended ? 'text-emerald-300' : PICKER_COLOURS[m.kind] || 'text-sky-300';
+  title.textContent = m.label;
+  const best = document.createElement('span');
+  best.className = 'missionBest shrink-0 text-[10px] font-mono';
+  row.append(title, best);
+  const blurb = document.createElement('div');
+  blurb.className = 'text-[10px] text-slate-400';
+  blurb.textContent = m.blurb || '';
+  btn.append(row, blurb);
+  return btn;
+}
+// Personal bests are re-read whenever the picker opens (a landing may have set a new one).
+function refreshMissionBests() {
+  let storage = null;
+  try { storage = window.localStorage; } catch { /* storage unavailable: no grades */ }
+  for (const btn of document.querySelectorAll('#missionList .btnMission')) {
+    let key = btn.dataset.scenario;
+    if (key === CROSSWIND_KEY) {
+      const m = sim.crosswindMission;
+      key = m ? `${CROSSWIND_KEY}:${runwayEnd(m.airport, m.rwy).id}` : null;
+    }
+    const grade = key ? bestGradeFor(storage, key) : null;
+    const el = btn.querySelector('.missionBest');
+    el.textContent = grade ? `Best ${grade}` : '';
+    el.className = `missionBest shrink-0 text-[10px] font-mono ${GRADE_COLOURS[grade] || ''}`;
+  }
+}
+function syncMissionPicker(mission) {
+  for (const btn of document.querySelectorAll('#missionList .btnMission')) {
+    btn.classList.toggle('active', btn.dataset.scenario === mission.key);
+  }
+  document.getElementById('txtPickedMission').textContent = mission.label;
+}
+
 function boot() {
   populateMissionSelect();
+  buildMissionPicker();
+  refreshMissionBests();
   let seen = false;
   try { seen = coachSeen(window.localStorage); } catch { /* storage unavailable: coach on */ }
   document.getElementById('chkCoach').checked = !seen;
@@ -2166,7 +2233,6 @@ function boot() {
   loadScenario(linked || 'kdfw_35c_final');
   if (linked) {
     document.getElementById('selScenario').value = linked;
-    document.querySelectorAll('.btnMission').forEach((b) => b.classList.toggle('active', b.dataset.scenario === linked));
     try { history.replaceState(null, '', `${location.pathname}${stripDeepLink(location.search)}${location.hash}`); } catch { /* sandboxed */ }
   }
   handleResize();

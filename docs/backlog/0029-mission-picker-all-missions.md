@@ -1,7 +1,7 @@
 ---
 id: 0029
 title: Start screen lists every mission, grouped by airport, with your best grade
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: content
@@ -25,11 +25,11 @@ Enter cockpit button stays pinned and visible (>=44px). Touches `index.html`, `s
 (add a `blurb` per mission), `src/main.js` (render + wiring), `src/landing.js` (read helper).
 
 ## Acceptance criteria
-- [ ] Every key in `MISSIONS` has exactly one card; adding a mission adds a card with no HTML edit
-- [ ] Cards show the personal-best grade when one exists, nothing when none
-- [ ] At 390x844 Enter cockpit is visible without scrolling the page; cards scroll within the modal
-- [ ] Existing e2e tests that click the old cards still pass or are updated with the same intent
-- [ ] No frame-time regression
+- [x] Every key in `MISSIONS` has exactly one card; adding a mission adds a card with no HTML edit
+- [x] Cards show the personal-best grade when one exists, nothing when none
+- [x] At 390x844 Enter cockpit is visible without scrolling the page; cards scroll within the modal
+- [x] Existing e2e tests that click the old cards still pass or are updated with the same intent
+- [x] No frame-time regression
 
 ## Test plan
 Unit: a pure `groupMissions()` returns every key once, grouped by airport. E2E: open the modal,
