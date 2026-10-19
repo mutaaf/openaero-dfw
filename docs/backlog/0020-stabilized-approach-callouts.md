@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: authenticity
 created: 2026-10-17
-pr: 39
+pr: 41
 ---
 
 ## Why
