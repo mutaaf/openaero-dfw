@@ -66,9 +66,10 @@ export function sunDirection({ elevationDeg, azimuthDeg }, out = { x: 0, y: 0, z
 const LOW_SUN_DEG = 2.5;
 
 // The sun for a time-of-day mode on the solar day around `date`: Now is the real sun; the
-// others are found on today's track (5-minute samples), so they follow the season.
+// others are found on today's track (5-minute samples), so they follow the season. `at` is
+// the moment (ms) of that sun, for the stars and Moon that go with it.
 export function sunPreset(mode, date, latDeg, lonDeg) {
-  if (mode === 'Now' || !TIME_MODES.includes(mode)) return sunPosition(date, latDeg, lonDeg);
+  if (mode === 'Now' || !TIME_MODES.includes(mode)) return { ...sunPosition(date, latDeg, lonDeg), at: date.getTime() };
   // Solar noon UTC ≈ 12:00 − longitude/15 h; sample the 24 h centred on the nearest one.
   const noonOffsetMs = (12 - lonDeg / 15) * 3600000;
   const dayMs = 86400000;
@@ -81,6 +82,7 @@ export function sunPreset(mode, date, latDeg, lonDeg) {
   let prev = null;
   for (let ms = noon - dayMs / 2; ms <= noon + dayMs / 2; ms += step) {
     const s = sunPosition(new Date(ms), latDeg, lonDeg);
+    s.at = ms;
     if (!hi || s.elevationDeg > hi.elevationDeg) hi = s;
     if (!lo || s.elevationDeg < lo.elevationDeg) lo = s;
     if (prev) {
@@ -97,16 +99,23 @@ export function sunPreset(mode, date, latDeg, lonDeg) {
 }
 
 // Sky, haze and light for a sun elevation: keyframes from deep night through twilight and
-// golden hour to full day, linearly blended. Intensities are the r128-era values (main.js
-// scales them by π for three's physical light units).
+// golden hour to full day, linearly blended. `zenith`/`horizon` paint the sky dome
+// (skyDome.js), `glow` is the extra light on the sunward horizon, and the haze (fog) is the
+// horizon colour, so distant ground melts into the sky. `sky` is the dome's mean colour.
+// Intensities are the r128-era values (main.js scales them by π for three's light units).
+// Night keeps a moonlit-city ambient: the imagery must stay readable after dark (the
+// ground shader adds the city lights on top).
 const SKY_KEYS = [
-  { el: -18, sky: 0x020617, fog: 0x0f172a, ambient: 0x1e293b, ambientIntensity: 0.25, sun: 0x000000, sunIntensity: 0 },
-  { el: -6, sky: 0x1e1b4b, fog: 0x312e81, ambient: 0x475569, ambientIntensity: 0.32, sun: 0x000000, sunIntensity: 0 },
-  { el: 0, sky: 0xf97316, fog: 0x7c2d12, ambient: 0xfed7aa, ambientIntensity: 0.55, sun: 0xffa45c, sunIntensity: 0 },
-  { el: 3, sky: 0xfb9a5b, fog: 0xa8623f, ambient: 0xfed7aa, ambientIntensity: 0.62, sun: 0xffb877, sunIntensity: 0.7 },
-  { el: 8, sky: 0x7cb8f0, fog: 0xc2a07a, ambient: 0xfde6c8, ambientIntensity: 0.72, sun: 0xffd9a0, sunIntensity: 1.0 },
-  { el: 25, sky: 0x38bdf8, fog: 0x94a3b8, ambient: 0xdbeafe, ambientIntensity: 0.85, sun: 0xfffbeb, sunIntensity: 1.4 },
+  { el: -18, sky: 0x060b1a, zenith: 0x02050f, horizon: 0x1b2036, glow: 0x1b2036, ambient: 0x7d8fc4, ambientIntensity: 0.34, sun: 0x000000, sunIntensity: 0 },
+  { el: -9, sky: 0x10183a, zenith: 0x060d26, horizon: 0x2b2c4c, glow: 0x4a3550, ambient: 0x8796c8, ambientIntensity: 0.4, sun: 0x000000, sunIntensity: 0 },
+  { el: -4, sky: 0x283466, zenith: 0x12224f, horizon: 0x5a4a6a, glow: 0xb0583a, ambient: 0xb4a6c4, ambientIntensity: 0.5, sun: 0x000000, sunIntensity: 0 },
+  { el: 0, sky: 0xd9804f, zenith: 0x2c4a86, horizon: 0xe08a5a, glow: 0xff8a3c, ambient: 0xfed7aa, ambientIntensity: 0.55, sun: 0xffa45c, sunIntensity: 0 },
+  { el: 3, sky: 0xe4a070, zenith: 0x3c64a8, horizon: 0xf0aa78, glow: 0xffa050, ambient: 0xfed7aa, ambientIntensity: 0.62, sun: 0xffb877, sunIntensity: 0.7 },
+  { el: 8, sky: 0x8ab8e0, zenith: 0x3d74c0, horizon: 0xd8c4ae, glow: 0xffd6a0, ambient: 0xfde6c8, ambientIntensity: 0.72, sun: 0xffd9a0, sunIntensity: 1.0 },
+  { el: 25, sky: 0x58a8e8, zenith: 0x2a68c4, horizon: 0xb4cde6, glow: 0xfff2dc, ambient: 0xdbeafe, ambientIntensity: 0.85, sun: 0xfffbeb, sunIntensity: 1.4 },
+  { el: 60, sky: 0x4aa0ea, zenith: 0x1f5cbc, horizon: 0xaac8ea, glow: 0xfff8ec, ambient: 0xdbeafe, ambientIntensity: 0.85, sun: 0xfffbeb, sunIntensity: 1.4 },
 ];
+const COLOUR_KEYS = ['sky', 'zenith', 'horizon', 'glow', 'ambient', 'sun'];
 
 function mixHex(a, b, k) {
   let out = 0;
@@ -120,21 +129,22 @@ function mixHex(a, b, k) {
 
 export function skyForSun(elevationDeg) {
   const keys = SKY_KEYS;
-  if (elevationDeg <= keys[0].el) return { ...keys[0] };
-  const last = keys[keys.length - 1];
-  if (elevationDeg >= last.el) return { ...last };
-  let i = 1;
-  while (keys[i].el < elevationDeg) i++;
-  const a = keys[i - 1];
-  const b = keys[i];
-  const k = (elevationDeg - a.el) / (b.el - a.el);
-  return {
-    el: elevationDeg,
-    sky: mixHex(a.sky, b.sky, k),
-    fog: mixHex(a.fog, b.fog, k),
-    ambient: mixHex(a.ambient, b.ambient, k),
-    ambientIntensity: a.ambientIntensity + (b.ambientIntensity - a.ambientIntensity) * k,
-    sun: mixHex(a.sun, b.sun, k),
-    sunIntensity: a.sunIntensity + (b.sunIntensity - a.sunIntensity) * k,
-  };
+  let out;
+  if (elevationDeg <= keys[0].el) out = { ...keys[0] };
+  else if (elevationDeg >= keys[keys.length - 1].el) out = { ...keys[keys.length - 1] };
+  else {
+    let i = 1;
+    while (keys[i].el < elevationDeg) i++;
+    const a = keys[i - 1];
+    const b = keys[i];
+    const k = (elevationDeg - a.el) / (b.el - a.el);
+    out = {
+      el: elevationDeg,
+      ambientIntensity: a.ambientIntensity + (b.ambientIntensity - a.ambientIntensity) * k,
+      sunIntensity: a.sunIntensity + (b.sunIntensity - a.sunIntensity) * k,
+    };
+    for (const c of COLOUR_KEYS) out[c] = mixHex(a[c], b[c], k);
+  }
+  out.fog = out.horizon;
+  return out;
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseMetar, windVector, gustFactor, runwayWindComponents, fogDensityForVisibility,
-  scenarioWeather, metarAgeMinutes, flowForWind, pickCrosswindRunway,
+  scenarioWeather, metarAgeMinutes, flowForWind, pickCrosswindRunway, cloudLayers,
 } from '../../src/weather.js';
 import { RUNWAY_ENDS } from '../../src/airports.js';
 import { crosswindMission, missionByKey } from '../../src/missions.js';
@@ -137,5 +137,17 @@ describe('pickCrosswindRunway (today\'s crosswind challenge)', () => {
     expect(m.label).toBe("Today's crosswind: KDFW 18L, 15 kt from the right");
     expect(missionByKey('crosswind_today', [m])).toBe(m);
     expect(missionByKey('crosswind_today').key).toBe('kdfw_35c_final');
+  });
+});
+
+describe('cloudLayers (sky dome clouds)', () => {
+  it('keeps every reported layer up to FL200, lowest first, with its coverage', () => {
+    const l = cloudLayers([{ cover: 'BKN', base: 9000 }, { cover: 'FEW', base: 3500 }, { cover: 'OVC', base: 25000 }, { cover: 'CLR' }]);
+    expect(l.map((c) => c.baseFt)).toEqual([3500, 9000]);
+    expect(l[0].coverage).toBeLessThan(l[1].coverage);
+  });
+  it('is empty for a clear sky and drawn for the offline scenario (FEW050)', () => {
+    expect(cloudLayers(undefined)).toEqual([]);
+    expect(scenarioWeather().cloudLayers).toEqual([{ cover: 'FEW', baseFt: 5000, coverage: 0.2 }]);
   });
 });

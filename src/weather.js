@@ -33,6 +33,7 @@ export function parseMetar(m) {
     visibilitySm: parseVisibility(m.visib),
     ceilingFt: ceilingLayer ? ceilingLayer.base : null,
     ceilingCover: ceilingLayer ? ceilingLayer.cover : null,
+    cloudLayers: cloudLayers(m.clouds),
     altimInHg: typeof m.altim === 'number' ? m.altim * HPA_TO_INHG : 29.92,
     tempC: m.temp,
     fltCat: m.fltCat || null,
@@ -40,11 +41,25 @@ export function parseMetar(m) {
   };
 }
 
+// How much of the sky each METAR cover code hides (oktas / 8, mid-range: FEW 1–2, SCT 3–4,
+// BKN 5–7, OVC 8).
+const COVERAGE = { FEW: 0.2, SCT: 0.45, BKN: 0.75, OVC: 1, OVX: 1 };
+
+// Every reported layer up to FL200, lowest first, at most three: what the sky dome draws.
+export function cloudLayers(clouds) {
+  return (clouds || [])
+    .filter((c) => COVERAGE[c.cover] && typeof c.base === 'number' && c.base <= 20000)
+    .sort((a, b) => a.base - b.base)
+    .slice(0, 3)
+    .map((c) => ({ cover: c.cover, baseFt: c.base, coverage: COVERAGE[c.cover] }));
+}
+
 // Mild fallback used offline or when the API is unavailable. Never labelled "live".
 export function scenarioWeather() {
   return {
     icao: 'KDFW', raw: 'SCENARIO KDFW 35010KT 10SM FEW050 18/08 A3000', obsTime: null,
     windDirDeg: 350, windKts: 10, gustKts: 10, visibilitySm: 10, ceilingFt: null, ceilingCover: null,
+    cloudLayers: cloudLayers([{ cover: 'FEW', base: 5000 }]),
     altimInHg: 30.0, tempC: 18, fltCat: 'VFR', live: false,
   };
 }

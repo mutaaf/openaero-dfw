@@ -29,6 +29,7 @@ test('first visit coaches the default final; Skip dismisses it; a reload does no
 test('the coach can be re-enabled from the modal', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('openaero_coach_v1', JSON.stringify({ v: 1, seen: true, at: 1 })));
   await page.goto(BASE);
+  await page.locator('summary', { hasText: 'Options' }).click();
   await page.locator('#chkCoach').check();
   await page.locator('#btnStartFlight').click();
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });

@@ -2,7 +2,13 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Headless Chromium renders WebGL through SwiftShader (software GL), in CI and locally.
 const GL_ARGS = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
-const DESKTOP = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } };
+// Most desktop specs drive the instrument panels, so they start in the full view; the clean
+// view (the default for players) has its own spec that clears this (tests/e2e/view.spec.js).
+export const FULL_VIEW = {
+  cookies: [],
+  origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'openaero_view_v1', value: '{"v":1,"clean":false,"at":0}' }] }],
+};
+const DESKTOP = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 }, storageState: FULL_VIEW };
 
 export default defineConfig({
   testDir: 'tests/e2e',

@@ -1,7 +1,7 @@
 ---
 id: 0011
 title: Light the runways (edge, approach and PAPI lights that read at night)
-status: ready
+status: in-progress
 priority: P2
 size: M
 lens: authenticity
@@ -21,9 +21,9 @@ flashers (static under reduced motion), PAPI lamps that glow. Light intensity sc
 with the sun elevation.
 
 ## Acceptance criteria
-- [ ] At night, a screenshot from 4 NM shows the runway outline and approach lights
-- [ ] One draw call per light type (InstancedMesh or Points), frame budget held
-- [ ] Reduced motion: no flasher animation
+- [x] At night, a screenshot from 4 NM shows the runway outline and approach lights
+- [x] One draw call for all the lights (Points), frame budget held
+- [x] Reduced motion: no flasher animation
 
 ## Test plan
 e2e night screenshot with tiles stubbed, assert bright pixels along the runway column;

@@ -27,3 +27,15 @@ The regression guard in the test fails above 250 ms average. That's deliberately
 - `syncUI()` does ~25 `document.getElementById` lookups and text writes **every frame**,
   even when values haven't changed. Cache the elements once and write only on change.
 - `updateCamera()` allocates with `sim.pos.clone()` in three camera modes every frame.
+
+2026-10-19, 0052/0053/0011 (sky dome, stars, Moon, METAR clouds, night ground, runway lights,
+clean view), 1280x720:
+
+| Build | SwiftShader (`perf.spec`, `--workers=1`) avg / p95 | Apple M1 Max, Metal, uncapped, day avg / p95 | same, Night |
+|---|---|---|---|
+| main (b4bb5f9) | 34.6 ms / 50 ms | 2.29 ms / 4.4 ms | 2.32 ms / 4.5 ms |
+| this change | 41.8 ms / 50 ms | 1.63 ms / 3.9 ms | 1.70 ms / 3.9 ms |
+
+On software GL the dome and the 8,865 runway-light points cost a few ms (stars and runway
+lights are skipped in clear daylight, the dome draws after the ground on the far plane); on a
+GPU the frame got cheaper, mostly from the clean view folding away the blurred panels.

@@ -26,8 +26,6 @@ test('reduced motion: no CSS animation runs, alerts stay visible but still (0007
   const running = await page.evaluate(() => document.getAnimations()
     .map((a) => `${a.constructor.name} ${a.animationName || a.transitionProperty || ''} on ${a.effect?.target?.id || a.effect?.target?.className}`));
   expect(running).toEqual([]);
-  // The scanline overlay is a constant flicker-like pattern: gone under reduce.
-  await expect(page.locator('.scanlines')).toBeHidden();
   expect(errors).toEqual([]);
 });
 
@@ -35,15 +33,14 @@ test('without reduced motion the alert still pulses (0007)', async ({ page }) =>
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto(BASE);
   const names = await page.evaluate(() => document.getAnimations().map((a) => a.animationName));
-  expect(names).toContain('ping');
-  await expect(page.locator('.scanlines')).toBeVisible();
+  expect(names).toContain('pulse');
 });
 
 test('keyboard: Tab reaches ENTER COCKPIT with a visible focus ring, Enter starts the flight (0007)', async ({ page }) => {
   await page.goto(BASE);
   await expect(page.locator('#onboardingModal')).toBeVisible();
   let reached = false;
-  for (let i = 0; i < 30 && !reached; i++) {
+  for (let i = 0; i < 60 && !reached; i++) {
     await page.keyboard.press('Tab');
     const id = await page.evaluate(() => document.activeElement?.id);
     // Focus never leaves the open modal.

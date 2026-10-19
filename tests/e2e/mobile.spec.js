@@ -205,7 +205,8 @@ test('phone: telemetry and touch labels are at least 10 px and reach 4.5:1 (0007
   await stubTiles(page);
   await enterCockpit(page);
   expect(await lowContrastLabels(page, '#phoneTelemetry, #touchDeck')).toEqual([]);
-  const sizes = await page.locator('#phoneTelemetry div > div').evaluateAll((els) => els.map((el) => parseFloat(getComputedStyle(el).fontSize)));
+  const sizes = await page.locator('#phoneTelemetry div > div').evaluateAll((els) => els.filter((el) => el.checkVisibility())
+    .map((el) => parseFloat(getComputedStyle(el).fontSize)));
   expect(sizes.length).toBe(4);
   for (const px of sizes) expect(px).toBeGreaterThanOrEqual(10);
 });

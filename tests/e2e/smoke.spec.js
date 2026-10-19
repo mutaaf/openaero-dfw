@@ -9,7 +9,7 @@ test('boots under the base path with zero console errors', async ({ page }) => {
   const errors = collectErrors(page);
   const res = await page.goto(BASE);
   expect(res.status()).toBe(200);
-  await expect(page).toHaveTitle(/Dallas Metroplex/);
+  await expect(page).toHaveTitle(/OpenAero DFW/);
   await expect(page.locator('#btnStartFlight')).toBeVisible();
   await page.waitForTimeout(1500);
   expect(errors).toEqual([]);
