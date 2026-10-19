@@ -37,6 +37,7 @@ import {
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
+import { createWakeLock, wantWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
@@ -1729,11 +1730,13 @@ function closeModal(restoreFocus = false) {
   modalOpener = null;
 }
 const modalOpen = () => !onboardingModal.classList.contains('hidden');
+let cockpitEntered = false; // the first ENTER COCKPIT (ticket 0032)
 document.getElementById('btnCloseModal').addEventListener('click', (e) => {
   applyCoachChoice();
   closeModal(e.detail === 0);
 });
 document.getElementById('btnStartFlight').addEventListener('click', () => {
+  cockpitEntered = true;
   if (document.getElementById('chkAutoSound').checked) audio.init();
   applyCoachChoice();
   // The (billable) Google session starts only when someone actually flies, once per page.
@@ -1833,14 +1836,24 @@ document.getElementById('btnMouseYoke').addEventListener('click', () => {
 
 document.getElementById('btnTimeOfDay').addEventListener('click', toggleTimeOfDay);
 
-document.getElementById('btnPause').addEventListener('click', () => {
-  sim.paused = !sim.paused;
+function setPaused(paused) {
+  sim.paused = paused;
+  audio.pause(paused);
   document.getElementById('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
   // Pause/Resume lives in the folded menu on phones: say so on the button that's always shown.
   const menuBtn = document.getElementById('btnMenu');
   menuBtn.textContent = sim.paused ? '☰ PAUSED' : '☰ Menu';
   menuBtn.classList.toggle('text-red-400', sim.paused);
   menuBtn.classList.toggle('text-sky-300', !sim.paused);
+}
+document.getElementById('btnPause').addEventListener('click', () => setPaused(!sim.paused));
+
+// Ticket 0032: switching tabs or locking the phone pauses the flight (also behind the
+// Missions modal mid-flight, where the sim keeps running). Coming back does not resume it:
+// the player taps Resume, so a landing never starts without them. Before the first ENTER
+// COCKPIT nothing is flying and there is no sound yet.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && !sim.paused && cockpitEntered) setPaused(true);
 });
 
 document.getElementById('btnReset').addEventListener('click', () => {
@@ -2034,6 +2047,8 @@ document.getElementById('btnAudio').addEventListener('click', () => {
   }
 });
 
+const wakeLock = createWakeLock();
+const resultsCard = document.getElementById('resultsCard');
 let lastTime = performance.now();
 // Longest frame the sim catches up on (a hidden tab or a stall beyond this is skipped).
 const MAX_FRAME_S = 0.25;
@@ -2051,6 +2066,9 @@ function renderLoop(time) {
     resCounting = true;
     if (stepResScale(resScale, frameMs)) renderer.setPixelRatio(resScale.ratio); // drawing buffer only
   }
+
+  // Keep the screen awake while flying (released when paused, hidden or on results).
+  wakeLock.sync(wantWakeLock(sim.paused, document.hidden, modalOpen(), !resultsCard.classList.contains('hidden')));
 
   updateGamepad();
   step6DofPhysics(dt);
@@ -2121,6 +2139,9 @@ window.openaeroDebug = () => {
     aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
     pixelRatio: resScale.ratio,
+    paused: sim.paused,
+    audio: audio.state,
+    wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
     lastLanding: sim.lastLanding,

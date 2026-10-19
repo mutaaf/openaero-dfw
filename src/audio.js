@@ -12,7 +12,7 @@ export function createAudio(sim, onStateChange) {
 
   function init() {
     if (audioCtx) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      if (!sim.paused) pause(false); // paused (ticket 0032) stays silent until Resume
       return;
     }
     try {
@@ -154,5 +154,19 @@ export function createAudio(sim, onStateChange) {
   // The autopilot tutor's voice: queued, never interrupting a callout.
   const teach = (text) => say(text, { interrupt: false });
 
-  return { init, update, mute, callout, teach, get started() { return audioCtx !== null; } };
+  // Pause (ticket 0032): silence everything, the engine drone and any queued speech;
+  // pause(false) undoes only that (init() still needs a user gesture to create the context).
+  // No state checks: the state flips only when the promise settles, so a quick pause/resume
+  // would be dropped; Web Audio applies the calls in order. iOS reports 'interrupted' after a
+  // lock, which resuming also covers.
+  function pause(on) {
+    try { if (on) synth?.cancel(); } catch { /* best-effort */ }
+    if (audioCtx && audioCtx.state !== 'closed') audioCtx[on ? 'suspend' : 'resume']().catch(() => {});
+  }
+
+  return {
+    init, update, mute, callout, teach, pause,
+    get started() { return audioCtx !== null; },
+    get state() { return audioCtx ? audioCtx.state : 'off'; },
+  };
 }
