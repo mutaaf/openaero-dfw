@@ -14,6 +14,7 @@ test('autoland explains itself, lights its controls, and Your turn hands control
   const panel = (await page.viewportSize()).width >= 1024 ? '#virtualStickPad' : '#touchStick';
   await expect(page.locator(panel)).toHaveClass(/ap-flying/);
   await expect(page.locator('#btnTakeover')).toBeVisible();
+  await expect(page.locator('#btnCoachSkip')).toHaveText('Hide');
 
   await page.click('#btnTakeover');
   await expect(page.locator('#btnApApr')).not.toHaveClass(/(^|\s)active(\s|$)/);
@@ -21,6 +22,7 @@ test('autoland explains itself, lights its controls, and Your turn hands control
   await expect(page.locator('#btnTakeover')).toBeHidden();
   // The coach picks up the hand-flown final.
   await expect(page.locator('#txtCoachLabel')).toHaveText('Coach', { timeout: 5_000 });
+  await expect(page.locator('#btnCoachSkip')).toHaveText('Skip');
   expect(errors).toEqual([]);
 });
 

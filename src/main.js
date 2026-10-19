@@ -846,7 +846,9 @@ function updateCoach(dt) {
   document.getElementById('btnTakeover').classList.toggle('hidden', !caption);
   if (key === null) return;
   document.getElementById('txtCoachLabel').textContent = caption ? 'Autopilot' : 'Coach';
-  document.getElementById('btnCoachSkip').setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
+  const skip = document.getElementById('btnCoachSkip');
+  skip.textContent = caption ? 'Hide' : 'Skip';
+  skip.setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
   if (caption) {
     tutorVals.targetKts = sim.spec.vrefKts + 5;
     tutorVals.hdgDeg = String(Math.round(sim.targetHdgDeg) % 360).padStart(3, '0');
