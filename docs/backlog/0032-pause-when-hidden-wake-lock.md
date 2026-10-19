@@ -6,7 +6,7 @@ priority: P1
 size: S
 lens: tech-health
 created: 2026-10-18
-pr: 46
+pr: 47
 ---
 
 ## Why
