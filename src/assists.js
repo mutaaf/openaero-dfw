@@ -23,11 +23,11 @@ export const DEFAULT_ASSIST = 'pilot';
 
 export const ASSIST_CONFIG = {
   kid: {
-    label: 'Kid', bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 3,
+    bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 3,
     autoThrottle: true, autoConfig: true, autoFlare: true, softLanding: true, groundFloor: true, handsOff: true,
   },
   learner: {
-    label: 'Learner', bankMaxDeg: 45, pitchUpMaxDeg: 20, pitchDownMaxDeg: -15, aoaMarginDeg: 2,
+    bankMaxDeg: 45, pitchUpMaxDeg: 20, pitchDownMaxDeg: -15, aoaMarginDeg: 2,
     autoThrottle: false, autoConfig: false, autoFlare: false, softLanding: false, groundFloor: false, handsOff: false,
   },
   pilot: null,
@@ -42,7 +42,8 @@ const PITCH_RATE_DEG_S = 8;   // full fore/aft stick moves the held pitch this f
 const PITCH_LEAD_DEG = 4;     // the held pitch never runs further than this ahead of the nose
 const COORD_GAIN = 0.1;       // rudder per degree of sideslip
 const CMD_SHARE = 0.85;       // full stick commands this share of a limit; the rest is overshoot room
-const FLARE_FROM_M = 12;      // Kid auto-flare: wheel height where it starts
+const FLARE_FROM_M = 12;      // Kid auto-flare: wheel height where it starts…
+const FLARE_BANK_DEG = 5;     // …and the most bank it allows there (wingtip strike is > 10°)
 const FLOOR_BELOW_M = 150;    // Kid ground floor: below ~500 ft no dive steeper than…
 const FLOOR_GAMMA_DEG = -4;   // …a 4° descent (a 3° glidepath still fits)
 const TAIL_MARGIN_DEG = 2;    // Kid auto-flare keeps the tail this far off the runway
@@ -95,13 +96,14 @@ export function shapeControls(cfg, st, s, dt, out) {
   out.elev = elevatorForPitch(pitchCmd, s.pitchDeg, s.pitchRateUp);
 
   // Roll: the stick commands a bank angle, capped; release = wings level.
-  const bankShare = cfg.bankMaxDeg * CMD_SHARE;
+  const bankLimit = cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M ? FLARE_BANK_DEG : cfg.bankMaxDeg;
+  const bankShare = bankLimit * CMD_SHARE;
   const bankCmd = Math.abs(s.rollIn) <= DEAD && cfg.handsOff
     ? clamp(s.guideBankDeg, -bankShare, bankShare)
     : clamp(s.rollIn, -1, 1) * bankShare;
   out.ail = aileronForBank(bankCmd, s.bankRightDeg, s.rollRateRight);
   // A bank past the cap (gust, upset) is rolled back at full authority.
-  if (Math.abs(s.bankRightDeg) > cfg.bankMaxDeg) out.ail = -Math.sign(s.bankRightDeg);
+  if (Math.abs(s.bankRightDeg) > bankLimit) out.ail = -Math.sign(s.bankRightDeg);
 
   // Yaw: the pilot's rudder if they use it, else coordinate (rudder + = yaw right cancels
   // a positive, from-the-right sideslip).

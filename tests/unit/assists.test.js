@@ -188,6 +188,17 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
   }
 });
 
+describe('Kid wings level in the flare', () => {
+  it('below the flare height full stick rolls back toward 5° of bank, never a wingtip strike', () => {
+    const out = {};
+    shapeControls(assistConfig('kid'), createAssistState(), {
+      pitchIn: 0, rollIn: 1, yawIn: 0, pitchDeg: 3, bankRightDeg: 12, pitchRateUp: 0, rollRateRight: 0,
+      aoaDeg: 5, betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 11, onGround: false, wheelHeightM: 6, gsMps: 70, guideBankDeg: 0, guideGammaDeg: -3,
+    }, 1 / 120, out);
+    expect(out.ail).toBe(-1);
+  });
+});
+
 describe('Kid ground floor', () => {
   it('below ~500 ft a held dive is shallowed to a 4° descent; above it, and in Learner, it is not', () => {
     const s = {

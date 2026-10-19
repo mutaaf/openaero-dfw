@@ -8,6 +8,12 @@ import {
 const onPath = { aglFt: 900, vsiFpm: -700, papiWhite: 2, throttle: 0.44, onGround: false, autopilot: false };
 
 describe('coachTarget', () => {
+  it('Kid level: one hands-off prompt, never power, flare or idle', () => {
+    expect(coachTarget({ ...onPath, kid: true })).toBe('kid');
+    expect(coachTarget({ ...onPath, kid: true, papiWhite: 0, vsiFpm: -1500 })).toBe('kid');
+    expect(coachTarget({ ...onPath, kid: true, aglFt: 20, throttle: 0.3 })).toBeNull();
+    expect(coachTarget({ ...onPath, kid: true, papiWhite: null })).toBeNull();
+  });
   it('on the glidepath it points at the PAPI', () => {
     expect(coachTarget(onPath)).toBe('papi');
   });

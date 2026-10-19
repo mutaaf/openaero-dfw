@@ -709,7 +709,9 @@ function checkStabilizedGate() {
 }
 
 // --- Landing grade ---------------------------------------------------------------
+let softResetAt = null; // Kid soft landing: sim time at which the mission restarts
 function checkTouchdown(dt) {
+  if (softResetAt !== null && sim.simTime >= softResetAt) { softResetAt = null; loadScenario(sim.missionKey); return; }
   if (!sim.onGround) {
     sim.airborneTime += dt;
     if (sim.aglFt > 50) sim.landingGraded = false;
@@ -740,9 +742,9 @@ function checkTouchdown(dt) {
   // Kid: a hard landing bounces and starts the approach again instead of crashing.
   if (result.grade === 'CRASH' && assist && assist.softLanding) {
     sim.vel.y = Math.max(sim.vel.y, 2.5);
-    showToast('Boing! That was a bit hard. Let\'s try again!');
-    const key = sim.missionKey;
-    setTimeout(() => { if (sim.missionKey === key) loadScenario(key); }, 2000);
+    coach.done = true; coach.prompt = null; // no "Touchdown!" over the bounce
+    showToast(`Boing! ${result.reason} Let's try again!`);
+    softResetAt = sim.simTime + 2; // counted in sim time: a pause holds it
     return;
   }
   sim.lastLanding = {
@@ -773,6 +775,8 @@ function showResults(result, best, end, gate) {
   const bestEl = document.getElementById('txtBest');
   if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
   else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';
+  // Kid and Learner bests are their own (assists.js): say which level this grade is for.
+  if (bestEl.textContent && sim.assist !== 'pilot') bestEl.textContent = `${sim.assist === 'kid' ? 'Kid' : 'Learner'} level · ${bestEl.textContent}`;
   // Not scored: the stabilized-gate verdict (null when the mission started below the gate).
   const gateEl = document.getElementById('txtStabilized');
   gateEl.classList.toggle('hidden', !gate);
@@ -811,7 +815,7 @@ let coachShown = undefined; // prompt key on screen, to touch the DOM only on ch
 let coachMarked = false; // 'seen' is stored the first time a prompt actually shows
 let coachDoneS = 0;
 const COACH_DONE_SHOW_S = 4;
-const coachInput = { aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false };
+const coachInput = { aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false };
 
 function resetCoach() {
   Object.assign(coach, createCoach());
@@ -857,6 +861,7 @@ function updateCoach(dt) {
     coachInput.throttle = sim.throttle;
     coachInput.onGround = sim.onGround;
     coachInput.autopilot = sim.apMaster || sim.apApproach;
+    coachInput.kid = sim.assist === 'kid';
     stepCoach(coach, coachInput, dt);
     if (coach.done) coachDoneS += dt;
     prompt = coach.done && coachDoneS > COACH_DONE_SHOW_S ? null : coach.prompt;
@@ -1586,6 +1591,7 @@ function loadScenario(key) {
   sim.apApproach = false;
   resetApFilters();
   resetAssistState(assistState);
+  softResetAt = null;
   sim.lastCalloutIdx = -1;
   Object.assign(sim.gateState, { armed: false, armFt: GATE_VMC_FT, done: false });
   sim.gate = null;
@@ -2323,6 +2329,7 @@ function refreshMissionBests() {
 // Assist level picker on the start screen (ticket 0042): three big buttons, remembered.
 function setAssist(level, remember = true) {
   if (!ASSIST_LEVELS.includes(level)) return;
+  const changed = sim.assist !== level;
   sim.assist = level;
   for (const btn of document.querySelectorAll('#assistPicker .btnAssist')) {
     const on = btn.dataset.assist === level;
@@ -2333,6 +2340,9 @@ function setAssist(level, remember = true) {
   resetAssistState(assistState);
   if (remember) { try { saveAssist(window.localStorage, level); } catch { /* storage unavailable */ } }
   refreshMissionBests();
+  // A new level starts the flight over: a landing is graded and kept under the level it was
+  // flown at, and no surface is left where the other input path put it.
+  if (remember && changed) loadScenario(sim.missionKey);
 }
 for (const btn of document.querySelectorAll('#assistPicker .btnAssist')) {
   btn.addEventListener('click', () => setAssist(btn.dataset.assist));
