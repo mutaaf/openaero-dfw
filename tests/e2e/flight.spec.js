@@ -55,16 +55,20 @@ test('ILS autoland holds the localizer and glideslope from 4 NM, pitch steady', 
   await enterCockpit(page);
   await page.selectOption('#selScenario', 'kdal_31r_final');
   await page.click('#btnApApr');
-  const t0 = Date.now();
+  // Windows in sim seconds: CI's software GL can fall behind wall time.
+  const t0 = (await snap(page)).simTime;
   const pitches = [];
-  while (Date.now() - t0 < 45_000) {
+  for (;;) {
     const s = await snap(page);
+    const t = s.simTime - t0;
+    if (t > 45) break;
     expect(Math.abs(s.crossM), 'localizer').toBeLessThan(20);
     expect(Math.abs(s.heightAbovePathM), 'glideslope').toBeLessThan(20);
     expect(Math.abs(s.bankRightDeg), 'wings').toBeLessThan(30);
-    if (Date.now() - t0 > 10_000) pitches.push(s.pitchDeg);
+    if (t > 10) pitches.push(s.pitchDeg);
     await page.waitForTimeout(250);
   }
+  expect(pitches.length).toBeGreaterThan(20);
   // Ticket 0016: no autothrottle/glidepath phugoid. Before the fix pitch swung −2.5°…+6.3°
   // with a ~28 s period; it must stay within ±1.5° of its mean after the first 10 s.
   const mean = pitches.reduce((a, b) => a + b, 0) / pitches.length;

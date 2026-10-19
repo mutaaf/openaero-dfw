@@ -64,7 +64,7 @@ const sim = {
 
   // Autopilot
   apMaster: false, apHdgHold: false, apAltHold: false, apApproach: false,
-  apPrevIasKts: null, apIasRate: 0, apGsIntegral: 0, // autothrottle / glidepath filter state
+  apPrevIasKts: null, apIasRate: 0, apGsIntegral: 0, apGsEndId: null, // autothrottle / glidepath filter state
   targetHdgDeg: 360, targetAltFt: 1880,
 
   // Camera System
@@ -999,10 +999,11 @@ function integrateSubStep(dt) {
       sim.elevInput = elevatorForPitch(Math.min(9.5, gammaDeg + sim.aoaDeg), pitchDeg, pitchRateUp);
     };
 
-    // Filtered airspeed trend (kt/s) for the autothrottle's proportional term.
-    if (sim.apPrevIasKts !== null) {
-      const rate = (sim.iasKts - sim.apPrevIasKts) / dt;
-      sim.apIasRate += (rate - sim.apIasRate) * Math.min(1, dt / 0.5);
+    // Filtered airspeed trend (kt/s) for the autothrottle's proportional term. A jump of
+    // > 5 kt in one sub-step is a teleport (mission load), not flight: skip that sample.
+    if (sim.apPrevIasKts !== null && dt > 0) {
+      const dIas = sim.iasKts - sim.apPrevIasKts;
+      if (Math.abs(dIas) < 5) sim.apIasRate += (dIas / dt - sim.apIasRate) * Math.min(1, dt / 0.5);
     }
     sim.apPrevIasKts = sim.iasKts;
 
@@ -1012,13 +1013,18 @@ function integrateSubStep(dt) {
       const wheelH = sim.pos.y - sim.groundY - spec.gearHeight;
       const gsMps = Math.max(20, Math.hypot(sim.vel.x, sim.vel.z));
       if (wheelH > 15) {
-        sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
+        // Integrate only near the path (no windup while capturing from far above/below),
+        // and start over when the active runway changes.
+        if (sim.apGsEndId !== sim.activeEnd.id) { sim.apGsEndId = sim.activeEnd.id; sim.apGsIntegral = 0; }
+        if (Math.abs(ap.heightAbovePathM) < 15) {
+          sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
+        }
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral));
         sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 5, sim.throttle, dt, sim.apIasRate);
       } else {
         // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
         holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
-        if (wheelH > 8) sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 3, sim.throttle, dt * 3, sim.apIasRate);
+        if (wheelH > 8) sim.throttle = throttleForSpeed(sim.iasKts, spec.vrefKts + 3, sim.throttle, dt * 3);
         else sim.throttle = Math.max(0, sim.throttle - dt * 0.5);
       }
       if (sim.onGround) { sim.elevInput = 0; sim.throttle = 0; }
@@ -1443,6 +1449,7 @@ function resetApFilters() {
   sim.apPrevIasKts = null;
   sim.apIasRate = 0;
   sim.apGsIntegral = 0;
+  sim.apGsEndId = null;
 }
 
 function loadScenario(key) {
@@ -2016,6 +2023,7 @@ window.openaeroDebug = () => {
   const m = sim.loadedMission || missionByKey(sim.missionKey);
   return {
     mission: sim.missionKey,
+    simTime: sim.simTime,
     missionRunway: m.kind === 'tour' ? null : `${m.airport}_${m.rwy}`,
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
     activeRunway: sim.activeEnd ? sim.activeEnd.id : null,
