@@ -38,7 +38,7 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 //    proportional only), so the wing reaches lift-off speed later.
 //  - brakes 138 m: main-wheel brakes only, load moves to the nose wheel, 0.36 g. The 0.45 μ
 //    reference is flightModel.js's assumption, not the POH; the POH landing-roll card that
-//    should replace it is ticket 0050.
+//    should replace it is ticket 0051.
 const GAPS = { flightModel: new Set(), jsbsim: new Set(['takeoff', 'brakes']) };
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
