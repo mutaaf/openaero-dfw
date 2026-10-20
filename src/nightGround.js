@@ -24,8 +24,8 @@ const FRAG_MAIN = /* glsl */`
 #ifdef NIGHT_TINT
   diffuseColor.rgb *= uGroundTint;
 #endif
-#ifdef USE_MAP
-if (uNight > 0.001) {
+#if defined(USE_MAP) && defined(NIGHT_GROUND)
+{
   vec3 tex = sampledDiffuseColor.rgb;
   float lum = dot(tex, vec3(0.2126, 0.7152, 0.0722));
   float mx = max(tex.r, max(tex.g, tex.b)), mn = min(tex.r, min(tex.g, tex.b));
@@ -58,16 +58,37 @@ if (uNight > 0.001) {
 #endif
 `;
 
+// The lights are compiled in only while they are on: by day the ground runs the plain
+// imagery shader (software GL pays for a skipped branch on every pixel). Switching
+// recompiles once, at sunset or sunrise or when the player picks another time of day.
+let lightsOn = false;
+const patched = new Set(); // WeakRefs: photoreal tiles come and go
+
+// Sets how far the city lights are on (0..1); recompiles the ground when they switch.
+export function setCityLights(k) {
+  nightUniforms.uNight.value = k;
+  const on = k > 0.001;
+  if (on === lightsOn) return;
+  lightsOn = on;
+  for (const ref of patched) {
+    const m = ref.deref();
+    if (m) m.needsUpdate = true; else patched.delete(ref);
+  }
+}
+
 // `tint`: multiply by the shared ground light (for materials whose colour isn't the tint).
 export function patchNightGround(material, { tint = false } = {}) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uNight = nightUniforms.uNight;
     shader.uniforms.uGroundTint = nightUniforms.uGroundTint;
     shader.vertexShader = VERT_PARS + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>\n${VERT_MAIN}`);
-    shader.fragmentShader = (tint ? '#define NIGHT_TINT\n' : '') + FRAG_PARS
+    shader.fragmentShader = (tint ? '#define NIGHT_TINT\n' : '') + (lightsOn ? '#define NIGHT_GROUND\n' : '') + FRAG_PARS
       + shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`);
   };
-  material.customProgramCacheKey = () => (tint ? 'nightGround:tint' : 'nightGround');
+  material.customProgramCacheKey = () => `nightGround:${tint ? 'tint' : ''}:${lightsOn ? 'lit' : 'day'}`;
+  const ref = new WeakRef(material);
+  patched.add(ref);
+  material.addEventListener('dispose', () => patched.delete(ref));
   return material;
 }
 

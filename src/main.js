@@ -43,7 +43,7 @@ import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
-import { nightUniforms, cityLightsFor } from './nightGround.js';
+import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
@@ -255,7 +255,7 @@ function applyGroundLight(only) {
   if (!only) terrainLod?.setTint(_tint);
   // Photoreal tiles take the same light, relative to full day (Google's photos are daylit).
   nightUniforms.uGroundTint.value.copy(_tint).multiplyScalar(1 / DAY_TINT);
-  nightUniforms.uNight.value = cityLightsFor(sun.elevationDeg);
+  setCityLights(cityLightsFor(sun.elevationDeg));
 }
 // Luminance of the flat-ground tint under the high noon sun (skyForSun(60)).
 const DAY_TINT = (() => {
@@ -1352,6 +1352,11 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major) {
   hudCtx.beginPath();
   hudCtx.rect(side < 0 ? x - 60 : x, y - half, 60, half * 2);
   hudCtx.clip();
+  // A faint dark strip keeps the scale readable over bright imagery and still shows the
+  // runway through it (a text shadow blur did the same at many times the cost on software
+  // rasterizers).
+  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.3)';
+  hudCtx.fill();
   hudCtx.strokeStyle = 'rgba(186, 230, 253, 0.85)';
   hudCtx.fillStyle = '#e0f2fe';
   hudCtx.font = '10px monospace';
@@ -1445,8 +1450,6 @@ function renderHud() {
 
   // Speed and altitude tapes: see-through scales that scroll past a boxed readout, so
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
-  hudCtx.shadowColor = 'rgba(2, 6, 23, 0.9)';
-  hudCtx.shadowBlur = 3;
   drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20);
   drawTape(cx + 130, cy, 1, sim.mslFt, 0.2, 100, 500);
 
@@ -1461,7 +1464,6 @@ function renderHud() {
   hudCtx.font = 'bold 13px monospace';
   hudCtx.fillText(`${String(hdgDeg).padStart(3, '0')}°`, cx, hdgTop + 16);
   hudCtx.font = '12px monospace';
-  hudCtx.shadowBlur = 0;
 
   // ILS Guidance Crosshairs
   // Fly-to bars: the localizer bar sits where the centreline is (left when you're right of

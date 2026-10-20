@@ -14,13 +14,19 @@ const R_MOON = 72000;
 const MOON_DIAMETER_DEG = 0.9;
 const SPACE_BLUE = new THREE.Color(0x020a2a);
 
-// The smooth parts (gradient, twilight glow, overcast) are per vertex on a dense dome; the
-// fragment shader adds only what needs a pixel: the sun's disc and halo, the Moon's glow.
+// Software GL pays for every sky pixel, so nearly all of the sky is per vertex on a dense
+// dome: the gradient, twilight glow, overcast, the sun's wide halo and the Moon's glow, then
+// ACES and sRGB (the same functions three applies per pixel). The fragment shader only
+// dithers, except within ~16° of the sun, where the tight aureole and the disc need a pixel.
 const SKY_VERT = /* glsl */`
-uniform vec3 uZenith, uHorizon, uGlow, uSunDir, uOvercastCol, uSpaceCol;
-uniform float uGlowK, uOvercast, uSpace;
+#include <tonemapping_pars_fragment>
+#include <colorspace_pars_fragment>
+uniform vec3 uZenith, uHorizon, uGlow, uSunDir, uSunCol, uMoonDir, uOvercastCol, uSpaceCol;
+uniform float uGlowK, uOvercast, uSpace, uSunVis, uMoonLit;
 varying vec3 vDir;
 varying vec3 vBase;
+varying vec3 vOut;
+varying float vSunC;
 void main() {
   vDir = position;
   vec3 d = normalize(position);
@@ -33,35 +39,40 @@ void main() {
   vec2 dh = normalize(d.xz + 1e-5), sh = normalize(uSunDir.xz + 1e-5);
   float toward = max(dot(dh, sh), 0.0);
   col += uGlow * uGlowK * pow(toward, 2.5) * exp(-max(h, 0.0) * 7.0);
-  vBase = mix(col, uOvercastCol, uOvercast * smoothstep(-0.1, 0.12, h));
+  col = mix(col, uOvercastCol, uOvercast * smoothstep(-0.1, 0.12, h));
+  float clear = 1.0 - uOvercast;
+  // The sun's wide Mie halo and the moonlit haze around the Moon.
+  float c = max(dot(d, uSunDir), 0.0);
+  float c2 = c * c, c4 = c2 * c2, c8 = c4 * c4;
+  col += uSunCol * uSunVis * clear * c8 * c2 * 0.22;
+  col += vec3(0.55, 0.6, 0.75) * pow(max(dot(d, uMoonDir), 0.0), 40.0) * 0.06 * uMoonLit * clear;
+  vBase = col;
+  vSunC = c;
+  vOut = sRGBTransferOETF(vec4(ACESFilmicToneMapping(col), 1.0)).rgb;
   vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_Position = p.xyww; // on the far plane
 }`;
 
 const SKY_FRAG = /* glsl */`
-uniform vec3 uSunDir, uSunCol, uMoonDir;
-uniform float uSunVis, uMoonLit, uOvercast;
+#include <tonemapping_pars_fragment>
+uniform vec3 uSunDir, uSunCol;
+uniform float uSunVis, uOvercast;
 varying vec3 vDir;
 varying vec3 vBase;
+varying vec3 vOut;
+varying float vSunC;
 void main() {
-  vec3 col = vBase;
-  if (uSunVis > 0.0 || uMoonLit > 0.0) {
+  vec3 col = vOut;
+  if (vSunC > 0.96 && uSunVis > 0.0) {
+    // The tight aureole and the hard disc (0.53°), then the same ACES + sRGB as the dome.
     vec3 d = normalize(vDir);
-    float clear = 1.0 - uOvercast;
-    // The sun: a wide Mie halo, a tight aureole and a hard disc (0.53°).
     float c = max(dot(d, uSunDir), 0.0);
-    float c2 = c * c, c4 = c2 * c2, c8 = c4 * c4;
-    float halo = c8 * c2 * 0.22 + pow(c, 300.0) * 0.9;
-    col += uSunCol * uSunVis * clear * (halo + smoothstep(0.99990, 0.99997, c) * 18.0 * smoothstep(-0.012, 0.004, d.y));
-    // Moonlit haze around the Moon.
-    float m = max(dot(d, uMoonDir), 0.0);
-    col += vec3(0.55, 0.6, 0.75) * pow(m, 40.0) * 0.06 * uMoonLit * clear;
+    float sun = pow(c, 300.0) * 0.9 + smoothstep(0.99990, 0.99997, c) * 18.0 * smoothstep(-0.012, 0.004, d.y);
+    col = sRGBTransferOETF(vec4(ACESFilmicToneMapping(vBase + uSunCol * uSunVis * (1.0 - uOvercast) * sun), 1.0)).rgb;
   }
   // Break up 8-bit banding in the long night gradients (interleaved gradient noise).
   col += (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5) / 255.0;
   gl_FragColor = vec4(col, 1.0);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
 }`;
 
 const STAR_VERT = /* glsl */`
@@ -180,7 +191,7 @@ export function createSkyDome({ scene, base, reducedMotion = false }) {
   };
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(R_SKY, 64, 64),
-    new THREE.ShaderMaterial({ uniforms: skyU, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false }),
+    new THREE.ShaderMaterial({ uniforms: skyU, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, toneMapped: false }),
   );
   // Drawn after the opaque world on the far plane: the depth test skips every pixel the
   // ground already covers (a full-screen fill costs ~5 ms a frame on software GL).

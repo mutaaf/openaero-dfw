@@ -39,3 +39,14 @@ clean view), 1280x720:
 On software GL the dome and the 8,865 runway-light points cost a few ms (stars and runway
 lights are skipped in clear daylight, the dome draws after the ground on the far plane); on a
 GPU the frame got cheaper, mostly from the clean view folding away the blurred panels.
+
+First CI run of #52: 93/123 e2e tests green when the 20 min job limit cancelled it (main:
+18.7 min). Every existing test ran 20–30% longer: CI's two parallel SwiftShader workers
+draw at ~200–300 ms a frame, at the 250 ms catch-up limit, so frame cost there stretches
+sim time (a 2.7 min autoland took 3.2). And it ran at 00:45 UTC, after sunset in Dallas,
+so the default "Live" sky had everything on. Fixed in the change, not the limit:
+- the tapes' text-shadow blur (Skia's slowest canvas op, on many labels) → a 30% dark strip;
+- the city lights are compiled in only while on (setCityLights recompiles once a switch);
+  by day the ground runs the plain imagery shader;
+- the sky dome tone-maps and sRGB-encodes per vertex (the gradient and wide halo are
+  smooth); per pixel only dither, plus the aureole and disc within ~16° of the sun.
