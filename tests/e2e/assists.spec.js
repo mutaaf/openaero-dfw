@@ -74,6 +74,31 @@ test.describe('first visit', () => {
   });
 });
 
+// A first visit flies Learner by touch: bank with the stick, let go, and the wings come back level.
+for (const [w, h] of [[390, 844], [844, 390]]) {
+  test.describe(`Learner by touch at ${w}x${h}`, () => {
+    test.use({ storageState: { cookies: [], origins: [] }, viewport: { width: w, height: h }, hasTouch: true, isMobile: true });
+    test('the stick banks inside 45°, and letting go rolls the wings level', async ({ page }) => {
+      await page.goto(BASE);
+      const start = page.locator('#btnStartFlight');
+      await start.scrollIntoViewIfNeeded();
+      await start.tap();
+      await expect(page.locator('#onboardingModal')).toBeHidden();
+      expect((await debug(page)).assist).toBe('learner');
+      const stick = await page.locator('#touchStick').boundingBox();
+      const cdp = await page.context().newCDPSession(page);
+      const cx = stick.x + stick.width / 2, cy = stick.y + stick.height / 2;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 1 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: stick.x + stick.width - 2, y: cy, id: 1 }] });
+      await expect.poll(async () => (await debug(page)).bankRightDeg, { timeout: 15_000 }).toBeGreaterThan(15);
+      expect((await debug(page)).inputSource).toBe('stick');
+      expect((await debug(page)).bankRightDeg).toBeLessThanOrEqual(45);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await expect.poll(async () => Math.abs((await debug(page)).bankRightDeg), { timeout: 20_000 }).toBeLessThan(5);
+    });
+  });
+}
+
 test('a stored level wins: Kid and Pilot load as stored', async ({ page }) => {
   for (const level of ['kid', 'pilot']) {
     await page.goto(BASE);
