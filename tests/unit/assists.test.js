@@ -253,7 +253,7 @@ describe('Kid automatic gear and flaps', () => {
     expect(autoConfigure(b738, { onGround: false, aglFt: 800, vsiFpm: -700, iasKts: 140 }, { gearDown: true, flapsIndex: 3 }).flapsIndex).toBe(3);
   });
   it('autothrottle target: Vref+5 with flaps, +30 clean', () => {
-    expect(kidTargetKts(b738, 2)).toBe(141);
+    expect(kidTargetKts(b738, 2)).toBe(155);
     expect(kidTargetKts(c172, 0)).toBe(92);
   });
 });

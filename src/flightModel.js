@@ -8,7 +8,8 @@
 // windVec (air-mass velocity) and groundY (terrain height under the aircraft); optional
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
 // writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY,
-// sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn).
+// sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn),
+// spoilers (ground spoiler extension 0–1, airframes with spec.groundSpoilers).
 import { Vector3, Quaternion, Euler, MathUtils } from 'three';
 import { MPS_TO_KTS, M_TO_FT, DEG_TO_RAD, RAD_TO_DEG, GRAVITY } from './constants.js';
 import { airAt } from './atmosphere.js';
@@ -51,11 +52,20 @@ export function stepFlightModel(body, spec, dt) {
   const qDyn = dynamicPressure(airspeed, air.rho);
 
   // Aerodynamic Lift & Drag Curves with Post-Stall Drop (aero.js)
-  const cl = liftCoefficient(spec, aoaRad, body.flapsIndex);
+  let cl = liftCoefficient(spec, aoaRad, body.flapsIndex);
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
   const groundEffect = groundEffectFactor(body.pos.y - body.groundY, spec.wingSpanM);
-  const cd = dragCoefficient(spec, cl, body.gearDown, body.flapsIndex, groundEffect);
+  let cd = dragCoefficient(spec, cl, body.gearDown, body.flapsIndex, groundEffect);
+
+  // Auto ground spoilers: out over ~1 s on the ground with the thrust levers at idle, in
+  // again as soon as they are advanced. Lift dumped onto the gear and brakes, plus drag.
+  if (spec.groundSpoilers) {
+    const deploy = body.onGround && body.throttle < 0.05 ? 1 : 0;
+    body.spoilers = MathUtils.clamp((body.spoilers ?? 0) + Math.sign(deploy - (body.spoilers ?? 0)) * dt, 0, 1);
+    cl += spec.groundSpoilers.dCl * body.spoilers;
+    cd += spec.groundSpoilers.dCd * body.spoilers;
+  }
 
   const liftForce = cl * qDyn * spec.wingAreaM2;
   const dragForce = cd * qDyn * spec.wingAreaM2;

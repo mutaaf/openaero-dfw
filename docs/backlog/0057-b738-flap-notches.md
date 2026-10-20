@@ -1,12 +1,12 @@
 ---
 id: 0057
 title: Give the 737 its real landing flaps (30 and 40) so Vref and approach pitch match Boeing
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: 55
 ---
 
 ## Why
@@ -35,10 +35,10 @@ lift dump on touchdown as part of this ticket. Keep the approach-thrust and L/D 
 `flapCd`), and the Kid/Learner/autoland flight specs green.
 
 ## Acceptance criteria
-- [ ] The two 0057 cards in `tests/flight/b738.test.js` are promoted from `it.fails` to `it`
-- [ ] A flaps 30 card: pitch on a 3° path at Vref30 ≈ 3.2° (VLA Table A6-1, winglets, ±1°)
-- [ ] The landing-distance card (ACAP §3.4.3) flies the real flaps 30, at a Vref30 fitted to Boeing data, and still passes
-- [ ] Existing 737 cards and e2e autoland/flight specs stay green
+- [x] The two 0057 cards in `tests/flight/b738.test.js` are promoted from `it.fails` to `it`
+- [x] A flaps 30 card: pitch on a 3° path at Vref30 ≈ 3.2° (VLA Table A6-1, winglets, ±1°)
+- [x] The landing-distance card (ACAP §3.4.3) flies the real flaps 30, at a Vref30 fitted to Boeing data, and still passes
+- [x] Existing 737 cards and e2e autoland/flight specs stay green
 
 ## Test plan
 `npm test -- tests/flight`, then the e2e flight specs (autoland, Kid landing).

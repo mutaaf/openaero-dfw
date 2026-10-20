@@ -68,7 +68,7 @@ const sim = {
 
   // Controls
   throttle: 0.44, elevInput: 0, aileronInput: 0, rudderInput: 0,
-  flapsIndex: 2, flapAngles: [0, 10, 25, 40],
+  flapsIndex: 2, flapAngles: [0, 10, 25, 40], // labels for airframes without spec.flapDetentsDeg
   gearDown: true, brakesOn: false, onGround: false,
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
   // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
@@ -720,7 +720,7 @@ function checkStabilizedGate() {
   if (step !== 'evaluate') return;
   const gate = sim.gate = stabilizedGate({
     iasKt: sim.iasKts, vref: sim.spec.vrefKts, vsFpm: sim.vsiFpm, gearDown: sim.gearDown,
-    flapsOk: sim.flapsIndex >= 2, // 25° or 40°: landing flaps
+    flapsOk: sim.flapsIndex >= 2, // the two landing notches (737: 30°/40°, 172: 20°/30°)
     glideDevDots: ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
     vmc: gs.armFt === GATE_VMC_FT,
   });
@@ -1798,6 +1798,9 @@ function toggleTimeOfDay() {
 
 let rngThrottleEl = null;
 let draggingThrottle = false;
+// The flap lever's detent (deg) for the current notch, as the airframe labels it.
+const flapDeg = () => (sim.spec.flapDetentsDeg ?? sim.flapAngles)[sim.flapsIndex];
+
 function syncUI() {
   const throttlePct = Math.round(sim.throttle * 100);
   document.getElementById('txtThrottle').textContent = `${throttlePct}%`;
@@ -1836,7 +1839,7 @@ function syncUI() {
   document.getElementById('btnGear').classList.toggle('active', sim.gearDown);
   document.getElementById('txtGear').textContent = sim.gearDown ? 'DOWN 3 GRN' : 'UP';
 
-  document.getElementById('txtFlaps').textContent = `${sim.flapAngles[sim.flapsIndex]}°`;
+  document.getElementById('txtFlaps').textContent = `${flapDeg()}°`;
   document.getElementById('btnBrakes').classList.toggle('active-amber', sim.brakesOn);
   document.getElementById('txtBrakes').textContent = sim.brakesOn ? 'SET' : 'OFF';
 
@@ -1867,14 +1870,14 @@ function syncUI() {
   document.getElementById('touchThrottle').setAttribute('aria-valuenow', String(thrPct));
   document.getElementById('txtTouchGear').textContent = sim.gearDown ? 'DN' : 'UP';
   document.getElementById('touchGear').classList.toggle('active', sim.gearDown);
-  document.getElementById('txtTouchFlaps').textContent = `${sim.flapAngles[sim.flapsIndex]}°`;
+  document.getElementById('txtTouchFlaps').textContent = `${flapDeg()}°`;
   document.getElementById('touchBrakes').classList.toggle('active-amber', sim.brakesOn);
   document.getElementById('touchIls').classList.toggle('active-amber', sim.apApproach);
   document.getElementById('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
   document.getElementById('txtPhoneAgl').textContent = `${sim.aglFt}`;
   document.getElementById('txtPhoneVs').textContent = `${sim.vsiFpm}`;
   document.getElementById('txtPhoneThr').textContent = `${throttlePct}%`;
-  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : sim.gearDown ? 'DN' : 'UP'} · ${sim.flapAngles[sim.flapsIndex]}°`;
+  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : sim.gearDown ? 'DN' : 'UP'} · ${flapDeg()}°`;
   const papi = document.getElementById('txtPapiStatus');
   const phonePapi = document.getElementById('txtPhonePapi');
   phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
