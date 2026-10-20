@@ -1,12 +1,12 @@
 ---
 id: 0050
 title: Active touch buttons (GEAR DN, THR %) stay readable over bright ground
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: accessibility
 created: 2026-10-19
-pr:
+pr: 61
 ---
 
 ## Why

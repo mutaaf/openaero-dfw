@@ -22,30 +22,39 @@ html, body {
   border: 1px solid rgba(148, 163, 184, 0.22);
   cursor: pointer;
 }
-.hud-btn:hover {
-  background: rgba(30, 41, 59, 0.95);
-  border-color: #38bdf8;
-  transform: translateY(-1px);
+/* Mouse only: on touch a tapped button keeps :hover, and its sky border read as "on" (0050). */
+@media (hover: hover) {
+  .hud-btn:hover {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: #38bdf8;
+    transform: translateY(-1px);
+  }
 }
 .hud-btn:active { transform: translateY(1px); }
+/* Active states are near-opaque coloured fills (alpha 0.95), not 28% washes: the touch buttons
+   sit straight on the 3D world, and over bright ground a wash left GEAR DN at ~1.2:1 (ticket
+   0050). Bright enough to read ON next to the slate OFF fill, dark enough for >= 4.5:1 over
+   white and black; captions inside an active button lift a step (slate-300, emerald-300). */
 .hud-btn.active {
-  background: rgba(16, 185, 129, 0.28);
+  background: rgba(6, 78, 59, 0.95);
   border-color: #10b981;
   color: #6ee7b7;
   box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
 }
 .hud-btn.active-amber {
-  background: rgba(245, 158, 11, 0.28);
+  background: rgba(110, 62, 6, 0.95);
   border-color: #f59e0b;
   color: #fcd34d;
   box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
 }
 .hud-btn.active-sky {
-  background: rgba(14, 165, 233, 0.32);
+  background: rgba(12, 74, 110, 0.95);
   border-color: #38bdf8;
   color: #bae6fd;
   box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
 }
+.hud-btn.active .text-slate-400, .hud-btn.active-amber .text-slate-400, .hud-btn.active-sky .text-slate-400 { color: #cbd5e1; }
+.hud-btn.active .text-emerald-400 { color: #6ee7b7; }
 input[type=range] { accent-color: #38bdf8; }
 .scanlines {
   background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%);
