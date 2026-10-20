@@ -1,15 +1,36 @@
-// Flight test cards for the Boeing 737-800 (65 t). Fewer public numbers than the C172 POH,
-// so these pin operational facts pilots know rather than chart values.
+// Flight test cards for the Boeing 737-800 (65 t). The first three pin operational facts
+// pilots know; the rest read Boeing's published airport data:
+//  - ACAP: 737 Airplane Characteristics for Airport Planning, D6-58325-7 Rev C (Oct 2025),
+//    737NG_REV_C.pdf, §3.3.29 (takeoff) and §3.4.3 (landing) charts
+//  - ARC: Aerodrome Reference Code and Approach Speeds, Rev A (Aug 2026),
+//    arcandapproachspeeds.pdf
+//  - VLA: Visual Landing Aids Data, Rev A (Jun 2026), icaoadmpart4a.pdf, Table A6-1
+// all under https://www.boeing.com/content/dam/boeing/v2/airports/ (acaps/, faq/).
+// The charts are images; values were read off the raster at the grid's pixel scale.
+//
+// A card the model does not yet meet is a KNOWN GAP: `it.fails` with its ticket, never a
+// looser tolerance. The fixing PR promotes it to `it`.
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { engineThrust } from '../../src/engine.js';
 import { airAt } from '../../src/atmosphere.js';
-import { liftCoefficient, dragCoefficient } from '../../src/aero.js';
-import { trimAoaDeg } from '../../src/autopilot.js';
+import { liftCoefficient, dragCoefficient, stallSpeedKts } from '../../src/aero.js';
+import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
+import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
+import { makeBody, fly, attitude } from './harness.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
 const vApp = (b738.vrefKts + 5) * 0.514444;
+const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
+const LB_PER_KG = 2.20462;
+const MLW_KG = 66361; // ARC / ACAP: maximum landing weight 146,300 lb
+// Model flap notches are 0/10/25/40 (main.js flapAngles); the real 737 lands with 30 or 40.
+const FLAPS_25 = 2, FLAPS_40 = 3;
+
+// 14 CFR 25.125(b)(2): VREF ≥ 1.23 VSR0, the 1-g reference stall speed in the landing
+// configuration. Scaled to another mass by √(m / massKg) (same CL, same speed squared).
+const vrefKts = (flaps, massKg = b738.massKg) => 1.23 * stallSpeedKts(b738, flaps) * Math.sqrt(massKg / b738.massKg);
 
 describe('Boeing 737-800', () => {
   it('flies a 3° final at Vref+5 on ~20–35% thrust (N1 ~55–60%), not near idle', () => {
@@ -35,4 +56,94 @@ describe('Boeing 737-800', () => {
     const along = engineThrust(b738, 0, vApp, air, vApp / 340, q) + b738.massKg * 9.80665 * Math.sin(3 * Math.PI / 180) - drag;
     expect(along).toBeLessThan(0);
   });
+});
+
+describe('Boeing 737-800 vs Boeing airport data', () => {
+  // ARC p. 3: 737-800 approach speed 142 kt at MLW 146,300 lb (66,361 kg), the Vref that
+  // sets its approach category (14 CFR 97.3: Vref at maximum certificated landing weight).
+  // The document names no flap: assumed flaps 40, the lowest Vref, which is the one that
+  // sets the category. The model reaches 1.23 Vs at 130 kt: flaps 40 lifts too much (0057).
+  it.fails('Vref flaps 40 at MLW 66,361 kg is about 142 kt (Boeing ARC Rev A, ±5 kt) [gap: 0057]', () => {
+    expect(Math.abs(vrefKts(FLAPS_40, MLW_KG) - 142)).toBeLessThanOrEqual(5);
+  });
+
+  // VLA Table A6-1 (VREF+5), 3.0° glide slope column: 737-800 w/Winglets (the model's
+  // 35.8 m span is the winglet airframe), flaps 40, flight-director pitch 0.9° (1.3° without
+  // winglets). Speed: the ARC's 142 kt Vref scaled to 65 t (140.5 kt) + 5. Pitch on a
+  // steady 3° path = trim AoA − 3°. The model needs −3.5° (nose down): flaps 40 (0057).
+  it.fails('pitch on a 3° ILS at Vref+5, flaps 40, is about +0.9° (Boeing VLA Table A6-1, winglets, ±1°) [gap: 0057]', () => {
+    const kts = 142 * Math.sqrt(b738.massKg / MLW_KG) + 5;
+    const pitch = trimAoaDeg(b738, kts * KTS_TO_MPS, FLAPS_40) - 3;
+    expect(Math.abs(pitch - 0.9)).toBeLessThanOrEqual(1);
+  });
+
+  // ACAP §3.4.3 (flaps 30, standard day, zero wind, dry, auto spoilers, anti-skid): the
+  // sea-level dry curve reads 5,570 ft at 140,000 lb, 5,690 ft at 143,300 lb (65 t) and
+  // 5,800 ft at MLW. That is the FAR landing field length, the demonstrated distance from
+  // 50 ft divided by 0.6 (14 CFR 121.195(b)), so the airplane itself needs 0.6 × 5,690 =
+  // 3,414 ft from 50 ft to a stop. Flown like 14 CFR 25.125: a steady 3° approach at Vref
+  // (1.23 Vs) to 50 ft, idle and flare from 30 ft, then maximum braking, no reverse. Not
+  // Boeing's configuration: the model flies flaps 25 (the game's landing flap, its nearest
+  // notch to 30) at its own Vref25 ≈ 139 kt, a few knots slower than a real Vref30 (0057),
+  // and it has no ground spoilers (braking is tyre μ 0.45 with the wing still lifting).
+  // Those two errors partly cancel: the same flight from 143 kt measures ~3,980 ft (+17%),
+  // from 147 kt ~4,200 ft. 0057 must add ground spoilers along with the real Vref30.
+  it('lands from 50 ft to a stop in about 3,414 ft, 65 t, sea level, dry (Boeing ACAP §3.4.3 × 0.6, ±15%)', () => {
+    const kts = vrefKts(FLAPS_25);
+    const v = kts * KTS_TO_MPS;
+    const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_25, throttle: trimThrottle(b738, v, FLAPS_25, -3, true, airAt(15)) });
+    b.vel.set(0, -v * Math.sin(3 * DEG_TO_RAD), -v * Math.cos(3 * DEG_TO_RAD));
+    const pitch0 = trimAoaDeg(b738, v, FLAPS_25) - 3;
+    b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
+    let touchdown = null;
+    fly(b, b738, 90, (x) => {
+      const { pitchDeg, bankRightDeg } = attitude(x);
+      const ft = (x.pos.y - b738.gearHeight) * M_TO_FT;
+      let cmd = pitch0;
+      if (touchdown) { cmd = -1; x.throttle = 0; x.brakesOn = true; } // nose down, max braking
+      else if (ft < 30) { cmd = pitch0 + Math.min(3, (30 - ft) * 0.2); x.throttle = 0; } // flare
+      x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+    }, (x) => {
+      if (!touchdown && x.onGround) touchdown = { sinkFpm: x.lastAirVsi, airFt: x.distM * M_TO_FT };
+      return touchdown && -x.vel.z < 0.3;
+    });
+    // A real landing, not a drop: on the runway at under 600 fpm after ~1,000 ft in the air.
+    expect(touchdown.sinkFpm).toBeGreaterThan(-600);
+    expect(touchdown.airFt).toBeGreaterThan(700);
+    within(b.distM * M_TO_FT, 0.6 * 5690, 0.15);
+  });
+
+  // ACAP §3.3.29 (CFM56-7B24/-7B26/-7B27 at 26,000 lb SLST; the model has 2 × 120 kN ≈
+  // 27,000 lb, 4% more; standard day, zero wind, dry, optimum flap; non-winglet performance,
+  // "winglet aircraft will have slightly improved performance", so for the model's winglet
+  // airframe it is an upper bound): the sea-level curve reads 5,120 ft at 143,300 lb (4,910
+  // ft at 140,000). Not §3.3.25 (4,600 ft): that chart is the short field package, which the
+  // model doesn't have.
+  // 14 CFR 25.113(a): the takeoff distance is at least 115% of the all-engines distance to
+  // 35 ft, so 1.15 × that distance can't exceed the field length (the engine-out cases
+  // only make it longer). Flown with full thrust from brake release, rotation at Vr at
+  // 2.5°/s (Boeing FCTM: 2–3°/s) to 15°, at the better of the model's takeoff flaps (10,
+  // 25), both rotating at the model's single Vr 142 kt. The model needs ~5,420 ft (0058).
+  it.fails('1.15 × the all-engines distance to 35 ft is within the 5,100 ft field length, 65 t, sea level (Boeing ACAP §3.3.29, 14 CFR 25.113) [gap: 0058]', () => {
+    const toFt = (flaps) => {
+      const b = makeBody(b738, { throttle: 1, flaps });
+      let rot = null;
+      fly(b, b738, 120, (x, dt) => {
+        const { pitchDeg, bankRightDeg } = attitude(x);
+        if (x.iasKts >= b738.vrKts) {
+          rot = (rot ?? pitchDeg) + 2.5 * dt;
+          x.elevInput = elevatorForPitch(Math.min(x.onGround ? b738.maxGroundPitchDeg - 1 : 15, rot), pitchDeg, x.angVel.x);
+        }
+        x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+      }, (x) => (x.pos.y - b738.gearHeight) * M_TO_FT >= 35);
+      return b.distM * M_TO_FT;
+    };
+    expect(1.15 * Math.min(toFt(1), toFt(FLAPS_25))).toBeLessThanOrEqual(5100);
+  });
+});
+
+// 143,300 lb is 65,000 kg: the weight the cards above read the charts at.
+it('the charts are read at the model mass (65,000 kg = 143,300 lb)', () => {
+  expect(Math.abs(b738.massKg * LB_PER_KG - 143300)).toBeLessThan(100);
 });
