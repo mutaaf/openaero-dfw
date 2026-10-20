@@ -61,8 +61,8 @@ describe('Boeing 737-800', () => {
 describe('Boeing 737-800 vs Boeing airport data', () => {
   // ARC p. 3: 737-800 approach speed 142 kt at MLW 146,300 lb (66,361 kg), the Vref that
   // sets its approach category (14 CFR 97.3: Vref at maximum certificated landing weight).
-  // The document names no flap; it is the lowest certified Vref, i.e. flaps 40 (the flaps
-  // 30 Vref is higher). The model reaches 1.23 Vs at 130 kt: flaps 40 lifts too much (0057).
+  // The document names no flap: assumed flaps 40, the lowest Vref, which is the one that
+  // sets the category. The model reaches 1.23 Vs at 130 kt: flaps 40 lifts too much (0057).
   it.fails('Vref flaps 40 at MLW 66,361 kg is about 142 kt (Boeing ARC Rev A, ±5 kt) [gap: 0057]', () => {
     expect(Math.abs(vrefKts(FLAPS_40, MLW_KG) - 142)).toBeLessThanOrEqual(5);
   });
@@ -81,8 +81,10 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // 5,800 ft at MLW. That is the FAR landing field length, the demonstrated distance from
   // 50 ft divided by 0.6 (14 CFR 121.195(b)), so the airplane itself needs 0.6 × 5,690 =
   // 3,414 ft from 50 ft to a stop. Flown like 14 CFR 25.125: a steady 3° approach at Vref
-  // (1.23 Vs) to 50 ft, idle and flare from 30 ft, then maximum braking, no reverse. Flaps
-  // 25 is the game's landing flap and the model's nearest notch to 30 (0057).
+  // (1.23 Vs) to 50 ft, idle and flare from 30 ft, then maximum braking, no reverse. Not
+  // Boeing's configuration: the model flies flaps 25 (the game's landing flap, its nearest
+  // notch to 30) at its own Vref25 ≈ 139 kt, a few knots slower than a real Vref30 (0057),
+  // and it has no ground spoilers (braking is tyre μ 0.45 with the wing still lifting).
   it('lands from 50 ft to a stop in about 3,414 ft, 65 t, sea level, dry (Boeing ACAP §3.4.3 × 0.6, ±15%)', () => {
     const kts = vrefKts(FLAPS_25);
     const v = kts * KTS_TO_MPS;
@@ -116,15 +118,15 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // 35 ft, so 1.15 × that distance can't exceed the field length (the engine-out cases
   // only make it longer). Flown with full thrust from brake release, rotation at Vr at
   // 2.5°/s (Boeing FCTM: 2–3°/s) to 15°, at the better of the model's takeoff flaps (10,
-  // 25). The model needs ~5,420 ft: its acceleration averages ~0.25 g to lift-off (0058).
+  // 25), both rotating at the model's single Vr 142 kt. The model needs ~5,420 ft (0058).
   it.fails('1.15 × the all-engines distance to 35 ft is within the 4,600 ft field length, 65 t, sea level (Boeing ACAP §3.3.25, 14 CFR 25.113) [gap: 0058]', () => {
     const toFt = (flaps) => {
       const b = makeBody(b738, { throttle: 1, flaps });
       let rot = null;
-      fly(b, b738, 120, (x) => {
+      fly(b, b738, 120, (x, dt) => {
         const { pitchDeg, bankRightDeg } = attitude(x);
         if (x.iasKts >= b738.vrKts) {
-          rot = (rot ?? pitchDeg) + 2.5 * (1 / 120);
+          rot = (rot ?? pitchDeg) + 2.5 * dt;
           x.elevInput = elevatorForPitch(Math.min(x.onGround ? b738.maxGroundPitchDeg - 1 : 15, rot), pitchDeg, x.angVel.x);
         }
         x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
