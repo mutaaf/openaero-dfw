@@ -137,7 +137,8 @@ src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes 
                     input before stepFlightModel (physics untouched): bank/pitch/AoA
                     envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,
                     no-dive floor, auto-flare; main.js adds Kid's autothrottle, gear/flaps
-                    and soft landing. Pilot never calls in (pure, flown headless in tests)
+                    and soft landing. Pilot never calls in (pure, flown headless in tests).
+                    A first visit (nothing stored) flies Learner; a stored level wins (0059)
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn
 src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign

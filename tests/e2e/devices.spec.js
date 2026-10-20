@@ -75,6 +75,8 @@ for (const d of DEVICES) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: s.x, y: s.y - stick.height * 0.1, id: 1 }, { x: t.x, y: thr.y + thr.height * 0.4, id: 2 }] });
       await expect.poll(() => page.locator('#txtTouchThr').textContent(), { timeout: 10_000 }).toMatch(/^(5[5-9]|6[0-5])%$/);
       await expect.poll(() => page.locator('#meterElev').textContent(), { timeout: 10_000 }).not.toBe('0%');
+      // The stick, not a hold, is flying it (a first visit flies Learner, whose pitch hold moves the elevator too).
+      expect((await page.evaluate(() => window.openaeroDebug())).inputSource).toBe('stick');
       const stats = await frames;
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
