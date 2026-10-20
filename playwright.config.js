@@ -30,7 +30,7 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop', testIgnore: /mobile\.spec|phone-landscape\.spec|perf\.spec|devices\.spec/, use: DESKTOP },
-    { name: 'phone', testMatch: /mobile\.spec|phone-landscape\.spec/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 }, launchOptions: { args: GL_ARGS } } },
+    { name: 'phone', testMatch: /mobile\.spec|phone-landscape\.spec/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 }, storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [PILOT] }] }, launchOptions: { args: GL_ARGS } } },
     // The frame-time probe runs alone, after everything else: sharing SwiftShader's CPU
     // with a parallel flight test swung the same build from 207 to 314 ms a frame.
     { name: 'perf', testMatch: /perf\.spec/, dependencies: ['desktop', 'phone'], use: { ...DESKTOP, deviceScaleFactor: 1 } },
