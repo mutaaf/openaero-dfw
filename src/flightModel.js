@@ -63,7 +63,7 @@ export function stepFlightModel(body, spec, dt) {
   if (spec.groundSpoilers) {
     const deploy = body.onGround && body.throttle < 0.05 ? 1 : 0;
     body.spoilers = MathUtils.clamp((body.spoilers ?? 0) + Math.sign(deploy - (body.spoilers ?? 0)) * dt, 0, 1);
-    cl += spec.groundSpoilers.dCl * body.spoilers;
+    cl *= 1 - spec.groundSpoilers.liftDump * body.spoilers;
     cd += spec.groundSpoilers.dCd * body.spoilers;
   }
 

@@ -96,3 +96,25 @@ describe('ground spoilers (737)', () => {
     expect(run(b, 1).spoilers).toBe(0);
   });
 });
+
+describe('ground spoilers dump lift at every flap setting', () => {
+  const b738 = AIRCRAFT_DATABASE.b738;
+  // Upward aero force at 140 kt, nose level, with the spoilers held at `spoilers` (onGround
+  // keeps them deploying; 100 m up, so no gear force), as a share of the same without.
+  const lift = (flapsIndex, spoilers) => {
+    const b = {
+      pos: new Vector3(0, 100, 0), vel: new Vector3(0, 0, -72), quat: new Quaternion(), angVel: new Vector3(),
+      windVec: new Vector3(), groundY: 0, elevInput: 0, aileronInput: 0, rudderInput: 0, throttle: 0, engineN: 0,
+      flapsIndex, gearDown: true, brakesOn: false, apMaster: false, onGround: true, spoilers,
+    };
+    stepFlightModel(b, b738, 1e-4);
+    return (b.vel.y / 1e-4 + 9.80665) * b738.massKg;
+  };
+  it('leaves the same small share of lift (never downforce) at flaps 0, 30 and 40', () => {
+    for (const f of [0, 2, 3]) {
+      const share = lift(f, 1) / lift(f, 0);
+      expect(share).toBeGreaterThan(0.1);
+      expect(share).toBeLessThan(0.3);
+    }
+  });
+});

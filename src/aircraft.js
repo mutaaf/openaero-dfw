@@ -20,6 +20,8 @@ export const AIRCRAFT_DATABASE = {
     // (ARC Rev A) and pitch +0.9° at Vref40+5 on a 3° path (VLA Table A6-1, winglets) give
     // ΔCL 0.856 and CLmax 2.42 (stall 14.1°); pitch +3.2° at Vref30 (same table), with the
     // same stall AoA (the slats are fully out at both), gives ΔCL 0.559: Vref30 150 kt at 65 t.
+    // No public Vref30 exists: that shared stall AoA is an assumption, and it sets Vref30
+    // (±1° of stall AoA moves it 6–12 kt).
     flapDetentsDeg: [0, 10, 30, 40],
     flapCl: [0, 0.42, 0.559, 0.856],
     alphaStallDegByFlap: [14.8, 14.8, 14.12, 14.12],
@@ -29,8 +31,9 @@ export const AIRCRAFT_DATABASE = {
     flapCd: [0, 0.015, 0.077, 0.1],
     // Auto ground spoilers (ACAP §3.4.3 assumes them): on the ground with the thrust levers
     // at idle they deploy over ~1 s, dump most of the wing's lift onto the brakes and add
-    // drag. An estimate (no public 737 spoiler data): CL on the rollout ~0.15 at flaps 30.
-    groundSpoilers: { dCl: -0.7, dCd: 0.08 },
+    // drag. An estimate (no public 737 spoiler data): 80% of the lift dumped (whatever the
+    // flaps; never downforce), CL on the rollout ~0.15 at flaps 30.
+    groundSpoilers: { liftDump: 0.8, dCd: 0.08 },
     // Control authority (rad/s² at 120 kt). With the damping above: ~12°/s pitch, ~18°/s roll.
     pitchAuthority: 0.5,
     rollAuthority: 1.0,
