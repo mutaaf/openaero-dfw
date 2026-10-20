@@ -1,12 +1,12 @@
 ---
 id: 0054
 title: Cessna 172S cruise speed and fuel-flow cards from the POH performance tables
-status: proposed
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: 53
 ---
 
 ## Why

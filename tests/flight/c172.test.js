@@ -89,6 +89,30 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     within(rocFpm(3048), 315, 0.15);
   });
 
+  // POH Fig. 4-3 / 5-8 (2550 lb, standard day): at 8,000 ft, 2700 rpm, 77% BHP, 124 KTAS
+  // (Fig. 4-3 says 124 KTAS at 75% power, 8000 ft). Full throttle at 8,000 ft is the
+  // nearest the model's power lever gets to that row. The pilot holds altitude with pitch
+  // and lets the speed settle; level-flight TAS is what drag and the power lapse decide.
+  it('cruises about 124 KTAS level at 8,000 ft, full throttle (POH Fig. 4-3 / 5-8, ±8%)', () => {
+    const alt0 = 8000 / M_TO_FT;
+    const b = makeBody(c172, { kts: 100, altM: alt0, throttle: 1 });
+    const hold = (x, dt) => {
+      const { pitchDeg, bankRightDeg } = attitude(x);
+      const vsErr = vsFpm(x);
+      x.pitchTrim = (x.pitchTrim ?? x.pitchCmd) + ((alt0 - x.pos.y) * 0.002 - vsErr * 0.00005) * dt * 20;
+      x.pitchCmd = Math.max(-5, Math.min(20, x.pitchTrim + (alt0 - x.pos.y) * 0.02 - vsErr * 0.001));
+      x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+    };
+    fly(b, c172, 180, hold);
+    const tas = [];
+    fly(b, c172, 60, (x, dt) => { hold(x, dt); tas.push(x.tasKts); });
+    // Settled: speed varies < 2 kt and the altitude stayed within 100 ft of 8,000.
+    expect(Math.max(...tas) - Math.min(...tas)).toBeLessThan(2);
+    expect(Math.abs(b.pos.y - alt0) * M_TO_FT).toBeLessThan(100);
+    within(tas.reduce((a, c) => a + c, 0) / tas.length, 124, 0.08);
+  });
+
   // Was 4.6:1 with lift in body axes (0037); the idle prop windmills (0039).
   it('glides about 9:1 at 68 KIAS, idle (POH: ~1.5 NM per 1000 ft, ±15%)', () => {
     const g = makeBody(c172, { kts: 68, altM: 1500 });
