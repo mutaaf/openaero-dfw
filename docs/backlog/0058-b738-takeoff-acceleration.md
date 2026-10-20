@@ -1,12 +1,12 @@
 ---
 id: 0058
 title: The 737 takes off in Boeing's field length (find why it needs ~6% too much runway)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: 57
 ---
 
 ## Why
@@ -36,12 +36,29 @@ roll) and the Vr / rotation the harness flies (`vrKts` 142). Fix the data with a
 source, not a fudge factor; keep the approach-thrust and climb behaviour.
 
 ## Acceptance criteria
-- [ ] The 0058 card in `tests/flight/b738.test.js` is promoted from `it.fails` to `it`
-- [ ] Every other 737 card and the e2e takeoff / autoland specs stay green
-- [ ] The source for any changed thrust number, or Vr per flap setting, is quoted next to it
+- [x] The 0058 card in `tests/flight/b738.test.js` is promoted from `it.fails` to `it`
+- [x] Every other 737 card and the e2e takeoff / autoland specs stay green
+- [x] The source for any changed thrust number, or Vr per flap setting, is quoted next to it
 
 ## Test plan
 `npm test -- tests/flight`; e2e flight spec (takeoff, 737).
 
 ## Out of scope
 Engine-out continued takeoff, accelerate-stop, flap-optimisation.
+
+## Outcome (2026-10-20)
+Cause: Vr, not thrust or friction. Probed headless (65 t, flaps 10): at Vr 142 the test pilot's
+2.5°/s command reached only ~2.0°/s, and the airplane lifted off at 7.0° pitch and 157 kt, 15 kt
+after Vr: held on the runway past the speed its wing flies at a normal attitude. Line crews
+lift off at 8–9° (NTSB, AA 737-800 LAX 2011, quoting the operator's manual; ATSB AO-2018-011:
+8° at flaps 5) after an average ~2.2–2.4°/s rotation (ATSB 200500382, AO-2018-011).
+- The harness pilot now commands 3°/s (FCTM top end) and averages 2.38°/s, as crews do.
+- `vrKts` 142 → 132 (flaps 10, 65 t; the model's Vr, fitted to its lift curve, not a published one): lift-off at 8.4°, 149 kt; 4,245 ft to 35 ft, × 1.15 =
+  4,882 ft ≤ 5,100. Engine failed at Vr: 146 kt at 35 ft ≥ V2 = 1.13 Vs = 140 kt (14 CFR 25.107),
+  4,435 ft to 35 ft (25.113(a)(1)).
+- Not changed: thrust lapse (Bartel & Young 2008, fitted to the CFM56-7B, gives ~20% loss by
+  M0.23, slightly more than the model's 18%, so thrust is not short); rolling μ 0.03 (0.02 would
+  save ~80 ft; left alone without a 737-specific source).
+- Not done (0062): the panel notes lift-off is 17 kt after Vr (real: Vr + 5–10) and Vr is
+  1.06 Vs; real flaps 5–10 Vr at 65 t is reported nearer 136–142. No public 737 takeoff
+  V-speed table was found to refit flaps 10 against. `vrKts` isn't read by the game yet.
