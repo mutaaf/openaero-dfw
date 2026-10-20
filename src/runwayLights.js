@@ -4,7 +4,7 @@
 // red end bars facing the rollout, and an approach light system on every end: ALSF-2-style
 // (2,400 ft, a light bar every 100 ft, 1,000 ft crossbar, sequenced flashers racing to the
 // threshold twice a second) on the big airline runways, MALSR (1,400 ft) elsewhere.
-// One Points draw call; lights keep a constant on-screen size like the real thing at range,
+// One Points draw call per airport (culled off screen and beyond range); lights keep a constant on-screen size like the real thing at range,
 // fade in at dusk, and are directional where real fixtures are (thresholds, ends, approach).
 import * as THREE from 'three';
 import { courseVector } from './airports.js';
@@ -25,8 +25,10 @@ const COLOURS = [
 // the outer end, 1 at the threshold).
 export function layoutRunwayLights(runways, endById) {
   const out = [];
-  const add = (x, z, kind, dirX = 0, dirZ = 0, phase = 0) => out.push({ x, z, kind, dirX, dirZ, phase });
+  let airport = '';
+  const add = (x, z, kind, dirX = 0, dirZ = 0, phase = 0) => out.push({ x, z, kind, dirX, dirZ, phase, airport });
   for (const r of runways) {
+    airport = r.airport;
     const [a, b] = r.ends.map(endById);
     const d = courseVector(a.hdgT);          // from a's end towards b's end
     const left = { x: d.z, z: -d.x };
@@ -104,6 +106,8 @@ void main() {
   vA = on * facing;
   vCol = aCol;
   gl_Position = projectionMatrix * viewMatrix * wp;
+  // A light facing away is dark: clip it before the rasterizer sets up its quad.
+  if (vA < 0.004) gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
 }`;
 
 const FRAG = /* glsl */`
@@ -117,45 +121,66 @@ void main() {
   gl_FragColor = vec4(c, vA * halo);
 }`;
 
+// Beyond this a field's lights are not drawn (about 19 NM, well past a night visual approach).
+export const LIGHTS_RANGE_M = 35000;
+
 export function createRunwayLights({ runways, endById, heightAt, reducedMotion = false }) {
-  const lights = layoutRunwayLights(runways, endById);
-  const n = lights.length;
-  const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
-  const dir = new Float32Array(n * 2), kind = new Float32Array(n), phase = new Float32Array(n);
-  lights.forEach((L, i) => {
-    pos[i * 3] = L.x; pos[i * 3 + 2] = L.z;
-    // Approach lights stand on masts over the terrain; runway lights sit just proud of it.
-    pos[i * 3 + 1] = heightAt(L.x, L.z) + (L.kind >= LIGHT.approach ? 1.5 : 0.4);
-    col.set(COLOURS[L.kind], i * 3);
-    dir[i * 2] = L.dirX; dir[i * 2 + 1] = L.dirZ;
-    kind[i] = L.kind; phase[i] = L.phase;
-  });
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
-  g.setAttribute('aDir', new THREE.BufferAttribute(dir, 2));
-  g.setAttribute('aKind', new THREE.BufferAttribute(kind, 1));
-  g.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+  const all = layoutRunwayLights(runways, endById);
   const uniforms = { uPx: { value: 1 }, uNight: { value: 0 }, uTime: { value: 0 }, uFlash: { value: reducedMotion ? 0 : 1 } };
-  const points = new THREE.Points(g, new THREE.ShaderMaterial({
+  const material = new THREE.ShaderMaterial({
     uniforms, vertexShader: VERT, fragmentShader: FRAG,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-  }));
-  points.name = 'runwayLights';
-  points.renderOrder = 3;
-  points.frustumCulled = false;
+  });
+  const group = new THREE.Group();
+  group.name = 'runwayLights';
+  const fields = [];
+  for (const id of new Set(all.map((L) => L.airport))) {
+    const lights = all.filter((L) => L.airport === id);
+    const n = lights.length;
+    const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    const dir = new Float32Array(n * 2), kind = new Float32Array(n), phase = new Float32Array(n);
+    lights.forEach((L, i) => {
+      pos[i * 3] = L.x; pos[i * 3 + 2] = L.z;
+      // Approach lights stand on masts over the terrain; runway lights sit just proud of it.
+      pos[i * 3 + 1] = heightAt(L.x, L.z) + (L.kind >= LIGHT.approach ? 1.5 : 0.4);
+      col.set(COLOURS[L.kind], i * 3);
+      dir[i * 2] = L.dirX; dir[i * 2 + 1] = L.dirZ;
+      kind[i] = L.kind; phase[i] = L.phase;
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
+    g.setAttribute('aDir', new THREE.BufferAttribute(dir, 2));
+    g.setAttribute('aKind', new THREE.BufferAttribute(kind, 1));
+    g.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+    g.computeBoundingSphere(); // frustum culling: a field behind the camera costs nothing
+    const points = new THREE.Points(g, material);
+    points.name = `runwayLights:${id}`;
+    points.renderOrder = 3;
+    group.add(points);
+    fields.push({ points, g, pos, kind, n });
+  }
   return {
-    points,
-    count: n,
+    points: group,
+    count: all.length,
     // Re-seat on the terrain once the elevation grid arrives.
     reseat() {
-      for (let i = 0; i < n; i++) pos[i * 3 + 1] = heightAt(pos[i * 3], pos[i * 3 + 2]) + (kind[i] >= LIGHT.approach ? 1.5 : 0.4);
-      g.attributes.position.needsUpdate = true;
+      for (const { g, pos, kind, n } of fields) {
+        for (let i = 0; i < n; i++) pos[i * 3 + 1] = heightAt(pos[i * 3], pos[i * 3 + 2]) + (kind[i] >= LIGHT.approach ? 1.5 : 0.4);
+        g.attributes.position.needsUpdate = true;
+        g.computeBoundingSphere();
+      }
     },
-    update(time, pixelRatio, night) {
+    update(time, pixelRatio, night, eye) {
       uniforms.uTime.value = time;
       uniforms.uPx.value = pixelRatio;
       uniforms.uNight.value = night;
+      if (eye) {
+        for (const { points, g } of fields) {
+          const b = g.boundingSphere;
+          points.visible = Math.hypot(b.center.x - eye.x, b.center.z - eye.z) - b.radius < LIGHTS_RANGE_M;
+        }
+      }
     },
   };
 }

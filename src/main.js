@@ -2315,7 +2315,7 @@ function updateSkyAndLights(t) {
   if (runwayLights) {
     // On from dusk, and by day in low visibility (under 5 SM), as at the real fields.
     runwayLights.points.visible = night > 0.02 || sim.wx.visibilitySm < 5;
-    runwayLights.update(t, renderer.getPixelRatio(), night);
+    runwayLights.update(t, renderer.getPixelRatio(), night, camera.position);
   }
   if (papiLamps) papiLamps.material.size = 5 + 4 * night;
 }

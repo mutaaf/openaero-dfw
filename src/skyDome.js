@@ -14,22 +14,15 @@ const R_MOON = 72000;
 const MOON_DIAMETER_DEG = 0.9;
 const SPACE_BLUE = new THREE.Color(0x020a2a);
 
-// Software GL pays for every sky pixel, so nearly all of the sky is per vertex on a dense
-// dome: the gradient, twilight glow, overcast, the sun's wide halo and the Moon's glow, then
-// ACES and sRGB (the same functions three applies per pixel). The fragment shader only
-// dithers, except within ~16° of the sun, where the tight aureole and the disc need a pixel.
-const SKY_VERT = /* glsl */`
-#include <tonemapping_pars_fragment>
-#include <colorspace_pars_fragment>
+// Software GL pays for every sky pixel (and for both sides of any branch), so the whole
+// sky is per vertex on a dense dome: the gradient, twilight glow, overcast, the sun's wide
+// halo and the Moon's glow (SKY_COLOUR), then ACES and sRGB (the same functions three
+// applies per pixel). The fragment shader only dithers. Around the sun a small billboard
+// redoes the sky per pixel with the tight aureole and the disc added (SUN_FRAG).
+const SKY_COLOUR = /* glsl */`
 uniform vec3 uZenith, uHorizon, uGlow, uSunDir, uSunCol, uMoonDir, uOvercastCol, uSpaceCol;
 uniform float uGlowK, uOvercast, uSpace, uSunVis, uMoonLit;
-varying vec3 vDir;
-varying vec3 vBase;
-varying vec3 vOut;
-varying float vSunC;
-void main() {
-  vDir = position;
-  vec3 d = normalize(position);
+vec3 skyColour(vec3 d) {
   float h = d.y;
   vec3 zen = mix(uZenith, uSpaceCol, uSpace);
   // The sky stays horizon-coloured below the horizon (the far ground fades into it).
@@ -46,33 +39,52 @@ void main() {
   float c2 = c * c, c4 = c2 * c2, c8 = c4 * c4;
   col += uSunCol * uSunVis * clear * c8 * c2 * 0.22;
   col += vec3(0.55, 0.6, 0.75) * pow(max(dot(d, uMoonDir), 0.0), 40.0) * 0.06 * uMoonLit * clear;
-  vBase = col;
-  vSunC = c;
-  vOut = sRGBTransferOETF(vec4(ACESFilmicToneMapping(col), 1.0)).rgb;
+  return col;
+}
+vec3 skyDisplay(vec3 linear) { return sRGBTransferOETF(vec4(ACESFilmicToneMapping(linear), 1.0)).rgb; }
+`;
+
+const SKY_VERT = /* glsl */`
+#include <tonemapping_pars_fragment>
+#include <colorspace_pars_fragment>
+${SKY_COLOUR}
+varying vec3 vOut;
+void main() {
+  vOut = skyDisplay(skyColour(normalize(position)));
   vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_Position = p.xyww; // on the far plane
 }`;
 
 const SKY_FRAG = /* glsl */`
-#include <tonemapping_pars_fragment>
-uniform vec3 uSunDir, uSunCol;
-uniform float uSunVis, uOvercast;
-varying vec3 vDir;
-varying vec3 vBase;
 varying vec3 vOut;
-varying float vSunC;
 void main() {
-  vec3 col = vOut;
-  if (vSunC > 0.96 && uSunVis > 0.0) {
-    // The tight aureole and the hard disc (0.53°), then the same ACES + sRGB as the dome.
-    vec3 d = normalize(vDir);
-    float c = max(dot(d, uSunDir), 0.0);
-    float sun = pow(c, 300.0) * 0.9 + smoothstep(0.99990, 0.99997, c) * 18.0 * smoothstep(-0.012, 0.004, d.y);
-    col = sRGBTransferOETF(vec4(ACESFilmicToneMapping(vBase + uSunCol * uSunVis * (1.0 - uOvercast) * sun), 1.0)).rgb;
-  }
   // Break up 8-bit banding in the long night gradients (interleaved gradient noise).
-  col += (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5) / 255.0;
+  vec3 col = vOut + (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5) / 255.0;
   gl_FragColor = vec4(col, 1.0);
+}`;
+
+// The sun's aureole and hard disc (0.53°) on a billboard 2 × 12° across: the sky per pixel
+// plus the sun, blended into the dome by 12° (beyond, the aureole is under 1/255).
+const SUN_HALF_DEG = 12;
+const SUN_VERT = /* glsl */`
+varying vec3 vWorld;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorld = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const SUN_FRAG = /* glsl */`
+#include <tonemapping_pars_fragment>
+${SKY_COLOUR}
+varying vec3 vWorld;
+void main() {
+  vec3 d = normalize(vWorld - cameraPosition);
+  float c = max(dot(d, uSunDir), 0.0);
+  float edge = smoothstep(0.9781, 0.9903, c); // 12° → 8°
+  if (edge <= 0.0) discard;
+  float sun = pow(c, 300.0) * 0.9 + smoothstep(0.99990, 0.99997, c) * 18.0 * smoothstep(-0.012, 0.004, d.y);
+  vec3 col = skyDisplay(skyColour(d) + uSunCol * uSunVis * (1.0 - uOvercast) * sun);
+  gl_FragColor = vec4(col, edge);
 }`;
 
 const STAR_VERT = /* glsl */`
@@ -245,6 +257,16 @@ export function createSkyDome({ scene, base, reducedMotion = false }) {
   moon.scale.setScalar(2 * R_MOON * Math.tan((MOON_DIAMETER_DEG / 2) * Math.PI / 180));
   group.add(moon);
 
+  const sunDisc = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+    uniforms: skyU, vertexShader: SUN_VERT, fragmentShader: SUN_FRAG,
+    transparent: true, depthWrite: false, toneMapped: false,
+  }));
+  // After the dome, on the same terms: behind the ground, over the sky.
+  sunDisc.renderOrder = 101;
+  sunDisc.frustumCulled = false;
+  sunDisc.scale.setScalar(2 * R_MOON * Math.tan(SUN_HALF_DEG * Math.PI / 180));
+  group.add(sunDisc);
+
   // Cloud layers live in world space (they're a place you fly through), not on the dome.
   const cloudGeo = new THREE.PlaneGeometry(1, 1);
   cloudGeo.rotateX(-Math.PI / 2);
@@ -345,6 +367,10 @@ export function createSkyDome({ scene, base, reducedMotion = false }) {
     moonU.uRight.value.set(1, 0, 0).applyQuaternion(camera.quaternion);
     moonU.uUp.value.set(0, 1, 0).applyQuaternion(camera.quaternion);
     moon.visible = md.y > -0.02 && moonU.uAlpha.value > 0.01;
+    const sd = skyU.uSunDir.value;
+    sunDisc.position.copy(sd).multiplyScalar(R_MOON);
+    sunDisc.quaternion.copy(camera.quaternion);
+    sunDisc.visible = skyU.uSunVis.value > 0 && skyU.uOvercast.value < 1;
     for (const [i, l] of layers.entries()) {
       const m = clouds[i];
       m.position.set(camera.position.x, refY + l.baseFt * 0.3048, camera.position.z);

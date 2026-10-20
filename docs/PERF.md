@@ -49,4 +49,14 @@ so the default "Live" sky had everything on. Fixed in the change, not the limit:
 - the city lights are compiled in only while on (setCityLights recompiles once a switch);
   by day the ground runs the plain imagery shader;
 - the sky dome tone-maps and sRGB-encodes per vertex (the gradient and wide halo are
-  smooth); per pixel only dither, plus the aureole and disc within ~16° of the sun.
+  smooth); per pixel only dither. The aureole and disc are a 24° billboard that redoes the
+  sky per pixel and blends in (a branch inside the dome shader still cost ~7 ms: software
+  GL runs both sides);
+- runway lights: one Points per airport (frustum-culled, hidden beyond 35 km), and lights
+  facing away are clipped before the rasterizer sets up their quads.
+
+Second CI run still hit 20 min (79/123; the ILS autoland test timed out at 120 s, both
+tries: the sim ran under 0.4x). Two pages at once on SwiftShader (as CI's 2 workers), M1
+Max, 1280x720, avg frame: main 62 ms day / 61 night; after all of the above 66 day / 79–84
+night (before: +28% day, +48% night). Night's remainder is the stars, street lights and
+runway lights themselves.
