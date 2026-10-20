@@ -82,18 +82,24 @@ export async function enterCockpit(page) {
 
 // WCAG relative luminance contrast of each small HUD label against its panel, with the
 // panel's translucent backgrounds composited over the page background (#020617).
-export async function lowContrastLabels(page, rootSel) {
-  return page.evaluate((rootSel) => {
+// `backdrop: [r, g, b]` models a root that floats over the 3D world instead: only the
+// root and what is inside it are composited, over that colour (white = the brightest
+// ground or sky the HUD can sit on, ticket 0050).
+export async function lowContrastLabels(page, rootSel, { backdrop = null } = {}) {
+  return page.evaluate(({ rootSel, backdrop }) => {
     const parse = (c) => { const m = c.match(/[\d.]+/g).map(Number); return [m[0], m[1], m[2], m[3] ?? 1]; };
     const lum = ([r, g, b]) => {
       const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
       return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
     };
     const over = (top, bottom) => [0, 1, 2].map((i) => top[i] * top[3] + bottom[i] * (1 - top[3]));
-    const bgOf = (el) => {
+    const bgOf = (el, root) => {
       const chain = [];
-      for (let e = el; e; e = e.parentElement) chain.unshift(e);
-      let bg = [2, 6, 23];
+      for (let e = el; e; e = e.parentElement) {
+        chain.unshift(e);
+        if (backdrop && e === root) break;
+      }
+      let bg = backdrop || [2, 6, 23];
       for (const e of chain) bg = over(parse(getComputedStyle(e).backgroundColor), bg);
       return bg;
     };
@@ -105,7 +111,7 @@ export async function lowContrastLabels(page, rootSel) {
         const s = getComputedStyle(el);
         if (parseFloat(s.fontSize) > 12) continue;
         const fg = parse(s.color);
-        const bg = bgOf(el);
+        const bg = bgOf(el, root);
         const col = over(fg, bg);
         const [a, b] = [lum(col), lum(bg)];
         const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
@@ -113,5 +119,5 @@ export async function lowContrastLabels(page, rootSel) {
       }
     }
     return bad;
-  }, rootSel);
+  }, { rootSel, backdrop });
 }

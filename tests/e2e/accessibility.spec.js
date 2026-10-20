@@ -107,6 +107,19 @@ test('small HUD labels reach 4.5:1 against their panels (0007)', async ({ page }
   expect(await lowContrastLabels(page, 'header, aside, .hud-glass')).toEqual([]);
 });
 
+test('HUD buttons and labels stay 4.5:1 over the brightest ground, active or not (0050)', async ({ page }) => {
+  await page.goto(BASE);
+  await page.keyboard.press('Escape');
+  // Real states (syncUI reasserts the classes every frame): gear starts down, satellite on.
+  await page.locator('#btnBrakes').click();
+  await page.locator('#btnApMaster').click();
+  await expect(page.locator('#btnGear')).toHaveClass(/\bactive\b/);
+  await expect(page.locator('#btnApMaster')).toHaveClass(/\bactive\b/);
+  await expect(page.locator('#btnBrakes')).toHaveClass(/active-amber/);
+  await expect(page.locator('#btnSatLayer')).toHaveClass(/active-sky/);
+  expect(await lowContrastLabels(page, 'header, aside, .hud-glass', { backdrop: [255, 255, 255] })).toEqual([]);
+});
+
 test('8 px HUD labels are gone (0007)', async ({ page }) => {
   await page.goto(BASE);
   const tiny = await page.evaluate(() => [...document.querySelectorAll('header *, aside *, #touchDeck *')]

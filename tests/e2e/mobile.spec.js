@@ -201,6 +201,20 @@ test('phone: the menu has a keyboard path and grabbing the stick folds it (0021)
   await expect(page.locator('#hudMenu')).toBeHidden();
 });
 
+test('phone: touch buttons and THR stay 4.5:1 over the brightest ground, active or not (0050)', async ({ page }) => {
+  await stubTiles(page);
+  await enterCockpit(page);
+  // Real states, not forced classes (syncUI reasserts them every frame): the final starts gear
+  // down; brakes and the ILS autopilot are tapped on.
+  await page.locator('#touchBrakes').tap();
+  await page.locator('#touchIls').tap();
+  for (const id of ['#touchBrakes', '#touchIls']) await expect(page.locator(id)).toHaveClass(/active-amber/);
+  await expect(page.locator('#touchGear')).toHaveClass(/\bactive\b/);
+  const WHITE = [255, 255, 255];
+  expect(await lowContrastLabels(page, '#touchDeck, #phoneTelemetry, header', { backdrop: WHITE })).toEqual([]);
+  expect(await lowContrastLabels(page, '#touchDeck, #phoneTelemetry, header')).toEqual([]);
+});
+
 test('phone: telemetry and touch labels are at least 10 px and reach 4.5:1 (0007)', async ({ page }) => {
   await stubTiles(page);
   await enterCockpit(page);

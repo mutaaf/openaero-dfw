@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
 
 // Ticket 0025: a phone held sideways. Runs in the `phone` project (touch, mobile).
 // The ticket's two sizes, plus the narrowest phones the landscape query also matches.
@@ -144,5 +144,18 @@ test.describe('safe-area insets in landscape', () => {
     expect(after.stick.x + after.stick.width).toBeLessThanOrEqual(844 - 47);
     expect(after.menu).toBeGreaterThan(before.menu);
     expect(after.thr).toBeGreaterThan(before.thr);
+  });
+});
+
+test.describe('phone landscape 844x390: contrast over bright ground (0050)', () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
+
+  test('touch buttons and THR stay 4.5:1 over white, active or not', async ({ page }) => {
+    await startFlight(page);
+    await page.locator('#touchBrakes').tap();
+    await page.locator('#touchIls').tap();
+    for (const id of ['#touchBrakes', '#touchIls']) await expect(page.locator(id)).toHaveClass(/active-amber/);
+    await expect(page.locator('#touchGear')).toHaveClass(/\bactive\b/);
+    expect(await lowContrastLabels(page, '#touchDeck, #phoneTelemetry, header', { backdrop: [255, 255, 255] })).toEqual([]);
   });
 });
