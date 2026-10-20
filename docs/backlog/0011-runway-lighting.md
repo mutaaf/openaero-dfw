@@ -1,12 +1,12 @@
 ---
 id: 0011
 title: Light the runways (edge, approach and PAPI lights that read at night)
-status: in-progress
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-16
-pr:
+pr: 52
 ---
 
 ## Why

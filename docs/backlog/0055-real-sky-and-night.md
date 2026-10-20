@@ -1,12 +1,12 @@
 ---
 id: 0055
 title: A real sky over DFW, and a night that keeps the world
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-10-19
-pr:
+pr: 52
 ---
 
 ## Why

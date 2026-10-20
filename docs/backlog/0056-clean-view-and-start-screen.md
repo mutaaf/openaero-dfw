@@ -1,12 +1,12 @@
 ---
 id: 0056
 title: Easy to start, clear to fly: a 1-2-3 start screen and a clean view
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-19
-pr:
+pr: 52
 ---
 
 ## Why
