@@ -67,3 +67,5 @@ billboard sun 144–163 ms. Desktop e2e specs now render at `deviceScaleFactor: 
 (playwright.config.js; 148 → 80 ms a frame). Only the specs that count canvas pixels
 (airports, night, sun, resolution) opt back into 1x with `FULL_RES`, and the perf probe still
 measures 1x. Flight specs alone at 0.5 were not enough: the suite took 20.2 min locally.
+With that, CI passed in 18.7 min, so the margin was still thin: the operator raised the CI
+job limit to 30 min and the ILS autoland test's wall allowance to 180 s.

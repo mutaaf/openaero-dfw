@@ -51,7 +51,8 @@ test('dragging the throttle slider sets the throttle', async ({ page }) => {
 });
 
 test('ILS autoland holds the localizer and glideslope from 4 NM, pitch steady', async ({ page }) => {
-  test.setTimeout(120_000);
+  // 45 sim seconds; at night CI's two SwiftShader workers run the sim at ~0.4x.
+  test.setTimeout(180_000);
   await enterCockpit(page);
   await page.selectOption('#selScenario', 'kdal_31r_final');
   await page.click('#btnApApr');
