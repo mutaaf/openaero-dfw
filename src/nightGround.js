@@ -11,13 +11,13 @@ export const nightUniforms = {
   uGroundTint: { value: new THREE.Color(1, 1, 1) }, // the light on flat ground (tinted materials)
 };
 
-const VERT_PARS = 'varying vec2 vNightXZ;\n';
-const VERT_MAIN = 'vNightXZ = (modelMatrix * vec4(transformed, 1.0)).xz;\n';
+const VERT_PARS = 'varying vec3 vNightW;\n';
+const VERT_MAIN = 'vNightW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n';
 
 const FRAG_PARS = /* glsl */`
 uniform float uNight;
 uniform vec3 uGroundTint;
-varying vec2 vNightXZ;
+varying vec3 vNightW;
 `;
 
 const FRAG_MAIN = /* glsl */`
@@ -35,13 +35,23 @@ const FRAG_MAIN = /* glsl */`
   float grey = 1.0 - smoothstep(0.1, 0.32, sat);
   float asphalt = smoothstep(0.025, 0.06, lum) * (1.0 - smoothstep(0.16, 0.3, lum)) * grey;
   float built = smoothstep(0.05, 0.2, lum) * grey;
+#ifdef NIGHT_TINT
+  // Google's 3D city: its photos are greyer than the satellite imagery and its walls are
+  // grey too, so pools only on near-level surfaces (face normal from the derivatives), a
+  // stricter grey, and a dimmer glow; otherwise whole districts turn gold.
+  vec3 fn = normalize(cross(dFdx(vNightW), dFdy(vNightW)));
+  asphalt *= smoothstep(0.8, 0.95, abs(fn.y)) * (1.0 - smoothstep(0.05, 0.16, sat));
+  const float GAIN = 0.45;
+#else
+  const float GAIN = 1.0;
+#endif
   // Moonlit grade: cooler and flatter than the daylight photo.
   float g = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   diffuseColor.rgb = mix(diffuseColor.rgb, g * vec3(0.78, 0.88, 1.18), 0.55 * uNight);
   // Street lights: one candidate per 20 m cell, jittered; each throws a warm pool on the
   // pavement around a small bright head. Far away, where a cell is under a pixel, their
   // average glow.
-  vec2 cell = vNightXZ / 20.0;
+  vec2 cell = vNightW.xz / 20.0;
   vec2 id = floor(cell);
   float h = fract(sin(dot(id, vec2(127.1, 311.7))) * 43758.5453);
   vec2 off = (vec2(fract(h * 17.31), fract(h * 31.77)) - 0.5) * 0.7;
@@ -53,7 +63,7 @@ const FRAG_MAIN = /* glsl */`
   vec3 colour = mix(vec3(1.0, 0.6, 0.24), vec3(0.95, 0.9, 0.8), step(0.75, fract(h * 7.7)));
   vec3 lamps = colour * (tex * pool * pool * 7.0 + head * 2.0);
   vec3 far = colour * (tex * 1.6 + 0.16);
-  diffuseColor.rgb += mix(far, lamps, near) * asphalt * uNight + colour * built * 0.04 * uNight;
+  diffuseColor.rgb += mix(far, lamps, near) * asphalt * GAIN * uNight + colour * built * 0.04 * uNight;
 }
 #endif
 `;

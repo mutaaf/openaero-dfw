@@ -99,14 +99,17 @@ describe('quota and errors', () => {
     fetch.mockResolvedValueOnce(ok(ROOT));
     expect((await createGoogleSession({ key: 'K', fetch, storage, now: () => t }).getRoot()).session).toBe('SESS123');
   });
-  it('403 (referrer/key) → unavailable for an hour', async () => {
+  it('403 (referrer/key) → unavailable for 10 minutes, then asks again', async () => {
     const storage = memStorage();
     let t = 0;
     const fetch = vi.fn(async () => status(403));
     await expect(createGoogleSession({ key: 'K', fetch, storage, now: () => t }).getRoot()).rejects.toMatchObject({ reason: 'forbidden' });
-    t = 30 * 60 * 1000;
+    t = 9 * 60 * 1000;
     await expect(createGoogleSession({ key: 'K', fetch, storage, now: () => t }).getRoot()).rejects.toMatchObject({ reason: 'forbidden' });
     expect(fetch).toHaveBeenCalledTimes(1);
+    t = 11 * 60 * 1000;
+    fetch.mockResolvedValueOnce(ok(ROOT));
+    expect((await createGoogleSession({ key: 'K', fetch, storage, now: () => t }).getRoot()).session).toBe('SESS123');
   });
   it('a network failure is unavailable but not remembered', async () => {
     const storage = memStorage();

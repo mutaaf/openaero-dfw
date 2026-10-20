@@ -226,6 +226,11 @@ kbd {
   #eicasPanel, #stickPanel, #mapPanel, #keyHints, #btnPanelsShow, #btnPanelsHide, #btnMouseYoke { display: none !important; }
   #coach, body.view-clean #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
 }
+/* Any tablet (touch-only, 700 px and up, either way round): the four function buttons are
+   one row along the bottom between the thumbs, not a column standing over the runway. */
+@media (min-width: 700px) and (hover: none) and (pointer: coarse) {
+  #touchButtons { flex-direction: row; gap: 0.5rem; }
+}
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform 0.15s; }
