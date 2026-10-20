@@ -226,6 +226,13 @@ kbd {
   #eicasPanel, #stickPanel, #mapPanel, #keyHints, #btnPanelsShow, #btnPanelsHide, #btnMouseYoke { display: none !important; }
   #coach, body.view-clean #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
 }
+/* Tablets (touch-only, 700 px across and 600 px tall, either way round; phones held sideways
+   keep their own row above): the four function buttons are one row along the bottom between
+   the thumbs, not a column standing over the runway, lifted clear of the ~31 px Google
+   attribution under photoreal (logo + data line, drawn above the deck). */
+@media (min-width: 700px) and (min-height: 600px) and (hover: none) and (pointer: coarse) {
+  #touchButtons { flex-direction: row; gap: 0.5rem; margin-bottom: 2rem; }
+}
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform 0.15s; }

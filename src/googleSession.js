@@ -57,9 +57,11 @@ const write = (storage, k, v) => {
   try { if (v === null) storage?.removeItem(k); else storage?.setItem(k, JSON.stringify(v)); } catch { /* full or blocked */ }
 };
 
-// The key is restricted to the referrer https://mutaafaziz.com/openaero/*, but browsers
-// send only the origin ("https://mutaafaziz.com/") on cross-origin requests by default,
-// which Google rejects (API_KEY_HTTP_REFERRER_BLOCKED). Send the full page URL (https only).
+// The key is restricted by referrer, but browsers send only the origin
+// ("https://mutaafaziz.com/") on cross-origin requests by default, which a key restricted
+// to mutaafaziz.com/openaero/* rejects (API_KEY_HTTP_REFERRER_BLOCKED). Ask for the full page
+// URL (https only). Safari and every iOS browser trim cross-site Referers to the origin
+// whatever we ask, so the key must also allow https://mutaafaziz.com/ (operator, Cloud console).
 export const GOOGLE_FETCH = { referrerPolicy: 'no-referrer-when-downgrade' };
 
 export class PhotorealUnavailable extends Error {
@@ -90,8 +92,9 @@ export function createGoogleSession({ key, fetch: fetchFn, storage, now = () => 
     }
     if (res.status === 429 || res.status === 403) {
       const reason = res.status === 429 ? 'quota' : 'forbidden';
-      // Quota resets at midnight Pacific; a forbidden key/referrer is retried in an hour.
-      const until = res.status === 429 ? nextPacificMidnight(now()) : now() + 3600 * 1000;
+      // Quota resets at midnight Pacific. A refused key/referrer costs nothing and is often
+      // fixed in the console (Safari sends only the origin as Referer), so retry in 10 min.
+      const until = res.status === 429 ? nextPacificMidnight(now()) : now() + 10 * 60 * 1000;
       write(storage, BLOCK_KEY, { tag, reason, until });
       throw new PhotorealUnavailable(reason, res.status);
     }

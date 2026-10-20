@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Headless Chromium renders WebGL through SwiftShader (software GL), in CI and locally.
-const GL_ARGS = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+// Sound off: Fly starts the engine audio and the spoken coach/GPWS, which a local run would play aloud.
+const GL_ARGS = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--mute-audio'];
 // Most desktop specs drive the instrument panels, so they start in the full view; the clean
 // view (the default for players) has its own spec that clears this (tests/e2e/view.spec.js).
 // They also fly the raw airplane (Pilot) and read its plain-key bests; a first visit flies

@@ -149,3 +149,36 @@ for (const d of DEVICES) {
     });
   });
 }
+
+// On a tablet the function buttons are one row along the bottom, and with photoreal on the
+// Google attribution (logo + data line, ~31 px tall, z-index above the deck) sits there too:
+// it must not cover a button or have a button over its logo (PR #60 panel). Tiles are
+// stubbed, so the Google credit line is forced on as photoreal shows it.
+const TABLETS = DEVICES.filter((d) => Math.min(d.width, d.height) >= 700);
+for (const d of TABLETS) {
+  test.describe(`${d.name} credits`, () => {
+  test.use({ viewport: { width: d.width, height: d.height }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  test(`${d.width}x${d.height}: the Google attribution clears the function buttons`, async ({ page }) => {
+    await stubTiles(page);
+    await page.goto(BASE);
+    await page.locator('#btnStartFlight').tap();
+    await expect(page.locator('#coach')).toBeVisible({ timeout: 10_000 });
+    const r = await page.evaluate(() => {
+      document.getElementById('creditsGoogle').classList.remove('hidden');
+      document.getElementById('creditsFree').classList.add('hidden');
+      document.getElementById('txtGoogleData').textContent = 'Google, Airbus, Maxar Technologies, Vexcel Imaging US';
+      const box = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; };
+      const buttons = [...document.querySelectorAll('#touchButtons button')].map((e) => {
+        const b = e.getBoundingClientRect();
+        let blocked = 0; // rows down the button's centre line where a tap lands on something else
+        for (let y = Math.ceil(b.top) + 1; y < b.bottom - 1; y++) if (!document.elementFromPoint(b.x + b.width / 2, y)?.closest(`#${e.id}`)) blocked++;
+        return { id: e.id, blocked };
+      });
+      return { credits: box(document.getElementById('mapCredits')), row: box(document.getElementById('touchButtons')), buttons };
+    });
+    expect(r.credits.height, 'Google credit line shown').toBeGreaterThan(20);
+    expect(overlaps(r.credits, r.row), 'credits vs #touchButtons').toBe(false);
+    for (const b of r.buttons) expect(b.blocked, `${b.id} fully tappable`).toBe(0);
+  });
+  });
+}
