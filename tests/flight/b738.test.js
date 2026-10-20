@@ -1,7 +1,7 @@
 // Flight test cards for the Boeing 737-800 (65 t). The first three pin operational facts
 // pilots know; the rest read Boeing's published airport data:
 //  - ACAP: 737 Airplane Characteristics for Airport Planning, D6-58325-7 Rev C (Oct 2025),
-//    737NG_REV_C.pdf, §3.3.25 (takeoff) and §3.4.3 (landing) charts
+//    737NG_REV_C.pdf, §3.3.29 (takeoff) and §3.4.3 (landing) charts
 //  - ARC: Aerodrome Reference Code and Approach Speeds, Rev A (Aug 2026),
 //    arcandapproachspeeds.pdf
 //  - VLA: Visual Landing Aids Data, Rev A (Jun 2026), icaoadmpart4a.pdf, Table A6-1
@@ -67,13 +67,14 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
     expect(Math.abs(vrefKts(FLAPS_40, MLW_KG) - 142)).toBeLessThanOrEqual(5);
   });
 
-  // VLA Table A6-1 (VREF+5), 3.0° glide slope column: 737-800, flaps 40, flight-director
-  // pitch 1.3°. Speed: the ARC's 142 kt Vref scaled to 65 t (140.5 kt) + 5. Pitch on a
+  // VLA Table A6-1 (VREF+5), 3.0° glide slope column: 737-800 w/Winglets (the model's
+  // 35.8 m span is the winglet airframe), flaps 40, flight-director pitch 0.9° (1.3° without
+  // winglets). Speed: the ARC's 142 kt Vref scaled to 65 t (140.5 kt) + 5. Pitch on a
   // steady 3° path = trim AoA − 3°. The model needs −3.5° (nose down): flaps 40 (0057).
-  it.fails('pitch on a 3° ILS at Vref+5, flaps 40, is about +1.3° (Boeing VLA Table A6-1, ±1°) [gap: 0057]', () => {
+  it.fails('pitch on a 3° ILS at Vref+5, flaps 40, is about +0.9° (Boeing VLA Table A6-1, winglets, ±1°) [gap: 0057]', () => {
     const kts = 142 * Math.sqrt(b738.massKg / MLW_KG) + 5;
     const pitch = trimAoaDeg(b738, kts * KTS_TO_MPS, FLAPS_40) - 3;
-    expect(Math.abs(pitch - 1.3)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pitch - 0.9)).toBeLessThanOrEqual(1);
   });
 
   // ACAP §3.4.3 (flaps 30, standard day, zero wind, dry, auto spoilers, anti-skid): the
@@ -85,6 +86,8 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // Boeing's configuration: the model flies flaps 25 (the game's landing flap, its nearest
   // notch to 30) at its own Vref25 ≈ 139 kt, a few knots slower than a real Vref30 (0057),
   // and it has no ground spoilers (braking is tyre μ 0.45 with the wing still lifting).
+  // Those two errors partly cancel: the same flight from 143 kt measures ~3,980 ft (+17%),
+  // from 147 kt ~4,200 ft. 0057 must add ground spoilers along with the real Vref30.
   it('lands from 50 ft to a stop in about 3,414 ft, 65 t, sea level, dry (Boeing ACAP §3.4.3 × 0.6, ±15%)', () => {
     const kts = vrefKts(FLAPS_25);
     const v = kts * KTS_TO_MPS;
@@ -111,15 +114,18 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
     within(b.distM * M_TO_FT, 0.6 * 5690, 0.15);
   });
 
-  // ACAP §3.3.25 (26,000 lb SLST, the model's 2 × 120 kN; standard day, zero wind, dry,
-  // optimum flap): the sea-level curve reads 4,600 ft at 143,300 lb (3,920 ft at 130,000;
-  // it meets the chart's 5,902 ft line at 165,788 lb, the ACAP §3.3.41 code-3 limit).
+  // ACAP §3.3.29 (CFM56-7B24/-7B26/-7B27 at 26,000 lb SLST; the model has 2 × 120 kN ≈
+  // 27,000 lb, 4% more; standard day, zero wind, dry, optimum flap; non-winglet performance,
+  // "winglet aircraft will have slightly improved performance", so for the model's winglet
+  // airframe it is an upper bound): the sea-level curve reads 5,120 ft at 143,300 lb (4,910
+  // ft at 140,000). Not §3.3.25 (4,600 ft): that chart is the short field package, which the
+  // model doesn't have.
   // 14 CFR 25.113(a): the takeoff distance is at least 115% of the all-engines distance to
   // 35 ft, so 1.15 × that distance can't exceed the field length (the engine-out cases
   // only make it longer). Flown with full thrust from brake release, rotation at Vr at
   // 2.5°/s (Boeing FCTM: 2–3°/s) to 15°, at the better of the model's takeoff flaps (10,
   // 25), both rotating at the model's single Vr 142 kt. The model needs ~5,420 ft (0058).
-  it.fails('1.15 × the all-engines distance to 35 ft is within the 4,600 ft field length, 65 t, sea level (Boeing ACAP §3.3.25, 14 CFR 25.113) [gap: 0058]', () => {
+  it.fails('1.15 × the all-engines distance to 35 ft is within the 5,100 ft field length, 65 t, sea level (Boeing ACAP §3.3.29, 14 CFR 25.113) [gap: 0058]', () => {
     const toFt = (flaps) => {
       const b = makeBody(b738, { throttle: 1, flaps });
       let rot = null;
@@ -133,7 +139,7 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
       }, (x) => (x.pos.y - b738.gearHeight) * M_TO_FT >= 35);
       return b.distM * M_TO_FT;
     };
-    expect(1.15 * Math.min(toFt(1), toFt(FLAPS_25))).toBeLessThanOrEqual(4600);
+    expect(1.15 * Math.min(toFt(1), toFt(FLAPS_25))).toBeLessThanOrEqual(5100);
   });
 });
 

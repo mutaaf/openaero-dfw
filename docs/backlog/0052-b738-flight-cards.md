@@ -44,8 +44,8 @@ Engine-out performance, the F-16 (0053), changing the flight model itself.
 
 ## Shipped
 Four Boeing-sourced cards: landing distance from 50 ft (ACAP §3.4.3 × 0.6, passes, +11%),
-Vref40 at MLW (ARC: 142 kt, gap 0057), approach pitch at Vref40+5 (VLA Table A6-1: +1.3°,
-gap 0057) and 1.15 × all-engines takeoff distance ≤ field length (ACAP §3.3.25, gap 0058).
+Vref40 at MLW (ARC: 142 kt, gap 0057), approach pitch at Vref40+5 (VLA Table A6-1, winglets: +0.9°,
+gap 0057) and 1.15 × all-engines takeoff distance ≤ field length (ACAP §3.3.29: 5,100 ft, gap 0058; the short-field-package chart §3.3.25 does not apply).
 The cruise-thrust card was not written: no public source for M0.785/FL350 thrust was found,
 and a card is never pinned to a forum number. The ACAP `acaps/737NG_REV%20C.pdf` link is
 dead; the live copy is `v2/airports/acaps/737NG_REV_C.pdf`.
