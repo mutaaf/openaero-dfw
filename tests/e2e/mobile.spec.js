@@ -213,6 +213,13 @@ test('phone: touch buttons and THR stay 4.5:1 over the brightest ground, active 
   const WHITE = [255, 255, 255];
   expect(await lowContrastLabels(page, '#touchDeck, #phoneTelemetry, header', { backdrop: WHITE })).toEqual([]);
   expect(await lowContrastLabels(page, '#touchDeck, #phoneTelemetry, header')).toEqual([]);
+  // ON must still look ON: the active fills are clearly lighter and coloured next to FLAPS' slate OFF.
+  const fill = (id) => page.locator(id).evaluate((el) => getComputedStyle(el).backgroundColor.match(/[\d.]+/g).map(Number));
+  const off = await fill('#touchFlaps');
+  const gear = await fill('#touchGear');
+  const brakes = await fill('#touchBrakes');
+  expect(gear[1] - off[1]).toBeGreaterThanOrEqual(40);
+  expect(brakes[0] - off[0]).toBeGreaterThanOrEqual(60);
 });
 
 test('phone: telemetry and touch labels are at least 10 px and reach 4.5:1 (0007)', async ({ page }) => {
