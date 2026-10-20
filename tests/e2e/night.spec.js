@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { stubTiles, collectErrors, enterCockpit } from './helpers.js';
+import { stubTiles, collectErrors, enterCockpit, FULL_RES } from './helpers.js';
+
+test.use(FULL_RES);
 
 // Night keeps the world: the imagery stays readable (moonlight + city lights, never black),
 // the runways light up (ticket 0011), and the real stars and Moon are overhead.

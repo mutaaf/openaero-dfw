@@ -60,3 +60,9 @@ tries: the sim ran under 0.4x). Two pages at once on SwiftShader (as CI's 2 work
 Max, 1280x720, avg frame: main 62 ms day / 61 night; after all of the above 66 day / 79–84
 night (before: +28% day, +48% night). Night's remainder is the stars, street lights and
 runway lights themselves.
+
+2026-10-20, a third CI run (with the above) was also cancelled at 20 min. Locally ( SwiftShader, 1280x720, Live
+at 21:17 CDT: main 100 ms a frame, this change before the billboard sun 144–163 ms). Desktop e2e specs now render at `deviceScaleFactor: 0.5`
+(playwright.config.js; 148 → 80 ms a frame). Only the specs that count canvas pixels
+(airports, night, sun, resolution) opt back into 1x with `FULL_RES`, and the perf probe still
+measures 1x. Flight specs alone at 0.5 were not enough: the suite took 20.2 min locally.

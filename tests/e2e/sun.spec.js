@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { stubTiles, collectErrors, enterCockpit } from './helpers.js';
+import { stubTiles, collectErrors, enterCockpit, FULL_RES } from './helpers.js';
+
+test.use(FULL_RES);
 
 // Ticket 0014: the sun is real by default (Now) and the button cycles today's
 // Dawn / Noon / Dusk / Night over DFW.

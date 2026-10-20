@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { stubTiles, enterCockpit } from './helpers.js';
+import { stubTiles, enterCockpit, FULL_RES } from './helpers.js';
+
+test.use(FULL_RES);
 
 test.beforeEach(async ({ page }) => { await stubTiles(page); });
 
