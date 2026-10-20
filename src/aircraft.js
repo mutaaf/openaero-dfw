@@ -46,7 +46,11 @@ export const AIRCRAFT_DATABASE = {
     engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.7, spoolTau: 1.2 },
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
     vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
-    vrKts: 142,
+    // Vr at flaps 10, 65 t: the speed from which a normal 2–3°/s rotation (FCTM; ~2.3°/s
+    // average as flown, ATSB) lifts off at the normal 8–9° attitude (NTSB, operator's 737
+    // manual) on this lift curve: 8.4° at 132 kt (at 142 it lifted off at 7.0° and 157 kt,
+    // a takeoff ~9% too long against Boeing ACAP §3.3.29). Pinned by tests/flight/b738.test.js.
+    vrKts: 132,
     stallCleanKts: 114,
     gearHeight: 3.4,
     eyeOffset: new Vector3(0, 4.2, -12.8),

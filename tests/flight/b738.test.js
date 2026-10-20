@@ -140,25 +140,70 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // model doesn't have.
   // 14 CFR 25.113(a): the takeoff distance is at least 115% of the all-engines distance to
   // 35 ft, so 1.15 × that distance can't exceed the field length (the engine-out cases
-  // only make it longer). Flown with full thrust from brake release, rotation at Vr at
-  // 2.5°/s (Boeing FCTM: 2–3°/s) to 15°, at the model's takeoff flap (10; its other notches
-  // are the landing flaps 30 and 40), rotating at the model's single Vr 142 kt. The model
-  // needs ~5,520 ft (0058).
-  it.fails('1.15 × the all-engines distance to 35 ft is within the 5,100 ft field length, 65 t, sea level (Boeing ACAP §3.3.29, 14 CFR 25.113) [gap: 0058]', () => {
-    const toFt = (flaps) => {
-      const b = makeBody(b738, { throttle: 1, flaps });
-      let rot = null;
-      fly(b, b738, 120, (x, dt) => {
-        const { pitchDeg, bankRightDeg } = attitude(x);
-        if (x.iasKts >= b738.vrKts) {
-          rot = (rot ?? pitchDeg) + 2.5 * dt;
-          x.elevInput = elevatorForPitch(Math.min(x.onGround ? b738.maxGroundPitchDeg - 1 : 15, rot), pitchDeg, x.angVel.x);
-        }
-        x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
-      }, (x) => (x.pos.y - b738.gearHeight) * M_TO_FT >= 35);
-      return b.distM * M_TO_FT;
-    };
-    expect(1.15 * toFt(FLAPS_10)).toBeLessThanOrEqual(5100);
+  // only make it longer). Flown with full thrust from brake release at the model's takeoff
+  // flap (10; its other notches are the landing flaps 30 and 40), rotating at Vr like a line
+  // crew (see takeoff() below). (Before 0058: Vr 142 kt and a slower rotation, ~5,520 ft.)
+  it('1.15 × the all-engines distance to 35 ft is within the 5,100 ft field length, 65 t, sea level (Boeing ACAP §3.3.29, 14 CFR 25.113)', () => {
+    expect(1.15 * takeoff(FLAPS_10).ft35).toBeLessThanOrEqual(5100);
+  });
+});
+
+// Takeoff, 65 t, sea level, standard day, full thrust from brake release, wings level. At Vr
+// the pilot rotates towards 15° at a commanded 3°/s, the top of the FCTM's 2–3°/s: the
+// airplane follows ~1° behind, so it averages ~2.3°/s from Vr to lift-off, what crews fly
+// (ATSB 200500382, VH-VXH, 737-838: 2.2°/s average over 23 normal takeoffs; ATSB
+// AO-2018-011, VH-YIR, 737-800: 2.4°/s). Ground pitch is held 1° short of the 11° tailstrike.
+// `oei`: one of the two engines fails at Vr (half the thrust; the model has no asymmetric yaw).
+function takeoff(flaps, { oei = false } = {}) {
+  const b = makeBody(b738, { throttle: 1, flaps });
+  let rot = null, vr = null, liftoff = null;
+  fly(b, b738, 120, (x, dt) => {
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    if (x.iasKts >= b738.vrKts) {
+      if (!vr) {
+        vr = { t: x.t, pitchDeg };
+        if (oei) x.throttle = (0.5 - b738.engine.idleFraction) / (1 - b738.engine.idleFraction);
+      }
+      rot = (rot ?? pitchDeg) + 3 * dt;
+      x.elevInput = elevatorForPitch(Math.min(x.onGround ? b738.maxGroundPitchDeg - 1 : 15, rot), pitchDeg, x.angVel.x);
+    }
+    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+  }, (x) => {
+    if (vr && !liftoff && !x.onGround) {
+      const { pitchDeg } = attitude(x);
+      liftoff = { kts: x.iasKts, pitchDeg, ratePerS: (pitchDeg - vr.pitchDeg) / (x.t - vr.t) };
+    }
+    return (x.pos.y - b738.gearHeight) * M_TO_FT >= 35;
+  });
+  return { ft35: b.distM * M_TO_FT, kts35: b.iasKts, liftoff };
+}
+
+describe('Boeing 737-800 rotation and Vr (0058)', () => {
+  // The test pilot rotates like a line crew, or the takeoff cards measure the pilot.
+  it('rotates at an average ~2.2–2.4°/s from Vr to lift-off, like crews do (ATSB 200500382, AO-2018-011; FCTM 2–3°/s)', () => {
+    const { ratePerS } = takeoff(FLAPS_10).liftoff;
+    expect(ratePerS).toBeGreaterThan(2);
+    expect(ratePerS).toBeLessThan(2.6);
+  });
+
+  // NTSB (American Airlines 737-800, LAX, 2011), quoting the operator's 737 manual: rotate at
+  // 2–3°/s, "normal lift-off attitude is 8–9°" at flaps 1 and 5, tail contact at 11°. ATSB
+  // AO-2018-011 quotes 8° for flaps 5. Vr is the speed from which that rotation lifts off at
+  // that attitude: rotate too late and the wing is flying before the pitch gets there (at Vr
+  // 142 the model lifted off at 7.0°, 157 kt, a long, flat takeoff). This card pins the
+  // model's Vr (b738.vrKts, flaps 10) against its own lift curve.
+  it('rotating at Vr, it lifts off at the normal 8–9° attitude, short of the 11° tailstrike (NTSB, operator 737 manual)', () => {
+    const { pitchDeg } = takeoff(FLAPS_10).liftoff;
+    expect(pitchDeg).toBeGreaterThanOrEqual(8);
+    expect(pitchDeg).toBeLessThanOrEqual(9);
+  });
+
+  // 14 CFR 25.107(b)/(e)(1)(iii): V2 ≥ 1.13 VSR, and Vr must let an airplane that loses an
+  // engine at Vr reach V2 by 35 ft. A Vr low enough to lift off at 8–9° must still do that.
+  it('with an engine failed at Vr it still reaches V2 (1.13 Vs, flaps 10) by 35 ft (14 CFR 25.107)', () => {
+    const { kts35, liftoff } = takeoff(FLAPS_10, { oei: true });
+    expect(kts35).toBeGreaterThanOrEqual(1.13 * stallSpeedKts(b738, FLAPS_10));
+    expect(liftoff.pitchDeg).toBeLessThan(b738.maxGroundPitchDeg);
   });
 });
 
