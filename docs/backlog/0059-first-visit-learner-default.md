@@ -1,12 +1,12 @@
 ---
 id: 0059
 title: First visit starts on Learner, not Pilot
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-20
-pr:
+pr: 59
 ---
 
 ## Why
@@ -25,11 +25,11 @@ the default to storage until the player picks a card or flies. The start screen 
 Learner card selected. Pilot remains one tap away. Physics untouched.
 
 ## Acceptance criteria
-- [ ] Fresh profile: Learner card is selected on the start screen; flying it keeps the coach on
-- [ ] A stored `{ v: 1, level: 'pilot' }` still loads Pilot; Kid likewise
-- [ ] Throwing storage (private mode) falls back to Learner without an error
-- [ ] Personal bests keep the right key (`@learner`), nothing written to `openaero_best` by the default alone
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse; no console errors
+- [x] Fresh profile: Learner card is selected on the start screen; flying it keeps the coach on
+- [x] A stored `{ v: 1, level: 'pilot' }` still loads Pilot; Kid likewise
+- [x] Throwing storage (private mode) falls back to Learner without an error
+- [x] Personal bests keep the right key (`@learner`), nothing written to `openaero_best` by the default alone
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse; no console errors
 
 ## Test plan
 Unit (`tests/unit` for assists): empty, stored pilot/kid, malformed, throwing storage.
