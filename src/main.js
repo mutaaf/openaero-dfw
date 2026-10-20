@@ -1607,7 +1607,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   const ap = sim.approach;
   if (departing) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off: climb away, wings level
-  } else if (sim.activeEnd && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500) {
+  } else if (cfg.handsOff && sim.activeEnd && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500) {
     const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
     if (Math.abs(headingError(sim.activeEnd.hdgT, curHdg)) < 45) {
       _assistIn.guideBankDeg = kidLocalizerBankDeg(sim.activeEnd.hdgT, curHdg, ap.crossM);
@@ -2355,6 +2355,7 @@ window.openaeroDebug = () => {
   return {
     mission: sim.missionKey,
     assist: sim.assist,
+    inputSource: sim.inputSource,
     simTime: sim.simTime,
     missionRunway: m.kind === 'tour' ? null : `${m.airport}_${m.rwy}`,
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
