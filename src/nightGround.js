@@ -22,7 +22,7 @@ varying vec3 vNightW;
 
 // NIGHT_TINT (Google's 3D city): its photos are greyer than the satellite imagery and its
 // walls are grey too, so pools only on near-level surfaces (face normal from the
-// derivatives), a stricter grey, and a dimmer glow; otherwise whole districts turn gold.
+// derivatives; an edge-on facet's zero normal reads as a wall, not NaN), a stricter grey, and a dimmer glow; otherwise whole districts turn gold.
 // (Kept out of the shader string: comments there ship in the boot bundle.)
 const FRAG_MAIN = /* glsl */`
 #ifdef NIGHT_TINT
@@ -40,8 +40,8 @@ const FRAG_MAIN = /* glsl */`
   float asphalt = smoothstep(0.025, 0.06, lum) * (1.0 - smoothstep(0.16, 0.3, lum)) * grey;
   float built = smoothstep(0.05, 0.2, lum) * grey;
 #ifdef NIGHT_TINT
-  vec3 fn = normalize(cross(dFdx(vNightW), dFdy(vNightW)));
-  asphalt *= smoothstep(0.8, 0.95, abs(fn.y)) * (1.0 - smoothstep(0.05, 0.16, sat));
+  vec3 fn = cross(dFdx(vNightW), dFdy(vNightW));
+  asphalt *= smoothstep(0.8, 0.95, abs(fn.y) / max(length(fn), 1e-6)) * (1.0 - smoothstep(0.05, 0.16, sat));
   const float GAIN = 0.45;
 #else
   const float GAIN = 1.0;
