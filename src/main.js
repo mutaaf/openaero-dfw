@@ -32,7 +32,7 @@ import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './t
 import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, stallWarningKts,
-  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg,
+  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
@@ -720,7 +720,7 @@ function checkStabilizedGate() {
   if (step === 'reset') sim.gate = null;
   if (step !== 'evaluate') return;
   const gate = sim.gate = stabilizedGate({
-    iasKt: sim.iasKts, vref: sim.spec.vrefKts, vsFpm: sim.vsiFpm, gearDown: sim.gearDown,
+    iasKt: sim.iasKts, vref: vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: sim.gearDown,
     flapsOk: sim.flapsIndex >= 2, // the two landing notches (737: 30°/40°, 172: 20°/30°)
     glideDevDots: ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
     vmc: gs.armFt === GATE_VMC_FT,
@@ -761,7 +761,7 @@ function checkTouchdown(dt) {
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankDeg: _euler.z * RAD_TO_DEG,
     iasKts: sim.iasKts,
-    vrefKts: sim.spec.vrefKts,
+    vrefKts: vrefFor(sim.spec, sim.flapsIndex),
     driftDeg: sim.missionKey === CROSSWIND_KEY ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : undefined,
   });
   // Kid: a hard landing bounces and starts the approach again instead of crashing.
@@ -872,7 +872,7 @@ function updateTutor(dt) {
   tutorInput.crossM = sim.approach.crossM;
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
-  tutorInput.targetKts = sim.spec.vrefKts + 5;
+  tutorInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
   stepTutor(tutor, tutorInput, dt);
   return tutor.caption;
 }
@@ -904,7 +904,7 @@ function updateCoach(dt) {
   skip.textContent = caption ? 'Hide' : 'Skip';
   skip.setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
   if (caption) {
-    tutorVals.targetKts = sim.spec.vrefKts + 5;
+    tutorVals.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
     tutorVals.hdgDeg = String(Math.round(sim.targetHdgDeg) % 360).padStart(3, '0');
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
     const text = TUTOR_TEXT[caption](tutorVals);
@@ -1204,11 +1204,11 @@ function integrateSubStep(dt) {
           sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
         }
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral));
-        sim.throttle = autoThrottle(spec.vrefKts + 5, -3, dt);
+        sim.throttle = autoThrottle(vrefFor(spec, sim.flapsIndex) + 5, -3, dt);
       } else {
         // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
         holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
-        if (wheelH > 8) sim.throttle = autoThrottle(spec.vrefKts + 3, -1.5, dt);
+        if (wheelH > 8) sim.throttle = autoThrottle(vrefFor(spec, sim.flapsIndex) + 3, -1.5, dt);
         else sim.throttle = Math.max(0, sim.throttle - dt * 0.5);
       }
       if (sim.onGround) { sim.elevInput = 0; sim.throttle = 0; }

@@ -254,6 +254,7 @@ describe('Kid automatic gear and flaps', () => {
   });
   it('autothrottle target: Vref+5 with flaps, +30 clean', () => {
     expect(kidTargetKts(b738, 2)).toBe(155);
+    expect(kidTargetKts(b738, 3)).toBe(146); // flaps 40: its own Vref 141 + 5
     expect(kidTargetKts(c172, 0)).toBe(92);
   });
 });

@@ -15,7 +15,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { engineThrust } from '../../src/engine.js';
 import { airAt } from '../../src/atmosphere.js';
-import { liftCoefficient, dragCoefficient, stallSpeedKts } from '../../src/aero.js';
+import { liftCoefficient, dragCoefficient, stallSpeedKts, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { makeBody, fly, attitude } from './harness.js';
@@ -42,6 +42,12 @@ describe('Boeing 737-800', () => {
   it('the game\'s Vref (HUD, assists, autoland, spawns) is the model\'s own 1.23 Vs at flaps 30', () => {
     expect(b738.flapDetentsDeg[FLAPS_30]).toBe(30);
     expect(Math.abs(b738.vrefKts - vrefKts(FLAPS_30))).toBeLessThanOrEqual(1);
+  });
+
+  it('with flaps 40 the game flies the flaps 40 Vref (gate, grade, autoland, Kid), the model\'s 1.23 Vs there', () => {
+    expect(b738.flapDetentsDeg[FLAPS_40]).toBe(40);
+    expect(Math.abs(vrefFor(b738, FLAPS_40) - vrefKts(FLAPS_40))).toBeLessThanOrEqual(1);
+    expect(vrefFor(b738, FLAPS_30)).toBe(b738.vrefKts);
   });
 
   it('landing configuration L/D is about 7–8', () => {

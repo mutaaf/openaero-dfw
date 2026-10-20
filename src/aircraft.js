@@ -42,6 +42,7 @@ export const AIRCRAFT_DATABASE = {
     // from flight idle to 95%).
     engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.7, spoolTau: 1.2 },
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
+    vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
     vrKts: 142,
     stallCleanKts: 114,
     gearHeight: 3.4,
