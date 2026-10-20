@@ -31,7 +31,7 @@ describe('liftCoefficient', () => {
   it('is linear in AoA below stall, plus the airframe\'s flap increment per notch', () => {
     const a = 5 * DEG_TO_RAD;
     expect(liftCoefficient(b738, a, 0)).toBeCloseTo(b738.cl0 + b738.clAlpha * a, 10);
-    expect(liftCoefficient(b738, a, 2) - liftCoefficient(b738, a, 0)).toBeCloseTo(2 * b738.flapClPerNotch, 10);
+    expect(liftCoefficient(b738, a, 2) - liftCoefficient(b738, a, 0)).toBeCloseTo(b738.flapCl[2], 10);
   });
   it('drops off past the stall angle', () => {
     const atStall = liftCoefficient(b738, b738.alphaStallDeg * DEG_TO_RAD, 0);
@@ -147,11 +147,11 @@ describe('flap lift per airframe', () => {
     expect(stallWarningKts(DB.c172, 3)).toBeLessThan(stallWarningKts(DB.c172, 0));
   });
 
-  it('the 737 needs ~4–6° AoA for 1 g at Vref+5 with flaps 25', () => {
+  it('the 737 needs ~4–6° AoA for 1 g at Vref+5 with flaps 30', () => {
     const s = DB.b738;
     const q = 0.5 * 1.225 * ((s.vrefKts + 5) * 0.514444) ** 2;
     const clNeeded = (s.massKg * 9.80665) / (q * s.wingAreaM2);
-    const aoaDeg = ((clNeeded - s.cl0 - 2 * s.flapClPerNotch) / s.clAlpha) * 180 / Math.PI;
+    const aoaDeg = ((clNeeded - s.cl0 - s.flapCl[2]) / s.clAlpha) * 180 / Math.PI;
     expect(aoaDeg).toBeGreaterThan(4);
     expect(aoaDeg).toBeLessThan(6);
     expect(lc(s, aoaDeg * Math.PI / 180, 2)).toBeCloseTo(clNeeded, 3);

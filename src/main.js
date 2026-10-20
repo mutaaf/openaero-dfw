@@ -32,7 +32,7 @@ import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './t
 import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, stallWarningKts,
-  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg,
+  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
@@ -68,7 +68,8 @@ const sim = {
 
   // Controls
   throttle: 0.44, elevInput: 0, aileronInput: 0, rudderInput: 0,
-  flapsIndex: 2, flapAngles: [0, 10, 25, 40],
+  flapsIndex: 2, flapAngles: [0, 10, 25, 40], // labels for airframes without spec.flapDetentsDeg
+  spoilers: 0, // ground spoiler extension 0–1 (flightModel.js)
   gearDown: true, brakesOn: false, onGround: false,
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
   // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
@@ -719,8 +720,8 @@ function checkStabilizedGate() {
   if (step === 'reset') sim.gate = null;
   if (step !== 'evaluate') return;
   const gate = sim.gate = stabilizedGate({
-    iasKt: sim.iasKts, vref: sim.spec.vrefKts, vsFpm: sim.vsiFpm, gearDown: sim.gearDown,
-    flapsOk: sim.flapsIndex >= 2, // 25° or 40°: landing flaps
+    iasKt: sim.iasKts, vref: vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: sim.gearDown,
+    flapsOk: sim.flapsIndex >= 2, // the two landing notches (737: 30°/40°, 172: 20°/30°)
     glideDevDots: ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
     vmc: gs.armFt === GATE_VMC_FT,
   });
@@ -760,7 +761,7 @@ function checkTouchdown(dt) {
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankDeg: _euler.z * RAD_TO_DEG,
     iasKts: sim.iasKts,
-    vrefKts: sim.spec.vrefKts,
+    vrefKts: vrefFor(sim.spec, sim.flapsIndex),
     driftDeg: sim.missionKey === CROSSWIND_KEY ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : undefined,
   });
   // Kid: a hard landing bounces and starts the approach again instead of crashing.
@@ -871,7 +872,7 @@ function updateTutor(dt) {
   tutorInput.crossM = sim.approach.crossM;
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
-  tutorInput.targetKts = sim.spec.vrefKts + 5;
+  tutorInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
   stepTutor(tutor, tutorInput, dt);
   return tutor.caption;
 }
@@ -903,7 +904,7 @@ function updateCoach(dt) {
   skip.textContent = caption ? 'Hide' : 'Skip';
   skip.setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
   if (caption) {
-    tutorVals.targetKts = sim.spec.vrefKts + 5;
+    tutorVals.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
     tutorVals.hdgDeg = String(Math.round(sim.targetHdgDeg) % 360).padStart(3, '0');
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
     const text = TUTOR_TEXT[caption](tutorVals);
@@ -1203,11 +1204,11 @@ function integrateSubStep(dt) {
           sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
         }
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral));
-        sim.throttle = autoThrottle(spec.vrefKts + 5, -3, dt);
+        sim.throttle = autoThrottle(vrefFor(spec, sim.flapsIndex) + 5, -3, dt);
       } else {
         // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
         holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
-        if (wheelH > 8) sim.throttle = autoThrottle(spec.vrefKts + 3, -1.5, dt);
+        if (wheelH > 8) sim.throttle = autoThrottle(vrefFor(spec, sim.flapsIndex) + 3, -1.5, dt);
         else sim.throttle = Math.max(0, sim.throttle - dt * 0.5);
       }
       if (sim.onGround) { sim.elevInput = 0; sim.throttle = 0; }
@@ -1721,6 +1722,7 @@ function loadScenario(key) {
     sim.activeEnd = null;
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
+  sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   // Airborne spawns fly their speed through the air: the wind adds to the ground velocity
   // (a final with a tailwind starts at its airspeed, not 5 kt slow).
@@ -1798,6 +1800,9 @@ function toggleTimeOfDay() {
 
 let rngThrottleEl = null;
 let draggingThrottle = false;
+// The flap lever's detent (deg) for the current notch, as the airframe labels it.
+const flapDeg = () => (sim.spec.flapDetentsDeg ?? sim.flapAngles)[sim.flapsIndex];
+
 function syncUI() {
   const throttlePct = Math.round(sim.throttle * 100);
   document.getElementById('txtThrottle').textContent = `${throttlePct}%`;
@@ -1836,7 +1841,7 @@ function syncUI() {
   document.getElementById('btnGear').classList.toggle('active', sim.gearDown);
   document.getElementById('txtGear').textContent = sim.gearDown ? 'DOWN 3 GRN' : 'UP';
 
-  document.getElementById('txtFlaps').textContent = `${sim.flapAngles[sim.flapsIndex]}°`;
+  document.getElementById('txtFlaps').textContent = `${flapDeg()}°`;
   document.getElementById('btnBrakes').classList.toggle('active-amber', sim.brakesOn);
   document.getElementById('txtBrakes').textContent = sim.brakesOn ? 'SET' : 'OFF';
 
@@ -1867,14 +1872,14 @@ function syncUI() {
   document.getElementById('touchThrottle').setAttribute('aria-valuenow', String(thrPct));
   document.getElementById('txtTouchGear').textContent = sim.gearDown ? 'DN' : 'UP';
   document.getElementById('touchGear').classList.toggle('active', sim.gearDown);
-  document.getElementById('txtTouchFlaps').textContent = `${sim.flapAngles[sim.flapsIndex]}°`;
+  document.getElementById('txtTouchFlaps').textContent = `${flapDeg()}°`;
   document.getElementById('touchBrakes').classList.toggle('active-amber', sim.brakesOn);
   document.getElementById('touchIls').classList.toggle('active-amber', sim.apApproach);
   document.getElementById('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
   document.getElementById('txtPhoneAgl').textContent = `${sim.aglFt}`;
   document.getElementById('txtPhoneVs').textContent = `${sim.vsiFpm}`;
   document.getElementById('txtPhoneThr').textContent = `${throttlePct}%`;
-  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : sim.gearDown ? 'DN' : 'UP'} · ${sim.flapAngles[sim.flapsIndex]}°`;
+  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : sim.gearDown ? 'DN' : 'UP'} · ${flapDeg()}°`;
   const papi = document.getElementById('txtPapiStatus');
   const phonePapi = document.getElementById('txtPhonePapi');
   phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
@@ -2097,7 +2102,7 @@ document.getElementById('btnGear').addEventListener('click', () => {
   if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown;
 });
 document.getElementById('btnFlaps').addEventListener('click', () => {
-  sim.flapsIndex = (sim.flapsIndex + 1) % sim.flapAngles.length;
+  sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 });
 document.getElementById('btnBrakes').addEventListener('click', () => {
   sim.brakesOn = !sim.brakesOn;
@@ -2247,7 +2252,7 @@ window.addEventListener('keydown', e => {
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
   if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
-  else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % sim.flapAngles.length; }
+  else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length; }
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (e.code === 'KeyC') { document.getElementById('btnCamera').click(); }
   else if (e.code === 'KeyM') { document.getElementById('btnMouseYoke').click(); }

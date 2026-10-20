@@ -15,7 +15,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { engineThrust } from '../../src/engine.js';
 import { airAt } from '../../src/atmosphere.js';
-import { liftCoefficient, dragCoefficient, stallSpeedKts } from '../../src/aero.js';
+import { liftCoefficient, dragCoefficient, stallSpeedKts, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { makeBody, fly, attitude } from './harness.js';
@@ -25,8 +25,8 @@ const vApp = (b738.vrefKts + 5) * 0.514444;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
 const LB_PER_KG = 2.20462;
 const MLW_KG = 66361; // ARC / ACAP: maximum landing weight 146,300 lb
-// Model flap notches are 0/10/25/40 (main.js flapAngles); the real 737 lands with 30 or 40.
-const FLAPS_25 = 2, FLAPS_40 = 3;
+// The model's flap notches are 0/10/30/40 (b738.flapDetentsDeg); the real 737 lands with 30 or 40.
+const FLAPS_10 = 1, FLAPS_30 = 2, FLAPS_40 = 3;
 
 // 14 CFR 25.125(b)(2): VREF ≥ 1.23 VSR0, the 1-g reference stall speed in the landing
 // configuration. Scaled to another mass by √(m / massKg) (same CL, same speed squared).
@@ -37,6 +37,17 @@ describe('Boeing 737-800', () => {
     const thr = trimThrottle(b738, vApp, 2, -3, true, airAt(200));
     expect(thr).toBeGreaterThan(0.2);
     expect(thr).toBeLessThan(0.35);
+  });
+
+  it('the game\'s Vref (HUD, assists, autoland, spawns) is the model\'s own 1.23 Vs at flaps 30', () => {
+    expect(b738.flapDetentsDeg[FLAPS_30]).toBe(30);
+    expect(Math.abs(b738.vrefKts - vrefKts(FLAPS_30))).toBeLessThanOrEqual(1);
+  });
+
+  it('with flaps 40 the game flies the flaps 40 Vref (gate, grade, autoland, Kid), the model\'s 1.23 Vs there', () => {
+    expect(b738.flapDetentsDeg[FLAPS_40]).toBe(40);
+    expect(Math.abs(vrefFor(b738, FLAPS_40) - vrefKts(FLAPS_40))).toBeLessThanOrEqual(1);
+    expect(vrefFor(b738, FLAPS_30)).toBe(b738.vrefKts);
   });
 
   it('landing configuration L/D is about 7–8', () => {
@@ -62,19 +73,28 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // ARC p. 3: 737-800 approach speed 142 kt at MLW 146,300 lb (66,361 kg), the Vref that
   // sets its approach category (14 CFR 97.3: Vref at maximum certificated landing weight).
   // The document names no flap: assumed flaps 40, the lowest Vref, which is the one that
-  // sets the category. The model reaches 1.23 Vs at 130 kt: flaps 40 lifts too much (0057).
-  it.fails('Vref flaps 40 at MLW 66,361 kg is about 142 kt (Boeing ARC Rev A, ±5 kt) [gap: 0057]', () => {
+  // sets the category. (Before 0057 flaps 40 lifted too much: 130 kt.)
+  it('Vref flaps 40 at MLW 66,361 kg is about 142 kt (Boeing ARC Rev A, ±5 kt)', () => {
     expect(Math.abs(vrefKts(FLAPS_40, MLW_KG) - 142)).toBeLessThanOrEqual(5);
   });
 
   // VLA Table A6-1 (VREF+5), 3.0° glide slope column: 737-800 w/Winglets (the model's
   // 35.8 m span is the winglet airframe), flaps 40, flight-director pitch 0.9° (1.3° without
   // winglets). Speed: the ARC's 142 kt Vref scaled to 65 t (140.5 kt) + 5. Pitch on a
-  // steady 3° path = trim AoA − 3°. The model needs −3.5° (nose down): flaps 40 (0057).
-  it.fails('pitch on a 3° ILS at Vref+5, flaps 40, is about +0.9° (Boeing VLA Table A6-1, winglets, ±1°) [gap: 0057]', () => {
+  // steady 3° path = trim AoA − 3°. (Before 0057 the model needed −3.5°, nose down.)
+  it('pitch on a 3° ILS at Vref+5, flaps 40, is about +0.9° (Boeing VLA Table A6-1, winglets, ±1°)', () => {
     const kts = 142 * Math.sqrt(b738.massKg / MLW_KG) + 5;
     const pitch = trimAoaDeg(b738, kts * KTS_TO_MPS, FLAPS_40) - 3;
     expect(Math.abs(pitch - 0.9)).toBeLessThanOrEqual(1);
+  });
+
+  // VLA Table A6-1 (VREF), 3.0° glide slope column: 737-800 w/Winglets, flaps 30, flight-
+  // director pitch 3.2°. No public source gives Vref30 itself, so the speed is the model's
+  // own 1.23 Vs at flaps 30 (fitted with the same stall AoA as flaps 40): this card and the
+  // ARC card above pin the flaps 30 lift.
+  it('pitch on a 3° ILS at Vref, flaps 30, is about +3.2° (Boeing VLA Table A6-1, winglets, ±1°)', () => {
+    const pitch = trimAoaDeg(b738, vrefKts(FLAPS_30) * KTS_TO_MPS, FLAPS_30) - 3;
+    expect(Math.abs(pitch - 3.2)).toBeLessThanOrEqual(1);
   });
 
   // ACAP §3.4.3 (flaps 30, standard day, zero wind, dry, auto spoilers, anti-skid): the
@@ -82,18 +102,16 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // 5,800 ft at MLW. That is the FAR landing field length, the demonstrated distance from
   // 50 ft divided by 0.6 (14 CFR 121.195(b)), so the airplane itself needs 0.6 × 5,690 =
   // 3,414 ft from 50 ft to a stop. Flown like 14 CFR 25.125: a steady 3° approach at Vref
-  // (1.23 Vs) to 50 ft, idle and flare from 30 ft, then maximum braking, no reverse. Not
-  // Boeing's configuration: the model flies flaps 25 (the game's landing flap, its nearest
-  // notch to 30) at its own Vref25 ≈ 139 kt, a few knots slower than a real Vref30 (0057),
-  // and it has no ground spoilers (braking is tyre μ 0.45 with the wing still lifting).
-  // Those two errors partly cancel: the same flight from 143 kt measures ~3,980 ft (+17%),
-  // from 147 kt ~4,200 ft. 0057 must add ground spoilers along with the real Vref30.
+  // (1.23 Vs) to 50 ft, idle and flare from 30 ft, then maximum braking, no reverse, in
+  // Boeing's configuration: flaps 30 at the fitted Vref30 (~150 kt), auto ground spoilers.
+  // (Before 0057 it flew flaps 25 at 139 kt with the wing still lifting on the rollout,
+  // two errors that partly cancelled.)
   it('lands from 50 ft to a stop in about 3,414 ft, 65 t, sea level, dry (Boeing ACAP §3.4.3 × 0.6, ±15%)', () => {
-    const kts = vrefKts(FLAPS_25);
+    const kts = vrefKts(FLAPS_30);
     const v = kts * KTS_TO_MPS;
-    const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_25, throttle: trimThrottle(b738, v, FLAPS_25, -3, true, airAt(15)) });
+    const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_30, throttle: trimThrottle(b738, v, FLAPS_30, -3, true, airAt(15)) });
     b.vel.set(0, -v * Math.sin(3 * DEG_TO_RAD), -v * Math.cos(3 * DEG_TO_RAD));
-    const pitch0 = trimAoaDeg(b738, v, FLAPS_25) - 3;
+    const pitch0 = trimAoaDeg(b738, v, FLAPS_30) - 3;
     b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
     let touchdown = null;
     fly(b, b738, 90, (x) => {
@@ -123,8 +141,9 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // 14 CFR 25.113(a): the takeoff distance is at least 115% of the all-engines distance to
   // 35 ft, so 1.15 × that distance can't exceed the field length (the engine-out cases
   // only make it longer). Flown with full thrust from brake release, rotation at Vr at
-  // 2.5°/s (Boeing FCTM: 2–3°/s) to 15°, at the better of the model's takeoff flaps (10,
-  // 25), both rotating at the model's single Vr 142 kt. The model needs ~5,420 ft (0058).
+  // 2.5°/s (Boeing FCTM: 2–3°/s) to 15°, at the model's takeoff flap (10; its other notches
+  // are the landing flaps 30 and 40), rotating at the model's single Vr 142 kt. The model
+  // needs ~5,520 ft (0058).
   it.fails('1.15 × the all-engines distance to 35 ft is within the 5,100 ft field length, 65 t, sea level (Boeing ACAP §3.3.29, 14 CFR 25.113) [gap: 0058]', () => {
     const toFt = (flaps) => {
       const b = makeBody(b738, { throttle: 1, flaps });
@@ -139,7 +158,7 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
       }, (x) => (x.pos.y - b738.gearHeight) * M_TO_FT >= 35);
       return b.distM * M_TO_FT;
     };
-    expect(1.15 * Math.min(toFt(1), toFt(FLAPS_25))).toBeLessThanOrEqual(5100);
+    expect(1.15 * toFt(FLAPS_10)).toBeLessThanOrEqual(5100);
   });
 });
 

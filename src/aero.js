@@ -34,6 +34,10 @@ export function stallSpeedKts(spec, flapsIndex) {
 
 // The stall warning sounds 5 kt above the current configuration's stall speed (FAR 23.207
 // asks for at least 5 kt of warning).
+// Vref (kt) for the flaps that are set: the airframe's per-notch value for its landing flaps
+// (737: 30 and 40), else its one vrefKts.
+export const vrefFor = (spec, flapsIndex) => spec.vrefKtsByFlap?.[flapsIndex] ?? spec.vrefKts;
+
 export const stallWarningKts = (spec, flapsIndex) => stallSpeedKts(spec, flapsIndex) + 5;
 
 // Ground-effect factor on drag (McCormick-style, 1 = out of ground effect).

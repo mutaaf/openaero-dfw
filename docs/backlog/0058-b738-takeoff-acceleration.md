@@ -21,6 +21,13 @@ Candidates, on equal terms: the turbofan thrust lapse, rolling and ground-run dr
 rotation speed (one `vrKts` 142 for every flap) and the lift-off overspeed: the harness
 caps ground pitch at 10° (tailstrike 11°) and the model lifts off 9–16 kt after Vr.
 
+Since 0057 (#55) the game's 737 notches are flaps 0/10/30/40, so the card flies flaps 10,
+the only takeoff notch left: 4,799 ft to 35 ft, × 1.15 = 5,519 ft (8% over; flaps 25 had
+given 4,714 ft). A flaps 5 or 15 takeoff notch is a fair candidate fix if the data support it.
+Also from the 0057 panel: flaps 10 (ΔCL 0.42, stall 14.8°) now stalls at 124 kt against flaps
+30's 122 kt at 65 t, only ~2 kt apart where the real airplane's speeds differ by ~10 kt, and
+Vr 142 is 1.14 × that stall speed: refit flaps 10 with the takeoff data.
+
 ## What
 Find the cause before changing anything: compare the model's thrust vs speed at sea level
 (`engine.js` turbofan `machLapse` [0.9, 0.6], ~18% loss by M0.23) with published CFM56-7B

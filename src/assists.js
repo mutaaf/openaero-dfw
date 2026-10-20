@@ -14,7 +14,7 @@
 // below ~500 ft and an auto-flare near the ground, and main.js adds the autothrottle, automatic
 // gear/flaps and a hard landing that resets instead of crashing (see ASSIST_CONFIG).
 import { aileronForBank, elevatorForPitch, flareSinkMps, bankCommandForHeading } from './autopilot.js';
-import { headingError } from './aero.js';
+import { headingError, vrefFor } from './aero.js';
 
 export const ASSIST_KEY = 'openaero_assist_v1';
 export const ASSIST_LEVELS = ['kid', 'learner', 'pilot'];
@@ -145,7 +145,7 @@ export function autoConfigure(spec, s, cfgOut) {
 }
 
 // Kid's autothrottle target (kt): approach speed with flaps out, a cruise margin without.
-export const kidTargetKts = (spec, flapsIndex) => spec.vrefKts + (flapsIndex > 0 ? 5 : 30);
+export const kidTargetKts = (spec, flapsIndex) => (flapsIndex > 0 ? vrefFor(spec, flapsIndex) + 5 : spec.vrefKts + 30);
 
 // Personal bests are kept per level; Pilot keeps the mission's own key (save-data compatible).
 export const assistBestKey = (key, level) => (level === 'pilot' || !isAssistLevel(level) ? key : `${key}@${level}`);

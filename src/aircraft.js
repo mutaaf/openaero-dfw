@@ -14,11 +14,26 @@ export const AIRCRAFT_DATABASE = {
     cl0: 0.28,
     clAlpha: 5.2,
     clMaxFlaps: 2.65,
-    // Flaps 25 ≈ +0.84 CL: approach AoA ~5° and pitch ~2° on a 3° path at Vref+5, like the real 737.
-    flapClPerNotch: 0.42,
-    // Flaps 0/10/25/40 drag. Landing flaps on an airliner are draggy: with gear down at
-    // Vref+5 the 737 flies at L/D ≈ 7.5 and needs ~25% thrust (N1 ~55–60%) on a 3° path.
+    // The game's notches are flaps 0/10/30/40: 10 is a takeoff flap, 30 and 40 the real
+    // landing flaps (finals spawn with 30, the airlines' usual one). Flaps 30/40 lift and
+    // stall AoA fitted to Boeing (tests/flight/b738.test.js): Vref40 142 kt at MLW 66,361 kg
+    // (ARC Rev A) and pitch +0.9° at Vref40+5 on a 3° path (VLA Table A6-1, winglets) give
+    // ΔCL 0.856 and CLmax 2.42 (stall 14.1°); pitch +3.2° at Vref30 (same table), with the
+    // same stall AoA (the slats are fully out at both), gives ΔCL 0.559: Vref30 150 kt at 65 t.
+    // No public Vref30 exists: that shared stall AoA is an assumption, and it sets Vref30
+    // (±1° of stall AoA moves it 6–12 kt).
+    flapDetentsDeg: [0, 10, 30, 40],
+    flapCl: [0, 0.42, 0.559, 0.856],
+    alphaStallDegByFlap: [14.8, 14.8, 14.12, 14.12],
+    // Flaps 0/10/30/40 drag. Landing flaps on an airliner are draggy: with gear down at
+    // Vref+5 the 737 flies at L/D ≈ 7.2 (flaps 30) / 6.7 (flaps 40) and needs ~25–30% thrust
+    // (N1 ~55–60%) on a 3° path.
     flapCd: [0, 0.015, 0.077, 0.1],
+    // Auto ground spoilers (ACAP §3.4.3 assumes them): on the ground with the thrust levers
+    // at idle they deploy over ~1 s, dump most of the wing's lift onto the brakes and add
+    // drag. An estimate (no public 737 spoiler data): 80% of the lift dumped (whatever the
+    // flaps; never downforce), CL on the rollout ~0.15 at flaps 30.
+    groundSpoilers: { liftDump: 0.8, dCd: 0.08 },
     // Control authority (rad/s² at 120 kt). With the damping above: ~12°/s pitch, ~18°/s roll.
     pitchAuthority: 0.5,
     rollAuthority: 1.0,
@@ -29,7 +44,8 @@ export const AIRCRAFT_DATABASE = {
     // σ^0.7 with altitude; idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s
     // from flight idle to 95%).
     engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.7, spoolTau: 1.2 },
-    vrefKts: 136,
+    vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
+    vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
     vrKts: 142,
     stallCleanKts: 114,
     gearHeight: 3.4,
@@ -56,6 +72,7 @@ export const AIRCRAFT_DATABASE = {
     clMaxFlaps: 1.95,
     // Flaps 0/10/20/30: ΔCL and stall AoA fitted to the POH stall speeds (2550 lb, power
     // off, most rearward CG): 53 / 50 / – / 48 KCAS; flaps 20 interpolated.
+    flapDetentsDeg: [0, 10, 20, 30],
     flapCl: [0, 0.19, 0.30, 0.40],
     alphaStallDegByFlap: [14.1, 14.1, 13.7, 13.3],
     alphaStallDeg: 14.1,
