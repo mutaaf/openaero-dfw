@@ -93,8 +93,10 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
 4. **Frame budget.** The render loop must hold 60fps on a mid-range laptop and stay
    playable on a recent phone. No per-frame allocations in hot paths (reuse vectors and
    arrays), no layout thrash from the HUD.
-5. **Mobile.** Touch controls work at 390x844, touch targets ≥44px, no page scroll or
-   zoom while playing, safe-area insets respected.
+5. **Mobile.** Touch controls work at 390x844 and on every touch-only screen, whatever its
+   width (an iPad held sideways is 1180 px: layout follows `(hover: none) and (pointer:
+   coarse)`, not just the breakpoint), touch targets ≥44px, no page scroll or zoom while
+   playing, safe-area insets respected.
 6. **Save data compatibility.** `localStorage['openaero_best'] = { v: 1, missions: {
    <missionKey>: { score, grade, at } } }` (personal bests, `src/landing.js`). New keys are
    prefixed `openaero_` and carry a `v`; bump `v` only with a migration on read; never throw
@@ -174,7 +176,9 @@ src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on
 src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/results), feature-
                     detected and silent; hiding the tab pauses the sim + audio (ticket 0032)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
-                    phone's top bar in landscape; pure, tested)
+                    phone's top bar in landscape) and the camera FOV (62° vertical in
+                    landscape; portrait opens towards 60° across, capped at 80° vertical:
+                    an iPad gets 60°, a phone ~42°, 0044; pure, tested)
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
                     integration on a `body` (main.js passes `sim`). Pure: flown headless by
                     tests/flight/ against published performance data
@@ -200,7 +204,8 @@ src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jso
                     GOOGLE_MAPS_KEY Worker secret (null when unset), no-store. Operator-frozen with
                     wrangler.jsonc: changes go in a build/ PR the operator merges.
 tests/unit/         Vitest for the pure modules
-tests/e2e/          Playwright: smoke, controls, missions, phone, perf probe
+tests/e2e/          Playwright: smoke, controls, missions, phone, perf probe, device-class probe
+                    (`devices` project: iPhone/iPad/Pixel sizes, touch, 4x CPU, 0044)
 ```
 
 World frame: metres from the KDFW origin, +X east, +Y up, **−Z north**. **Y is height
@@ -245,6 +250,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm test` | Unit tests (Vitest) |
 | `npm run e2e` | Playwright e2e (builds first) |
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
+| `npx playwright test --project=devices --no-deps` | The device-class probe alone (iPhone 15 both ways, iPad Air both ways, iPad Pro 12.9 portrait, Pixel 8, Chromium with emulated touch; touch, 4x CPU throttle, layout + frame time; numbers in `docs/PERF.md`) |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
 Budgets: JS ≤ 201 kB gzipped at boot (2026-10-19: 200.27 kB after 0055/0056/0011: the night

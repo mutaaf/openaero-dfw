@@ -1,12 +1,12 @@
 ---
 id: 0044
 title: Device-class probe for iPhone, iPad and Android (layout + throttled frame time)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: performance
 created: 2026-10-18
-pr:
+pr: 58
 ---
 
 ## Why
@@ -25,10 +25,10 @@ and write screenshots. Results table in `docs/PERF.md`. Camera FOV adapts to asp
 (wider vertical FOV in portrait so the horizon and runway stay in view).
 
 ## Acceptance criteria
-- [ ] `npx playwright test --project=devices` passes on all five sizes
-- [ ] Portrait iPad and iPhone show the runway and horizon on the default final (screenshot)
-- [ ] `docs/PERF.md` has a device table
-- [ ] No frame-time regression (e2e perf probe within budget)
+- [x] `npx playwright test --project=devices` passes on all five sizes
+- [x] Portrait iPad and iPhone show the runway and horizon on the default final (screenshot)
+- [x] `docs/PERF.md` has a device table
+- [x] No frame-time regression (e2e perf probe within budget)
 
 ## Test plan
 `tests/e2e/devices.spec.js` with overlap/target-size assertions; screenshots attached
@@ -36,3 +36,10 @@ in CI.
 
 ## Out of scope
 Real-device farms (BrowserStack etc. are new hosts); WebGPU.
+
+## Shipped (2026-10-20)
+The probe found that an iPad held sideways (1180x820) had no flight controls at all: the
+touch deck was `lg:hidden` and the clean view hides the desktop stick. Touch-only screens at
+desktop width (`hover: none` and `pointer: coarse`) now get the touch deck and the one-row top
+bar. Camera FOV: `cameraFovDeg` in `src/hudLayout.js` (62° vertical in landscape; portrait
+opens to 60° across, capped at 80° vertical).
