@@ -36,5 +36,10 @@ Unit (`tests/unit` for assists): empty, stored pilot/kid, malformed, throwing st
 Update `tests/e2e/assists.spec.js` where it relies on a fresh profile being Pilot (set the
 stored level explicitly there); add an e2e asserting the Learner card is selected fresh.
 
+## Notes (shipped)
+A player with no stored level who has already landed on Pilot (a plain-key best in
+`openaero_best`: pre-0042 players and everyone who only ever pressed Fly) keeps Pilot, so
+their airplane and their best badges don't change (validation panel finding).
+
 ## Out of scope
 Changing Learner's envelope, adding a fourth level, a "returning player" heuristic.

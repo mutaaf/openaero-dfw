@@ -274,6 +274,17 @@ describe('assist level storage and per-level bests', () => {
       expect(loadAssist(memStorage({ [ASSIST_KEY]: JSON.stringify({ v: 1, level, at: 0 }) }))).toBe(level);
     }
   });
+  it('a player who has flown Pilot without picking a level (a plain-key best) stays on Pilot', () => {
+    const best = (missions) => JSON.stringify({ v: 1, missions });
+    expect(loadAssist(memStorage({ openaero_best: best({ kdfw_35c_final: { score: 80, grade: 'A', at: 0 } }) }))).toBe('pilot');
+    // Only Learner or Kid bests (a first visit that landed on the default): still Learner.
+    expect(loadAssist(memStorage({ openaero_best: best({ 'kdfw_35c_final@learner': { score: 80, grade: 'A', at: 0 } }) }))).toBe('learner');
+    expect(loadAssist(memStorage({ openaero_best: best({}) }))).toBe('learner');
+    expect(loadAssist(memStorage({ openaero_best: '{junk' }))).toBe('learner');
+    // A stored level still wins over the bests.
+    expect(loadAssist(memStorage({ [ASSIST_KEY]: JSON.stringify({ v: 1, level: 'kid', at: 0 }),
+      openaero_best: best({ kdfw_35c_final: { score: 80, grade: 'A', at: 0 } }) }))).toBe('kid');
+  });
   it('junk, unknown versions and throwing storage read as Learner, without throwing', () => {
     expect(loadAssist(memStorage({ [ASSIST_KEY]: '{bad' }))).toBe('learner');
     expect(loadAssist(memStorage({ [ASSIST_KEY]: 'null' }))).toBe('learner');

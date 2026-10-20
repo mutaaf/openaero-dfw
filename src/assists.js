@@ -19,7 +19,8 @@ import { headingError, vrefFor } from './aero.js';
 export const ASSIST_KEY = 'openaero_assist_v1';
 export const ASSIST_LEVELS = ['kid', 'learner', 'pilot'];
 // A first visit (nothing stored, or storage that throws) flies Learner (ticket 0059); a
-// stored level always wins, and the default itself is never written.
+// stored level always wins, and the default itself is never written. A player who has
+// already landed on Pilot without ever picking a card (a plain-key best) keeps Pilot.
 export const DEFAULT_ASSIST = 'learner';
 
 export const ASSIST_CONFIG = {
@@ -154,9 +155,18 @@ export const assistBestKey = (key, level) => (level === 'pilot' || !isAssistLeve
 export function loadAssist(storage) {
   try {
     const data = JSON.parse(storage.getItem(ASSIST_KEY) || 'null');
-    return data && data.v === 1 && isAssistLevel(data.level) ? data.level : DEFAULT_ASSIST;
+    if (data && data.v === 1 && isAssistLevel(data.level)) return data.level;
+  } catch { /* storage unavailable or junk: fall through */ }
+  return flownPilot(storage) ? 'pilot' : DEFAULT_ASSIST;
+}
+
+// Pilot's bests keep the plain mission key (assistBestKey); Kid's and Learner's carry '@'.
+function flownPilot(storage) {
+  try {
+    const best = JSON.parse(storage.getItem('openaero_best') || 'null');
+    return !!best && best.v === 1 && !!best.missions && Object.keys(best.missions).some((k) => !k.includes('@'));
   } catch {
-    return DEFAULT_ASSIST;
+    return false;
   }
 }
 

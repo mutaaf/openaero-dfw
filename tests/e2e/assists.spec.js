@@ -50,6 +50,16 @@ test.describe('first visit', () => {
     expect((await debug(page)).assist).toBe('pilot');
   });
 
+  test('a player who landed on Pilot without picking a level keeps Pilot and their bests', async ({ page }) => {
+    await page.goto(BASE);
+    await page.evaluate(() => localStorage.setItem('openaero_best',
+      JSON.stringify({ v: 1, missions: { kdfw_35c_final: { score: 80, grade: 'A', at: 0 } } })));
+    await page.reload();
+    await expect(page.locator('.btnAssist[data-assist="pilot"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.btnMission[data-scenario="kdfw_35c_final"] .missionBest')).toHaveText('Best A');
+    expect(await page.evaluate(() => localStorage.getItem('openaero_assist_v1'))).toBeNull();
+  });
+
   test('private mode (storage throws) falls back to Learner without an error', async ({ page }) => {
     const errors = collectErrors(page);
     await page.addInitScript(() => {
