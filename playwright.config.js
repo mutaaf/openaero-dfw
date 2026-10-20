@@ -4,9 +4,12 @@ import { defineConfig, devices } from '@playwright/test';
 const GL_ARGS = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 // Most desktop specs drive the instrument panels, so they start in the full view; the clean
 // view (the default for players) has its own spec that clears this (tests/e2e/view.spec.js).
+// They also fly the raw airplane (Pilot) and read its plain-key bests; a first visit flies
+// Learner (0059), checked with an empty profile in tests/e2e/assists.spec.js.
+export const PILOT = { name: 'openaero_assist_v1', value: '{"v":1,"level":"pilot","at":0}' };
 export const FULL_VIEW = {
   cookies: [],
-  origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'openaero_view_v1', value: '{"v":1,"clean":false,"at":0}' }] }],
+  origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'openaero_view_v1', value: '{"v":1,"clean":false,"at":0}' }, PILOT] }],
 };
 // Desktop specs draw the 3D view at half resolution (a screen under 1x keeps its ratio, so CSS
 // layout and the HUD are unchanged). CI's SwiftShader pays per pixel and, past ~250 ms a frame,
