@@ -1,5 +1,5 @@
 ---
-id: 0053
+id: 0056
 title: Easy to start, clear to fly: a 1-2-3 start screen and a clean view
 status: in-progress
 priority: P1

@@ -28,7 +28,7 @@ The regression guard in the test fails above 250 ms average. That's deliberately
   even when values haven't changed. Cache the elements once and write only on change.
 - `updateCamera()` allocates with `sim.pos.clone()` in three camera modes every frame.
 
-2026-10-19, 0052/0053/0011 (sky dome, stars, Moon, METAR clouds, night ground, runway lights,
+2026-10-19, 0055/0056/0011 (sky dome, stars, Moon, METAR clouds, night ground, runway lights,
 clean view), 1280x720:
 
 | Build | SwiftShader (`perf.spec`, `--workers=1`) avg / p95 | Apple M1 Max, Metal, uncapped, day avg / p95 | same, Night |

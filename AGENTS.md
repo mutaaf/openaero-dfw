@@ -247,7 +247,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 201 kB gzipped at boot (2026-10-19: 200.27 kB after 0052/0053/0011: the night
+Budgets: JS ≤ 201 kB gzipped at boot (2026-10-19: 200.27 kB after 0055/0056/0011: the night
 ground shader the imagery needs at first paint, the HUD tapes, clean view and When? picker
 (+3.0 kB); the sky dome (4.9 kB gz) and runway lights (1.9 kB) are lazy chunks and the star
 catalogue (43 kB gz) is fetched by the dome; raised from 198 to 201. Before that: 197.25 kB with the ?fdm=jsbsim hook and the turn-rate heading hold (+0.3 kB), raised from 197 to 198; JSBSim itself is a lazy chunk, 4.6 kB JS + 493 kB WASM gz, fetched only with ?fdm=jsbsim; 196.95 kB after 0042's assist levels, raised from 196 to 197; 195.02 kB after 0032's wake lock + pause on hide (+0.43 kB after trimming to locals and dropping a per-frame duplicate), raised from 195 to 196; 194.6 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
