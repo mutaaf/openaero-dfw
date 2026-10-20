@@ -69,6 +69,7 @@ const sim = {
   // Controls
   throttle: 0.44, elevInput: 0, aileronInput: 0, rudderInput: 0,
   flapsIndex: 2, flapAngles: [0, 10, 25, 40], // labels for airframes without spec.flapDetentsDeg
+  spoilers: 0, // ground spoiler extension 0–1 (flightModel.js)
   gearDown: true, brakesOn: false, onGround: false,
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
   // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
@@ -1721,6 +1722,7 @@ function loadScenario(key) {
     sim.activeEnd = null;
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
+  sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   // Airborne spawns fly their speed through the air: the wind adds to the ground velocity
   // (a final with a tailwind starts at its airspeed, not 5 kt slow).
@@ -2100,7 +2102,7 @@ document.getElementById('btnGear').addEventListener('click', () => {
   if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown;
 });
 document.getElementById('btnFlaps').addEventListener('click', () => {
-  sim.flapsIndex = (sim.flapsIndex + 1) % sim.flapAngles.length;
+  sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 });
 document.getElementById('btnBrakes').addEventListener('click', () => {
   sim.brakesOn = !sim.brakesOn;
@@ -2250,7 +2252,7 @@ window.addEventListener('keydown', e => {
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
   if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
-  else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % sim.flapAngles.length; }
+  else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length; }
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (e.code === 'KeyC') { document.getElementById('btnCamera').click(); }
   else if (e.code === 'KeyM') { document.getElementById('btnMouseYoke').click(); }
