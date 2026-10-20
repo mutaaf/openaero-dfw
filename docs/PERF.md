@@ -83,8 +83,12 @@ there scales with pixels, which is why the iPad sizes are slowest.
 
 | Date | Machine | Device (CSS px) | Frames / 5 s | Avg frame | p95 frame |
 |---|---|---|---|---|---|
-| 2026-10-20 | Linux cloud sandbox, SwiftShader, `--workers=1`, 4x CPU | iPhone 15 portrait 390x844 | 71 | 70.7 ms | 83.4 ms |
-| 2026-10-20 | same | iPhone 15 landscape 844x390 | 52 | 97.7 ms | 133.3 ms |
-| 2026-10-20 | same | iPad Air portrait 820x1180 | 36 | 140.7 ms | 183.3 ms |
-| 2026-10-20 | same | iPad Air landscape 1180x820 | 34 | 149.4 ms | 183.4 ms |
-| 2026-10-20 | same | Pixel 8 portrait 412x915 | 68 | 74.5 ms | 99.9 ms |
+| 2026-10-20 | Linux cloud sandbox, SwiftShader, `--workers=1`, 4x CPU | iPhone 15 portrait 390x844 | 72 | 69.6 ms | 100 ms |
+| 2026-10-20 | same | iPhone 15 landscape 844x390 | 50 | 101.4 ms | 133.4 ms |
+| 2026-10-20 | same | iPad Air portrait 820x1180 | 35 | 143.4 ms | 183.3 ms |
+| 2026-10-20 | same | iPad Air landscape 1180x820 | 33 | 155.5 ms | 216.6 ms |
+| 2026-10-20 | same | iPad Pro 12.9 portrait 1024x1366 | 28 | 182 ms | 233.3 ms |
+| 2026-10-20 | same | Pixel 8 portrait 412x915 | 69 | 72.7 ms | 83.4 ms |
+
+Chromium with emulated touch only: iOS Safari/WebKit is not rendered here. The probe also
+opens ☰ Menu and holds the sheet's controls to 44 px.

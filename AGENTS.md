@@ -177,7 +177,8 @@ src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/resul
                     detected and silent; hiding the tab pauses the sim + audio (ticket 0032)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
                     phone's top bar in landscape) and the camera FOV (62° vertical in
-                    landscape, wider in portrait: ≥ 60° across up to 80°, 0044; pure, tested)
+                    landscape; portrait opens towards 60° across, capped at 80° vertical:
+                    an iPad gets 60°, a phone ~42°, 0044; pure, tested)
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
                     integration on a `body` (main.js passes `sim`). Pure: flown headless by
                     tests/flight/ against published performance data
@@ -249,7 +250,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm test` | Unit tests (Vitest) |
 | `npm run e2e` | Playwright e2e (builds first) |
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
-| `npx playwright test --project=devices --no-deps` | The device-class probe alone (iPhone 15, iPad Air both ways, Pixel 8; touch, 4x CPU throttle, layout + frame time; numbers in `docs/PERF.md`) |
+| `npx playwright test --project=devices --no-deps` | The device-class probe alone (iPhone 15 both ways, iPad Air both ways, iPad Pro 12.9 portrait, Pixel 8, Chromium with emulated touch; touch, 4x CPU throttle, layout + frame time; numbers in `docs/PERF.md`) |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
 Budgets: JS ≤ 201 kB gzipped at boot (2026-10-19: 200.27 kB after 0055/0056/0011: the night

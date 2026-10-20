@@ -14,6 +14,8 @@ const DEVICES = [
   { name: 'iPhone 15 landscape', width: 844, height: 390 },
   { name: 'iPad Air portrait', width: 820, height: 1180 },
   { name: 'iPad Air landscape', width: 1180, height: 820 },
+  // Exactly on the 1024 px breakpoint, where the touch-only desktop-width rule starts.
+  { name: 'iPad Pro 12.9 portrait', width: 1024, height: 1366 },
   { name: 'Pixel 8 portrait', width: 412, height: 915 },
 ];
 const CPU_THROTTLE = 4;
@@ -120,6 +122,17 @@ for (const d of DEVICES) {
         .map((e) => { const r = e.getBoundingClientRect(); return [e.id || e.textContent.trim().slice(0, 16), Math.round(r.width), Math.round(r.height)]; })
         .filter(([, w, h]) => w > 0 && h > 0 && (w < 44 || h < 44)));
       expect(small, 'controls under 44 px').toEqual([]);
+
+      // The same inside the ☰ Menu sheet, which shows more on wider screens.
+      await page.locator('#btnMenu').tap();
+      await expect(page.locator('#hudMenu')).toBeVisible();
+      const smallInMenu = await page.locator('#hudMenu').evaluate((root) => [...root.querySelectorAll('button, [role="slider"], input, select')]
+        .filter((e) => e.checkVisibility())
+        .map((e) => { const r = e.getBoundingClientRect(); return [e.id || e.textContent.trim().slice(0, 16), Math.round(r.width), Math.round(r.height)]; })
+        .filter(([, w, h]) => w > 0 && h > 0 && (w < 44 || h < 44)));
+      expect(smallInMenu, 'menu controls under 44 px').toEqual([]);
+      await page.locator('#btnMenu').tap();
+      await expect(page.locator('#hudMenu')).toBeHidden();
 
       const scroll = await page.evaluate(() => ({
         w: document.documentElement.scrollWidth, h: document.documentElement.scrollHeight, y: window.scrollY,

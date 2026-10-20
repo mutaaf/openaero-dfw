@@ -84,7 +84,7 @@ input[type=range] { accent-color: #38bdf8; }
 
 /* Coarse pointers get ≥44px targets on the HUD buttons. */
 @media (pointer: coarse) {
-  header .hud-btn { min-height: 44px; min-width: 44px; }
+  header .hud-btn, header select { min-height: 44px; min-width: 44px; }
 }
 
 /* First-flight coach: above the phone touch deck (which pads for the home indicator),
@@ -222,7 +222,8 @@ kbd {
   #phoneHeader { right: auto; width: min(46rem, calc(100% - 1rem)); }
   #hudMenu { display: none; }
   #hudMenu.open { display: flex; }
-  #eicasPanel, #stickPanel, #mapPanel, #keyHints, #btnPanelsShow, #btnPanelsHide { display: none !important; }
+  /* Mouse-Fly too: a tap fires a mousemove, so the yoke would jump to the last finger. */
+  #eicasPanel, #stickPanel, #mapPanel, #keyHints, #btnPanelsShow, #btnPanelsHide, #btnMouseYoke { display: none !important; }
   #coach, body.view-clean #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
 }
 details > summary { list-style: none; }
