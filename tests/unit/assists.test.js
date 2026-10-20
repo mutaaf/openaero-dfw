@@ -260,20 +260,27 @@ describe('Kid automatic gear and flaps', () => {
 });
 
 describe('assist level storage and per-level bests', () => {
-  it('defaults to Pilot; remembers a level as { v: 1, level }', () => {
+  it('a first visit (nothing stored) flies Learner (0059); remembers a level as { v: 1, level }', () => {
     const st = memStorage();
     expect(loadAssist(st)).toBe(DEFAULT_ASSIST);
-    expect(DEFAULT_ASSIST).toBe('pilot');
+    expect(DEFAULT_ASSIST).toBe('learner');
+    expect(st.m[ASSIST_KEY]).toBeUndefined(); // reading the default writes nothing
     saveAssist(st, 'kid', 123);
     expect(JSON.parse(st.m[ASSIST_KEY])).toEqual({ v: 1, level: 'kid', at: 123 });
     expect(loadAssist(st)).toBe('kid');
   });
-  it('junk, unknown versions and throwing storage read as Pilot', () => {
-    expect(loadAssist(memStorage({ [ASSIST_KEY]: '{bad' }))).toBe('pilot');
-    expect(loadAssist(memStorage({ [ASSIST_KEY]: JSON.stringify({ v: 2, level: 'kid' }) }))).toBe('pilot');
-    expect(loadAssist(memStorage({ [ASSIST_KEY]: JSON.stringify({ v: 1, level: 'god' }) }))).toBe('pilot');
+  it('a stored level always wins over the first-visit default', () => {
+    for (const level of ['pilot', 'kid', 'learner']) {
+      expect(loadAssist(memStorage({ [ASSIST_KEY]: JSON.stringify({ v: 1, level, at: 0 }) }))).toBe(level);
+    }
+  });
+  it('junk, unknown versions and throwing storage read as Learner, without throwing', () => {
+    expect(loadAssist(memStorage({ [ASSIST_KEY]: '{bad' }))).toBe('learner');
+    expect(loadAssist(memStorage({ [ASSIST_KEY]: 'null' }))).toBe('learner');
+    expect(loadAssist(memStorage({ [ASSIST_KEY]: JSON.stringify({ v: 2, level: 'kid' }) }))).toBe('learner');
+    expect(loadAssist(memStorage({ [ASSIST_KEY]: JSON.stringify({ v: 1, level: 'god' }) }))).toBe('learner');
     const throwing = { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } };
-    expect(loadAssist(throwing)).toBe('pilot');
+    expect(loadAssist(throwing)).toBe('learner');
     expect(() => saveAssist(throwing, 'kid')).not.toThrow();
   });
   it('Pilot keeps the mission key (existing bests); Kid and Learner get their own', () => {

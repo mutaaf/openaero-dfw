@@ -18,8 +18,9 @@ import { headingError, vrefFor } from './aero.js';
 
 export const ASSIST_KEY = 'openaero_assist_v1';
 export const ASSIST_LEVELS = ['kid', 'learner', 'pilot'];
-// Pilot by default: a returning player keeps today's airplane until they pick a level.
-export const DEFAULT_ASSIST = 'pilot';
+// A first visit (nothing stored, or storage that throws) flies Learner (ticket 0059); a
+// stored level always wins, and the default itself is never written.
+export const DEFAULT_ASSIST = 'learner';
 
 export const ASSIST_CONFIG = {
   kid: {

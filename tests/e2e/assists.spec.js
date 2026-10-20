@@ -6,17 +6,72 @@ test.beforeEach(async ({ page }) => { await stubTiles(page); });
 
 const debug = (page) => page.evaluate(() => window.openaeroDebug());
 
-test('the level picker defaults to Pilot and remembers a choice across a reload', async ({ page }) => {
-  await page.goto(BASE);
-  await expect(page.locator('.btnAssist[data-assist="pilot"]')).toHaveAttribute('aria-pressed', 'true');
-  expect((await debug(page)).assist).toBe('pilot');
-  await page.locator('.btnAssist[data-assist="learner"]').click();
-  await expect(page.locator('.btnAssist[data-assist="learner"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.btnAssist[data-assist="pilot"]')).toHaveAttribute('aria-pressed', 'false');
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_assist_v1')))).toMatchObject({ v: 1, level: 'learner' });
-  await page.reload();
-  await expect(page.locator('.btnAssist[data-assist="learner"]')).toHaveAttribute('aria-pressed', 'true');
-  expect((await debug(page)).assist).toBe('learner');
+// 0059: a first visit (nothing stored) starts on Learner; a stored level always wins.
+test.describe('first visit', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  const freshLearnerFlight = async (page, tap) => {
+    const errors = collectErrors(page);
+    await page.goto(BASE);
+    await expect(page.locator('.btnAssist[data-assist="learner"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.btnAssist[data-assist="pilot"]')).toHaveAttribute('aria-pressed', 'false');
+    expect((await debug(page)).assist).toBe('learner');
+    const start = page.locator('#btnStartFlight');
+    await start.scrollIntoViewIfNeeded();
+    if (tap) await start.tap(); else await start.click();
+    await expect(page.locator('#onboardingModal')).toBeHidden();
+    await expect(page.locator('#coach')).toBeVisible({ timeout: 10_000 });
+    expect((await debug(page)).assist).toBe('learner');
+    // The default alone writes nothing: no level, no best.
+    const stored = await page.evaluate(() => [localStorage.getItem('openaero_assist_v1'), localStorage.getItem('openaero_best')]);
+    expect(stored).toEqual([null, null]);
+    expect(errors).toEqual([]);
+  };
+
+  test('a fresh profile starts on Learner and flies it with the coach on at 1280x720', async ({ page }) => {
+    await freshLearnerFlight(page, false);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    test('a fresh profile starts on Learner and flies it with the coach on at 390x844, touch only', async ({ page }) => {
+      await freshLearnerFlight(page, true);
+    });
+  });
+
+  test('Pilot is one tap away and remembered across a reload', async ({ page }) => {
+    await page.goto(BASE);
+    await page.locator('.btnAssist[data-assist="pilot"]').click();
+    await expect(page.locator('.btnAssist[data-assist="pilot"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.btnAssist[data-assist="learner"]')).toHaveAttribute('aria-pressed', 'false');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_assist_v1')))).toMatchObject({ v: 1, level: 'pilot' });
+    await page.reload();
+    await expect(page.locator('.btnAssist[data-assist="pilot"]')).toHaveAttribute('aria-pressed', 'true');
+    expect((await debug(page)).assist).toBe('pilot');
+  });
+
+  test('private mode (storage throws) falls back to Learner without an error', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.addInitScript(() => {
+      const deny = () => { throw new DOMException('denied', 'SecurityError'); };
+      Storage.prototype.getItem = deny;
+      Storage.prototype.setItem = deny;
+    });
+    await page.goto(BASE);
+    await expect(page.locator('.btnAssist[data-assist="learner"]')).toHaveAttribute('aria-pressed', 'true');
+    expect((await debug(page)).assist).toBe('learner');
+    expect(errors).toEqual([]);
+  });
+});
+
+test('a stored level wins: Kid and Pilot load as stored', async ({ page }) => {
+  for (const level of ['kid', 'pilot']) {
+    await page.goto(BASE);
+    await page.evaluate((l) => localStorage.setItem('openaero_assist_v1', JSON.stringify({ v: 1, level: l, at: 0 })), level);
+    await page.reload();
+    await expect(page.locator(`.btnAssist[data-assist="${level}"]`)).toHaveAttribute('aria-pressed', 'true');
+    expect((await debug(page)).assist).toBe(level);
+  }
 });
 
 for (const [w, h] of [[390, 844], [844, 390], [820, 1180], [1280, 720]]) {
