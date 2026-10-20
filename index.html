@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Dallas Metroplex 6-DOF Real-World Flight Simulator — OpenAero Pro</title>
+  <title>OpenAero DFW · Fly the real Dallas–Fort Worth</title>
   <meta name="description" content="OpenAero DFW: fly a 6-DOF flight model over real Dallas-Fort Worth satellite imagery in your browser." />
   <meta name="theme-color" content="#020617" />
   <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
@@ -14,7 +14,6 @@
   <div id="simViewport" class="absolute inset-0 w-full h-full">
     <canvas id="simCanvas" class="block w-full h-full cursor-grab active:cursor-grabbing"></canvas>
     <canvas id="hudCanvas" class="pointer-events-none absolute inset-0 block w-full h-full z-10"></canvas>
-    <div class="pointer-events-none absolute inset-0 z-10 scanlines opacity-20"></div>
   </div>
 
   <!-- Mouse Flight Control Crosshair Indicator -->
@@ -59,12 +58,11 @@
   <div id="onboardingModal" role="dialog" aria-modal="true" aria-labelledby="txtModalTitle" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-200">
     <div id="modalPanel" tabindex="-1" class="outline-none hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-2xl p-4 sm:p-6 flex flex-col gap-3 text-slate-200 border-sky-400/40 shadow-2xl">
       <div class="shrink-0 flex items-center justify-between border-b border-slate-700/80 pb-3">
-        <div class="flex items-center gap-2.5">
-          <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-ping" aria-hidden="true"></span>
-          <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 -ml-6"></span>
+        <div class="flex items-center gap-3">
+          <span class="brand-mark" aria-hidden="true"></span>
           <div>
-            <h1 id="txtModalTitle" class="text-sm sm:text-base font-bold text-sky-300 tracking-wider font-mono">DALLAS 6-DOF SATELLITE SIMULATOR PRO</h1>
-            <p class="text-[11px] text-slate-400">Real satellite imagery • Real runways • Today's METAR weather when online</p>
+            <h1 id="txtModalTitle" class="text-base sm:text-lg font-black tracking-tight text-white">OpenAero <span class="text-sky-300">DFW</span></h1>
+            <p class="text-[11px] text-slate-300">Fly the real Dallas–Fort Worth: its runways, today's weather, tonight's sky.</p>
           </div>
         </div>
         <button id="btnCloseModal" aria-label="Close (Esc)" class="hud-btn px-2.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white">✕ CLOSE</button>
@@ -72,13 +70,11 @@
 
       <!-- Everything between the title and ENTER COCKPIT scrolls inside the modal; the button stays pinned -->
       <div id="modalScroll" class="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-1 px-1 flex flex-col gap-4">
-      <p class="text-xs text-slate-300 leading-relaxed">
-        Captain, welcome to the Dallas-Fort Worth airspace! Powered by <b class="text-sky-300">real high-resolution satellite imagery</b> covering DFW, Love Field, and Downtown Dallas, combined with a <b>full 6-Degree-of-Freedom (6-DOF) flight dynamics model</b> with genuine aerodynamic lift/drag polars, ground effect float, and FAA runway elevations.
-      </p>
-
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+      <div class="flex flex-col gap-4">
       <!-- Assist level (ticket 0042): same physics, more or less help; main.js setAssist() -->
       <div id="assistPicker" role="group" aria-labelledby="txtAssistTitle" class="flex flex-col gap-1.5">
-        <div id="txtAssistTitle" class="text-[11px] font-mono font-bold text-sky-300">WHO'S FLYING?</div>
+        <div id="txtAssistTitle" class="step-title"><span class="step-n">1</span>Who's flying?</div>
         <div class="grid grid-cols-3 gap-2">
           <button data-assist="kid" aria-pressed="false" class="btnAssist hud-btn min-h-[64px] rounded-xl p-2 flex flex-col items-center justify-center gap-0.5 text-center">
             <span class="text-2xl leading-none" aria-hidden="true">🧒</span><span class="text-sm font-bold text-slate-100">Kid</span>
@@ -95,7 +91,40 @@
         </div>
       </div>
 
+      <!-- When: the real sky over Dallas now, or today's dawn / noon / dusk / night (sun.js, sky.js) -->
+      <div id="timePicker" role="group" aria-labelledby="txtTimeTitle" class="flex flex-col gap-1.5">
+        <div id="txtTimeTitle" class="step-title"><span class="step-n">2</span>When?</div>
+        <div class="grid grid-cols-5 gap-1.5">
+          <button data-time="0" aria-pressed="false" class="btnTime hud-btn min-h-[52px] rounded-xl flex flex-col items-center justify-center text-[11px] font-bold text-slate-100"><span class="text-lg leading-none" aria-hidden="true">🛰</span>Live</button>
+          <button data-time="1" aria-pressed="false" class="btnTime hud-btn min-h-[52px] rounded-xl flex flex-col items-center justify-center text-[11px] font-bold text-slate-100"><span class="text-lg leading-none" aria-hidden="true">🌅</span>Dawn</button>
+          <button data-time="2" aria-pressed="false" class="btnTime hud-btn min-h-[52px] rounded-xl flex flex-col items-center justify-center text-[11px] font-bold text-slate-100"><span class="text-lg leading-none" aria-hidden="true">☀️</span>Day</button>
+          <button data-time="3" aria-pressed="false" class="btnTime hud-btn min-h-[52px] rounded-xl flex flex-col items-center justify-center text-[11px] font-bold text-slate-100"><span class="text-lg leading-none" aria-hidden="true">🌇</span>Dusk</button>
+          <button data-time="4" aria-pressed="false" class="btnTime hud-btn min-h-[52px] rounded-xl flex flex-col items-center justify-center text-[11px] font-bold text-slate-100"><span class="text-lg leading-none" aria-hidden="true">🌙</span>Night</button>
+        </div>
+        <p id="txtSkyNow" class="text-[11px] text-slate-300 min-h-[1rem]"></p>
+      </div>
+
+      <details class="how-to rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-[11px] text-slate-300">
+        <summary class="cursor-pointer font-bold text-sky-300 min-h-[28px] flex items-center">How to fly</summary>
+        <div class="lg:hidden pt-1 leading-relaxed">
+          <b>Right thumb</b>: the stick (drag up to raise the nose)<br>
+          <b>Left thumb</b>: throttle (top = full power)<br>
+          <b>Middle</b>: gear, flaps, brakes, and ILS AUTO lands it for you<br>
+          <b>Gamepad</b>: left stick flies, RT/LT throttle, A flaps, B gear, X brakes
+        </div>
+        <div class="hidden lg:grid grid-cols-2 gap-x-4 gap-y-1 pt-1 font-mono">
+          <span><kbd>W</kbd> <kbd>S</kbd> nose down / up</span><span><kbd>A</kbd> <kbd>D</kbd> bank</span>
+          <span><kbd>Shift</kbd> <kbd>Ctrl</kbd> power</span><span><kbd>Q</kbd> <kbd>E</kbd> rudder</span>
+          <span><kbd>G</kbd> gear · <kbd>F</kbd> flaps</span><span><kbd>B</kbd> brakes · <kbd>Z</kbd> autopilot</span>
+          <span><kbd>C</kbd> camera · drag to look</span><span><kbd>H</kbd> show / hide panels</span>
+          <span><kbd>M</kbd> fly with the mouse</span><span><kbd>Space</kbd> centre the stick</span>
+        </div>
+      </details>
+      </div>
+
       <!-- Mission picker (ticket 0029): generated from src/missions.js by buildMissionPicker() -->
+      <div class="flex flex-col gap-1.5">
+      <div class="step-title"><span class="step-n">3</span>Where to?</div>
       <div id="missionList" class="flex flex-col gap-3 text-xs">
         <button id="btnCrosswindToday" data-scenario="crosswind_today" class="btnMission hud-btn hidden p-3 min-h-[44px] rounded-xl text-left flex-col gap-1 border-amber-400/50">
           <div class="flex items-center justify-between gap-2 font-bold text-amber-300">
@@ -106,39 +135,11 @@
         </button>
       </div>
 
-      <!-- Controls Matrix -->
-      <div class="lg:hidden bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-[11px] font-mono text-slate-300 leading-relaxed">
-        <div class="text-sky-400 font-bold mb-1">👍 TOUCH CONTROLS:</div>
-        • <b>Right thumb</b>: flight stick (drag up to raise the nose)<br>
-        • <b>Left thumb</b>: throttle (top = TO/GA, bottom = idle)<br>
-        • <b>Middle</b>: gear, flaps, brakes, ILS autoland<br>
-        • <b>Gamepad</b>: left stick flies, RT/LT throttle, A flaps, B gear, X brakes
       </div>
-      <div class="hidden lg:grid bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-[11px] grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
-        <div>
-          <div class="text-sky-400 font-bold mb-1 flex items-center gap-1.5">
-            <span>🕹️ FLIGHT YOKE CONTROLS:</span>
-          </div>
-          <div class="text-slate-300 leading-relaxed text-[10px]">
-            • <b>W / S</b> or <b>↑ / ↓</b>: Pitch Down / Up<br>
-            • <b>A / D</b> or <b>← / →</b>: Bank Left / Right<br>
-            • <b>Q / E</b>: Rudder Yaw | <b>Space</b>: Center Controls<br>
-            • <b>M</b>: Toggle Direct Mouse Yoke (Steer with cursor!)
-          </div>
-        </div>
-        <div>
-          <div class="text-emerald-400 font-bold mb-1 flex items-center gap-1.5">
-            <span>⚙️ POWER & SYSTEMS:</span>
-          </div>
-          <div class="text-slate-300 leading-relaxed text-[10px]">
-            • <b>Shift / Ctrl</b>: Throttle Up / Down (0–100%)<br>
-            • <b>G</b>: Landing Gear | <b>F</b>: Flaps | <b>B</b>: Wheel Brakes<br>
-            • <b>C</b>: Cycle 6 Camera Views | <b>Z</b>: Autopilot Master<br>
-            • <b>Orbit Drag</b>: Click and drag canvas to rotate camera view!
-          </div>
-        </div>
       </div>
 
+      <details class="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+      <summary class="cursor-pointer text-[11px] font-bold text-slate-300 min-h-[28px] flex items-center">Options</summary>
       <div class="flex flex-col gap-1.5">
         <label class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer">
           <input id="chkAutoSound" type="checkbox" checked class="w-4 h-4 rounded accent-sky-400" />
@@ -153,12 +154,13 @@
           <span>Autopilot explains what it's doing</span>
         </label>
       </div>
+      </details>
       </div>
 
       <div class="shrink-0 flex items-center justify-between gap-3 border-t border-slate-700/80 pt-3">
-        <div class="min-w-0 truncate text-[11px] font-mono text-slate-400">Selected: <b id="txtPickedMission" class="text-slate-100"></b></div>
-        <button id="btnStartFlight" class="shrink-0 whitespace-nowrap hud-btn active px-6 py-2.5 min-h-[44px] rounded-xl text-xs font-bold font-mono text-white bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/20">
-          ENTER COCKPIT ✈
+        <div class="min-w-0 truncate text-[11px] text-slate-300"><b id="txtPickedMission" class="text-white"></b></div>
+        <button id="btnStartFlight" class="btn-fly shrink-0 whitespace-nowrap px-7 py-2.5 min-h-[48px] rounded-xl text-sm font-black tracking-wide text-slate-950">
+          Fly ✈
         </button>
       </div>
     </div>
@@ -167,15 +169,18 @@
   <!-- Top Real-Time Aviation Operations Bar -->
   <header id="phoneHeader" class="absolute left-2 right-2 z-20 flex flex-col gap-1.5 pointer-events-none" style="top: max(0.5rem, env(safe-area-inset-top))">
     <!-- Phone top row (below lg): the menu button and the one telemetry strip; everything else folds into #hudMenu -->
-    <div class="lg:hidden flex items-stretch gap-1.5">
+    <div id="topRow" class="lg:hidden flex items-stretch gap-1.5">
       <button id="btnMenu" class="hud-btn pointer-events-auto rounded-xl min-h-[44px] min-w-[44px] px-2 text-[11px] font-mono font-bold text-sky-300" aria-label="Menu" aria-expanded="false" aria-controls="hudMenu">☰ Menu</button>
       <!-- Phone telemetry strip (the EICAS and moving map are desktop-only) -->
-      <div id="phoneTelemetry" class="flex-1 hud-glass pointer-events-auto rounded-xl px-2 py-1 grid grid-cols-4 gap-1 text-center font-mono text-[10px]">
+      <div id="phoneTelemetry" class="flex-1 hud-glass pointer-events-auto rounded-xl px-2 py-1 grid grid-cols-4 lg:grid-cols-6 gap-1 text-center font-mono text-[10px]">
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">IAS</div><b id="txtPhoneIas" class="text-slate-100">140</b></div>
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">AGL FT</div><b id="txtPhoneAgl" class="text-emerald-300">1270</b></div>
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">V/S FPM</div><b id="txtPhoneVs" class="text-sky-300">-700</b></div>
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">PAPI</div><b id="txtPhonePapi" class="text-emerald-400">ON GS</b></div>
+        <div class="hidden lg:block"><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">POWER</div><b id="txtPhoneThr" class="text-emerald-300">44%</b></div>
+        <div class="hidden lg:block"><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">GEAR · FLAPS</div><b id="txtPhoneConfig" class="text-slate-100">DN · 25°</b></div>
       </div>
+      <button id="btnPanelsShow" class="hud-btn hidden lg:block pointer-events-auto rounded-xl min-h-[44px] px-3 text-[11px] font-mono font-bold text-sky-300" title="Show the instrument panels (H)">Panels</button>
     </div>
 
     <!-- Brand, missions, systems and weather: always shown on desktop, a sheet behind ☰ Menu below lg -->
@@ -233,6 +238,7 @@
         <button id="btnAudio" class="hud-btn px-2 py-0.5 rounded text-[11px]">
           Sound: <span id="txtAudioState" class="text-amber-400 font-bold">OFF</span>
         </button>
+        <button id="btnPanelsHide" class="hud-btn hidden lg:inline-block px-2 py-0.5 rounded text-[11px] text-sky-200" title="Hide the panels for a clear view (H)">Clean view</button>
         <button id="btnPause" class="hud-btn px-2 py-0.5 rounded text-[11px] font-bold text-red-400">PAUSE</button>
         <button id="btnReset" class="hud-btn px-2 py-0.5 rounded text-[11px] text-amber-300">RESET</button>
       </div>
@@ -255,7 +261,7 @@
   </header>
 
   <!-- Left: EICAS Propulsion, Flight Controls & Trim Deck -->
-  <aside class="hud-glass absolute bottom-3 left-3 z-20 w-68 sm:w-76 rounded-2xl p-3 text-xs hidden lg:flex flex-col gap-2 font-mono">
+  <aside id="eicasPanel" class="hud-glass absolute bottom-3 left-3 z-20 w-68 sm:w-76 rounded-2xl p-3 text-xs hidden lg:flex flex-col gap-2 font-mono">
     <div class="flex items-center justify-between border-b border-slate-700/80 pb-1">
       <div>
         <div class="text-[9px] uppercase tracking-wider text-slate-400 font-bold">EICAS / 6-DOF DATA</div>
@@ -312,7 +318,7 @@
   </aside>
 
   <!-- Center-Bottom: Virtual Flight Stick & Glide Path Indicator -->
-  <div class="hud-glass absolute bottom-3 left-1/2 -translate-x-1/2 z-20 hidden lg:flex items-center gap-3 rounded-2xl px-3.5 py-2 text-xs font-mono">
+  <div id="stickPanel" class="hud-glass absolute bottom-3 left-1/2 -translate-x-1/2 z-20 hidden lg:flex items-center gap-3 rounded-2xl px-3.5 py-2 text-xs font-mono">
     <div class="flex flex-col items-center">
       <div class="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-1">6-DOF Stick (Drag or WASD)</div>
       <div id="virtualStickPad" class="relative w-24 h-24 rounded-xl bg-slate-950/95 border border-sky-500/30 cursor-crosshair flex items-center justify-center overflow-hidden">
@@ -394,6 +400,12 @@
         <div id="touchStickKnob" class="w-14 h-14 rounded-full bg-sky-400/90 border-2 border-white shadow-lg pointer-events-none"></div>
       </div>
     </div>
+  </div>
+
+  <!-- Clean view on a keyboard: the keys, one quiet line above the credits -->
+  <div id="keyHints" class="hidden pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-5 z-20 gap-3 px-3 py-1.5 rounded-xl text-[11px] font-mono text-slate-200 key-hints">
+    <span><kbd>W</kbd><kbd>S</kbd> pitch</span><span><kbd>A</kbd><kbd>D</kbd> bank</span><span><kbd>Shift</kbd><kbd>Ctrl</kbd> power</span>
+    <span><kbd>G</kbd> gear</span><span><kbd>F</kbd> flaps</span><span><kbd>B</kbd> brakes</span><span><kbd>C</kbd> camera</span><span><kbd>H</kbd> panels</span>
   </div>
 
   <div id="mapCredits" class="imagery-credit">

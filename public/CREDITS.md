@@ -19,3 +19,11 @@
 - Satellite imagery © Esri, Maxar, Earthstar Geographics.
 - Elevation: USGS 3DEP via AWS Terrain Tiles.
 - Photorealistic 3D Tiles © Google (credited on screen while shown).
+
+## Sky
+
+- Stars: the **Yale Bright Star Catalogue, 5th revised edition** (Hoffleit & Warren, 1991),
+  public domain, via the JSON conversion at https://github.com/brettonw/YaleBrightStarCatalog
+  (`sky/stars-v1.bin`, baked by `scripts/bake-stars.mjs`).
+- Moon position: the low-precision lunar series of *The Astronomical Almanac* (US Naval
+  Observatory / HM Nautical Almanac Office), implemented in `src/sky.js`.

@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { ecefToSim, ecefToSimRigid } from './ecef.js';
 import { createGoogleSession, ROOT_URL, PhotorealUnavailable, GOOGLE_FETCH } from './googleSession.js';
 import { courseVector } from './airports.js';
+import { patchNightGround } from './nightGround.js';
 
 export const PHOTOREAL_ORIGINS = ['https://mutaafaziz.com'];
 
@@ -53,7 +54,8 @@ export function createPhotoreal({ scene, camera, renderer, base, storage, isMobi
   }
 
   // Exact ECEF → sim for every vertex of a freshly loaded tile; unlit (Google's textures
-  // carry the real light), normals dropped.
+  // carry the real light) but tinted by the time of day with city lights at night
+  // (nightGround.js), normals dropped.
   function remapTile(tileScene) {
     tileScene.updateMatrixWorld(true);
     tileScene.traverse((o) => {
@@ -72,7 +74,7 @@ export function createPhotoreal({ scene, camera, renderer, base, storage, isMobi
         g.computeBoundingSphere();
         g.computeBoundingBox();
         const old = o.material;
-        o.material = new THREE.MeshBasicMaterial({ map: old.map || null, color: old.color ? old.color.clone() : 0xffffff });
+        o.material = patchNightGround(new THREE.MeshBasicMaterial({ map: old.map || null, color: old.color ? old.color.clone() : 0xffffff }), { tint: true });
         old.dispose();
       }
       if (o !== tileScene) { o.matrix.identity(); o.matrixAutoUpdate = false; }

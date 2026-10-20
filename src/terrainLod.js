@@ -5,6 +5,7 @@
 // cache, and are re-draped if the elevation grid arrives after them.
 import * as THREE from 'three';
 import { esriTileUrl } from './geo.js';
+import { patchNightGround } from './nightGround.js';
 import {
   selectTiles, flatten, resolveVisible, tileBounds, segmentsForZoom, rootTiles,
 } from './tileTree.js';
@@ -108,7 +109,7 @@ export function createTerrainLod({ scene, ground, renderOrder = -5, maxZoom, ani
 
   const makeTile = (node) => {
     const b = tileBounds(node.z, node.x, node.y);
-    const mat = new THREE.MeshBasicMaterial({ color: tint, vertexColors: true });
+    const mat = patchNightGround(new THREE.MeshBasicMaterial({ color: tint, vertexColors: true }));
     const mesh = new THREE.Mesh(buildGeometry(b, segmentsForZoom(node.z), ground.heightAt, sunDir), mat);
     mesh.position.set(b.cx, 0, b.cz);
     mesh.renderOrder = renderOrder;

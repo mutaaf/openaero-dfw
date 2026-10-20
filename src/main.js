@@ -43,6 +43,8 @@ import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
+import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
+import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
@@ -169,8 +171,13 @@ try {
 }
 
 scene = new THREE.Scene();
-scene.background = new THREE.Color(0x38bdf8);
+scene.background = new THREE.Color(0x38bdf8); // behind the sky dome; only seen if it fails
 scene.fog = new THREE.FogExp2(0x94a3b8, 0.000035);
+const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+// The atmosphere, the real stars and Moon over DFW, and the METAR's clouds (skyDome.js):
+// its own chunk, loaded right after boot; until then the sky is the plain haze colour.
+let skyDome = null;
+let runwayLights = null;
 
 camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 95000);
 
@@ -246,7 +253,17 @@ function applyGroundLight(only) {
   _tint.copy(ambientLight.color).multiplyScalar(ambientLight.intensity).add(_sunTint).multiplyScalar(1 / Math.PI);
   for (const m of only ? [only] : groundMats) m.color.copy(m.userData.baseColor).multiply(_tint);
   if (!only) terrainLod?.setTint(_tint);
+  // Photoreal tiles take the same light, relative to full day (Google's photos are daylit).
+  nightUniforms.uGroundTint.value.copy(_tint).multiplyScalar(1 / DAY_TINT);
+  setCityLights(cityLightsFor(sun.elevationDeg));
 }
+// Luminance of the flat-ground tint under the high noon sun (skyForSun(60)).
+const DAY_TINT = (() => {
+  const k = skyForSun(60);
+  const c = new THREE.Color(k.ambient).multiplyScalar(k.ambientIntensity)
+    .add(new THREE.Color(k.sun).multiplyScalar(k.sunIntensity * Math.sin(60 * DEG_TO_RAD)));
+  return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+})();
 
 // Append an axis-aligned quad (in a runway's local frame) to a flat position array,
 // rotated by `rot` around Y and translated to (ox, oz). y is the height above ground.
@@ -326,6 +343,12 @@ function buildRunways() {
   lampGeo.setAttribute('color', new THREE.BufferAttribute(lampCol, 3));
   papiLamps = new THREE.Points(lampGeo, new THREE.PointsMaterial({ size: 5, sizeAttenuation: false, vertexColors: true }));
   scene.add(papiLamps);
+
+  // Runway and approach lights (ticket 0011): their own chunk, after boot.
+  import('./runwayLights.js').then(({ createRunwayLights }) => {
+    runwayLights = createRunwayLights({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, reducedMotion });
+    scene.add(runwayLights.points);
+  }).catch((err) => console.warn('Runway lights unavailable:', err.message));
 }
 
 function buildSatelliteTerrain() {
@@ -471,6 +494,7 @@ async function loadDem() {
     ground.setDem(decodeDem(new Uint8Array(raw)));
     terrainLod.redrape();
     seatLandmarks();
+    runwayLights?.reseat();
   } catch (err) {
     console.warn('Terrain elevation unavailable, flying on flat ground:', err.message);
   }
@@ -933,16 +957,32 @@ document.getElementById('btnTakeover').addEventListener('click', () => {
 
 // --- Weather -----------------------------------------------------------------------
 const WX_IDS = 'KDFW,KDAL,KADS,KAFW,KFTW,KGKY';
-let cloudDeck = null;
-const skyBase = new THREE.Color(0x38bdf8);   // set by the sun (applySun)
 const OVERCAST_GREY = new THREE.Color(0x9aa5b1);
+const NO_SKY = { nightness: 0, moonIllumination: 0, moonElevationDeg: -90 };
+const _overcast = new THREE.Color();
+const _skyDate = new Date();
 placeSun();
 
-// Sky = time-of-day colour, greyed by how much of it a low deck covers.
+// The sky dome for the sun of the moment, greyed by how much of it a low deck covers, and
+// the haze matched to its horizon. Moonlight lifts the night ambient.
 function applySky() {
   const base = sim.wx.ceilingFt;
   const k = base !== null && base <= 12000 ? (sim.wx.ceilingCover === 'BKN' ? 0.45 : 0.8) : 0;
-  scene.background.copy(skyBase).lerp(OVERCAST_GREY, k);
+  const look = skyForSun(sun.elevationDeg);
+  _overcast.copy(OVERCAST_GREY).multiplyScalar(Math.min(1, 0.12 + look.ambientIntensity * 0.9 + look.sunIntensity * 0.15));
+  _skyDate.setTime(sun.at ?? Date.now());
+  skyDome?.setSky({
+    look, sunDir: _sunVec, sunElevationDeg: sun.elevationDeg, date: _skyDate,
+    latDeg: DFW_ORIGIN_LAT, lonDeg: DFW_ORIGIN_LON, overcast: k, overcastColor: _overcast,
+  });
+  scene.fog.color.setHex(look.fog).lerp(_overcast, k);
+  scene.background.copy(scene.fog.color);
+  const st = skyDome?.state ?? NO_SKY;
+  const moonlight = st.moonIllumination * Math.max(0, Math.min(1, st.moonElevationDeg / 10)) * st.nightness * (1 - k);
+  ambientLight.intensity = (look.ambientIntensity + 0.18 * moonlight) * LIGHT_SCALE;
+  // The eye adapts: a little more exposure after dark.
+  if (renderer) renderer.toneMappingExposure = 1.05 + 0.35 * st.nightness;
+  applyGroundLight();
 }
 
 async function fetchWeather() {
@@ -998,22 +1038,8 @@ function refreshWeather() {
   sim.isaDevC = isaDeviationC(sim.wx.tempC, REF_ELEV_M);
   sim.altimInHg = sim.wx.altimInHg || 29.92;
   scene.fog.density = fogDensityForVisibility(sim.wx.visibilitySm);
-  const base = sim.wx.ceilingFt;
-  if (base !== null && base <= 12000) {
-    if (!cloudDeck) {
-      cloudDeck = new THREE.Mesh(
-        new THREE.PlaneGeometry(160000, 160000),
-        new THREE.MeshBasicMaterial({ color: 0xdfe5ec, transparent: true, depthWrite: false, side: THREE.DoubleSide }),
-      );
-      cloudDeck.rotation.x = -Math.PI / 2;
-      scene.add(cloudDeck);
-    }
-    cloudDeck.position.y = (sim.activeEnd ? sim.activeEnd.thrY : 0) + base * 0.3048;
-    cloudDeck.material.opacity = sim.wx.ceilingCover === 'BKN' ? 0.55 : 0.88;
-    cloudDeck.visible = true;
-  } else if (cloudDeck) {
-    cloudDeck.visible = false;
-  }
+  // METAR cloud bases are above the reporting field.
+  skyDome?.setClouds(sim.wx.cloudLayers, sim.activeEnd ? sim.activeEnd.thrY : 0);
   applySky();
 }
 
@@ -1318,6 +1344,49 @@ function updateCamera() {
   }
 }
 
+// One HUD tape: a vertical scale whose inner edge is at x (side −1 = scale to the left of
+// it, +1 = to the right), centred on y, scrolling so `value` sits at the readout.
+function drawTape(x, y, side, value, pxPerUnit, minor, major) {
+  const half = 90;
+  hudCtx.save();
+  hudCtx.beginPath();
+  hudCtx.rect(side < 0 ? x - 60 : x, y - half, 60, half * 2);
+  hudCtx.clip();
+  // A faint dark strip keeps the scale readable over bright imagery and still shows the
+  // runway through it (a text shadow blur did the same at many times the cost on software
+  // rasterizers).
+  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.3)';
+  hudCtx.fill();
+  hudCtx.strokeStyle = 'rgba(186, 230, 253, 0.85)';
+  hudCtx.fillStyle = '#e0f2fe';
+  hudCtx.font = '10px monospace';
+  hudCtx.textAlign = side < 0 ? 'right' : 'left';
+  hudCtx.beginPath();
+  hudCtx.moveTo(x, y - half); hudCtx.lineTo(x, y + half);
+  const lo = Math.floor((value - half / pxPerUnit) / minor) * minor;
+  for (let v = lo; v <= value + half / pxPerUnit; v += minor) {
+    const ty = y - (v - value) * pxPerUnit;
+    const isMajor = v % major === 0;
+    hudCtx.moveTo(x, ty); hudCtx.lineTo(x + side * (isMajor ? 9 : 5), ty);
+    if (isMajor && Math.abs(ty - y) > 16) hudCtx.fillText(`${v}`, x + side * 12, ty + 3.5);
+  }
+  hudCtx.stroke();
+  hudCtx.restore();
+  // The readout box points at the scale.
+  const bw = side < 0 ? 44 : 56;
+  const bx = side < 0 ? x - 8 - bw : x + 8;
+  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';
+  hudCtx.strokeStyle = '#38bdf8';
+  hudCtx.beginPath();
+  hudCtx.rect(bx, y - 11, bw, 22);
+  hudCtx.fill(); hudCtx.stroke();
+  hudCtx.fillStyle = '#f0f9ff';
+  hudCtx.font = 'bold 13px monospace';
+  hudCtx.textAlign = 'center';
+  hudCtx.fillText(`${Math.round(value)}`, bx + bw / 2, y + 4.5);
+  hudCtx.textAlign = 'left';
+}
+
 function renderHud() {
   const w = hudCanvas.width;
   const h = hudCanvas.height;
@@ -1379,29 +1448,22 @@ function renderHud() {
   });
   hudCtx.restore();
 
-  // Speed Tape
-  hudCtx.strokeRect(cx - 175, cy - 90, 44, 180);
-  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(cx - 175, cy - 90, 44, 180);
-  hudCtx.fillStyle = '#38bdf8';
-  hudCtx.font = '12px monospace';
-  hudCtx.fillText(`${Math.round(sim.iasKts)}`, cx - 165, cy + 4);
+  // Speed and altitude tapes: see-through scales that scroll past a boxed readout, so
+  // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
+  drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20);
+  drawTape(cx + 130, cy, 1, sim.mslFt, 0.2, 100, 500);
 
-  // Altitude Tape
-  hudCtx.strokeRect(cx + 130, cy - 90, 56, 180);
-  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(cx + 130, cy - 90, 56, 180);
-  hudCtx.fillStyle = '#38bdf8';
-  hudCtx.fillText(`${sim.mslFt}`, cx + 136, cy + 4);
-
-  // Heading Arc
+  // Heading
   const hdgTop = headingBoxTop(cy);
-  hudCtx.strokeRect(cx - 52, hdgTop, 104, HEADING_BOX_H);
-  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(cx - 52, hdgTop, 104, HEADING_BOX_H);
-  hudCtx.fillStyle = '#38bdf8';
+  hudCtx.strokeStyle = '#38bdf8';
+  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.55)';
+  hudCtx.fillRect(cx - 40, hdgTop, 80, HEADING_BOX_H);
+  hudCtx.strokeRect(cx - 40, hdgTop, 80, HEADING_BOX_H);
+  hudCtx.fillStyle = '#e0f2fe';
   hudCtx.textAlign = 'center';
-  hudCtx.fillText(`TRK ${String(hdgDeg).padStart(3, '0')}°`, cx, hdgTop + 16);
+  hudCtx.font = 'bold 13px monospace';
+  hudCtx.fillText(`${String(hdgDeg).padStart(3, '0')}°`, cx, hdgTop + 16);
+  hudCtx.font = '12px monospace';
 
   // ILS Guidance Crosshairs
   // Fly-to bars: the localizer bar sits where the centreline is (left when you're right of
@@ -1683,8 +1745,6 @@ function placeSun() {
   sunLight.intensity = look.sunIntensity * LIGHT_SCALE;
   ambientLight.color.setHex(look.ambient);
   ambientLight.intensity = look.ambientIntensity * LIGHT_SCALE;
-  skyBase.setHex(look.sky);
-  scene.fog.color.setHex(look.fog);
 }
 
 // Terrain relief is baked into vertex colours once per tile, so it takes the boot-time sun,
@@ -1696,12 +1756,40 @@ function reliefSunDir() {
 
 function applySun() {
   placeSun();
-  applyGroundLight();
-  applySky();
+  applySky(); // also re-lights the ground
   const mode = TIME_MODES[sim.timeOfDayMode];
+  for (const btn of document.querySelectorAll('#timePicker .btnTime')) {
+    const on = Number(btn.dataset.time) === sim.timeOfDayMode;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+  document.getElementById('txtSkyNow').textContent = skyCaption(mode);
   document.getElementById('txtTimeBadge').textContent = mode;
   document.getElementById('btnTimeOfDay').title = `Sun: ${mode} (${Math.round(sun.elevationDeg)}° up). Cycle Now / Dawn / Noon / Dusk / Night`;
 }
+
+// One line under the When? picker: what the sky over Dallas is doing at that moment.
+const DALLAS_CLOCK = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit' });
+function skyCaption(mode) {
+  const st = skyDome?.state ?? NO_SKY;
+  const el = Math.round(sun.elevationDeg);
+  const light = el > 6 ? `sun ${el}° up` : el > -1 ? 'sun on the horizon' : el > -6 ? 'twilight' : 'dark';
+  const moon = st.moonElevationDeg > 0 ? `Moon ${Math.round(st.moonIllumination * 100)}% lit, ${Math.round(st.moonElevationDeg)}° up` : 'Moon below the horizon';
+  const when = mode === 'Now' ? `Live over Dallas, ${DALLAS_CLOCK.format(new Date(sun.at))}` : `Today's ${mode === 'Noon' ? 'midday' : mode.toLowerCase()} in Dallas, ${DALLAS_CLOCK.format(new Date(sun.at))}`;
+  return `${when} · ${light} · ${moon}`;
+}
+for (const btn of document.querySelectorAll('#timePicker .btnTime')) {
+  btn.addEventListener('click', () => { sim.timeOfDayMode = Number(btn.dataset.time); applySun(); });
+}
+
+// Clean view (desktop): panels folded away, the world fills the screen (H toggles).
+function setCleanView(clean, remember = true) {
+  document.body.classList.toggle('view-clean', clean);
+  if (!clean) setHudMenu(false);
+  if (remember) { try { saveCleanView(window.localStorage, clean); } catch { /* storage unavailable */ } }
+}
+document.getElementById('btnPanelsShow').addEventListener('click', () => setCleanView(false));
+document.getElementById('btnPanelsHide').addEventListener('click', () => setCleanView(true));
 
 function toggleTimeOfDay() {
   sim.timeOfDayMode = (sim.timeOfDayMode + 1) % TIME_MODES.length;
@@ -1785,6 +1873,8 @@ function syncUI() {
   document.getElementById('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
   document.getElementById('txtPhoneAgl').textContent = `${sim.aglFt}`;
   document.getElementById('txtPhoneVs').textContent = `${sim.vsiFpm}`;
+  document.getElementById('txtPhoneThr').textContent = `${throttlePct}%`;
+  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : sim.gearDown ? 'DN' : 'UP'} · ${sim.flapAngles[sim.flapsIndex]}°`;
   const papi = document.getElementById('txtPapiStatus');
   const phonePapi = document.getElementById('txtPhonePapi');
   phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
@@ -2161,6 +2251,7 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (e.code === 'KeyC') { document.getElementById('btnCamera').click(); }
   else if (e.code === 'KeyM') { document.getElementById('btnMouseYoke').click(); }
+  else if (e.code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }
   else if (e.code === 'KeyZ') { document.getElementById('btnApMaster').click(); }
   else if (e.code === 'Space') {
     sim.elevInput = 0; sim.aileronInput = 0; sim.rudderInput = 0;
@@ -2206,6 +2297,7 @@ function renderLoop(time) {
   if (!sim.paused) updateCoach(dt);
   syncWeatherUI(dt);
   updateCamera();
+  updateSkyAndLights(time / 1000);
   terrainLod.update(dt, camera);
   photoreal.update(dt);
   updateDebugOverlay(dt);
@@ -2214,6 +2306,18 @@ function renderLoop(time) {
   renderRadar();
   syncUI();
   audio.update();
+}
+
+// The sky follows the camera; runway lights and PAPIs brighten as the light goes.
+function updateSkyAndLights(t) {
+  skyDome?.update(camera, { time: t, pixelRatio: renderer.getPixelRatio(), wind: sim.windVec, altitudeM: camera.position.y + REF_ELEV_M });
+  const night = nightUniforms.uNight.value;
+  if (runwayLights) {
+    // On from dusk, and by day in low visibility (under 5 SM), as at the real fields.
+    runwayLights.points.visible = night > 0.02 || sim.wx.visibilitySm < 5;
+    runwayLights.update(t, renderer.getPixelRatio(), night, camera.position);
+  }
+  if (papiLamps) papiLamps.material.size = 5 + 4 * night;
 }
 
 // ?debug: a one-line usage readout of the Google session (to verify the free tier holds).
@@ -2277,7 +2381,9 @@ window.openaeroDebug = () => {
     audio: audio.state,
     wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
-    cloudBaseFt: cloudDeck && cloudDeck.visible ? sim.wx.ceilingFt : null,
+    cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,
+    cloudLayers: (sim.wx.cloudLayers || []).length,
+    sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
@@ -2401,11 +2507,17 @@ function boot() {
   try { tutorEnabled = tutorOn(window.localStorage); } catch { /* storage unavailable: tutor on */ }
   document.getElementById('chkTutor').checked = tutorEnabled;
   try { setAssist(loadAssist(window.localStorage), false); } catch { setAssist(DEFAULT_ASSIST, false); }
+  try { setCleanView(loadCleanView(window.localStorage), false); } catch { setCleanView(true, false); }
   fetchWeather();
   setInterval(fetchWeather, 10 * 60 * 1000);
   applySun();
   setInterval(() => { if (TIME_MODES[sim.timeOfDayMode] === 'Now') applySun(); }, 60 * 1000);
   buildSatelliteTerrain();
+  import('./skyDome.js').then(({ createSkyDome }) => {
+    skyDome = createSkyDome({ scene, base: import.meta.env.BASE_URL, reducedMotion });
+    refreshWeather(); // clouds
+    applySun();       // sky, stars, Moon and the caption
+  }).catch((err) => console.warn('Sky unavailable, plain haze instead:', err.message));
   buildAircraft('b738');
   // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap.
   const linked = missionFromLink(window.location.search);

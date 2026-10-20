@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, collectErrors, FULL_RES } from './helpers.js';
+
+test.use(FULL_RES);
 
 // Adaptive render resolution (0026). Only the 3D canvas's drawing buffer changes; its CSS
 // size and the 2D HUD canvas (drawn at CSS pixels) stay put.

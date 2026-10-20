@@ -80,7 +80,7 @@ describe('sunPreset', () => {
   });
 
   it('Now is the real sun', () => {
-    expect(sunPreset('Now', now, LAT, LON)).toEqual(sunPosition(now, LAT, LON));
+    expect(sunPreset('Now', now, LAT, LON)).toEqual({ ...sunPosition(now, LAT, LON), at: now.getTime() });
   });
 
   it('Noon is the day\'s highest sun, Night is below the horizon', () => {
@@ -137,5 +137,16 @@ describe('skyForSun', () => {
   it('a sun at the horizon paints a warm sky', () => {
     const s = skyForSun(1);
     expect((s.sky >> 16) & 255).toBeGreaterThan(s.sky & 255); // more red than blue
+  });
+});
+
+describe('sunPreset moment', () => {
+  it('carries the moment of each preset sun, so the stars and Moon match it', () => {
+    const now = new Date(Date.UTC(2026, 9, 19, 18));
+    for (const mode of TIME_MODES) {
+      const s = sunPreset(mode, now, LAT, LON);
+      const again = sunPosition(new Date(s.at), LAT, LON);
+      expect(again.elevationDeg).toBeCloseTo(s.elevationDeg, 6);
+    }
   });
 });

@@ -103,7 +103,8 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    `openaero_g3dt_block_v1` (quota/forbidden back-off, no key, no Google content). The
    first-flight coach remembers `openaero_coach_v1 = { v: 1, seen, at }` (`src/coach.js`);
    the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`); the assist
-   level `openaero_assist_v1 = { v: 1, level, at }` (`src/assists.js`). Kid and Learner keep
+   level `openaero_assist_v1 = { v: 1, level, at }` (`src/assists.js`); the clean view
+   `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`). Kid and Learner keep
    their personal bests under `<missionKey>@kid` / `@learner` in `openaero_best`; Pilot keeps
    the plain mission key.
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
@@ -155,8 +156,19 @@ src/photoreal.js    Google Photorealistic 3D Tiles (lazy 3d-tiles-renderer): exa
 src/tileTree.js     quadtree LOD selection for the streamed imagery (pure, tested)
 src/terrainLod.js   streamed Esri imagery draped on terrain.js: per-tile height grids with
                     skirts, hillshade in vertex colours, load queue, LRU cache
-src/sun.js          real sun (NOAA solar position) over DFW, Now/Dawn/Noon/Dusk/Night presets,
-                    sky/haze/light colours by sun elevation (pure, tested)
+src/sun.js          real sun (NOAA solar position) over DFW, Now/Dawn/Noon/Dusk/Night presets
+                    (each with its moment, `at`), sky zenith/horizon/glow, haze (= horizon) and
+                    light colours by sun elevation; night ambient keeps the imagery moonlit
+src/sky.js          the real night sky (pure, tested): sidereal time, J2000 → sim rotation, the
+                    Moon's topocentric position + illumination, nightness, star colours
+src/skyDome.js      lazy chunk after boot: atmosphere dome (sun disc/halo, twilight glow, deeper
+                    towards space with altitude), Yale BSC stars (public/sky/stars-v1.bin from
+                    scripts/bake-stars.mjs), the Moon with its real phase, METAR cloud layers
+src/nightGround.js  shader patch on the ground's MeshBasicMaterials (terrainLod, photoreal):
+                    moonlit grade after sunset + street lights on the asphalt (world space)
+src/runwayLights.js lazy chunk: edge/centreline/threshold/end lights and ALSF-2/MALSR approach
+                    lights with sequenced flashers, one Points draw (layout pure, tested)
+src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembered
 src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
                     windows, back up after a fast cool-down that backs off (pure, tested)
 src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/results), feature-
@@ -235,7 +247,10 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 198 kB gzipped at boot (2026-10-19: 197.25 kB with the ?fdm=jsbsim hook and the turn-rate heading hold (+0.3 kB), raised from 197 to 198; JSBSim itself is a lazy chunk, 4.6 kB JS + 493 kB WASM gz, fetched only with ?fdm=jsbsim; 196.95 kB after 0042's assist levels, raised from 196 to 197; 195.02 kB after 0032's wake lock + pause on hide (+0.43 kB after trimming to locals and dropping a per-frame duplicate), raised from 195 to 196; 194.6 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
+Budgets: JS ≤ 201 kB gzipped at boot (2026-10-19: 200.27 kB after 0055/0056/0011: the night
+ground shader the imagery needs at first paint, the HUD tapes, clean view and When? picker
+(+3.0 kB); the sky dome (4.9 kB gz) and runway lights (1.9 kB) are lazy chunks and the star
+catalogue (43 kB gz) is fetched by the dome; raised from 198 to 201. Before that: 197.25 kB with the ?fdm=jsbsim hook and the turn-rate heading hold (+0.3 kB), raised from 197 to 198; JSBSim itself is a lazy chunk, 4.6 kB JS + 493 kB WASM gz, fetched only with ?fdm=jsbsim; 196.95 kB after 0042's assist levels, raised from 196 to 197; 195.02 kB after 0032's wake lock + pause on hide (+0.43 kB after trimming to locals and dropping a per-frame duplicate), raised from 195 to 196; 194.6 kB after 0029's generated mission picker; 193.2 kB after 0046 and 0026; 191.4 kB raised from 190 for the validated flight model: atmosphere, engines, per-flap aero, feed-forward autothrottle; 2026-10-17: 184 kB, almost all three.js; raised
 from 180 for photoreal: three is one module, so the core classes the lazy glTF/3D-tiles
 chunk needs are hoisted into the entry chunk; 3d-tiles-renderer + Draco load only when
 photoreal starts), CSS ≤ 10 kB gzipped (4.2 kB). Frame-time numbers live in `docs/PERF.md`.

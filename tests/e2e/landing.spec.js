@@ -46,6 +46,7 @@ test('with sound off nothing is spoken', async ({ page }) => {
     window.speechSynthesis.speak = (u) => { window.__spoken.push(u.text); };
   });
   await page.goto('/openaero/');
+  await page.locator('summary', { hasText: 'Options' }).click();
   await page.locator('#chkAutoSound').uncheck();
   await page.click('#btnStartFlight');
   await page.selectOption('#selScenario', 'kdfw_35c_flare');

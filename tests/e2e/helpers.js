@@ -2,6 +2,10 @@
 // and never load Esri's servers from CI.
 export const BASE = '/openaero/';
 
+// Desktop specs render at half resolution (playwright.config.js); the ones that count or
+// compare canvas pixels opt back into 1x with test.use(FULL_RES).
+export const FULL_RES = { deviceScaleFactor: 1 };
+
 // 1x1 opaque green PNG.
 const TILE_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg==',
