@@ -53,10 +53,12 @@ after Vr: held on the runway past the speed its wing flies at a normal attitude.
 lift off at 8–9° (NTSB, AA 737-800 LAX 2011, quoting the operator's manual; ATSB AO-2018-011:
 8° at flaps 5) after an average ~2.2–2.4°/s rotation (ATSB 200500382, AO-2018-011).
 - The harness pilot now commands 3°/s (FCTM top end) and averages 2.38°/s, as crews do.
-- `vrKts` 142 → 132 (flaps 10, 65 t): lift-off at 8.4°, 149 kt; 4,245 ft to 35 ft, × 1.15 =
-  4,882 ft ≤ 5,100. Engine failed at Vr: 146 kt at 35 ft ≥ V2 = 1.13 Vs = 140 kt (14 CFR 25.107).
+- `vrKts` 142 → 132 (flaps 10, 65 t; the model's Vr, fitted to its lift curve, not a published one): lift-off at 8.4°, 149 kt; 4,245 ft to 35 ft, × 1.15 =
+  4,882 ft ≤ 5,100. Engine failed at Vr: 146 kt at 35 ft ≥ V2 = 1.13 Vs = 140 kt (14 CFR 25.107),
+  4,435 ft to 35 ft (25.113(a)(1)).
 - Not changed: thrust lapse (Bartel & Young 2008, fitted to the CFM56-7B, gives ~20% loss by
   M0.23, slightly more than the model's 18%, so thrust is not short); rolling μ 0.03 (0.02 would
   save ~80 ft; left alone without a 737-specific source).
-- Not done: flaps 10's stall speed vs flaps 30 (the 0057 panel note). No public 737 takeoff
-  V-speed table was found to refit it against.
+- Not done (0062): the panel notes lift-off is 17 kt after Vr (real: Vr + 5–10) and Vr is
+  1.06 Vs; real flaps 5–10 Vr at 65 t is reported nearer 136–142. No public 737 takeoff
+  V-speed table was found to refit flaps 10 against. `vrKts` isn't read by the game yet.

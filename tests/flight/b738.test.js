@@ -182,16 +182,17 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
   // The test pilot rotates like a line crew, or the takeoff cards measure the pilot.
   it('rotates at an average ~2.2–2.4°/s from Vr to lift-off, like crews do (ATSB 200500382, AO-2018-011; FCTM 2–3°/s)', () => {
     const { ratePerS } = takeoff(FLAPS_10).liftoff;
-    expect(ratePerS).toBeGreaterThan(2);
-    expect(ratePerS).toBeLessThan(2.6);
+    expect(ratePerS).toBeGreaterThan(2.1);
+    expect(ratePerS).toBeLessThan(2.5);
   });
 
   // NTSB (American Airlines 737-800, LAX, 2011), quoting the operator's 737 manual: rotate at
   // 2–3°/s, "normal lift-off attitude is 8–9°" at flaps 1 and 5, tail contact at 11°. ATSB
-  // AO-2018-011 quotes 8° for flaps 5. Vr is the speed from which that rotation lifts off at
+  // AO-2018-011 quotes 8° for flaps 5; applied here to flaps 10. Vr is the speed from which that rotation lifts off at
   // that attitude: rotate too late and the wing is flying before the pitch gets there (at Vr
   // 142 the model lifted off at 7.0°, 157 kt, a long, flat takeoff). This card pins the
-  // model's Vr (b738.vrKts, flaps 10) against its own lift curve.
+  // model's Vr (b738.vrKts, flaps 10) against its own lift curve, not against a published
+  // Vr (none found; the flaps 10 lift itself is 0062).
   it('rotating at Vr, it lifts off at the normal 8–9° attitude, short of the 11° tailstrike (NTSB, operator 737 manual)', () => {
     const { pitchDeg } = takeoff(FLAPS_10).liftoff;
     expect(pitchDeg).toBeGreaterThanOrEqual(8);
@@ -199,11 +200,13 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
   });
 
   // 14 CFR 25.107(b)/(e)(1)(iii): V2 ≥ 1.13 VSR, and Vr must let an airplane that loses an
-  // engine at Vr reach V2 by 35 ft. A Vr low enough to lift off at 8–9° must still do that.
-  it('with an engine failed at Vr it still reaches V2 (1.13 Vs, flaps 10) by 35 ft (14 CFR 25.107)', () => {
-    const { kts35, liftoff } = takeoff(FLAPS_10, { oei: true });
+  // engine at Vr reach V2 by 35 ft. A Vr low enough to lift off at 8–9° must still do that,
+  // and 14 CFR 25.113(a)(1): the engine-out distance to 35 ft is within the field length too
+  // (ACAP §3.3.29, 5,100 ft). Generous: no windmilling or sideslip drag from the dead engine.
+  it('with an engine failed at Vr it still reaches V2 (1.13 Vs, flaps 10) by 35 ft, within 5,100 ft (14 CFR 25.107, 25.113)', () => {
+    const { kts35, ft35 } = takeoff(FLAPS_10, { oei: true });
     expect(kts35).toBeGreaterThanOrEqual(1.13 * stallSpeedKts(b738, FLAPS_10));
-    expect(liftoff.pitchDeg).toBeLessThan(b738.maxGroundPitchDeg);
+    expect(ft35).toBeLessThanOrEqual(5100);
   });
 });
 
