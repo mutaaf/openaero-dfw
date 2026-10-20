@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { headingBoxTop, HEADING_BOX_H, TAPE_TOP, BELOW_TOP_BAR } from '../../src/hudLayout.js';
+import { headingBoxTop, HEADING_BOX_H, TAPE_TOP, BELOW_TOP_BAR, cameraFovDeg, BASE_FOV_DEG, MIN_HFOV_DEG, MAX_FOV_DEG } from '../../src/hudLayout.js';
 
 describe('headingBoxTop', () => {
   it('keeps the classic cy - 145 on tall screens (desktop, portrait phone)', () => {
@@ -22,5 +22,47 @@ describe('headingBoxTop', () => {
       expect(headingBoxTop(h / 2) + HEADING_BOX_H).toBeLessThanOrEqual(h / 2 + TAPE_TOP);
     }
     expect(BELOW_TOP_BAR).toBe(72);
+  });
+});
+
+describe('cameraFovDeg (0044)', () => {
+  const hFov = (vDeg, aspect) => 2 * Math.atan(Math.tan((vDeg * Math.PI) / 360) * aspect) * (180 / Math.PI);
+
+  it('keeps the classic 62° on landscape screens (desktop, phone sideways, iPad sideways)', () => {
+    for (const [w, h] of [[1280, 720], [1920, 1080], [844, 390], [568, 320], [1180, 820], [1024, 1024]]) {
+      expect(cameraFovDeg(w, h), `${w}x${h}`).toBe(BASE_FOV_DEG);
+    }
+    expect(BASE_FOV_DEG).toBe(62);
+  });
+
+  it('opens the vertical FOV in portrait so the view is not a 31° keyhole', () => {
+    // At 62° vertical a 390x844 phone saw only 31° across: a crab or a turn put the
+    // runway off the side. Portrait keeps at least MIN_HFOV_DEG across, up to the cap.
+    for (const [w, h] of [[820, 1180], [768, 1024], [834, 1194], [1024, 1366]]) {
+      const v = cameraFovDeg(w, h);
+      expect(v, `${w}x${h}`).toBeGreaterThan(BASE_FOV_DEG);
+      expect(hFov(v, w / h), `${w}x${h} across`).toBeCloseTo(MIN_HFOV_DEG, 6);
+    }
+    for (const [w, h] of [[390, 844], [412, 915], [360, 800], [430, 932], [320, 568]]) {
+      const v = cameraFovDeg(w, h);
+      expect(v, `${w}x${h}`).toBe(MAX_FOV_DEG);
+      expect(hFov(v, w / h), `${w}x${h} across`).toBeGreaterThan(40);
+    }
+  });
+
+  it('never narrows or exceeds the cap, and grows monotonically as the screen gets taller', () => {
+    let prev = 0;
+    for (let aspect = 2.5; aspect >= 0.3; aspect -= 0.01) {
+      const v = cameraFovDeg(1000 * aspect, 1000);
+      expect(v).toBeGreaterThanOrEqual(BASE_FOV_DEG);
+      expect(v).toBeLessThanOrEqual(MAX_FOV_DEG);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      prev = v;
+    }
+  });
+
+  it('tolerates a zero-sized window (returns the base FOV)', () => {
+    expect(cameraFovDeg(0, 0)).toBe(BASE_FOV_DEG);
+    expect(cameraFovDeg(390, 0)).toBe(BASE_FOV_DEG);
   });
 });

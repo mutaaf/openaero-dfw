@@ -13,3 +13,17 @@ export const BELOW_TOP_BAR = 72;
 export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
+
+// Camera field of view (ticket 0044). Landscape screens keep the classic 62° vertical. In
+// portrait a fixed 62° vertical leaves a keyhole across (31° on a 390x844 phone), so a crab
+// or a turn takes the runway off the side: there the vertical opens until the view is
+// MIN_HFOV_DEG across, up to MAX_FOV_DEG (an iPad gets the full 60° across, a phone ~42°).
+export const BASE_FOV_DEG = 62;
+export const MIN_HFOV_DEG = 60;
+export const MAX_FOV_DEG = 80;
+
+export function cameraFovDeg(w, h) {
+  if (!(w > 0 && h > 0)) return BASE_FOV_DEG;
+  const v = 2 * Math.atan(Math.tan((MIN_HFOV_DEG * Math.PI) / 360) / (w / h)) * (180 / Math.PI);
+  return Math.min(MAX_FOV_DEG, Math.max(BASE_FOV_DEG, v));
+}

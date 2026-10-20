@@ -69,3 +69,22 @@ billboard sun 144–163 ms. Desktop e2e specs now render at `deviceScaleFactor: 
 measures 1x. Flight specs alone at 0.5 were not enough: the suite took 20.2 min locally.
 With that, CI passed in 18.7 min, so the margin was still thin: the operator raised the CI
 job limit to 30 min and the ILS autoland test's wall allowance to 180 s.
+
+## Devices (ticket 0044)
+
+`tests/e2e/devices.spec.js`, its own `devices` Playwright project, alone after `perf`:
+`npx playwright test --project=devices --no-deps`. Each size boots, taps Fly, then flies the
+default KDFW 35C final for 5 s by touch (60% power, a little nose-up) under a 4x CPU throttle
+(CDP `Emulation.setCPUThrottlingRate`), DPR 1, tiles stubbed. It asserts no console errors,
+no page scroll, HUD boxes clear of each other, the horizon box and the tapes, and every
+control ≥ 44 px; screenshots (`final-*.png`, `layout-*.png`) land in the test output.
+Same SwiftShader caveat as above: these numbers rank sizes and catch regressions; frame cost
+there scales with pixels, which is why the iPad sizes are slowest.
+
+| Date | Machine | Device (CSS px) | Frames / 5 s | Avg frame | p95 frame |
+|---|---|---|---|---|---|
+| 2026-10-20 | Linux cloud sandbox, SwiftShader, `--workers=1`, 4x CPU | iPhone 15 portrait 390x844 | 71 | 70.7 ms | 83.4 ms |
+| 2026-10-20 | same | iPhone 15 landscape 844x390 | 52 | 97.7 ms | 133.3 ms |
+| 2026-10-20 | same | iPad Air portrait 820x1180 | 36 | 140.7 ms | 183.3 ms |
+| 2026-10-20 | same | iPad Air landscape 1180x820 | 34 | 149.4 ms | 183.4 ms |
+| 2026-10-20 | same | Pixel 8 portrait 412x915 | 68 | 74.5 ms | 99.9 ms |

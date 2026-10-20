@@ -213,6 +213,18 @@ kbd {
   body.view-clean #keyHints { display: flex; }
   body.view-clean #coach { bottom: 4.5rem; }
 }
+/* A touch-only screen at desktop width (iPad held sideways, 1180x820; iPad Pro portrait,
+   ticket 0044): the desktop panels assume a mouse and keys, so it flies like a phone or
+   an iPad in portrait: the touch deck, the one-row top bar, no panels or key hints. */
+@media (min-width: 1024px) and (hover: none) and (pointer: coarse) {
+  #touchDeck { display: block; }
+  #topRow { display: flex; }
+  #phoneHeader { right: auto; width: min(46rem, calc(100% - 1rem)); }
+  #hudMenu { display: none; }
+  #hudMenu.open { display: flex; }
+  #eicasPanel, #stickPanel, #mapPanel, #keyHints, #btnPanelsShow, #btnPanelsHide { display: none !important; }
+  #coach, body.view-clean #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
+}
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform 0.15s; }

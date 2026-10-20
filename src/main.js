@@ -45,7 +45,7 @@ import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
-import { headingBoxTop, HEADING_BOX_H } from './hudLayout.js';
+import { headingBoxTop, HEADING_BOX_H, cameraFovDeg } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
 
@@ -180,7 +180,7 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 let skyDome = null;
 let runwayLights = null;
 
-camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 95000);
+camera = new THREE.PerspectiveCamera(cameraFovDeg(window.innerWidth, window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 95000);
 
 // three ≥ r155 uses physically based light units: Lambert/Standard BRDFs divide by π,
 // so the r128-era intensities are scaled by π to keep the same exposure (docs/THREE-UPGRADE.md).
@@ -1893,6 +1893,7 @@ function handleResize() {
 
   renderer.setSize(w, h);
   camera.aspect = w / h;
+  camera.fov = cameraFovDeg(w, h); // wider vertical in portrait (0044)
   camera.updateProjectionMatrix();
   photoreal?.resize();
 
