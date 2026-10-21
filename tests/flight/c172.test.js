@@ -34,7 +34,7 @@ function stallKts(flaps) {
 const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), c172, 10, speedHoldPilot(() => 74), vsFpm, 60);
 
 // JSBSim's known gaps (measured, PR #48):
-//  - lift-off 56 kt: the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
+//  - lift-off 55.2 kt (band edge 55.08, so a small fix promotes the card): the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
 //    proportional only), so the wing reaches lift-off speed later.
 //  - brakes 138 m: main-wheel brakes only, load moves to the nose wheel, 0.36 g. The 0.45 μ
 //    reference is flightModel.js's assumption, not the POH; the POH landing-roll card that
@@ -68,17 +68,19 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
   // POH Fig. 5-5 sheet 1 (p. 5-14), 2550 lb, flaps 10°, full throttle before brake release,
   // paved level dry runway, zero wind, lift off 51 KIAS, 56 KIAS at 50 ft. Sea level,
   // interpolated to ISA 15 °C: ground roll (925 + 995) / 2 = 960 ft, total over a 50 ft
-  // obstacle (1575 + 1690) / 2 = 1633 ft. The POH has no flaps-up takeoff table; this is
-  // its only one. Lift-off speed is the card above's job; this one checks the distances
-  // and that the harness pilot flew the technique (rotate at 45, wings level, 56 to 50 ft).
+  // obstacle (1575 + 1690) / 2 = 1633 ft. The POH's takeoff tables are all short-field
+  // (flaps 10°); there is no flaps-up one. Lift-off speed is the card above's job; this one
+  // checks the distances and that the harness pilot stayed on the runway heading and climbed
+  // near 56 KIAS. Rotating at 45 KIAS to 11° is the harness's convention (the POH says only
+  // "slightly tail low"); its quick rotation is printed, not judged. The speed hold
+  // overshoots to ~58 KIAS by 50 ft, which lengthens the total a little.
   it('short-field takeoff: roll near 960 ft, 1633 ft over a 50 ft obstacle (POH Fig. 5-5, ±15%)', () => {
     const r = shortFieldTakeoff(c172, 0, 50);
     console.log(`[c172 ${model}] roll ${r.rollFt.toFixed(0)} ft, 50 ft at ${r.totalFt.toFixed(0)} ft; `
       + `rotate ${r.rotateKts.toFixed(1)} KIAS, peak pitch rate ${r.maxPitchRateDegS.toFixed(1)}°/s, `
       + `lift-off ${r.liftoffKts.toFixed(1)} KIAS, ${r.clearKts.toFixed(1)} KIAS at 50 ft, heading ±${r.maxHeadingDevDeg.toFixed(2)}°`);
-    expect(Math.abs(r.rotateKts - 45)).toBeLessThan(1);
     expect(r.maxHeadingDevDeg).toBeLessThan(2);
-    within(r.clearKts, 56, 0.10);
+    within(r.clearKts, 56, 0.05);
     within(r.rollFt, 960, 0.15);
     within(r.totalFt, 1633, 0.15);
   });
