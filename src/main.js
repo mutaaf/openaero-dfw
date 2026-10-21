@@ -33,7 +33,7 @@ import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
-  takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD,
+  takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN,
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
@@ -46,7 +46,7 @@ import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
-import { headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, cameraFovDeg } from './hudLayout.js';
+import { headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
@@ -1191,7 +1191,9 @@ function step6DofPhysics(dt) {
 // sound is on and shown on the HUD either way. Re-armed by loadScenario.
 function checkTakeoffCallouts() {
   if (sim.loadedMission?.kind !== 'takeoff' || sim.takeoffCalloutIdx >= TAKEOFF_CALLOUTS.length - 1) return;
-  const i = takeoffCalloutIndex(sim.iasKts, sim.vsiFpm, sim.aglFt, sim.spec.vrKts, sim.takeoffCalloutIdx);
+  // Wheel height, not sim.aglFt: that is the CG's, already ~11 ft with a 737's wheels down.
+  const wheelFt = sim.onGround ? 0 : (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
+  const i = takeoffCalloutIndex(sim.iasKts, sim.vsiFpm, wheelFt, sim.spec.vrKts, sim.takeoffCalloutIdx, !!sim.spec.twoCrew);
   if (i < 0) return;
   sim.takeoffCalloutIdx = i;
   sim.takeoffCalls.push(TAKEOFF_CALLOUTS[i]);
@@ -1645,10 +1647,11 @@ function drawTakeoffCall(cx, cy) {
   const top = takeoffCallTop(cy);
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = 'rgba(15, 23, 42, 0.8)';
-  hudCtx.fillRect(cx - 78, top, 156, TAKEOFF_CALL_H);
+  hudCtx.fillRect(cx - TAKEOFF_CALL_W / 2, top, TAKEOFF_CALL_W, TAKEOFF_CALL_H);
   hudCtx.font = 'bold 15px monospace';
   hudCtx.fillStyle = '#f8fafc';
-  hudCtx.fillText(TAKEOFF_CALLOUT_HUD[sim.takeoffCalloutIdx], cx, top + 18);
+  const words = sim.assist === 'pilot' ? TAKEOFF_CALLOUT_HUD : TAKEOFF_CALLOUT_HUD_PLAIN;
+  hudCtx.fillText(words[sim.takeoffCalloutIdx], cx, top + 18);
 }
 
 function renderRadar() {
@@ -2191,6 +2194,8 @@ document.getElementById('selAircraft').addEventListener('change', e => {
   if (sim.spec.fixedGear) sim.gearDown = true;
   if (!systemsOf(sim.spec).autobrake) sim.autobrake = 0;
   seedSystems(sim.spec, sim); // the new airframe's gear and flaps where its levers are
+  sim.takeoffCalloutIdx = -1; // its own callouts (0035), from the top
+  sim.takeoffCalls.length = 0;
   document.getElementById('txtAircraftTitle').textContent = sim.spec.name;
   buildAircraft(sim.aircraftKey);
 });

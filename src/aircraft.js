@@ -70,8 +70,9 @@ export const AIRCRAFT_DATABASE = {
     // later (FCTM: 3–4 s), with V2 (1.13 Vs) 6.8 kt above it (crews' data: 3–4 kt). Published
     // VR at 65 t is ~145 (AAIB 6/2019, ATSB AO-2014-162, flap not stated): with this flap's
     // lift the takeoff would then exceed Boeing's field length, so that gap waits for a
-    // flaps 5 notch (0070). Read only by tests/flight/b738.test.js so far (0035 will call it out).
+    // flaps 5 notch (0070). Called out on the takeoff roll (0035).
     vrKts: 135,
+    twoCrew: true, // the pilot monitoring's takeoff callouts: eighty knots, V1 (0035)
     stallCleanKts: 114,
     gearHeight: 3.4,
     // Struts (gear.js): wheelbase 15.6 m and main track 5.72 m (Boeing 737-800 ACAP §2);

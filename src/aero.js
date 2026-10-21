@@ -116,17 +116,21 @@ export function gpwsCalloutIndex(aglFt, lastIdx) {
 
 // Takeoff callouts (0035): the pilot monitoring's "eighty knots" (airspeed cross-check),
 // "V1", "rotate", then "positive rate" once the aircraft climbs. Wording varies by operator;
-// this is the common Boeing-style sequence. V1 is taken as Vr - 3 kt (V1 <= Vr). A light
-// single (Vr under 60 kt) has no 80 kt check and no V1: it hears rotate, positive rate.
+// this is the common Boeing-style sequence. V1 is taken as Vr - 3 kt (V1 <= Vr; the real
+// one comes from the day's performance data). Only a two-crew airliner (spec.twoCrew) has
+// the 80 kt check and V1; a single pilot (Cessna, F-16) hears rotate, positive rate.
 export const TAKEOFF_CALLOUTS = ['eighty knots', 'V1', 'rotate', 'positive rate'];
 export const TAKEOFF_CALLOUT_HUD = ['80 KNOTS', 'V1', 'ROTATE', 'POSITIVE RATE'];
+// Kid and Learner also read what the word asks of them.
+export const TAKEOFF_CALLOUT_HUD_PLAIN = ['80 KNOTS · SPEED OK', 'V1 · KEEP GOING', 'ROTATE · NOSE UP', 'POSITIVE RATE · CLIMBING'];
 
 // Index into TAKEOFF_CALLOUTS that should fire now, or -1. Strictly in order, each once
 // (lastIdx is the last one called, -1 at brake release), at most one per call; positive
-// rate needs rotate first, more than 5 ft up and more than 300 fpm up.
-export function takeoffCalloutIndex(iasKts, vsiFpm, aglFt, vrKts, lastIdx) {
+// rate needs rotate first, the wheels more than 5 ft up and more than 300 fpm up. aglFt is
+// the wheels' height (0 on the ground), not the CG's.
+export function takeoffCalloutIndex(iasKts, vsiFpm, aglFt, vrKts, lastIdx, twoCrew) {
   let i = lastIdx + 1;
-  if (vrKts < 60 && i < 2) i = 2;
+  if (!twoCrew && i < 2) i = 2;
   if (i === 0) return iasKts >= 80 ? 0 : -1;
   if (i === 1) return iasKts >= vrKts - 3 ? 1 : -1;
   if (i === 2) return iasKts >= vrKts ? 2 : -1;

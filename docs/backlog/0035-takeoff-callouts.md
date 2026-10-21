@@ -27,7 +27,7 @@ Sound off). The HUD shows the same word briefly in the alert slot. V-speeds come
 `src/aircraft.js` (`vrKts`; derive V1 and 80 kt scaled for the Cessna: skip "eighty knots" below 60 kt Vr).
 
 ## Acceptance criteria
-- [ ] Unit: sweeping IAS 0 to Vr+10 yields each callout exactly once, in order, for the 737 (Vr 132 since 0058) and the Cessna (Vr 55)
+- [ ] Unit: sweeping IAS 0 to Vr+10 yields each callout exactly once, in order, for the 737 (Vr 135 since 0062) and the Cessna (Vr 55)
 - [ ] Unit: "positive rate" only after rotate, never on a bounced or descending liftoff
 - [ ] e2e: on the takeoff mission, with throttle and rotation scripted, the callout words are emitted in order (spy on the audio speak hook)
 - [ ] Sound off: nothing is spoken, the on-screen word still shows

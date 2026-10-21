@@ -14,10 +14,11 @@ export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
 
-// The takeoff callout's word box (0035): 26 px tall, 156 px wide, centred, just under the
-// heading box. On the roll the horizon is at cy and rotating moves it down, so the word
-// stays in the sky; 156 px fits between the tapes.
+// The takeoff callout's word box (0035): 26 px tall, 232 px wide (24 characters of bold
+// 15 px monospace), centred, just under the heading box. On the roll the horizon is at cy
+// and rotating moves it down, so the word stays in the sky; it fits between the tapes.
 export const TAKEOFF_CALL_H = 26;
+export const TAKEOFF_CALL_W = 232;
 export function takeoffCallTop(cy) {
   return headingBoxTop(cy) + HEADING_BOX_H + 4;
 }
