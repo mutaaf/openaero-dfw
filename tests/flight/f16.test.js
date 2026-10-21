@@ -1,0 +1,134 @@
+// Flight test cards for the F-16C (ticket 0053). The flight manual (T.O. 1F-16CM-1) is not
+// open data, so every card reads an open source, and nothing comes from a game wiki or forum:
+//  - USAF: the Air Force's F-16 fact sheet, General Characteristics (F-16C/D),
+//    https://www.af.mil/About-Us/Fact-Sheets/Display/Article/104505/f-16-fighting-falcon/
+//    (af.mil refuses scripted fetches; read from the verbatim copy linked to it at
+//    https://wingsoverhouston.com/wp-content/uploads/2016/08/F16-Fact-Sheet.pdf)
+//  - LM: Lockheed Martin, F-16 Block 70/72 product card (Jan 2025),
+//    https://lockheedmartin.com/content/dam/lockheed-martin/aero/documents/F-16/25-00470_F-16%20Block70_72_Product%20Card_Jan%202025.pdf
+//  - TP-1538: Nguyen et al., NASA Technical Paper 1538 (1979), Simulator Study of
+//    Stall/Post-Stall Characteristics of a Fighter Airplane With Relaxed Longitudinal Static
+//    Stability (the F-16's wind-tunnel data), https://ntrs.nasa.gov/citations/19800005879
+//
+// What the open data does not cover, so there is no card for it (gaps, not guesses):
+//  - climb rate, turn rate, roll rate, takeoff and landing distances, approach speeds: all in
+//    the restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited.
+//  - top speed: USAF gives "Mach 2 at altitude", but the model has no transonic wave drag, so
+//    its supersonic acceleration is not a performance claim (the zoom card is a capability
+//    bound only).
+//  - thrust lapse: TP-1538 Table VI tabulates the 1979 F100-PW-100, not the F110/F100-229
+//    class engine the spec models, so its lapse is not this engine's. (For the record, at
+//    max thrust the model has little of the table's ram rise with Mach: M 1.0 at sea level
+//    is 1.35 × M 0.2 there, 1.05 × in the model.)
+//  - the flight-control system (g and AoA limiters): out of scope for 0053; the 25° AoA
+//    limit below is only used to say what the slowest 1-g flight is.
+//
+// A card the model does not yet meet is a KNOWN GAP: `it.fails` with its ticket, never a
+// looser tolerance. The fixing PR promotes it to `it`.
+import { describe, it, expect } from 'vitest';
+import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
+import { M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
+import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
+import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
+import { makeBody, fly, attitude, vsFpm } from './harness.js';
+
+const f16 = AIRCRAFT_DATABASE.f16;
+const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
+const G = 9.80665;
+const LB_TO_KG = 0.45359237;
+const LBF_TO_N = 4.4482216;
+
+// USAF: weight 19,700 lb without fuel (8,936 kg); 7,000 lb internal fuel (3,175 kg);
+// F-16C/D thrust 27,000 lb; wingspan 32 ft 8 in (with the wingtip missile rails; LM gives
+// 31 ft / 9.449 m for the bare wing). LM: engine thrust class 29,000 lb (the F110-GE-129
+// the spec names, or the F100-PW-229).
+const EMPTY_KG = 19700 * LB_TO_KG;
+const INTERNAL_FUEL_KG = 7000 * LB_TO_KG;
+const SPAN_M = (32 + 8 / 12) * 0.3048;
+const THRUST_CLASS_N = 29000 * LBF_TO_N;
+
+// TP-1538 Table III, β = 0, δh = 0: body-axis force coefficients of the whole airplane, the
+// leading-edge flap at its 25° limit (the base tables; App. B adds an increment as the flap
+// retracts). TP-1538 says the flap is scheduled on AoA and Mach; at low speed and AoA ≥ 20°
+// it is assumed fully down, so these rows apply as they are. CL = −CZ·cos α + CX·sin α.
+const TP1538 = { 20: { cx: 0.12830, cz: -1.41800 }, 25: { cx: 0.13000, cz: -1.65800 } };
+const nasaCl = (aoaDeg) => {
+  const { cx, cz } = TP1538[aoaDeg], a = aoaDeg * DEG_TO_RAD;
+  return -cz * Math.cos(a) + cx * Math.sin(a);
+};
+// TP-1538 p. 12: the AoA limiter holds α "at or below 25°". The slowest 1-g flight at the
+// spec's mass, sea level, is therefore where CL(25°) carries the weight: about 129 kt.
+const vAtAoaLimitKts = () => Math.sqrt(2 * f16.massKg * G / (1.225 * f16.wingAreaM2 * nasaCl(25))) / 0.514444;
+
+describe('F-16C vs the USAF fact sheet and Lockheed Martin', () => {
+  it('wingspan is the fact sheet\'s 32 ft 8 in (9.96 m, with tip rails), ±1%', () => {
+    within(f16.wingSpanM, SPAN_M, 0.01);
+  });
+
+  it('wing area is 300 ft² (27.87 m², TP-1538 Table I), ±0.5%', () => {
+    within(f16.wingAreaM2, 27.87, 0.005);
+  });
+
+  it('mass is between empty and empty + full internal fuel (8,936–12,111 kg, USAF)', () => {
+    expect(f16.massKg).toBeGreaterThan(EMPTY_KG);
+    expect(f16.massKg).toBeLessThanOrEqual(EMPTY_KG + INTERNAL_FUEL_KG);
+  });
+
+  it('max static thrust is the 29,000 lbf class (LM, ±3%) and not below USAF\'s 27,000 lbf', () => {
+    within(f16.engine.staticThrustN, THRUST_CLASS_N, 0.03);
+    expect(f16.engine.staticThrustN).toBeGreaterThanOrEqual(27000 * LBF_TO_N);
+  });
+
+  it('static thrust-to-weight is 29,000 lbf over empty + internal fuel (26,700 lb): 1.09, ±3%', () => {
+    within(f16.engine.staticThrustN / (f16.massKg * G), THRUST_CLASS_N / ((EMPTY_KG + INTERNAL_FUEL_KG) * G), 0.03);
+  });
+});
+
+describe('F-16C vs NASA TP-1538 wind-tunnel data', () => {
+  it('lift coefficient at 20° AoA is NASA\'s 1.38, ±5%', () => {
+    within(liftCoefficient(f16, 20 * DEG_TO_RAD, 0), nasaCl(20), 0.05);
+  });
+
+  // The model's lift is a straight line to a 28° stall (CL 1.91); NASA's curve bends over
+  // above 20° (1.56 at 25°, its peak ~1.89 near 35°).
+  it.fails('KNOWN GAP (0066): lift coefficient at 25° AoA is NASA\'s 1.56, ±5% (model: 1.72)', () => {
+    within(liftCoefficient(f16, 25 * DEG_TO_RAD, 0), nasaCl(25), 0.05);
+  });
+
+  // With the limiter, the slowest 1-g flight is at 25°; the model stalls at 28° on its
+  // steeper line, so it flies (and stall-warns, stallCleanKts 120) ~10 kt slower.
+  it.fails('KNOWN GAP (0066): slowest 1-g flight at 12 t is NASA\'s ~129 KIAS at the 25° AoA limit, ±5% (model: 117)', () => {
+    within(stallSpeedKts(f16, 0), vAtAoaLimitKts(), 0.05);
+  });
+});
+
+describe('F-16C capability bound (not a performance claim)', () => {
+  // USAF: "Mach 2 at altitude", ceiling "above 50,000 feet". A clean, full-afterburner run
+  // at 30,000 ft must pass Mach 1.2 and zoom past 40,000 ft with the numbers finite, the
+  // wing unstalled and the jet above its stall speed. The model has no wave drag, so how
+  // fast it gets there says nothing.
+  it('accelerates past Mach 1.2 at 30,000 ft and zooms past 40,000 ft without NaN or stall', () => {
+    const alt0 = 30000 / M_TO_FT;
+    const b = makeBody(f16, { kts: 325, altM: alt0, throttle: 1, gearDown: false });
+    let zoom = false, maxMach = 0, maxAoa = 0, minIas = Infinity, finite = true;
+    fly(b, f16, 300, (x) => {
+      const { pitchDeg, bankRightDeg } = attitude(x);
+      if (!zoom) x.pitchCmd = Math.max(-5, Math.min(15, (alt0 - x.pos.y) * 0.01 - vsFpm(x) * 0.0005 + 2));
+      else x.pitchCmd = 30;
+      x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+      if (x.t > 0) {
+        finite &&= [x.pos.y, x.vel.x, x.vel.y, x.vel.z, x.quat.w, x.mach, x.aoaDeg].every(Number.isFinite);
+        maxMach = Math.max(maxMach, x.mach);
+        maxAoa = Math.max(maxAoa, Math.abs(x.aoaDeg));
+        minIas = Math.min(minIas, x.iasKts);
+      }
+      if (x.mach >= 1.2) zoom = true;
+    }, (x) => zoom && x.pos.y * M_TO_FT >= 40000);
+    expect(finite).toBe(true);
+    expect(maxMach).toBeGreaterThanOrEqual(1.2);
+    expect(b.pos.y * M_TO_FT).toBeGreaterThanOrEqual(40000);
+    expect(maxAoa).toBeLessThan(stallAoaDeg(f16, 0));
+    expect(minIas).toBeGreaterThan(stallSpeedKts(f16, 0));
+  });
+});
