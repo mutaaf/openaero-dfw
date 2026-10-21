@@ -404,7 +404,8 @@
         <button id="touchGear" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">GEAR <span id="txtTouchGear" class="text-emerald-400">DN</span></button>
         <button id="touchFlaps" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">FLAPS <span id="txtTouchFlaps" class="text-sky-300">30°</span></button>
         <button id="touchBrakes" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">BRAKES</button>
-        <button id="touchIls" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px] text-amber-300">ILS AUTO</button>
+        <!-- ILS AUTO in the air; on the ground, REV for airframes with thrust reversers (0074) -->
+        <button id="touchIls" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px] text-amber-300"><span id="txtTouchIls">ILS AUTO</span></button>
       </div>
       <div id="touchStick" class="touch-control hud-glass pointer-events-auto relative w-36 h-36 rounded-full flex items-center justify-center" aria-label="Flight stick">
         <div class="absolute inset-x-4 top-1/2 h-px bg-slate-600/60 pointer-events-none"></div>

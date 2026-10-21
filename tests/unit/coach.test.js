@@ -193,6 +193,14 @@ describe('landing coach (0073)', () => {
     c = stepCoach(c, { ...full, onGround: true, rollout }, 0.016);
     expect(c.prompt).toBe('stopped');
   });
+  it('on a touch screen it names the buttons, not the keys, and still fits a phone', () => {
+    for (const k of ['gear', 'reverse', 'brake', 'stow', 'flaps']) {
+      const t = coachText(k, { touch: true, flapsDeg: 30 });
+      expect(t).not.toMatch(/\((G|R|B)\)|press [FR]\b|: R,/);
+      expect(t.length).toBeLessThanOrEqual(48);
+    }
+    expect(coachText('reverse', { touch: true })).toContain('REV');
+  });
   it('puts the numbers in the words', () => {
     expect(coachText('slow', { targetKts: 155 })).toBe('Slow: fly 155 kt, add power');
     expect(coachText('flaps', { flapsDeg: 30 })).toBe('Landing flaps: press F until 30°');

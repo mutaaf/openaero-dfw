@@ -90,7 +90,8 @@ export async function attachModel(root, aircraftKey, base, refs, current) {
     name,
     update(sim) {
       const q = sim.quat; // sin(pitch): the nose (body -Z) direction's height
-      const lift = rotationLift(2 * (q.w * q.x - q.y * q.z), sim.spec.gearHeight, mainGearZ, sim.pos.y - sim.groundY - sim.spec.gearHeight);
+      // With struts (gear.js) the physics pivots on the mains itself: no lift needed.
+      const lift = sim.spec.gear ? 0 : rotationLift(2 * (q.w * q.x - q.y * q.z), sim.spec.gearHeight, mainGearZ, sim.pos.y - sim.groundY - sim.spec.gearHeight);
       // The legs show from half-way out (systems.js gearPos: 0 up → 1 down and locked).
       const out = (sim.gearPos ?? (sim.gearDown ? 1 : 0)) >= 0.5;
       model.position.y = out ? lift : 0;
