@@ -6,13 +6,16 @@
 // Models are built by scripts/build-models.mjs (sources and licences in
 // assets-src/models/README.md and public/CREDITS.md). Each is in the physics body frame:
 // metres, nose towards -Z, +Y up, origin at the centre of gravity, the lowest wheel at
-// -gearHeight (src/aircraft.js), so the wheels touch where the flight model's gear does.
+// -gearHeight (src/aircraft.js), so at zero pitch the wheels touch where the flight model's
+// gear does. The flight model holds the centre of gravity, not the main gear, at gearHeight
+// on the ground, so a pitched-up airframe would sink its mains: see rotationLift.
 // Gear and doors are nodes named `gear_*`; moving surfaces come with 0063.
 
 export const AIRCRAFT_MODELS = {
   // A generic CC0 twin-jet (OpenGameArt, weirdybeardyman), not a 737 replica: scaled to the
   // 737-800's length (39.5 m), fuselage 3.7 m wide (real 3.76), span 30.8 m (real 35.8).
-  b738: { name: 'twinjet', file: 'models/twinjet-v1.glb' },
+  // mainGearZ: the main axles' distance aft of the origin (m), for the rotation lift below.
+  b738: { name: 'twinjet', file: 'models/twinjet-v1.glb', mainGearZ: 1.47 },
 };
 
 export function modelUrl(aircraftKey, base) {
@@ -25,6 +28,16 @@ export function gearNodes(root) {
   const out = [];
   root.traverse((o) => { if (o.name.startsWith('gear_')) out.push(o); });
   return out;
+}
+
+// How far to raise the model (m, body frame) so the main wheels stay on the runway when
+// the flight model pitches the airframe about its centre of gravity on the ground (rotation,
+// flare): a main axle `mainGearZ` aft of the origin and `gearHeight` below it sits
+// gearHeight·(1 − cos θ) − mainGearZ·sin θ above the plane under a level airframe;
+// `wheelHeightM` is how far that plane is above the ground. 0 in the air and nose-down.
+export function rotationLift(sinPitch, gearHeight, mainGearZ, wheelHeightM) {
+  const cosPitch = Math.sqrt(1 - sinPitch * sinPitch);
+  return Math.max(0, mainGearZ * sinPitch - gearHeight * (1 - cosPitch) - Math.max(0, wheelHeightM));
 }
 
 export function showGear(nodes, down) {
@@ -71,10 +84,14 @@ export async function attachModel(root, aircraftKey, base, refs, current) {
   root.add(model);
   refs.fanL = refs.fanR = null; // the primitive's fans are hidden with it
   const gear = gearNodes(model);
+  const { name, mainGearZ } = AIRCRAFT_MODELS[aircraftKey];
   let shown = null;
   refs.model = {
-    name: AIRCRAFT_MODELS[aircraftKey].name,
+    name,
     update(sim) {
+      const q = sim.quat; // sin(pitch): the nose (body -Z) direction's height
+      const lift = rotationLift(2 * (q.w * q.x - q.y * q.z), sim.spec.gearHeight, mainGearZ, sim.pos.y - sim.groundY - sim.spec.gearHeight);
+      model.position.y = sim.gearDown ? lift : 0;
       if (shown === sim.gearDown) return;
       shown = sim.gearDown;
       showGear(gear, shown);

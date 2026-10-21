@@ -3,7 +3,7 @@ import { readFileSync, statSync } from 'node:fs';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { AIRCRAFT_MODELS, modelUrl, gearNodes, showGear, parseModel, loadAircraftModel } from '../../src/aircraftModel.js';
+import { AIRCRAFT_MODELS, modelUrl, gearNodes, showGear, parseModel, loadAircraftModel, rotationLift } from '../../src/aircraftModel.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 
 const read = (file) => {
@@ -51,7 +51,12 @@ describe('aircraft models', () => {
       const nose = box(root, (o) => o.name.startsWith('gear_nose') && o.material.name === 'Tyre');
       const main = box(root, (o) => o.name.startsWith('gear_main') && o.material.name === 'Tyre');
       expect(nose.max.z).toBeLessThan(-10); // nose gear forward (-Z)...
-      expect(main.min.z).toBeGreaterThan(0); // ...main gear just aft of the centre of gravity
+      const mainZ = (main.min.z + main.max.z) / 2, noseZ = (nose.min.z + nose.max.z) / 2;
+      // ...main gear just aft of the centre of gravity: the nose wheel carries 4-15% of the
+      // weight, as on a tricycle airliner, so the origin really is a plausible CG.
+      expect(mainZ / (mainZ - noseZ)).toBeGreaterThan(0.04);
+      expect(mainZ / (mainZ - noseZ)).toBeLessThan(0.15);
+      expect(mainZ).toBeCloseTo(m.mainGearZ, 1);
       // Wheelbase (axle to axle) within 5% of the 737-800's 15.6 m (D6-58325-6 Fig. 2.2.1).
       const wheelbase = (main.min.z + main.max.z) / 2 - (nose.min.z + nose.max.z) / 2;
       expect(wheelbase).toBeGreaterThan(15.6 * 0.95);
@@ -90,6 +95,43 @@ describe('aircraft models', () => {
       expect(gear.every((o) => o.visible)).toBe(true);
     });
   }
+
+  it('rotation: the mains stay on the runway when the flight model pitches about the CG', () => {
+    const s = (deg) => Math.sin(deg * Math.PI / 180);
+    expect(rotationLift(0, 3.4, 1.47, 0)).toBe(0);
+    expect(rotationLift(s(-3), 3.4, 1.47, 0)).toBe(0); // nose-down: the nose wheel is the flight model's
+    // 10° on the ground: 1.47·sin 10° − 3.4·(1 − cos 10°) = 0.204 m (panel measured 0.19 below).
+    expect(rotationLift(s(10), 3.4, 1.47, 0)).toBeCloseTo(0.204, 3);
+    expect(rotationLift(s(10), 3.4, 1.47, 0.1)).toBeCloseTo(0.104, 3); // climbing away: less
+    expect(rotationLift(s(10), 3.4, 1.47, 1)).toBe(0); // airborne
+  });
+
+  it('attaching swaps out the stand-in; update lifts on rotation and follows the gear', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(read('models/twinjet-v1.glb'))));
+    const root = new THREE.Group();
+    const standIn = new THREE.Group();
+    root.add(standIn);
+    const refs = { fanL: {}, fanR: {}, model: null };
+    const { attachModel } = await import('../../src/aircraftModel.js?attach'); // its own cache
+    await attachModel(root, 'b738', '/openaero/', refs, () => true);
+    expect(standIn.visible).toBe(false);
+    expect(refs.fanL).toBeNull();
+    expect(refs.model.name).toBe('twinjet');
+    const model = root.children[1];
+    const pitch = (deg) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), deg * Math.PI / 180);
+    const sim = { quat: pitch(10), spec: { gearHeight: 3.4 }, pos: { y: 3.4 }, groundY: 0, gearDown: true };
+    refs.model.update(sim);
+    expect(model.position.y).toBeCloseTo(0.204, 2);
+    sim.quat = pitch(0);
+    sim.gearDown = false;
+    refs.model.update(sim);
+    expect(model.position.y).toBe(0);
+    expect(gearNodes(model).every((o) => !o.visible)).toBe(true);
+    // A rebuilt aircraft drops a late model.
+    const other = new THREE.Group();
+    await attachModel(other, 'b738', '/openaero/', {}, () => false);
+    expect(other.children).toEqual([]);
+  });
 
   it('loads each model once per page and hands out copies', async () => {
     const fetch = vi.fn(async () => new Response(read('models/twinjet-v1.glb')));

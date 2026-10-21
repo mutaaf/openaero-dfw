@@ -73,10 +73,20 @@ for (const size of [{ width: 390, height: 844 }, { width: 820, height: 1180 }]) 
     const fly = await page.locator('#btnStartFlight').boundingBox();
     expect(fly.x + fly.width).toBeLessThanOrEqual(size.width);
     expect(box.x + box.width).toBeLessThanOrEqual(fly.x);
+    // The mission Fly will start is readable whole, on up to two lines, not cut off.
+    const label = page.locator('#txtPickedMission');
+    expect(await label.evaluate((el) => { const p = el.parentElement; return p.scrollHeight <= p.clientHeight + 1 && p.scrollWidth <= p.clientWidth + 1; })).toBe(true);
+    // A phone-readable page (not raw markdown) that opens beside the game.
+    expect(await link.getAttribute('target')).toBe('_blank');
     const res = await page.request.get(new URL(await link.getAttribute('href'), page.url()).href);
     expect(res.status()).toBe(200);
-    const text = await res.text();
-    expect(text).toContain('weirdybeardyman');
-    expect(text).toContain('CC0');
+    expect(res.headers()['content-type']).toMatch(/text\/html/);
+    const credits = await page.context().newPage();
+    await credits.setViewportSize(size);
+    await credits.goto(res.url());
+    await expect(credits.locator('h1')).toContainText('credits');
+    await expect(credits.locator('li', { hasText: 'weirdybeardyman' })).toContainText('CC0');
+    await expect(credits.locator('a[href="https://opengameart.org/content/jet-airplane"]')).toBeVisible();
+    expect(await credits.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(size.width);
   });
 }
