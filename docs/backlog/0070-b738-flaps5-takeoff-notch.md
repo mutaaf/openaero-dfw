@@ -22,8 +22,11 @@ Vr 135 / V2 142. A pilot who knows the jet still sees speeds ~10 kt low. The two
 Add a flaps 5 notch to the 737 (`src/aircraft.js` flapDetentsDeg/flapCl/flapCd/
 alphaStallDegByFlap, the flap keys and buttons, `vrKts` by flap) with less lift than
 flaps 10, fitted so a takeoff at the published VR lifts off at 8–9° in 3–4 s, and make it
-the 737's takeoff flap for spawns, Kid and the autopilot. Check every place that indexes
-flaps by number (landing notches 30/40 move up one), and the e2e flap controls.
+the 737's takeoff flap on the takeoff spawns. Every flap index shifts (30/40 move up one):
+check the places that hard-code indexes, e.g. `src/assists.js` (Kid's landing flaps,
+index ≥ 2), `src/main.js` (finals spawn with index 2, takeoffs with 1), the per-notch
+arrays (`vrefKtsByFlap`, `alphaStallDegByFlap`, `flapCd`), tests/flight FLAPS_* constants
+and the e2e flap controls.
 
 ## Acceptance criteria
 - [ ] The two 0070 known-gap cards pass at flaps 5 and are promoted to `it`

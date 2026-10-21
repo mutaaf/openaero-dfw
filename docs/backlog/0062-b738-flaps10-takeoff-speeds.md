@@ -6,7 +6,7 @@ priority: P2
 size: M
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: 69
 ---
 
 ## Why
@@ -33,3 +33,14 @@ Vs, Vr, lift-off and V2 are spaced like the source, and the 0058 cards still pas
 
 ## Out of scope
 New flap notches; engine-out yaw.
+
+## Outcome (#69)
+- Source: AAIB Bulletin 6/2019 (YR-BMF) and ATSB AO-2014-162 (VH-VZR) print four crew
+  performance-tool outputs: at 65 t, VR ~145, V2 ~148, V2 − VR 3–4 kt; flap not stated.
+- Refit: flaps 10 ΔCL 0.42 → 0.38, Vr 132 → 135 (Vs 125.5, V2 141.8, V2 − Vr 6.8 kt);
+  every 0057/0058 card green. Boeing's field-length card caps the refit there: the cited
+  Vr/V2 are `it.fails` cards for 0070 (a flaps 5 notch), so the "card pins Vr" criterion is
+  met as a known gap, not a pass.
+- Deviation: "lift-off within ~Vr + 12" is replaced by the FCTM's "lift-off attitude in 3–4
+  s" (quoted in AAIB 6/2019): at full thrust the jet gains ~5 kt/s, so it lifts off ~Vr + 17
+  (at 75% thrust, Vr + 13). The card flies full thrust.
