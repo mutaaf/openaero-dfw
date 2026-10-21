@@ -1,12 +1,12 @@
 ---
 id: 0053
 title: F-16C flight test cards against public USAF and manufacturer figures
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: 65
 ---
 
 ## Why
@@ -29,9 +29,9 @@ performance claim); (d) low-speed: documented as a known gap with `it.fails` if 
 open data does not cover.
 
 ## Acceptance criteria
-- [ ] Every assertion cites a URL in a comment; no figure comes from a game wiki or forum
-- [ ] Missing open data is listed in the file header as a gap, not guessed
-- [ ] `npm test -- tests/flight` green
+- [x] Every assertion cites a URL in a comment; no figure comes from a game wiki or forum
+- [x] Missing open data is listed in the file header as a gap, not guessed
+- [x] `npm test -- tests/flight` green
 
 ## Test plan
 The cards are the test.
