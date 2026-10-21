@@ -1,12 +1,12 @@
 ---
 id: 0045
 title: glTF aircraft pipeline (meshopt + KTX2, LOD, credits; first CC0 model)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-18
-pr:
+pr: 67
 ---
 
 ## Why
