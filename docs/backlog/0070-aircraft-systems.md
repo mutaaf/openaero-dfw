@@ -33,6 +33,13 @@ Finals spawn with autobrake 2 armed (airline practice).
 - [x] Every existing flight card still passes
 - [x] e2e desktop + phone suites pass
 
+## Test plan
+`tests/flight/b738-systems.test.js` flies the 737 headless: gear lock time, load relief,
+autobrake 1/2/3/MAX decelerations against Boeing, pedals vs MAX, reverse, gear-up belly.
+`tests/unit/systems.test.js` covers notch interpolation, seeding, reverser ground logic,
+autobrake disarm, brake friction, "too low, gear" and the gear-up CRASH grade. The smoke and
+gamepad e2e accept flaps in transit ("33→40°").
+
 ## Out of scope
 Per-wheel oleo struts and nose-wheel steering (a follow-up), hydraulic failures, engine-out,
 brake temperatures, a touch control for the reversers.
