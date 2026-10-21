@@ -1,9 +1,9 @@
 ---
 id: 0045
-title: glTF aircraft pipeline (meshopt + KTX2, LOD, articulated parts, credits)
+title: glTF aircraft pipeline (meshopt + KTX2, LOD, credits; first CC0 model)
 status: ready
 priority: P1
-size: L
+size: M
 lens: player-feel
 created: 2026-10-18
 pr:
@@ -36,9 +36,8 @@ Trademarks: the CC licence covers the mesh, not the brand. Neutral names in the 
    decoder into `public/`; `GLTFLoader` + `KTX2Loader.detectSupport(renderer)`.
 3. `src/aircraftModel.js`: lazy-load after Start, keep the primitive model as the
    fallback until loaded, `THREE.LOD` with hysteresis, cockpit glb only in cockpit view.
-   Articulation by node name (`ctl_aileron_L/R`, `ctl_elevator`, `ctl_rudder`,
-   `ctl_flap_L/R`, `gear_*`, `prop`, `fan_L/R`), pivots at hinge lines, driven by the
-   physics state (surface deflection from control inputs, gear compression, prop RPM).
+   (Moving surfaces, gear and props are split out to 0063; this ticket only has to show
+   the static model in the chase view.)
 4. First asset shipped: the CC0 OpenGameArt jet (no login needed). The operator
    downloads the CC-BY models above into `assets-src/models/` for follow-up PRs;
    rigging (splitting surfaces in Blender) is noted per model in `assets-src/models/README.md`.
@@ -47,7 +46,6 @@ Trademarks: the CC licence covers the mesh, not the brand. Neutral names in the 
 ## Acceptance criteria
 - [ ] Boot JS budget unchanged (loaders and models lazy); each aircraft ≤ 3 MB on the wire
 - [ ] No runtime request leaves our origin for models or decoders (e2e asserts)
-- [ ] Control surfaces visibly move with stick input in the chase view (e2e screenshot diff)
 - [ ] iPhone-size at 4x CPU throttle: frame time within budget; < 150 draw calls
 - [ ] Credits visible from the start screen; licence of every shipped model is CC0/CC-BY/PD
 - [ ] Works at 390x844, 844x390, 820x1180 touch and 1280x720 keyboard/mouse
@@ -58,4 +56,4 @@ console errors, network log has only same-origin model/decoder URLs, screenshot 
 the chase view at phone and iPad sizes.
 
 ## Out of scope
-Liveries editor, new aircraft types, ground vehicles (0043).
+Articulated control surfaces, gear and props (0063). Liveries editor, new aircraft types, ground vehicles (0043).

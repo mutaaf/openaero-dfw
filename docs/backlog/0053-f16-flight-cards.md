@@ -1,7 +1,7 @@
 ---
 id: 0053
 title: F-16C flight test cards against public USAF and manufacturer figures
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
