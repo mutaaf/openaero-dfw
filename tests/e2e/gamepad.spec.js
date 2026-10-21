@@ -31,7 +31,7 @@ test('a gamepad stick flies the aircraft and its buttons work the systems', asyn
   await page.evaluate(() => { window.__pad.axes[0] = 0; });
 
   // A = flaps (edge-triggered: one press = one notch). The lever is at 40 at once; the
-  // flaps follow on the hydraulics ("33→40°", 0070).
+  // flaps follow on the hydraulics ("33→40°", 0072).
   await page.evaluate(() => { window.__pad.buttons[0] = { pressed: true, value: 1 }; });
   await expect(page.locator('#txtFlaps')).toHaveText(/(^|→)40°$/);
   await page.evaluate(() => { window.__pad.buttons[0] = { pressed: false, value: 0 }; });
