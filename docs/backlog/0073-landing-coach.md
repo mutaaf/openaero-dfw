@@ -1,12 +1,12 @@
 ---
 id: 0073
 title: Landing coach on every final, with HUD aim point, speed bug and flare cue
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 71
 ---
 
 ## Why
