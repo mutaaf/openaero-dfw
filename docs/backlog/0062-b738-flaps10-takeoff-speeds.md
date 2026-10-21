@@ -1,7 +1,7 @@
 ---
 id: 0062
 title: Refit the 737's flaps 10 lift so Vr, lift-off and V2 match the real jet's spacing
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity

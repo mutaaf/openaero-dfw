@@ -171,7 +171,7 @@ function takeoff(flaps, { oei = false } = {}) {
   }, (x) => {
     if (vr && !liftoff && !x.onGround) {
       const { pitchDeg } = attitude(x);
-      liftoff = { kts: x.iasKts, pitchDeg, ratePerS: (pitchDeg - vr.pitchDeg) / (x.t - vr.t) };
+      liftoff = { kts: x.iasKts, pitchDeg, ratePerS: (pitchDeg - vr.pitchDeg) / (x.t - vr.t), seconds: x.t - vr.t };
     }
     return (x.pos.y - b738.gearHeight) * M_TO_FT >= 35;
   });
@@ -207,6 +207,69 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
     const { kts35, ft35 } = takeoff(FLAPS_10, { oei: true });
     expect(kts35).toBeGreaterThanOrEqual(1.13 * stallSpeedKts(b738, FLAPS_10));
     expect(ft35).toBeLessThanOrEqual(5100);
+  });
+});
+
+// Published 737-800 takeoff speeds (0062). No Boeing table is public, but two accident
+// reports print the crews' performance-tool output, the right and the wrong one:
+//  - AAIB Bulletin 6/2019, YR-BMF (737-8Q8), Table 1: 59 t: VR 140, V2 143; 71.3 t: VR 153,
+//    V2 157 (assets.publishing.service.gov.uk/media/5f4681b1d3bf7f5d84a943c8/)
+//  - ATSB AO-2014-162, VH-VZR (737-838, winglets): 66.4 t: V1 145, VR 146, V2 149; 76.4 t:
+//    V1 152, VR 155, V2 158 (read in the verbatim copy at b737.org.uk/incident_vh-vzr.htm,
+//    atsb.gov.au refused the sandbox)
+// Neither prints the flap (the bug card is an image). Scaled to 65 t by √(m / 65 t), the
+// stall-speed law V-speeds follow above the minimum-control speeds: VR 143.0–147.0, V2
+// 145.7–150.1, V2 − VR 3–4 kt. The model has one takeoff notch, 10, and Boeing's field
+// length card above (optimum flap) caps how little lift it can have: with VR 145 the
+// model's all-engines takeoff would need ~5,500 ft. Line crews mostly take off with flaps
+// 1 or 5 on long runways, which lift less and fly faster: those cards are known gaps until
+// the model has a flaps 5 notch (0070).
+const PUBLISHED_TAKEOFF = [ // { t, vr, v2 } at the crews' weights
+  { t: 59, vr: 140, v2: 143 }, { t: 71.3, vr: 153, v2: 157 }, // AAIB 6/2019
+  { t: 66.4, vr: 146, v2: 149 }, { t: 76.4, vr: 155, v2: 158 }, // ATSB AO-2014-162
+];
+const at65t = (kts, t) => kts * Math.sqrt(b738.massKg / (t * 1000));
+const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+const VR_65T = mean(PUBLISHED_TAKEOFF.map((p) => at65t(p.vr, p.t))); // 145.1 kt
+const V2_65T = mean(PUBLISHED_TAKEOFF.map((p) => at65t(p.v2, p.t))); // 148.3 kt
+
+describe('Boeing 737-800 takeoff speeds vs published crew data (0062)', () => {
+  // 14 CFR 25.107(b): V2 ≥ 1.13 VSR; the model's V2 is that floor at flaps 10.
+  const v2 = () => 1.13 * stallSpeedKts(b738, FLAPS_10);
+
+  it('the published speeds agree with each other once scaled to 65 t (√m, within ±3 kt)', () => {
+    for (const p of PUBLISHED_TAKEOFF) {
+      expect(Math.abs(at65t(p.vr, p.t) - VR_65T)).toBeLessThanOrEqual(3);
+      expect(Math.abs(at65t(p.v2, p.t) - V2_65T)).toBeLessThanOrEqual(3);
+      expect(p.v2 - p.vr).toBeGreaterThanOrEqual(3);
+      expect(p.v2 - p.vr).toBeLessThanOrEqual(4);
+    }
+  });
+
+  // Every published pair has V2 3–4 kt above VR. Before 0062 the model's was 8.4 kt (Vr 132,
+  // V2 140.4): a rotation that early leaves the jet flying well below its own V2.
+  it('V2 sits just above Vr, as in every published 737-800 case (3–4 kt; model within 1–8 kt)', () => {
+    const gap = v2() - b738.vrKts;
+    expect(gap).toBeGreaterThanOrEqual(1);
+    expect(gap).toBeLessThanOrEqual(8);
+  });
+
+  // AAIB 6/2019 quotes the 737 FCTM: rotating at VR towards 15° at 2–3°/s, "liftoff attitude
+  // is achieved in approximately 3 to 4 seconds depending on airplane weight and thrust
+  // setting". At full thrust the jet gains ~5 kt a second, so it lifts off ~17 kt above Vr;
+  // the ticket's "Vr + 5–10" is a reduced-thrust takeoff's.
+  it('lifts off 3–4 s after Vr at full thrust (737 FCTM, quoted in AAIB Bulletin 6/2019)', () => {
+    const { seconds } = takeoff(FLAPS_10).liftoff;
+    expect(seconds).toBeGreaterThanOrEqual(3);
+    expect(seconds).toBeLessThanOrEqual(4);
+  });
+
+  it.fails('KNOWN GAP (0070): Vr at 65 t is within 5 kt of the published 145 kt (flap not stated; likely 1 or 5)', () => {
+    expect(Math.abs(b738.vrKts - VR_65T)).toBeLessThanOrEqual(5);
+  });
+
+  it.fails('KNOWN GAP (0070): V2 (1.13 Vs) at 65 t is within 5 kt of the published 148 kt (flap not stated; likely 1 or 5)', () => {
+    expect(Math.abs(v2() - V2_65T)).toBeLessThanOrEqual(5);
   });
 });
 

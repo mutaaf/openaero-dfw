@@ -22,8 +22,11 @@ export const AIRCRAFT_DATABASE = {
     // same stall AoA (the slats are fully out at both), gives ΔCL 0.559: Vref30 150 kt at 65 t.
     // No public Vref30 exists: that shared stall AoA is an assumption, and it sets Vref30
     // (±1° of stall AoA moves it 6–12 kt).
+    // Flaps 10 (the one takeoff notch) is fitted between two limits (0062): Boeing's field
+    // length (optimum flap) caps how little it lifts, and published crew speeds (VR ~145,
+    // V2 ~148 at 65 t, likely flaps 1/5) ask for less: ΔCL 0.38 gives Vs 125.5 kt, V2 142.
     flapDetentsDeg: [0, 10, 30, 40],
-    flapCl: [0, 0.42, 0.559, 0.856],
+    flapCl: [0, 0.38, 0.559, 0.856],
     alphaStallDegByFlap: [14.8, 14.8, 14.12, 14.12],
     // Flaps 0/10/30/40 drag. Landing flaps on an airliner are draggy: with gear down at
     // Vref+5 the 737 flies at L/D ≈ 7.2 (flaps 30) / 6.7 (flaps 40) and needs ~25–30% thrust
@@ -46,14 +49,14 @@ export const AIRCRAFT_DATABASE = {
     engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.7, spoolTau: 1.2 },
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
     vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
-    // The model's Vr at flaps 10, 65 t, fitted to its own lift curve (no public 737 V-speed
-    // table): the speed from which a normal 2–3°/s rotation (FCTM; ~2.3°/s average as flown,
-    // ATSB) lifts off at the normal 8–9° attitude (NTSB, operator's 737 manual, quoted for
-    // flaps 1/5): 8.4° at 132 kt. At 142 it lifted off at 7.0° and 157 kt, a takeoff ~8% too
-    // long against Boeing ACAP §3.3.29. Real flaps 5–10 Vr at this weight is reported nearer
-    // 136–142 kt and lift-off nearer Vr + 5–10: the flaps 10 lift and V-speeds are 0062.
-    // Read only by tests/flight/b738.test.js so far (0035 will call it out).
-    vrKts: 132,
+    // The model's Vr at flaps 10, 65 t, fitted to its own lift curve: the speed from which a
+    // normal 2–3°/s rotation (FCTM; ~2.3°/s average as flown, ATSB) lifts off at the normal
+    // 8–9° attitude (NTSB, operator's 737 manual, quoted for flaps 1/5): 8.3° at 135 kt, 3.5 s
+    // later (FCTM: 3–4 s), with V2 (1.13 Vs) 6.8 kt above it (crews' data: 3–4 kt). Published
+    // VR at 65 t is ~145 (AAIB 6/2019, ATSB AO-2014-162, flap not stated): with this flap's
+    // lift the takeoff would then exceed Boeing's field length, so that gap waits for a
+    // flaps 5 notch (0070). Read only by tests/flight/b738.test.js so far (0035 will call it out).
+    vrKts: 135,
     stallCleanKts: 114,
     gearHeight: 3.4,
     eyeOffset: new Vector3(0, 4.2, -12.8),
