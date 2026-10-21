@@ -3,7 +3,7 @@
 // the way Google's tiles are. Proves: the key gates it, the root is fetched once per page
 // and only after "start flying", the ECEF → sim remap lands the tile on the sim's ground,
 // mission changes reuse the session, and 403/429 fall back to the free terrain cleanly.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, collectErrors, BASE } from './helpers.js';
 import { geodeticToEcef, geoidN } from '../../src/ecef.js';
 import { REF_ELEV_M } from '../../src/terrain.js';

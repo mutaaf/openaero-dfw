@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 
 // The zone injects Cloudflare Web Analytics into HTML unless the response says no-transform.
 // The build must emit dist/_headers so the game ships without a third-party beacon.

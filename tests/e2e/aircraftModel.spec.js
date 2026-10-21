@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0045: the twin-jet's detailed glTF model loads after Fly, from our own origin only,

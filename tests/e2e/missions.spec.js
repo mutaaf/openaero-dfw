@@ -1,5 +1,5 @@
 // Ticket 0029: the start screen lists every mission, grouped by airport, with your best grade.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, stubMetar, collectErrors, lowContrastLabels, TEST_METAR } from './helpers.js';
 import { MISSIONS } from '../../src/missions.js';
 

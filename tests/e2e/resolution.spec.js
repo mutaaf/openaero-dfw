@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, FULL_RES } from './helpers.js';
 
 test.use(FULL_RES);

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, distinctColours, enterCockpit } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
@@ -56,7 +56,8 @@ test('keyboard input deflects the controls', async ({ page }) => {
 test('gear, flaps and camera toggles update the panel', async ({ page }) => {
   await enterCockpit(page);
   await page.keyboard.press('KeyF');
-  await expect(page.locator('#txtFlaps')).toHaveText('40°');
+  // The lever goes to 40 at once; the flaps follow on the hydraulics ("33→40°", 0072).
+  await expect(page.locator('#txtFlaps')).toHaveText(/(^|→)40°$/);
   await page.keyboard.press('KeyC');
   await expect(page.locator('#txtCamMode')).toHaveText('Orbit Chase');
   await page.keyboard.press('KeyB');

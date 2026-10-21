@@ -38,6 +38,20 @@ export const AIRCRAFT_DATABASE = {
     // drag. An estimate (no public 737 spoiler data): 80% of the lift dumped (whatever the
     // flaps; never downforce), CL on the rollout ~0.15 at flaps 30.
     groundSpoilers: { liftDump: 0.8, dCd: 0.08 },
+    // Systems (systems.js). Gear and flap travel times are estimates (no public Boeing
+    // figures; crews quote ~7 s up, ~10 s down, and flaps 0 → 40 in about half a minute).
+    // Flap load relief and the autobrake decelerations are Boeing's (737 NG FCOM 9.20 /
+    // 14.10: flaps 40 → 30 above the 162 kt placard; autobrake 1/2/3/MAX = 4/5/7.2/14
+    // ft/s²). Reverser effectiveness (a fraction of forward thrust at the same N1) and the
+    // ~2 s sleeve travel are estimates for the CFM56-7 cascade reverser.
+    systems: {
+      hydraulics: { psi: 3000 },
+      gear: { extendS: 10, retractS: 7 },
+      flaps: { degPerS: 1.5, loadRelief: { fromIndex: 3, toIndex: 2, aboveKts: 162 } },
+      brakes: { tauS: 0.3, muMax: 0.45 },
+      autobrake: { decelFtS2: [0, 4, 5, 7.2, 14] },
+      reverser: { deployS: 2, effectiveness: 0.35 },
+    },
     // Control authority (rad/s² at 120 kt). With the damping above: ~12°/s pitch, ~18°/s roll.
     pitchAuthority: 0.5,
     rollAuthority: 1.0,
@@ -86,6 +100,8 @@ export const AIRCRAFT_DATABASE = {
     flapDetentsDeg: [0, 10, 20, 30],
     flapCl: [0, 0.19, 0.30, 0.40],
     alphaStallDegByFlap: [14.1, 14.1, 13.7, 13.3],
+    // Electric flaps, 0 → 30° in ~10 s (an estimate); toe brakes, no autobrake or reverse.
+    systems: { flaps: { degPerS: 3 } },
     alphaStallDeg: 14.1,
     maxThrustN: 2100, // Lycoming IO-360-L2A, 180 hp, fixed-pitch prop (static)
     // Sea-level full-throttle thrust vs TAS (m/s). 0: 2070 N measured static thrust of a

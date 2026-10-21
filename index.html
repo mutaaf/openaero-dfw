@@ -115,7 +115,7 @@
         <div class="hidden lg:grid grid-cols-2 gap-x-4 gap-y-1 pt-1 font-mono">
           <span><kbd>W</kbd> <kbd>S</kbd> nose down / up</span><span><kbd>A</kbd> <kbd>D</kbd> bank</span>
           <span><kbd>Shift</kbd> <kbd>Ctrl</kbd> power</span><span><kbd>Q</kbd> <kbd>E</kbd> rudder</span>
-          <span><kbd>G</kbd> gear · <kbd>F</kbd> flaps</span><span><kbd>B</kbd> brakes · <kbd>Z</kbd> autopilot</span>
+          <span><kbd>G</kbd> gear · <kbd>F</kbd> flaps</span><span><kbd>B</kbd> brakes · <kbd>K</kbd> autobrake · <kbd>R</kbd> reverse</span><span><kbd>Z</kbd> autopilot</span>
           <span><kbd>C</kbd> camera · drag to look</span><span><kbd>H</kbd> show / hide panels</span>
           <span><kbd>M</kbd> fly with the mouse</span><span><kbd>Space</kbd> centre the stick</span>
         </div>
@@ -303,6 +303,17 @@
         <span class="text-slate-400 text-[10px]">BRAKES (B)</span>
         <span id="txtBrakes" class="font-bold">OFF</span>
       </button>
+      <button id="btnAutobrake" class="hud-btn p-1.5 rounded-lg flex flex-col items-center">
+        <span class="text-slate-400 text-[10px]">AUTOBRK (K)</span>
+        <span id="txtAutobrake" class="font-bold text-sky-300">2</span>
+      </button>
+      <button id="btnReverse" class="hud-btn p-1.5 rounded-lg flex flex-col items-center">
+        <span class="text-slate-400 text-[10px]">REVERSE (R)</span>
+        <span id="txtReverse" class="font-bold">STOW</span>
+      </button>
+      <div class="p-1.5 rounded-lg flex flex-col items-center justify-center text-slate-400 text-[10px]">
+        <span id="txtHyd">HYD 3000 PSI</span>
+      </div>
     </div>
 
     <!-- Aerodynamic Control Deflection Meters -->

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, enterCockpit } from './helpers.js';
 
 // A fake standard-mapping gamepad whose state the test can change.
@@ -30,12 +30,13 @@ test('a gamepad stick flies the aircraft and its buttons work the systems', asyn
   await expect.poll(() => page.locator('#meterAil').textContent(), { timeout: 5_000 }).not.toBe('0%');
   await page.evaluate(() => { window.__pad.axes[0] = 0; });
 
-  // A = flaps (edge-triggered: one press = one notch).
+  // A = flaps (edge-triggered: one press = one notch). The lever is at 40 at once; the
+  // flaps follow on the hydraulics ("33→40°", 0072).
   await page.evaluate(() => { window.__pad.buttons[0] = { pressed: true, value: 1 }; });
-  await expect(page.locator('#txtFlaps')).toHaveText('40°');
+  await expect(page.locator('#txtFlaps')).toHaveText(/(^|→)40°$/);
   await page.evaluate(() => { window.__pad.buttons[0] = { pressed: false, value: 0 }; });
   await page.waitForTimeout(200);
-  await expect(page.locator('#txtFlaps')).toHaveText('40°');
+  await expect(page.locator('#txtFlaps')).toHaveText(/(^|→)40°$/);
 
   // RT spools the engines, and the desktop slider follows (ticket 0017), even when the
   // player last used it (a range input keeps focus after a click).

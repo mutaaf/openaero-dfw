@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, stubMetar, enterCockpit, lowContrastLabels, TEST_METAR } from './helpers.js';
 
 // Stabilized-approach gate (ticket 0020): evaluated once at 500 ft above the runway in VMC

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0032: hiding the tab pauses the flight (no auto-resume), and the screen is kept

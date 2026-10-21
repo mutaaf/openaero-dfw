@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0042: assist levels Kid · Learner · Pilot over the same physics.

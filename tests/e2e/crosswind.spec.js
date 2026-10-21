@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, stubMetar, enterCockpit, TEST_METAR } from './helpers.js';
 
 // KDFW 27015KT: straight across the 17/18 and 35/36 runways.

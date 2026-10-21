@@ -131,8 +131,9 @@ src/landmarks.js    Dallas landmarks at true lat/lon (cited) + real heights, via
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
 src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +
                     versioned personal bests
-src/coach.js        first-flight coach on the default final: prompts from PAPI, AGL,
-                    sink rate and throttle (pure state machine) + seen flag
+src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
+                    sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
+                    e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
 src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes the pilot's
                     input before stepFlightModel (physics untouched): bank/pitch/AoA
                     envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,
@@ -193,6 +194,10 @@ src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFligh
                     elevator on spawn, lever→plate throttle map. fdm/loadJsbsim.js loads it
                     in the browser, tests/flight/jsbsimNode.js in Node. The aircraft it flies
                     is our own MIT data: public/jsbsim/ (C172 from POH + Roskam)
+src/systems.js      aircraft systems (pure, run first in every flightModel sub-step): hydraulic
+                    gear and flap travel (levers are commands; gearPos/flapDeg/flapPos are where
+                    they are), 737 flap load relief, brake pressure + anti-skid, autobrake
+                    1/2/3/MAX (Boeing decelerations), thrust reversers, belly when not locked
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/√θ power lapse,

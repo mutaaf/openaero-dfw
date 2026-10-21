@@ -1,5 +1,5 @@
 // Landmarks at their true coordinates (ticket 0010): the tours point you at the real thing.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, enterCockpit, collectErrors } from './helpers.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS, ATT_STADIUM } from '../../src/landmarks.js';
 import { missionByKey } from '../../src/missions.js';
