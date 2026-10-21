@@ -1,12 +1,12 @@
 ---
 id: 0064
 title: C172 takeoff roll and 50 ft distance card against the POH
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 63
 ---
 
 ## Why
@@ -37,3 +37,19 @@ Headless flight card as above; no e2e.
 
 ## Out of scope
 Landing roll (0051), short-field technique, wind and slope corrections, 737 and F-16.
+
+## Shipped notes
+The POH has no flaps-up takeoff table: Fig. 5-5 (p. 5-14, Revision 4 copy at befa.org,
+sheets 1–3 at 2550/2400/2200 lb) is short-field only (flaps 10°, lift off 51 KIAS, 56 KIAS at 50 ft). At sea level,
+interpolated to 15 °C, it reads 960 ft roll and 1633 ft over 50 ft, so the card flies the
+POH's own conditions with the harness's existing short-field rotation (45 KIAS to 11°) and
+climbs at 56 KIAS. Measured: flightModel 959 / 1712 ft, JSBSim 1014 / 1783 ft. The harness
+pilot now holds runway heading with rudder (without it JSBSim yawed 2° left by lift-off,
+8° by 50 ft).
+
+Known caveats (validation panel): flightModel lifts off at 54.4 KIAS, not 51, yet rolls
+960 ft, so it accelerates on the ground ~14% harder than the POH implies and the late
+lift-off hides it; the roll band alone does not prove thrust and rolling friction. The card
+catches a ~7% thrust loss or ~11% gain but is nearly blind to drag (cd0 ×2: +14% total).
+JSBSim's total sits at +9%. The harness rotation (45 KIAS to 11°, 11–14°/s) is quicker than
+a real tail-low lift-off. Worth a follow-up ticket: lift-off speed and ground acceleration.
