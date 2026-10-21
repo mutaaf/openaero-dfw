@@ -1,7 +1,7 @@
 ---
 id: 0035
 title: Call out 80 knots, V1, Rotate and Positive rate on the takeoff roll
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: authenticity

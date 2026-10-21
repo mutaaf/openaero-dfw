@@ -33,6 +33,7 @@ import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
+  takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD,
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
@@ -45,7 +46,7 @@ import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
-import { headingBoxTop, HEADING_BOX_H, cameraFovDeg } from './hudLayout.js';
+import { headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, cameraFovDeg } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
@@ -112,6 +113,11 @@ const sim = {
   lastLanding: null,
   audioEnabled: false,
   lastCalloutIdx: -1,
+  // Takeoff callouts (0035, aero.js takeoffCalloutIndex): last one called (-1 at brake
+  // release), the words called so far this roll, and until when the HUD shows the last
+  takeoffCalloutIdx: -1,
+  takeoffCalls: [],
+  takeoffCallShownUntil: 0,
   // Stabilized-approach gate (ticket 0020): armed above the gate, evaluated once on the way down
   gateState: { armed: false, armFt: GATE_VMC_FT, done: false }, // aero.js gateStep
   gate: null, // { gateHeight, stable, failing[], runway, iasKt } for this approach, or null
@@ -1178,6 +1184,19 @@ function step6DofPhysics(dt) {
   updatePapi();
   checkStabilizedGate();
   checkTouchdown(dt);
+  checkTakeoffCallouts();
+}
+
+// Takeoff callouts (0035): on the takeoff mission's roll and climb-out only, spoken when
+// sound is on and shown on the HUD either way. Re-armed by loadScenario.
+function checkTakeoffCallouts() {
+  if (sim.loadedMission?.kind !== 'takeoff' || sim.takeoffCalloutIdx >= TAKEOFF_CALLOUTS.length - 1) return;
+  const i = takeoffCalloutIndex(sim.iasKts, sim.vsiFpm, sim.aglFt, sim.spec.vrKts, sim.takeoffCalloutIdx);
+  if (i < 0) return;
+  sim.takeoffCalloutIdx = i;
+  sim.takeoffCalls.push(TAKEOFF_CALLOUTS[i]);
+  sim.takeoffCallShownUntil = sim.simTime + 2.5;
+  audio.takeoffCall(TAKEOFF_CALLOUTS[i]);
 }
 
 function integrateSubStep(dt) {
@@ -1561,6 +1580,7 @@ function renderHud() {
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
   if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(cx, cy);
+  if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil) drawTakeoffCall(cx, cy);
 
   hudCtx.restore();
 }
@@ -1618,6 +1638,17 @@ function drawGateVerdict(cx, cy) {
   hudCtx.fillText(g.stable ? 'STABILIZED' : 'UNSTABILIZED', cx, y + 1);
   // At most 3 items a line (≤ 26 characters, ~205 px), so the box always holds them.
   for (let i = 0; i < lines; i++) hudCtx.fillText(sim.gateLines[i], cx, y + 18 + i * 16);
+}
+
+// The takeoff callout's word (0035), just under the heading box (hudLayout.js).
+function drawTakeoffCall(cx, cy) {
+  const top = takeoffCallTop(cy);
+  hudCtx.textAlign = 'center';
+  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+  hudCtx.fillRect(cx - 78, top, 156, TAKEOFF_CALL_H);
+  hudCtx.font = 'bold 15px monospace';
+  hudCtx.fillStyle = '#f8fafc';
+  hudCtx.fillText(TAKEOFF_CALLOUT_HUD[sim.takeoffCalloutIdx], cx, top + 18);
 }
 
 function renderRadar() {
@@ -1786,6 +1817,9 @@ function loadScenario(key) {
   resetAssistState(assistState);
   softResetAt = null;
   sim.lastCalloutIdx = -1;
+  sim.takeoffCalloutIdx = -1;
+  sim.takeoffCalls.length = 0;
+  sim.takeoffCallShownUntil = 0;
   Object.assign(sim.gateState, { armed: false, armFt: GATE_VMC_FT, done: false });
   sim.gate = null;
   sim.gateShownUntil = 0;
@@ -2561,6 +2595,7 @@ window.openaeroDebug = () => {
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
+    takeoffCalls: [...sim.takeoffCalls],
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
       { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,

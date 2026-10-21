@@ -207,7 +207,8 @@ src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/�
                     windmilling at idle), turbofan (Mach/density lapse, idle, spool lag)
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
-                    GPWS callouts, warnings, heading math
+                    GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),
+                    warnings, heading math
 src/input.js        keyboard state → control targets, virtual stick mapping
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
 src/styles.css      Tailwind entry + ported custom HUD styles

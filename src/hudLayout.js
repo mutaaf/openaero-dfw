@@ -14,6 +14,14 @@ export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
 
+// The takeoff callout's word box (0035): 26 px tall, 156 px wide, centred, just under the
+// heading box. On the roll the horizon is at cy and rotating moves it down, so the word
+// stays in the sky; 156 px fits between the tapes.
+export const TAKEOFF_CALL_H = 26;
+export function takeoffCallTop(cy) {
+  return headingBoxTop(cy) + HEADING_BOX_H + 4;
+}
+
 // Camera field of view (ticket 0044). Landscape screens keep the classic 62° vertical. In
 // portrait a fixed 62° vertical leaves a keyhole across (31° on a 390x844 phone), so a crab
 // or a turn takes the runway off the side: there the vertical opens until the view is

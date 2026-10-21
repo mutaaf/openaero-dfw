@@ -114,6 +114,26 @@ export function gpwsCalloutIndex(aglFt, lastIdx) {
   return -1;
 }
 
+// Takeoff callouts (0035): the pilot monitoring's "eighty knots" (airspeed cross-check),
+// "V1", "rotate", then "positive rate" once the aircraft climbs. Wording varies by operator;
+// this is the common Boeing-style sequence. V1 is taken as Vr - 3 kt (V1 <= Vr). A light
+// single (Vr under 60 kt) has no 80 kt check and no V1: it hears rotate, positive rate.
+export const TAKEOFF_CALLOUTS = ['eighty knots', 'V1', 'rotate', 'positive rate'];
+export const TAKEOFF_CALLOUT_HUD = ['80 KNOTS', 'V1', 'ROTATE', 'POSITIVE RATE'];
+
+// Index into TAKEOFF_CALLOUTS that should fire now, or -1. Strictly in order, each once
+// (lastIdx is the last one called, -1 at brake release), at most one per call; positive
+// rate needs rotate first, more than 5 ft up and more than 300 fpm up.
+export function takeoffCalloutIndex(iasKts, vsiFpm, aglFt, vrKts, lastIdx) {
+  let i = lastIdx + 1;
+  if (vrKts < 60 && i < 2) i = 2;
+  if (i === 0) return iasKts >= 80 ? 0 : -1;
+  if (i === 1) return iasKts >= vrKts - 3 ? 1 : -1;
+  if (i === 2) return iasKts >= vrKts ? 2 : -1;
+  if (i === 3) return aglFt > 5 && vsiFpm > 300 ? 3 : -1;
+  return -1;
+}
+
 // Warning logic shared by the banners.
 export function isStallWarning(iasKts, stallCleanKts, onGround) {
   return iasKts < stallCleanKts && !onGround;
