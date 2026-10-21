@@ -133,3 +133,37 @@ export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0) {
     totalFt: b.distM * M_TO_FT, clearKts: b.iasKts,
   };
 }
+
+// POH short-field landing (Fig. 5-11): flaps 30, power off, 61 KIAS at 50 ft, flare to
+// touch down on the mains, then flaps up, yoke full back and maximum braking. `rollFt` is
+// from touchdown to a stop, `totalFt` from the 50 ft point. Reports the touchdown sink
+// rate and IAS so the card can show the pilot flew a landing, not a crash.
+export function shortFieldLanding(spec, isaDevC = 0) {
+  const b = makeBody(spec, { kts: 61, altM: 50 / M_TO_FT + spec.gearHeight, flaps: 3, throttle: 0 });
+  b.isaDevC = isaDevC;
+  const approach = speedHoldPilot(() => 61);
+  let tdFt = null, tdKts = null, tdSinkFpm = null;
+  fly(b, spec, 120, (x, dt) => {
+    _e.setFromQuaternion(x.quat, 'YXZ');
+    const yawLeftDeg = _e.y * RAD_TO_DEG;
+    x.rudderInput = Math.max(-1, Math.min(1, yawLeftDeg * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15));
+    if (tdFt === null) {
+      const hFt = (x.pos.y - x.groundY - spec.gearHeight) * M_TO_FT;
+      if (hFt > 15) { approach(x, dt); return; }
+      // Flare: sink 100 fpm at 15 ft, easing to ~40 fpm at the ground, nose up.
+      const want = -(60 + 6 * Math.max(0, hFt));
+      const pitch = attitude(x).pitchDeg;
+      x.pitchCmd = Math.max(0, Math.min(12, (x.pitchCmd ?? pitch) + (want - vsFpm(x)) * 0.004 * dt * 60));
+      x.elevInput = elevatorForPitch(x.pitchCmd, pitch, x.angVel.x);
+      x.aileronInput = 0;
+    } else {
+      x.brakesOn = true;
+      x.flapsIndex = 0;
+      x.elevInput = -1;
+    }
+  }, (x) => {
+    if (tdFt === null && x.onGround) { tdFt = x.distM * M_TO_FT; tdKts = x.iasKts; tdSinkFpm = -vsFpm(x); }
+    return tdFt !== null && x.t > 1 && x.vel.length() < 0.5;
+  });
+  return { rollFt: b.distM * M_TO_FT - tdFt, totalFt: b.distM * M_TO_FT, tdKts, tdSinkFpm, tdFt };
+}
