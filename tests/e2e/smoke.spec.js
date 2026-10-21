@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, distinctColours, enterCockpit } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {

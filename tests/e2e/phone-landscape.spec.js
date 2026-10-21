@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
 
 // Ticket 0025: a phone held sideways. Runs in the `phone` project (touch, mobile).

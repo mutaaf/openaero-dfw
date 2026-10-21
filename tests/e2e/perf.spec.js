@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, enterCockpit } from './helpers.js';
 
 // Light frame-time probe. CI renders through SwiftShader (software GL), so the threshold

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, enterCockpit, collectErrors } from './helpers.js';
 
 const snap = (page) => page.evaluate(() => window.openaeroDebug());

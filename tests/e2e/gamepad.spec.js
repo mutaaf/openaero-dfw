@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, enterCockpit } from './helpers.js';
 
 // A fake standard-mapping gamepad whose state the test can change.

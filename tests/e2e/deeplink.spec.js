@@ -1,5 +1,5 @@
 // Deep links: the site launcher picks the flight; Start flight is still a tap.
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles } from './helpers.js';
 
 test.beforeEach(async ({ page }) => { await stubTiles(page); });

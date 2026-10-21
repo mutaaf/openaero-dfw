@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, enterCockpit } from './helpers.js';
 
 // A first visit gets the clean view on desktop: the world, the HUD, one top row and the keys.

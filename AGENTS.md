@@ -131,8 +131,9 @@ src/landmarks.js    Dallas landmarks at true lat/lon (cited) + real heights, via
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
 src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +
                     versioned personal bests
-src/coach.js        first-flight coach on the default final: prompts from PAPI, AGL,
-                    sink rate and throttle (pure state machine) + seen flag
+src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
+                    sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
+                    e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
 src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes the pilot's
                     input before stepFlightModel (physics untouched): bank/pitch/AoA
                     envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,

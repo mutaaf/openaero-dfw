@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, enterCockpit } from './helpers.js';
 
-const PROMPTS = /PAPI|high|low|Sinking|Flare|Idle/;
+const PROMPTS = /PAPI|high|low|Sinking|Flare|Idle|Slow|Fast|centreline|Gear|flaps/;
 
 test.beforeEach(async ({ page }) => { await stubTiles(page); });
 
@@ -36,7 +36,7 @@ test('the coach can be re-enabled from the modal', async ({ page }) => {
   await expect(page.locator('#txtCoach')).toHaveText(PROMPTS);
 });
 
-test('the coach stays out of other missions and steps aside for the autopilot', async ({ page }) => {
+test('the coach coaches finals only and steps aside for the autopilot', async ({ page }) => {
   await enterCockpit(page);
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
   await page.click('#btnApApr');
@@ -47,7 +47,10 @@ test('the coach stays out of other missions and steps aside for the autopilot', 
   await page.click('#btnApMaster'); // ILS on set AP master; both off hands the aircraft back
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
   await expect(page.locator('#txtCoachLabel')).toHaveText('Coach');
-  await page.selectOption('#selScenario', 'kdfw_35c_flare');
+  // Every final is coached now (0073); a takeoff is not.
+  await page.selectOption('#selScenario', 'kdfw_17c_final');
+  await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
+  await page.selectOption('#selScenario', 'kdfw_takeoff');
   await page.waitForTimeout(2_000);
   await expect(page.locator('#coach')).toBeHidden();
 });

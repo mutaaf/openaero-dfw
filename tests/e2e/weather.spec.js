@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { stubTiles, stubMetar, enterCockpit, TEST_METAR } from './helpers.js';
 
 const NORTH_30 = {

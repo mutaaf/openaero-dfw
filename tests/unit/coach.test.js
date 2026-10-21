@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  COACH_KEY, COACH_PROMPTS, coachTarget, createCoach, stepCoach,
-  coachSeen, markCoachSeen, COACH_MIN_HOLD_S,
+  COACH_KEY, COACH_PROMPTS, coachTarget, createCoach, stepCoach, rolloutTarget, coachText,
+  coachSeen, markCoachSeen, COACH_MIN_HOLD_S, COACH_DONE_HOLD_S,
 } from '../../src/coach.js';
 
 // On a stabilized 3° final: 2 white, ~-700 fpm, approach power.
@@ -41,7 +41,7 @@ describe('coachTarget', () => {
     expect(coachTarget({ ...onPath, papiWhite: null })).toBe(null);
   });
   it('every prompt has short text that fits a phone', () => {
-    for (const k of ['papi', 'high', 'low', 'sink', 'flare', 'idle', 'done']) {
+    for (const k of Object.keys(COACH_PROMPTS)) {
       expect(COACH_PROMPTS[k]).toBeTruthy();
       expect(COACH_PROMPTS[k].length).toBeLessThanOrEqual(48);
     }
@@ -138,5 +138,64 @@ describe('coach storage', () => {
     const throwing = { getItem: () => { throw new Error('private'); }, setItem: () => { throw new Error('private'); } };
     expect(coachSeen(throwing)).toBe(false);
     expect(() => markCoachSeen(throwing)).not.toThrow();
+  });
+});
+
+// Ticket 0073: the landing coach on every final, from configuration to the stop.
+const full = { ...onPath, iasKts: 155, targetKts: 155, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0 };
+
+describe('landing coach (0073)', () => {
+  it('a stable final is still the PAPI prompt', () => {
+    expect(coachTarget(full)).toBe('papi');
+  });
+  it('gear first, then landing flaps, before anything about the path', () => {
+    expect(coachTarget({ ...full, gearLocked: false, flapsLanding: false, papiWhite: 4 })).toBe('gear');
+    expect(coachTarget({ ...full, flapsLanding: false, papiWhite: 4 })).toBe('flaps');
+    expect(coachTarget({ ...full, gearLocked: false, aglFt: 2500 })).toBe('papi');
+  });
+  it('slow beats the glidepath; fast waits until the path is right', () => {
+    expect(coachTarget({ ...full, iasKts: 145, papiWhite: 4 })).toBe('slow');
+    expect(coachTarget({ ...full, iasKts: 170, papiWhite: 4 })).toBe('high');
+    expect(coachTarget({ ...full, iasKts: 170 })).toBe('fast');
+    expect(coachTarget({ ...full, iasKts: 162 })).toBe('papi');
+  });
+  it('says which way back to the centreline', () => {
+    expect(coachTarget({ ...full, locDots: 1 })).toBe('offRight');
+    expect(coachTarget({ ...full, locDots: -1 })).toBe('offLeft');
+    expect(coachTarget({ ...full, locDots: 0.4 })).toBe('papi');
+  });
+  it('in the flare with a crab on, it says to rudder the nose straight', () => {
+    expect(coachTarget({ ...full, aglFt: 40, throttle: 0, driftDeg: 7 })).toBe('decrab');
+    expect(coachTarget({ ...full, aglFt: 40, throttle: 0, driftDeg: 2 })).toBe('flare');
+    expect(coachTarget({ ...full, aglFt: 200, driftDeg: 7 })).toBe('papi'); // crabbing on final is right
+  });
+  it('the rollout: reverse, brakes, stow at 60 kt, stopped', () => {
+    expect(rolloutTarget({ gsKts: 130, canReverse: true, reverserPos: 0, braking: true })).toBe('reverse');
+    expect(rolloutTarget({ gsKts: 130, canReverse: false, reverserPos: 0, braking: false })).toBe('brake');
+    expect(rolloutTarget({ gsKts: 130, canReverse: false, reverserPos: 0, braking: true })).toBe(null);
+    expect(rolloutTarget({ gsKts: 65, canReverse: true, reverserPos: 1, braking: true })).toBe('stow');
+    expect(rolloutTarget({ gsKts: 1, canReverse: true, reverserPos: 0, braking: true })).toBe('stopped');
+  });
+  it('after "Touchdown!" the rollout prompts follow the stop, and "Stopped" is the end', () => {
+    const rollout = { gsKts: 130, canReverse: true, reverserPos: 0, braking: false };
+    let c = stepCoach(createCoach(), full, 0.1);
+    c = stepCoach(c, { ...full, onGround: true, rollout }, 0.016);
+    expect(c.prompt).toBe('done');
+    c = stepCoach(c, { ...full, onGround: true, rollout }, COACH_DONE_HOLD_S);
+    expect(c.prompt).toBe('reverse');
+    rollout.reverserPos = 1; rollout.braking = true; rollout.gsKts = 60;
+    c = stepCoach(c, { ...full, onGround: true, rollout }, 0.016);
+    expect(c.prompt).toBe('stow');
+    rollout.gsKts = 0;
+    c = stepCoach(c, { ...full, onGround: true, rollout }, 0.016);
+    expect(c.prompt).toBe('stopped');
+    rollout.gsKts = 40;
+    c = stepCoach(c, { ...full, onGround: true, rollout }, 0.016);
+    expect(c.prompt).toBe('stopped');
+  });
+  it('puts the numbers in the words', () => {
+    expect(coachText('slow', { targetKts: 155 })).toBe('Slow: fly 155 kt, add power');
+    expect(coachText('flaps', { flapsDeg: 30 })).toBe('Landing flaps: press F until 30°');
+    expect(coachText('papi')).toBe(COACH_PROMPTS.papi);
   });
 });

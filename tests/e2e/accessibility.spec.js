@@ -1,5 +1,5 @@
 // Ticket 0007: the accessibility floor in AGENTS.md (reduced motion, contrast, keyboard).
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
