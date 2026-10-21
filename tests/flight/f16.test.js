@@ -18,10 +18,12 @@
 //    bound only).
 //  - thrust lapse: TP-1538 Table VI tabulates the 1979 F100-PW-100, not the F110/F100-229
 //    class engine the spec models, so its lapse is not this engine's. (For the record, at
-//    max thrust the model has little of the table's ram rise with Mach: M 1.0 at sea level
-//    is 1.35 × M 0.2 there, 1.05 × in the model.)
+//    max thrust the model has little of the table's ram rise with Mach: Tmax at sea level is
+//    28,886 lbf at M 1.0 vs 21,420 at M 0.2 there, 1.35 ×; 1.05 × in the model.)
 //  - the flight-control system (g and AoA limiters): out of scope for 0053; the 25° AoA
-//    limit below is only used to say what the slowest 1-g flight is.
+//    limit below only sets the AoA at which the 1-g speed card is computed.
+//  - induced drag: aspectRatio 3.2 is the bare 31 ft wing (9.449² / 27.87); the span card
+//    checks the USAF span, which includes the wingtip missile rails.
 //
 // A card the model does not yet meet is a KNOWN GAP: `it.fails` with its ticket, never a
 // looser tolerance. The fixing PR promotes it to `it`.
@@ -56,8 +58,11 @@ const nasaCl = (aoaDeg) => {
   const { cx, cz } = TP1538[aoaDeg], a = aoaDeg * DEG_TO_RAD;
   return -cz * Math.cos(a) + cx * Math.sin(a);
 };
-// TP-1538 p. 12: the AoA limiter holds α "at or below 25°". The slowest 1-g flight at the
-// spec's mass, sea level, is therefore where CL(25°) carries the weight: about 129 kt.
+// TP-1538 p. 12: the AoA limiter holds α "at or below 25°". Our own sum, not a NASA figure:
+// the power-off 1-g speed at that limit, the spec's mass, sea level (KEAS), with the
+// stabilator at 0° (untrimmed) is where CL(25°) carries the weight: about 129 kt. Thrust
+// lifts too (afterburner × sin 25° is ~47% of the weight), so this is not a minimum speed
+// with power.
 const vAtAoaLimitKts = () => Math.sqrt(2 * f16.massKg * G / (1.225 * f16.wingAreaM2 * nasaCl(25))) / 0.514444;
 
 describe('F-16C vs the USAF fact sheet and Lockheed Martin', () => {
@@ -79,6 +84,7 @@ describe('F-16C vs the USAF fact sheet and Lockheed Martin', () => {
     expect(f16.engine.staticThrustN).toBeGreaterThanOrEqual(27000 * LBF_TO_N);
   });
 
+  // Empty + internal fuel leaves out the pilot, gun ammunition, oil and LOX (~600 lb).
   it('static thrust-to-weight is 29,000 lbf over empty + internal fuel (26,700 lb): 1.09, ±3%', () => {
     within(f16.engine.staticThrustN / (f16.massKg * G), THRUST_CLASS_N / ((EMPTY_KG + INTERNAL_FUEL_KG) * G), 0.03);
   });
@@ -90,23 +96,24 @@ describe('F-16C vs NASA TP-1538 wind-tunnel data', () => {
   });
 
   // The model's lift is a straight line to a 28° stall (CL 1.91); NASA's curve bends over
-  // above 20° (1.56 at 25°, its peak ~1.89 near 35°).
+  // above 20° (1.56 at 25°; at 35°, CX 0.16050 and CZ −2.20000 give its ~1.89 peak).
   it.fails('KNOWN GAP (0066): lift coefficient at 25° AoA is NASA\'s 1.56, ±5% (model: 1.72)', () => {
     within(liftCoefficient(f16, 25 * DEG_TO_RAD, 0), nasaCl(25), 0.05);
   });
 
-  // With the limiter, the slowest 1-g flight is at 25°; the model stalls at 28° on its
-  // steeper line, so it flies (and stall-warns, stallCleanKts 120) ~10 kt slower.
-  it.fails('KNOWN GAP (0066): slowest 1-g flight at 12 t is NASA\'s ~129 KIAS at the 25° AoA limit, ±5% (model: 117)', () => {
+  // The model stalls at 28° on its steeper line, so its power-off 1-g stall comes ~12 kt
+  // below that speed (and its stall warning, stall + 5 kt, ~7 kt below).
+  it.fails('KNOWN GAP (0066): power-off 1-g stall at 12 t is the ~129 KEAS that TP-1538\'s CL gives at the 25° AoA limit, ±5% (model: 117)', () => {
     within(stallSpeedKts(f16, 0), vAtAoaLimitKts(), 0.05);
   });
 });
 
 describe('F-16C capability bound (not a performance claim)', () => {
-  // USAF: "Mach 2 at altitude", ceiling "above 50,000 feet". A clean, full-afterburner run
-  // at 30,000 ft must pass Mach 1.2 and zoom past 40,000 ft with the numbers finite, the
-  // wing unstalled and the jet above its stall speed. The model has no wave drag, so how
-  // fast it gets there says nothing.
+  // USAF: "Mach 2 at altitude", ceiling "above 50,000 feet". The thresholds are ticket
+  // 0053's, well inside those: a clean, full-afterburner run at 30,000 ft must pass Mach 1.2
+  // and zoom past 40,000 ft with the numbers finite, below the model's own stall AoA and
+  // above its own stall speed. The model has no wave drag, so how fast it gets there says
+  // nothing.
   it('accelerates past Mach 1.2 at 30,000 ft and zooms past 40,000 ft without NaN or stall', () => {
     const alt0 = 30000 / M_TO_FT;
     const b = makeBody(f16, { kts: 325, altM: alt0, throttle: 1, gearDown: false });
