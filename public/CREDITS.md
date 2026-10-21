@@ -14,6 +14,19 @@
   App. B), the Lycoming type certificate data and NACA TR-640. They are MIT, like the rest of
   the repository, and are not derived from the GPL aircraft that ship with JSBSim.
 
+## Aircraft models
+
+- **Twin-jet** (`models/twinjet-v1.glb`, drawn for the 737-800): "jet airplane" by
+  **weirdybeardyman**, https://opengameart.org/content/jet-airplane, **CC0 1.0** (public
+  domain dedication). Changes: gear-down variant only; its external livery textures (not
+  included in the source file) dropped for plain paint; objects renamed; scaled to the
+  737-800's 39.5 m length (its span is then 30.8 m; the real jet's is 35.8 m) and seated on
+  the flight model's gear; meshopt-compressed
+  (`scripts/models/blend-to-glb.py`, `scripts/build-models.mjs`). A generic airliner shape,
+  not a Boeing replica, and no airline livery.
+- Loaded with three.js's `GLTFLoader` and the **meshoptimizer** decoder (© Arseny
+  Kapoulkine, MIT), bundled with the game.
+
 ## Imagery and elevation
 
 - Satellite imagery © Esri, Maxar, Earthstar Geographics.

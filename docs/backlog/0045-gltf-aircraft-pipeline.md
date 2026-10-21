@@ -1,12 +1,12 @@
 ---
 id: 0045
 title: glTF aircraft pipeline (meshopt + KTX2, LOD, credits; first CC0 model)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-18
-pr:
+pr: 67
 ---
 
 ## Why
@@ -57,3 +57,14 @@ the chase view at phone and iPad sizes.
 
 ## Out of scope
 Articulated control surfaces, gear and props (0063). Liveries editor, new aircraft types, ground vehicles (0043).
+
+## Shipped notes (2026-10-21)
+- First asset: the CC0 OpenGameArt twin-jet for the 737 (4k tris, 29 kB gz, no textures:
+  its livery images aren't in the .blend, and plain paint avoids any airline brand). Scaled
+  to the 737-800's length; span is 30.8 m vs 35.8 m (a generic jet, said so in CREDITS).
+- KTX2 and THREE.LOD are not wired yet: this model has no textures and is below the LOD2
+  target. `build-models.mjs` and `assets-src/models/README.md` say where they go for the first
+  textured / >25k-tri model (needs `toktx`). No cockpit glb.
+- The flight model holds the CG (not the mains) at gearHeight on the ground, so the model is
+  lifted visually during rotation (`rotationLift`) to keep the mains on the runway.
+

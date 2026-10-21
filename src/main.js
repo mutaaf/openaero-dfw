@@ -147,7 +147,7 @@ const mapCtx = mapCanvas.getContext('2d');
 let renderer, scene, camera, ambientLight, sunLight;
 let aircraftRoot, terrainGroup, terrainLod, photoreal;
 const runwayMeshes = []; // runway surface + markings: hidden under the photoreal mesh
-let animRefs = { prop: null, flame: null, fanL: null, fanR: null };
+let animRefs = { prop: null, flame: null, fanL: null, fanR: null, model: null };
 let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order)
 
 // Render resolution: the device's pixel ratio capped at 2, stepped down on slow frames (0026).
@@ -504,7 +504,7 @@ async function loadDem() {
 function buildAircraft(type) {
   if (aircraftRoot) scene.remove(aircraftRoot);
   aircraftRoot = new THREE.Group();
-  animRefs = { prop: null, flame: null, fanL: null, fanR: null };
+  animRefs = { prop: null, flame: null, fanL: null, fanR: null, model: null };
 
   // Shaders & materials
   const fuselageWhite = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.25, roughness: 0.35 });
@@ -697,6 +697,18 @@ function buildAircraft(type) {
   }
 
   scene.add(aircraftRoot);
+  attachDetailedModel(type);
+}
+
+// The detailed glTF model (ticket 0045) replaces the primitive stand-in once it has loaded.
+// It loads only after the first Fly (src/aircraftModel.js, the loader and the model are
+// their own chunks and file: nothing at boot); if it fails, the primitive stays. A model that
+// arrives after the aircraft was changed is dropped.
+let detailedModelsArmed = false;
+function attachDetailedModel(type) {
+  const refs = animRefs;
+  if (detailedModelsArmed) import('./aircraftModel.js').then((m) => m.attachModel(aircraftRoot, type, import.meta.env.BASE_URL, refs, () => refs === animRefs))
+    .catch((e) => console.warn('[openaero] no aircraft model:', e));
 }
 
 // --- Stabilized-approach gate (ticket 0020) ----------------------------------------
@@ -1125,6 +1137,7 @@ function step6DofPhysics(dt) {
     animRefs.flame.scale.set(1, 1, 0.8 + sim.throttle * 1.6);
     animRefs.flame.visible = sim.throttle > 0.6;
   }
+  animRefs.model?.update(sim);
 
   // Approach target + PAPI lamps
   updateActiveRunway(dt);
@@ -1952,6 +1965,10 @@ function loadJsbsimOnce() {
 
 document.getElementById('btnStartFlight').addEventListener('click', () => {
   loadJsbsimOnce();
+  if (!detailedModelsArmed) {
+    detailedModelsArmed = true;
+    attachDetailedModel(sim.aircraftKey);
+  }
   if (document.getElementById('chkAutoSound').checked) audio.init();
   applyCoachChoice();
   // The (billable) Google session starts only when someone actually flies, once per page.
@@ -2371,6 +2388,8 @@ window.openaeroDebug = () => {
     heightAbovePathM: sim.approach.heightAbovePathM,
     pos: { x: sim.pos.x, y: sim.pos.y, z: sim.pos.z },
     aircraft: sim.aircraftKey,
+    aircraftModel: animRefs.model?.name,
+    gearDown: sim.gearDown,
     fdm: jsbsim && jsbsim.flies(sim.aircraftKey) ? 'jsbsim' : 'builtin',
     groundY: sim.groundY,
     aglFt: sim.aglFt,
