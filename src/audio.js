@@ -144,6 +144,12 @@ export function createAudio(sim, onStateChange) {
     if (!say(text, { interrupt: false })) chirp(440, 0.3);
   }
 
+  // Takeoff callouts (0035): on time, so each cuts off whatever is still being said.
+  function takeoffCall(text) {
+    if (!audioCtx || !sim.audioEnabled) return;
+    if (!say(text)) chirp(523.25, 0.15);
+  }
+
   // Hard-mute every voice (used when the player switches sound off).
   function mute() {
     if (engineGain) engineGain.gain.value = 0;
@@ -165,7 +171,7 @@ export function createAudio(sim, onStateChange) {
   }
 
   return {
-    init, update, mute, callout, teach, pause,
+    init, update, mute, callout, takeoffCall, teach, pause,
     get started() { return audioCtx !== null; },
     get state() { return audioCtx ? audioCtx.state : 'off'; },
   };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { headingBoxTop, HEADING_BOX_H, TAPE_TOP, BELOW_TOP_BAR, cameraFovDeg, BASE_FOV_DEG, MIN_HFOV_DEG, MAX_FOV_DEG } from '../../src/hudLayout.js';
+import { headingBoxTop, HEADING_BOX_H, TAPE_TOP, BELOW_TOP_BAR, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg, BASE_FOV_DEG, MIN_HFOV_DEG, MAX_FOV_DEG } from '../../src/hudLayout.js';
 
 describe('headingBoxTop', () => {
   it('keeps the classic cy - 145 on tall screens (desktop, portrait phone)', () => {
@@ -22,6 +22,20 @@ describe('headingBoxTop', () => {
       expect(headingBoxTop(h / 2) + HEADING_BOX_H).toBeLessThanOrEqual(h / 2 + TAPE_TOP);
     }
     expect(BELOW_TOP_BAR).toBe(72);
+  });
+});
+
+describe('takeoffCallTop (0035)', () => {
+  it('sits under the heading box and clear above the horizon on every screen height', () => {
+    for (const h of [320, 360, 375, 390, 414, 430, 480, 720, 844, 1180, 1366]) {
+      const top = takeoffCallTop(h / 2);
+      expect(top, `${h}: under the heading box`).toBeGreaterThanOrEqual(headingBoxTop(h / 2) + HEADING_BOX_H);
+      // The horizon is at cy on the roll (pitch 0) and only drops once rotated.
+      expect(top + TAKEOFF_CALL_H, `${h}: above the horizon`).toBeLessThanOrEqual(h / 2 - 25);
+    }
+  });
+  it('fits between the speed tape (ends cx - 131) and the altitude tape (starts cx + 130)', () => {
+    expect(TAKEOFF_CALL_W / 2).toBeLessThanOrEqual(130 - 8);
   });
 });
 

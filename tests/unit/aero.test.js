@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
   inducedDragK, headingError, headingFromYaw, papiWhiteLights, gpwsCalloutIndex,
-  GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning,
+  GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, takeoffCalloutIndex, TAKEOFF_CALLOUTS,
+  TAKEOFF_CALLOUT_HUD_PLAIN,
 } from '../../src/aero.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { DEG_TO_RAD, KTS_TO_MPS, MPS_TO_KTS, M_TO_FT, FT_TO_M } from '../../src/constants.js';
@@ -116,6 +117,64 @@ describe('GPWS callouts', () => {
   });
   it('does not repeat the last callout', () => {
     expect(gpwsCalloutIndex(990, 0)).toBe(-1);
+  });
+});
+
+// Takeoff callouts (0035): a roll from 0 to Vr + 10 kt, lift-off 2 kt after Vr, then a
+// climb at 800 fpm. Returns the words in the order they fire.
+function sweepTakeoff(spec, { liftoffVsFpm = 800 } = {}) {
+  const { vrKts } = spec;
+  const words = [];
+  let last = -1;
+  for (let ias = 0; ias <= vrKts + 10; ias += 0.25) {
+    const airborne = ias >= vrKts + 2;
+    const agl = airborne ? (ias - vrKts - 2) * 4 : 0;
+    const i = takeoffCalloutIndex(ias, airborne ? liftoffVsFpm : 0, agl, vrKts, last, !!spec.twoCrew);
+    if (i >= 0) { words.push(TAKEOFF_CALLOUTS[i]); last = i; }
+  }
+  return words;
+}
+
+describe('takeoff callouts (0035)', () => {
+  it('the 737 hears eighty knots, V1, rotate, positive rate, each once and in order', () => {
+    expect(sweepTakeoff(AIRCRAFT_DATABASE.b738)).toEqual(['eighty knots', 'V1', 'rotate', 'positive rate']);
+  });
+  it('single pilots (Cessna Vr 55, F-16 Vr 155) get no 80 kt check and no V1: rotate, positive rate', () => {
+    expect(sweepTakeoff(AIRCRAFT_DATABASE.c172)).toEqual(['rotate', 'positive rate']);
+    expect(sweepTakeoff(AIRCRAFT_DATABASE.f16)).toEqual(['rotate', 'positive rate']);
+  });
+  it('Kid and Learner read what each word asks, in one line that fits the HUD box', () => {
+    expect(TAKEOFF_CALLOUT_HUD_PLAIN[2]).toBe('ROTATE · NOSE UP');
+    for (const w of TAKEOFF_CALLOUT_HUD_PLAIN) expect(w.length).toBeLessThanOrEqual(24);
+  });
+  it('fires at 80 kt, at Vr - 3 and at Vr', () => {
+    expect(takeoffCalloutIndex(79.9, 0, 0, 135, -1, true)).toBe(-1);
+    expect(takeoffCalloutIndex(80, 0, 0, 135, -1, true)).toBe(0);
+    expect(takeoffCalloutIndex(131.9, 0, 0, 135, 0, true)).toBe(-1);
+    expect(takeoffCalloutIndex(132, 0, 0, 135, 0, true)).toBe(1);
+    expect(takeoffCalloutIndex(134.9, 0, 0, 135, 1, true)).toBe(-1);
+    expect(takeoffCalloutIndex(135, 0, 0, 135, 1, true)).toBe(2);
+  });
+  it('a big speed jump still calls every word, one per call, in order', () => {
+    expect(takeoffCalloutIndex(140, 0, 0, 135, -1, true)).toBe(0);
+    expect(takeoffCalloutIndex(140, 0, 0, 135, 0, true)).toBe(1);
+    expect(takeoffCalloutIndex(140, 0, 0, 135, 1, true)).toBe(2);
+  });
+  it('positive rate only after rotate, never on a bounce or a descending lift-off', () => {
+    // Airborne and climbing before Vr (an early lift-off or a bounce): no positive rate yet.
+    expect(takeoffCalloutIndex(130, 600, 12, 135, 0, true)).toBe(-1);
+    expect(takeoffCalloutIndex(133, 600, 12, 135, 1, true)).toBe(-1);
+    // After rotate: a hop under 5 ft, a level or sinking airplane: nothing.
+    expect(takeoffCalloutIndex(140, 600, 4, 135, 2, true)).toBe(-1);
+    expect(takeoffCalloutIndex(140, 200, 20, 135, 2, true)).toBe(-1);
+    expect(takeoffCalloutIndex(140, -300, 20, 135, 2, true)).toBe(-1);
+    expect(takeoffCalloutIndex(140, 301, 6, 135, 2, true)).toBe(3);
+    // A strut rebound on the runway: the caller passes wheel height 0 while on the ground.
+    expect(takeoffCalloutIndex(140, 400, 0, 135, 2, true)).toBe(-1);
+    expect(sweepTakeoff(AIRCRAFT_DATABASE.b738, { liftoffVsFpm: -100 })).toEqual(['eighty knots', 'V1', 'rotate']);
+  });
+  it('nothing after positive rate', () => {
+    expect(takeoffCalloutIndex(160, 1500, 400, 135, 3, true)).toBe(-1);
   });
 });
 
