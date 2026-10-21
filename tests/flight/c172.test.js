@@ -14,7 +14,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, attitude, useFdm } from './harness.js';
+import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, stallInTurn, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -182,6 +182,29 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S level turns
       const { rateDegS, altErrM, tasKts, tanBank } = levelTurn(bank, 90);
       expect(Math.abs(altErrM)).toBeLessThan(60);
       within(Math.abs(rateDegS), (1091 * Math.abs(tanBank)) / tasKts, 0.10);
+    });
+  }
+
+  // Accelerated stall (ticket 0067). FAA-H-8083-25B ch. 5 "Load Factor and Stalling Speed"
+  // (and its stall-speed-vs-bank chart) / FAA-H-8083-3C ch. 5: in a level turn the stall
+  // speed rises with √(load factor) = √(1/cos(bank)): +19% at 45° (1.41 g), +41% at 60°
+  // (2 g). From the POH's 53 KCAS clean stall (Fig. 5-3): 63 KCAS at 45°, 75 KCAS at 60°.
+  // The harness pilot holds the turn level and bleeds ~1 kt/s on the throttle; the card
+  // also checks it actually flew that turn (bank, load factor, altitude, bleed rate).
+  // Holding 60° level needs full power, and the propeller's thrust·sin(α) then carries a
+  // little of the weight, so the break comes a few percent under the power-off √n number.
+  for (const bank of [45, 60]) {
+    const ref = 53 * Math.sqrt(1 / Math.cos((bank * Math.PI) / 180));
+    it(`stalls near ${ref.toFixed(0)} KCAS in a level ${bank}° turn, flaps up (53·√(1/cos ${bank}°), FAA-H-8083-25B ch. 5, ±10%)`, () => {
+      const r = stallInTurn(c172, bank, stallAoaDeg(c172, 0));
+      console.log(`[c172 ${model}] ${bank}° turn: break ${r.kts.toFixed(1)} KCAS (ref ${ref.toFixed(1)}), `
+        + `${r.n.toFixed(2)} g, bank ${r.bankDeg.toFixed(1)}°, alt ${r.altErrM.toFixed(1)} m, bleed ${r.bleedKtsS.toFixed(2)} kt/s`);
+      expect(Math.abs(r.bankDeg - bank)).toBeLessThan(2);
+      within(r.n, 1 / Math.cos((bank * Math.PI) / 180), 0.05);
+      expect(Math.abs(r.altErrM)).toBeLessThan(30);
+      expect(r.bleedKtsS).toBeGreaterThan(0.5);
+      expect(r.bleedKtsS).toBeLessThan(1.5);
+      within(r.kts, ref, 0.10);
     });
   }
 });
