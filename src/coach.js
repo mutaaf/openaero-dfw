@@ -42,12 +42,21 @@ const RANK = {
   done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6,
 };
 
+// On a touch screen the keys are buttons.
+const TOUCH_WORDS = {
+  gear: 'Gear down! Tap GEAR: you are about to land',
+  reverse: 'Reverse thrust: tap REV, then add power',
+  brake: 'Tap BRAKES to stop',
+  stow: 'Tap REV to stow the reversers, 60 kt',
+};
+
 // Words with numbers for the prompts that have them (the card and the voice); built only
-// when the prompt changes. v: { targetKts, flapsDeg }.
+// when the prompt changes. v: { targetKts, flapsDeg, touch (buttons, not keys) }.
 export function coachText(key, v = {}) {
   if (key === 'slow' && v.targetKts) return `Slow: fly ${v.targetKts} kt, add power`;
   if (key === 'fast' && v.targetKts) return `Fast: fly ${v.targetKts} kt, ease the power back`;
-  if (key === 'flaps' && v.flapsDeg) return `Landing flaps: press F until ${v.flapsDeg}°`;
+  if (key === 'flaps' && v.flapsDeg) return v.touch ? `Landing flaps: tap FLAPS until ${v.flapsDeg}°` : `Landing flaps: press F until ${v.flapsDeg}°`;
+  if (v.touch && TOUCH_WORDS[key]) return TOUCH_WORDS[key];
   return COACH_PROMPTS[key];
 }
 

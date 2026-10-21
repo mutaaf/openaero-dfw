@@ -74,6 +74,12 @@ export const AIRCRAFT_DATABASE = {
     vrKts: 135,
     stallCleanKts: 114,
     gearHeight: 3.4,
+    // Struts (gear.js): wheelbase 15.6 m and main track 5.72 m (Boeing 737-800 ACAP §2);
+    // mains 1.47 m aft of the CG (the model's axles, aircraftModel.js), so the nose carries
+    // ~9%. Static stroke and damping are estimates; ±7° pedal steering (737 FCOM).
+    // Inertia: approximate, from JSBSim's 737 model (slug·ft² → kg·m²).
+    gear: { noseZ: 14.13, mainZ: 1.47, trackM: 5.72, strokeM: 0.15, zeta: 0.6, steerDeg: 7 },
+    inertia: { roll: 7.6e5, pitch: 1.76e6, yaw: 2.39e6 },
     eyeOffset: new Vector3(0, 4.2, -12.8),
     chaseDist: 48,
     chaseHeight: 12.5,
@@ -115,6 +121,12 @@ export const AIRCRAFT_DATABASE = {
     vrKts: 55,
     stallCleanKts: 48,
     gearHeight: 1.65,
+    // Struts (gear.js): ~1.65 m wheelbase, 2.54 m main track (POH Section 1 dimensions), the
+    // nose carrying ~18%; spring-steel mains and a nose oleo, stroke and damping estimates;
+    // ±10° pedal nose-wheel steering (POH Section 7). Inertia: JSBSim c172x (948 / 1346 /
+    // 1967 slug·ft²).
+    gear: { noseZ: 1.35, mainZ: 0.3, trackM: 2.54, strokeM: 0.08, zeta: 0.6, steerDeg: 10 },
+    inertia: { roll: 1285, pitch: 1825, yaw: 2667 },
     eyeOffset: new Vector3(0, 1.85, -1.3),
     chaseDist: 18,
     chaseHeight: 4.5,
@@ -140,6 +152,10 @@ export const AIRCRAFT_DATABASE = {
     vrKts: 155,
     stallCleanKts: 120,
     gearHeight: 2.2,
+    // Struts (gear.js): ~4.0 m wheelbase, 2.36 m track, the nose carrying ~13% (estimates
+    // from published F-16 dimensions). Inertia: JSBSim f16 (9496 / 55814 / 63100 slug·ft²).
+    gear: { noseZ: 3.48, mainZ: 0.52, trackM: 2.36, strokeM: 0.12, zeta: 0.6, steerDeg: 10 },
+    inertia: { roll: 12875, pitch: 75674, yaw: 85551 },
     eyeOffset: new Vector3(0, 2.3, -2.5),
     chaseDist: 24,
     chaseHeight: 5.5,

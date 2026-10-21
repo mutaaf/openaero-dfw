@@ -1,12 +1,12 @@
 ---
 id: 0072
 title: Aircraft systems: hydraulic gear and flaps, autobrake, reversers, belly landings
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 71
 ---
 
 ## Why

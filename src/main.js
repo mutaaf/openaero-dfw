@@ -864,7 +864,7 @@ const coachInput = {
   rollout: { gsKts: 0, canReverse: false, reverserPos: 0, braking: false },
 };
 const coachVals = { targetKts: 0, flapsDeg: 0 };
-// Touch-only screens have no reverse key (systems.js reversers: R on a keyboard).
+// Touch-only screens reverse with the REV button (the ILS slot on the ground), not R.
 const touchOnly = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
 
 function resetCoach() {
@@ -923,7 +923,7 @@ function updateCoach(dt) {
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     const r = coachInput.rollout;
     r.gsKts = sim.gsKts;
-    r.canReverse = !!systemsOf(sim.spec).reverser && !touchOnly;
+    r.canReverse = !!systemsOf(sim.spec).reverser;
     r.reverserPos = sim.reverserPos ?? 0;
     r.braking = sim.brakesOn || sim.autobrakeActive;
     stepCoach(coach, coachInput, dt);
@@ -955,6 +955,7 @@ function updateCoach(dt) {
   }
   coachVals.targetKts = Math.round(vrefFor(sim.spec, sim.flapsIndex) + 5);
   coachVals.flapsDeg = (sim.spec.flapDetentsDeg ?? sim.flapAngles)[2];
+  coachVals.touch = touchOnly;
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   document.getElementById('txtCoach').textContent = text;
   // Spoken too when sound is on; the GPWS callouts own the last 100 ft.
@@ -2012,7 +2013,12 @@ function syncUI() {
   document.getElementById('touchGear').classList.toggle('active', locked);
   document.getElementById('txtTouchFlaps').textContent = flapText();
   document.getElementById('touchBrakes').classList.toggle('active-amber', sim.brakesOn);
-  document.getElementById('touchIls').classList.toggle('active-amber', sim.apApproach);
+  // On the ground the ILS button is the reverse levers (airframes that have them).
+  const revSlot = sim.onGround && !!sys.reverser;
+  const ilsTxt = revSlot ? (sim.reverserPos > 0 ? 'REV ON' : 'REV') : 'ILS AUTO';
+  const ilsEl = document.getElementById('txtTouchIls');
+  if (ilsEl.textContent !== ilsTxt) ilsEl.textContent = ilsTxt;
+  document.getElementById('touchIls').classList.toggle('active-amber', revSlot ? sim.reverserPos > 0 : sim.apApproach);
   document.getElementById('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
   document.getElementById('txtPhoneAgl').textContent = `${sim.aglFt}`;
   document.getElementById('txtPhoneVs').textContent = `${sim.vsiFpm}`;
@@ -2334,7 +2340,10 @@ bindStick(document.getElementById('touchStick'));
 document.getElementById('touchGear').addEventListener('click', () => document.getElementById('btnGear').click());
 document.getElementById('touchFlaps').addEventListener('click', () => document.getElementById('btnFlaps').click());
 document.getElementById('touchBrakes').addEventListener('click', () => document.getElementById('btnBrakes').click());
-document.getElementById('touchIls').addEventListener('click', () => document.getElementById('btnApApr').click());
+document.getElementById('touchIls').addEventListener('click', () => {
+  const rev = sim.onGround && systemsOf(sim.spec).reverser;
+  document.getElementById(rev ? 'btnReverse' : 'btnApApr').click();
+});
 
 // Small status toast (gamepad connect/disconnect, etc.)
 let toastTimer = 0;

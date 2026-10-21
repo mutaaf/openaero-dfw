@@ -198,6 +198,9 @@ src/systems.js      aircraft systems (pure, run first in every flightModel sub-s
                     gear and flap travel (levers are commands; gearPos/flapDeg/flapPos are where
                     they are), 737 flap load relief, brake pressure + anti-skid, autobrake
                     1/2/3/MAX (Boeing decelerations), thrust reversers, belly when not locked
+src/gear.js         landing gear on oleo struts (0074): nose + mains at their real positions,
+                    per-wheel loads and moments through spec.inertia, harder rebound damping,
+                    pedal nose-wheel steering, the tail against the mains' moment with q
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/√θ power lapse,

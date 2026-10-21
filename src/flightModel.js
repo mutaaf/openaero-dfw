@@ -19,6 +19,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
+import { gearConstants, gearForces, noseSteerYawRate, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -27,6 +28,7 @@ const _v4 = new Vector3();
 const _q1 = new Quaternion();
 const _euler = new Euler(0, 0, 0, 'YXZ');
 const _air = {};
+const _gearM = new Vector3();
 
 export function stepFlightModel(body, spec, dt) {
   stepSystems(body, spec, dt);
@@ -94,17 +96,30 @@ export function stepFlightModel(body, spec, dt) {
   // the ground height by ~1e-13 m, which must not count as lifting off.
   // Gear not down and locked: it folds, and the aircraft sits on its belly and scrapes.
   const locked = gearLocked(body);
-  const gh = body.groundY + spec.gearHeight * (locked ? 1 : 0.35);
-  if (body.pos.y <= gh + 0.01) {
+  // Airframes with spec.gear stand on three struts (gear.js): nose and mains, each with its
+  // load, and their moments turn the airframe (rotation about the mains, the nose coming
+  // down, a one-wheel touchdown). The floor below is then the struts fully compressed.
+  const struts = locked && spec.gear;
+  _gearM.set(0, 0, 0);
+  const gh = struts
+    ? body.groundY + spec.gearHeight + spec.gear.strokeM - gearConstants(spec).maxStroke
+    : body.groundY + spec.gearHeight * (locked ? 1 : 0.35);
+  let normalForce = 0;
+  if (struts) {
+    // A wheel can reach the ground only when the CG is lower than the longest leg below it.
+    if (body.pos.y <= body.groundY + spec.gearHeight + spec.gear.noseZ + 1) normalForce = gearForces(body, spec, totalForceWorld, _gearM);
+  } else if (body.pos.y <= gh + 0.01) {
     const penetration = gh - body.pos.y;
     const kSpring = spec.massKg * 85;
     const kDamper = spec.massKg * 9;
     // The gear carries whatever the wing doesn't (the contact is also held by the position
     // clamp below, so the spring alone sees ~no compression and would carry ~nothing, which
     // left rolling friction and the brakes with no load), or more while it absorbs a sink.
-    const normalForce = Math.max(0, penetration * kSpring - body.vel.y * kDamper, -totalForceWorld.y);
-
+    normalForce = Math.max(0, penetration * kSpring - body.vel.y * kDamper, -totalForceWorld.y);
     totalForceWorld.y += normalForce;
+    normalForce = Math.max(normalForce, 1e-6);
+  }
+  if (normalForce > 0) {
     body.onGround = true;
 
     // Tyres: rolling resistance (μ·N, brakes μ 0.45) along the nose, and a stiff side
@@ -125,6 +140,7 @@ export function stepFlightModel(body, spec, dt) {
     const sideMax = 0.8 * normalForce;
     totalForceWorld.x += MathUtils.clamp(-vSideX * spec.massKg * 4, -sideMax, sideMax);
     totalForceWorld.z += MathUtils.clamp(-vSideZ * spec.massKg * 4, -sideMax, sideMax);
+    body.vAlongMps = vAlong;
   } else {
     body.onGround = false;
   }
@@ -155,6 +171,16 @@ export function stepFlightModel(body, spec, dt) {
   body.angVel.y += rRate * dt;
   body.angVel.z += pRate * dt;
 
+  // The struts' moments (body axes: x pitch, y yaw, z roll) through the airframe's inertia,
+  // and the pedals steering the nose wheel while it carries weight.
+  if (struts && body.onGround) {
+    body.angVel.x += (_gearM.x / spec.inertia.pitch + tailVsMainsAccel(body, spec, body.iasKts)) * dt;
+    body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
+    body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
+    const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
+    if (steer !== null) body.angVel.y += (steer - body.angVel.y) * Math.min(1, dt * 6);
+  }
+
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {
     body.angVel.z -= body.angVel.z * 1.5 * dt;
   }
@@ -172,10 +198,12 @@ export function stepFlightModel(body, spec, dt) {
   if (body.onGround) {
     _euler.setFromQuaternion(body.quat, 'YXZ');
     const maxP = (spec.maxGroundPitchDeg ?? 15) * DEG_TO_RAD;
-    if (_euler.x > maxP || _euler.x < -0.05) {
-      _euler.x = MathUtils.clamp(_euler.x, -0.05, maxP);
+    // With struts the nose gear holds the nose up; the floor is only a backstop.
+    const minP = struts ? -0.12 : -0.05;
+    if (_euler.x > maxP || _euler.x < minP) {
+      _euler.x = MathUtils.clamp(_euler.x, minP, maxP);
       body.quat.setFromEuler(_euler);
-      if ((_euler.x >= maxP && body.angVel.x > 0) || (_euler.x <= -0.05 && body.angVel.x < 0)) body.angVel.x = 0;
+      if ((_euler.x >= maxP && body.angVel.x > 0) || (_euler.x <= minP && body.angVel.x < 0)) body.angVel.x = 0;
     }
   }
 }
