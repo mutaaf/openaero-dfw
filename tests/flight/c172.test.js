@@ -14,7 +14,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, attitude, useFdm } from './harness.js';
+import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -39,7 +39,11 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 //  - brakes 138 m: main-wheel brakes only, load moves to the nose wheel, 0.36 g. The 0.45 μ
 //    reference is flightModel.js's assumption, not the POH; the POH landing-roll card that
 //    should replace it is ticket 0051.
-const GAPS = { flightModel: new Set(), jsbsim: new Set(['takeoff', 'brakes']) };
+//  - landing roll (POH Fig. 5-11, 575 ft at sea level, 15 °C, max braking): flightModel.js
+//    stops in ~410 ft (-29%) and JSBSim in ~280 ft (-52%) from a 51-53 KIAS touchdown, so the
+//    brakes bite harder than the airplane's (the same gap as 'brakes' above). Found by the
+//    validator, ticket 0065.
+const GAPS = { flightModel: new Set(['landingRoll']), jsbsim: new Set(['takeoff', 'brakes', 'landingRoll']) };
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
   beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
@@ -91,6 +95,20 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     b.brakesOn = true;
     fly(b, c172, 30, null, (x) => -x.vel.z < 0.5);
     within(b.distM, 30 * 30 / (2 * 0.45 * 9.80665), 0.25);
+  });
+
+  // POH Fig. 5-11 (p. 5-23), 2550 lb, flaps 30, power off, max braking, dry paved, no wind,
+  // 61 KIAS at 50 ft: 565 / 585 ft ground roll and 1320 / 1350 ft over 50 ft at 10 / 20 °C
+  // → 575 / 1335 ft at 15 °C (also the POH's Section 1 summary figures).
+  it('lands from 50 ft at 61 KIAS in about 1335 ft total (POH Fig. 5-11, ±15%)', () => {
+    const r = shortFieldLanding(c172, 0);
+    expect(r.tdKts).toBeGreaterThan(48);
+    expect(r.tdKts).toBeLessThan(60);
+    within(r.totalFt, 1335, 0.15);
+  });
+
+  card('landingRoll')('stops in about 575 ft from touchdown, max braking (POH Fig. 5-11, ±15%)', () => {
+    within(shortFieldLanding(c172, 0).rollFt, 575, 0.15);
   });
 
   // POH Fig. 5-5 at sea level: 960 ft at 15 °C (interpolated), 1150 ft at 40 °C (+20%).
