@@ -193,6 +193,10 @@ src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFligh
                     elevator on spawn, lever→plate throttle map. fdm/loadJsbsim.js loads it
                     in the browser, tests/flight/jsbsimNode.js in Node. The aircraft it flies
                     is our own MIT data: public/jsbsim/ (C172 from POH + Roskam)
+src/systems.js      aircraft systems (pure, run first in every flightModel sub-step): hydraulic
+                    gear and flap travel (levers are commands; gearPos/flapDeg/flapPos are where
+                    they are), 737 flap load relief, brake pressure + anti-skid, autobrake
+                    1/2/3/MAX (Boeing decelerations), thrust reversers, belly when not locked
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/√θ power lapse,

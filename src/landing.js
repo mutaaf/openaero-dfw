@@ -15,7 +15,7 @@ function curve(x, pts) {
 const WEIGHTS = { rate: 0.35, centreline: 0.2, zone: 0.2, flare: 0.15, speed: 0.1 };
 
 // t: { vsFpm (negative = descending), crossM, pastThresholdM, runwayLengthM, runwayWidthM,
-//      pitchDeg (nose up +), bankDeg, iasKts, vrefKts, driftDeg? }
+//      pitchDeg (nose up +), bankDeg, iasKts, vrefKts, driftDeg?, gearLocked? (false = belly) }
 // driftDeg (crosswind challenge only) adds a "Crab / de-crab" note; it is not weighted.
 export function gradeLanding(t) {
   const sink = Math.max(0, -t.vsFpm);
@@ -45,7 +45,8 @@ export function gradeLanding(t) {
   let grade = score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';
   let reason = null;
   const offRunway = cross > t.runwayWidthM / 2 || t.pastThresholdM > t.runwayLengthM;
-  if (sink > 600) { grade = 'CRASH'; reason = 'Hard landing: the gear would not survive that.'; }
+  if (t.gearLocked === false) { grade = 'CRASH'; reason = 'Gear not down and locked: a belly landing.'; }
+  else if (sink > 600) { grade = 'CRASH'; reason = 'Hard landing: the gear would not survive that.'; }
   else if (bank > 10) { grade = 'CRASH'; reason = 'Wingtip strike: too much bank at touchdown.'; }
   else if (t.pastThresholdM < 0) { grade = 'D'; reason = 'Touched down short of the runway.'; }
   else if (offRunway) { grade = 'D'; reason = 'Touched down off the runway.'; }

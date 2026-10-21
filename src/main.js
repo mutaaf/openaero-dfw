@@ -31,7 +31,7 @@ import { createPhotoreal, photorealAllowed } from './photoreal.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './terrain.js';
 import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
-  headingError, papiWhiteLights, isStallWarning, isGpwsWarning, stallWarningKts,
+  headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
 } from './aero.js';
 import {
@@ -47,6 +47,7 @@ import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { headingBoxTop, HEADING_BOX_H, cameraFovDeg } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
+import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
 
 // --- Simulation State ---
@@ -71,6 +72,9 @@ const sim = {
   flapsIndex: 2, flapAngles: [0, 10, 25, 40], // labels for airframes without spec.flapDetentsDeg
   spoilers: 0, // ground spoiler extension 0–1 (flightModel.js)
   gearDown: true, brakesOn: false, onGround: false,
+  // Systems (systems.js): the levers above are commands; gearPos/flapDeg/brakePress/
+  // reverserPos are where things are. autobrake 0 OFF, 1–3, 4 MAX; reverseCmd the reverse levers.
+  autobrake: 0, reverseCmd: false,
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
   // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
   mslOffsetM: REF_ELEV_M, isaDevC: 0, altimInHg: 29.92, sigma: 1,
@@ -732,8 +736,9 @@ function checkStabilizedGate() {
   if (step === 'reset') sim.gate = null;
   if (step !== 'evaluate') return;
   const gate = sim.gate = stabilizedGate({
-    iasKt: sim.iasKts, vref: vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: sim.gearDown,
-    flapsOk: sim.flapsIndex >= 2, // the two landing notches (737: 30°/40°, 172: 20°/30°)
+    iasKt: sim.iasKts, vref: vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: gearLocked(sim),
+    // The two landing notches (737: 30°/40°, 172: 20°/30°), set and there (not in transit).
+    flapsOk: sim.flapsIndex >= 2 && sim.flapPos >= 1.999,
     glideDevDots: ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
     vmc: gs.armFt === GATE_VMC_FT,
   });
@@ -774,6 +779,7 @@ function checkTouchdown(dt) {
     bankDeg: _euler.z * RAD_TO_DEG,
     iasKts: sim.iasKts,
     vrefKts: vrefFor(sim.spec, sim.flapsIndex),
+    gearLocked: gearLocked(sim),
     driftDeg: sim.missionKey === CROSSWIND_KEY ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : undefined,
   });
   // Kid: a hard landing bounces and starts the approach again instead of crashing.
@@ -1236,7 +1242,7 @@ function integrateSubStep(dt) {
 
   // Forces, moments and integration (flightModel.js, pure and flight-tested headless), or
   // JSBSim under ?fdm=jsbsim once it has loaded, for the airframes it has a model of.
-  if (jsbsim && jsbsim.flies(sim.aircraftKey)) jsbsim.step(sim, spec, dt);
+  if (jsbsim && jsbsim.flies(sim.aircraftKey)) { stepSystems(sim, spec, dt); jsbsim.step(sim, spec, dt); }
   else stepFlightModel(sim, spec, dt);
 
   // Telemetry derivatives
@@ -1248,8 +1254,15 @@ function integrateSubStep(dt) {
   // Warning alerts
   const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapsIndex), sim.onGround);
   const gpwsWarning = isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround);
+  const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   document.getElementById('stallAlertBanner').classList.toggle('hidden', !stallWarning);
-  document.getElementById('masterAlertBanner').classList.toggle('hidden', !gpwsWarning);
+  const banner = document.getElementById('masterAlertBanner');
+  banner.classList.toggle('hidden', !gpwsWarning && !gearWarning);
+  const bannerText = gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
+  if (banner.textContent !== bannerText) banner.textContent = bannerText;
+  // Spoken once per descent below 500 ft (GPWS mode 4A).
+  if (gearWarning && !sim.gearWarned) { sim.gearWarned = true; audio.callout('too low, gear'); }
+  else if (!gearWarning && sim.aglFt > 600) sim.gearWarned = false;
 }
 
 function updatePapi() {
@@ -1736,6 +1749,11 @@ function loadScenario(key) {
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
   sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
+  // Airline practice on a final: autobrake 2 armed, reversers stowed (systems.js). The
+  // gear and flaps start where the spawn put the levers.
+  sim.autobrake = mission.kind === 'final' && systemsOf(sim.spec).autobrake ? 2 : 0;
+  sim.gearWarned = false;
+  seedSystems(sim.spec, sim);
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   // Airborne spawns fly their speed through the air: the wind adds to the ground velocity
   // (a final with a tailwind starts at its airspeed, not 5 kt slow).
@@ -1815,6 +1833,11 @@ let rngThrottleEl = null;
 let draggingThrottle = false;
 // The flap lever's detent (deg) for the current notch, as the airframe labels it.
 const flapDeg = () => (sim.spec.flapDetentsDeg ?? sim.flapAngles)[sim.flapsIndex];
+// Where the flaps are, and where they are going while they move (systems.js).
+const flapText = () => {
+  const at = Math.round(sim.flapDeg ?? flapDeg());
+  return at === flapDeg() ? `${at}°` : `${at}→${flapDeg()}°`;
+};
 
 function syncUI() {
   const throttlePct = Math.round(sim.throttle * 100);
@@ -1851,12 +1874,23 @@ function syncUI() {
   document.getElementById('btnApAlt').classList.toggle('active', sim.apAltHold);
   document.getElementById('btnApApr').classList.toggle('active', sim.apApproach);
 
-  document.getElementById('btnGear').classList.toggle('active', sim.gearDown);
-  document.getElementById('txtGear').textContent = sim.gearDown ? 'DOWN 3 GRN' : 'UP';
+  // Gear and flaps as they are, not as the levers are: amber while the hydraulics move them.
+  const locked = gearLocked(sim), transit = gearInTransit(sim);
+  document.getElementById('btnGear').classList.toggle('active', locked);
+  document.getElementById('btnGear').classList.toggle('active-amber', transit);
+  document.getElementById('txtGear').textContent = locked ? 'DOWN 3 GRN' : transit ? (sim.gearDown ? 'TRANSIT ▼' : 'TRANSIT ▲') : 'UP';
 
-  document.getElementById('txtFlaps').textContent = `${flapDeg()}°`;
+  document.getElementById('txtFlaps').textContent = flapText();
   document.getElementById('btnBrakes').classList.toggle('active-amber', sim.brakesOn);
-  document.getElementById('txtBrakes').textContent = sim.brakesOn ? 'SET' : 'OFF';
+  document.getElementById('txtBrakes').textContent = sim.brakesOn ? 'SET' : sim.autobrakeActive ? 'AUTO' : 'OFF';
+  const sys = systemsOf(sim.spec);
+  document.getElementById('btnAutobrake').disabled = !sys.autobrake;
+  document.getElementById('txtAutobrake').textContent = sys.autobrake ? AUTOBRAKE_LABELS[sim.autobrake] : 'N/A';
+  document.getElementById('btnAutobrake').classList.toggle('active-amber', sim.autobrakeActive);
+  document.getElementById('btnReverse').disabled = !sys.reverser;
+  document.getElementById('txtReverse').textContent = !sys.reverser ? 'N/A' : sim.reverserPos >= 1 ? 'REV' : sim.reverserPos > 0 ? 'UNLK' : 'STOW';
+  document.getElementById('btnReverse').classList.toggle('active-amber', sim.reverserPos > 0);
+  document.getElementById('txtHyd').textContent = sys.hydraulics ? `HYD ${sim.hydPsi} PSI` : 'HYD —';
 
   document.getElementById('meterElev').textContent = `${Math.round(sim.elevInput * 100)}%`;
   document.getElementById('meterAil').textContent = `${Math.round(sim.aileronInput * 100)}%`;
@@ -1883,16 +1917,16 @@ function syncUI() {
   document.getElementById('touchThrottleFill').style.height = `${thrPct}%`;
   document.getElementById('touchThrottleHandle').style.bottom = `${thrPct}%`;
   document.getElementById('touchThrottle').setAttribute('aria-valuenow', String(thrPct));
-  document.getElementById('txtTouchGear').textContent = sim.gearDown ? 'DN' : 'UP';
-  document.getElementById('touchGear').classList.toggle('active', sim.gearDown);
-  document.getElementById('txtTouchFlaps').textContent = `${flapDeg()}°`;
+  document.getElementById('txtTouchGear').textContent = locked ? 'DN' : transit ? '···' : 'UP';
+  document.getElementById('touchGear').classList.toggle('active', locked);
+  document.getElementById('txtTouchFlaps').textContent = flapText();
   document.getElementById('touchBrakes').classList.toggle('active-amber', sim.brakesOn);
   document.getElementById('touchIls').classList.toggle('active-amber', sim.apApproach);
   document.getElementById('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
   document.getElementById('txtPhoneAgl').textContent = `${sim.aglFt}`;
   document.getElementById('txtPhoneVs').textContent = `${sim.vsiFpm}`;
   document.getElementById('txtPhoneThr').textContent = `${throttlePct}%`;
-  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : sim.gearDown ? 'DN' : 'UP'} · ${flapDeg()}°`;
+  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;
   const papi = document.getElementById('txtPapiStatus');
   const phonePapi = document.getElementById('txtPhonePapi');
   phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
@@ -2024,6 +2058,8 @@ document.getElementById('selAircraft').addEventListener('change', e => {
   sim.aircraftKey = e.target.value;
   sim.spec = AIRCRAFT_DATABASE[sim.aircraftKey];
   if (sim.spec.fixedGear) sim.gearDown = true;
+  if (!systemsOf(sim.spec).autobrake) sim.autobrake = 0;
+  seedSystems(sim.spec, sim); // the new airframe's gear and flaps where its levers are
   document.getElementById('txtAircraftTitle').textContent = sim.spec.name;
   buildAircraft(sim.aircraftKey);
 });
@@ -2124,6 +2160,17 @@ document.getElementById('btnFlaps').addEventListener('click', () => {
 });
 document.getElementById('btnBrakes').addEventListener('click', () => {
   sim.brakesOn = !sim.brakesOn;
+});
+// Autobrake selector OFF → 1 → 2 → 3 → MAX (airframes that have one, systems.js).
+document.getElementById('btnAutobrake').addEventListener('click', () => {
+  if (systemsOf(sim.spec).autobrake) sim.autobrake = (sim.autobrake + 1) % AUTOBRAKE_LABELS.length;
+});
+// Reverse levers: only on the ground, from idle. Deploying or stowing brings the power to
+// idle first, as the interlock does; then the throttle sets reverse thrust.
+document.getElementById('btnReverse').addEventListener('click', () => {
+  if (!systemsOf(sim.spec).reverser || (!sim.onGround && !sim.reverseCmd)) return;
+  sim.reverseCmd = !sim.reverseCmd;
+  sim.throttle = 0;
 });
 
 // Throttle Buttons
@@ -2272,6 +2319,8 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
   else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length; }
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
+  else if (e.code === 'KeyK') { document.getElementById('btnAutobrake').click(); }
+  else if (e.code === 'KeyR') { document.getElementById('btnReverse').click(); }
   else if (e.code === 'KeyC') { document.getElementById('btnCamera').click(); }
   else if (e.code === 'KeyM') { document.getElementById('btnMouseYoke').click(); }
   else if (e.code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }

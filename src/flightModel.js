@@ -9,13 +9,16 @@
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
 // writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY,
 // sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn),
-// spoilers (ground spoiler extension 0–1, airframes with spec.groundSpoilers).
+// spoilers (ground spoiler extension 0–1, airframes with spec.groundSpoilers). Systems
+// (systems.js) run first: the gear, flaps, brakes and reversers follow their levers at
+// their own rates, so the aerodynamics see where the surfaces are, not where the levers are.
 import { Vector3, Quaternion, Euler, MathUtils } from 'three';
 import { MPS_TO_KTS, M_TO_FT, DEG_TO_RAD, RAD_TO_DEG, GRAVITY } from './constants.js';
 import { airAt } from './atmosphere.js';
 import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
+import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -26,6 +29,7 @@ const _euler = new Euler(0, 0, 0, 'YXZ');
 const _air = {};
 
 export function stepFlightModel(body, spec, dt) {
+  stepSystems(body, spec, dt);
   // Transform the AIR-RELATIVE velocity to the body frame: u (fwd), v (right), w (down).
   // Aerodynamics see the air mass, not the ground (weather.js wind, gusts included).
   const invQuat = _q1.copy(body.quat).invert();
@@ -52,16 +56,17 @@ export function stepFlightModel(body, spec, dt) {
   const qDyn = dynamicPressure(airspeed, air.rho);
 
   // Aerodynamic Lift & Drag Curves with Post-Stall Drop (aero.js)
-  let cl = liftCoefficient(spec, aoaRad, body.flapsIndex);
+  let cl = liftCoefficient(spec, aoaRad, body.flapPos);
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
   const groundEffect = groundEffectFactor(body.pos.y - body.groundY, spec.wingSpanM);
-  let cd = dragCoefficient(spec, cl, body.gearDown, body.flapsIndex, groundEffect);
+  let cd = dragCoefficient(spec, cl, body.gearPos, body.flapPos, groundEffect);
 
   // Auto ground spoilers: out over ~1 s on the ground with the thrust levers at idle, in
-  // again as soon as they are advanced. Lift dumped onto the gear and brakes, plus drag.
+  // again as soon as they are advanced (reverse thrust keeps them out). Lift dumped onto
+  // the gear and brakes, plus drag.
   if (spec.groundSpoilers) {
-    const deploy = body.onGround && body.throttle < 0.05 ? 1 : 0;
+    const deploy = body.onGround && (body.throttle < 0.05 || body.reverserPos > 0) ? 1 : 0;
     body.spoilers = MathUtils.clamp((body.spoilers ?? 0) + Math.sign(deploy - (body.spoilers ?? 0)) * dt, 0, 1);
     cl *= 1 - spec.groundSpoilers.liftDump * body.spoilers;
     cd += spec.groundSpoilers.dCd * body.spoilers;
@@ -70,7 +75,7 @@ export function stepFlightModel(body, spec, dt) {
   const liftForce = cl * qDyn * spec.wingAreaM2;
   const dragForce = cd * qDyn * spec.wingAreaM2;
   body.engineN = spoolEngine(spec, body.engineN ?? body.throttle, body.throttle, dt);
-  const thrustForce = engineThrust(spec, body.engineN, airspeed, air, body.mach, qDyn);
+  const thrustForce = reversedThrust(spec, engineThrust(spec, body.engineN, airspeed, air, body.mach, qDyn), body.reverserPos);
 
   // Lift is perpendicular to the relative wind (in the plane of the body's lateral axis),
   // drag is along it; both built in body axes from the air-relative velocity direction.
@@ -87,7 +92,9 @@ export function stepFlightModel(body, spec, dt) {
   // Ground Spring-Damper Suspension, on the real ground under the aircraft (terrain.js)
   // 1 cm contact tolerance: on a sloped runway, sub-nanometre drift along the slope changes
   // the ground height by ~1e-13 m, which must not count as lifting off.
-  const gh = body.groundY + spec.gearHeight;
+  // Gear not down and locked: it folds, and the aircraft sits on its belly and scrapes.
+  const locked = gearLocked(body);
+  const gh = body.groundY + spec.gearHeight * (locked ? 1 : 0.35);
   if (body.pos.y <= gh + 0.01) {
     const penetration = gh - body.pos.y;
     const kSpring = spec.massKg * 85;
@@ -109,7 +116,9 @@ export function stepFlightModel(body, spec, dt) {
     const vAlong = body.vel.x * fwd.x + body.vel.z * fwd.z;
     const vSideX = body.vel.x - fwd.x * vAlong;
     const vSideZ = body.vel.z - fwd.z * vAlong;
-    const mu = body.brakesOn ? 0.45 : 0.03; // Raymer: rolling μ 0.03 on concrete/asphalt
+    // Raymer: rolling μ 0.03 on concrete/asphalt; the brakes add up to what anti-skid gets
+    // from the runway (systems.js). A belly slides at μ ~0.5.
+    const mu = locked ? brakeMu(spec, body.brakePress) : 0.5;
     const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
     totalForceWorld.x += fwd.x * roll;
     totalForceWorld.z += fwd.z * roll;

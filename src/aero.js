@@ -9,11 +9,20 @@ export function dynamicPressure(airspeedMps, rho = RHO_SEA_LEVEL) {
   return 0.5 * rho * airspeedMps * airspeedMps;
 }
 
+// A per-notch table at a flap position in notch units: flaps in transit (systems.js) sit
+// between notches, so the value is interpolated between them.
+function notchValue(table, pos, fallback) {
+  const i = Math.floor(pos), f = pos - i;
+  const a = table[i] ?? fallback;
+  return f > 0 ? a + ((table[i + 1] ?? fallback) - a) * f : a;
+}
+
 // Flap lift increment and stall angle for a flap notch: per-notch tables when the airframe
 // has them (fitted to the POH stall speeds), else 0.28 per notch (the prototype's value).
 export const flapDeltaCl = (spec, flapsIndex) =>
-  (spec.flapCl ? spec.flapCl[flapsIndex] ?? 0 : flapsIndex * (spec.flapClPerNotch ?? 0.28));
-export const stallAoaDeg = (spec, flapsIndex) => spec.alphaStallDegByFlap?.[flapsIndex] ?? spec.alphaStallDeg;
+  (spec.flapCl ? notchValue(spec.flapCl, flapsIndex, 0) : flapsIndex * (spec.flapClPerNotch ?? 0.28));
+export const stallAoaDeg = (spec, flapsIndex) =>
+  (spec.alphaStallDegByFlap ? notchValue(spec.alphaStallDegByFlap, flapsIndex, spec.alphaStallDeg) : spec.alphaStallDeg);
 
 // Lift coefficient: linear lift curve + flap increment, with an exponential post-stall drop.
 export function liftCoefficient(spec, aoaRad, flapsIndex) {
@@ -54,10 +63,16 @@ export function inducedDragK(spec) {
 // Total drag coefficient: parasite + gear + flaps + induced. Ground effect weakens the
 // wingtip vortices, so it scales only the induced term (McCormick), not skin friction.
 // Flap drag per notch: a per-airframe table when the airframe has one, else 0.012 a notch.
-// Fixed gear (spec.fixedGear) is always down.
+// Fixed gear (spec.fixedGear) is always down. `gearDown` may be the gear's travel (0 up → 1
+// down, systems.js): the legs' drag grows as they come out, and the open doors add theirs
+// while the gear is in transit (an estimate: ~a third of the gear's drag).
+export const GEAR_CD = 0.018;
+export const GEAR_DOORS_CD = 0.006;
 export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect) {
-  const flapCd = spec.flapCd ? spec.flapCd[flapsIndex] ?? 0 : flapsIndex * 0.012;
-  return spec.cd0 + (gearDown || spec.fixedGear ? 0.018 : 0) + flapCd + inducedDragK(spec) * cl * cl * groundEffect;
+  const flapCd = spec.flapCd ? notchValue(spec.flapCd, flapsIndex, 0) : flapsIndex * 0.012;
+  const g = spec.fixedGear ? 1 : Number(gearDown);
+  const gearCd = GEAR_CD * g + (g > 0 && g < 1 ? GEAR_DOORS_CD : 0);
+  return spec.cd0 + gearCd + flapCd + inducedDragK(spec) * cl * cl * groundEffect;
 }
 
 // Heading error in degrees, wrapped to [-180, 180].
@@ -105,6 +120,10 @@ export function isStallWarning(iasKts, stallCleanKts, onGround) {
 }
 export function isGpwsWarning(aglFt, vsiFpm, onGround) {
   return aglFt < 450 && vsiFpm < -1400 && !onGround;
+}
+// GPWS mode 4A, "TOO LOW, GEAR": descending under 500 ft with the gear not down and locked.
+export function isGearWarning(aglFt, vsiFpm, gearLocked, onGround) {
+  return !gearLocked && !onGround && aglFt < 500 && vsiFpm < 0;
 }
 
 // Stabilized-approach gate (ticket 0020; Flight Safety Foundation ALAR Briefing Note 7.1).

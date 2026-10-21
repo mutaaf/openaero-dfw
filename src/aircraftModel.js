@@ -91,9 +91,11 @@ export async function attachModel(root, aircraftKey, base, refs, current) {
     update(sim) {
       const q = sim.quat; // sin(pitch): the nose (body -Z) direction's height
       const lift = rotationLift(2 * (q.w * q.x - q.y * q.z), sim.spec.gearHeight, mainGearZ, sim.pos.y - sim.groundY - sim.spec.gearHeight);
-      model.position.y = sim.gearDown ? lift : 0;
-      if (shown === sim.gearDown) return;
-      shown = sim.gearDown;
+      // The legs show from half-way out (systems.js gearPos: 0 up → 1 down and locked).
+      const out = (sim.gearPos ?? (sim.gearDown ? 1 : 0)) >= 0.5;
+      model.position.y = out ? lift : 0;
+      if (shown === out) return;
+      shown = out;
       showGear(gear, shown);
     },
   };
