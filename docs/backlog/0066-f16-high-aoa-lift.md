@@ -13,8 +13,9 @@ pr:
 0053's cards (`tests/flight/f16.test.js`) compare the F-16's lift with NASA TP-1538
 (https://ntrs.nasa.gov/citations/19800005879, Table III, the F-16's wind-tunnel data). The
 model's lift is a straight line to a 28° stall (CL 1.91): within 2% of NASA at 20° AoA, but
-10% high at 25° (1.72 vs 1.56), where the real curve bends over towards its ~1.89 peak near
-35°. With the jet's 25° AoA limiter (TP-1538 p. 12), CL(25°) puts the power-off 1-g speed
+10% high at 25° (1.72 vs 1.56). NASA's curve is not a smooth bend: from the same Table III
+rows (β = 0, δh = 0, CL = −CZ·cos α + CX·sin α) it is 1.38 at 20°, 1.56 at 25°, 1.82 at 30°
+and peaks ~1.89 near 35°, so a fit to the 25° point alone gets the shape wrong. With the jet's 25° AoA limiter (TP-1538 p. 12), CL(25°) puts the power-off 1-g speed
 at 12 t, sea level, at about 129 KEAS (our own sum from NASA's CL, untrimmed). The model's
 power-off stall is 117 kt and its stall warning (stall + 5 kt, `stallWarningKts`) ~122, so
 a pilot can hang the F-16 ~10 kt slower than its lift supports.
@@ -30,6 +31,7 @@ delete it or wire it. Promote the two `KNOWN GAP (0066)` cards to `it`.
 
 ## Acceptance criteria
 - [ ] Both 0066 cards in `tests/flight/f16.test.js` promoted to `it` and green
+- [ ] A new card pins CL(30°) to NASA's 1.82, ±5% (CX 0.15360, CZ −2.00800)
 - [ ] The 20° card and every C172 and 737 card stay green
 - [ ] `npm test -- tests/flight` green
 

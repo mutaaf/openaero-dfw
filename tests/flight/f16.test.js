@@ -23,7 +23,7 @@
 //  - the flight-control system (g and AoA limiters): out of scope for 0053; the 25° AoA
 //    limit below only sets the AoA at which the 1-g speed card is computed.
 //  - induced drag: aspectRatio 3.2 is the bare 31 ft wing (9.449² / 27.87); the span card
-//    checks the USAF span, which includes the wingtip missile rails.
+//    checks the USAF span, which (we infer) includes the wingtip missile rails.
 //
 // A card the model does not yet meet is a KNOWN GAP: `it.fails` with its ticket, never a
 // looser tolerance. The fixing PR promotes it to `it`.
@@ -41,9 +41,10 @@ const LB_TO_KG = 0.45359237;
 const LBF_TO_N = 4.4482216;
 
 // USAF: weight 19,700 lb without fuel (8,936 kg); 7,000 lb internal fuel (3,175 kg);
-// F-16C/D thrust 27,000 lb; wingspan 32 ft 8 in (with the wingtip missile rails; LM gives
-// 31 ft / 9.449 m for the bare wing). LM: engine thrust class 29,000 lb (the F110-GE-129
-// the spec names, or the F100-PW-229).
+// F-16C/D thrust 27,000 lb; wingspan 32 ft 8 in (the sheet rounds it to 9.8 m; 9.96 m
+// exactly). LM gives 31 ft / 9.449 m; that the difference is the wingtip missile rails is
+// our inference, not either source's. LM: engine thrust class 29,000 lb (LM names no
+// engine; the F110-GE-129 is aircraft.js's own label).
 const EMPTY_KG = 19700 * LB_TO_KG;
 const INTERNAL_FUEL_KG = 7000 * LB_TO_KG;
 const SPAN_M = (32 + 8 / 12) * 0.3048;
@@ -51,8 +52,10 @@ const THRUST_CLASS_N = 29000 * LBF_TO_N;
 
 // TP-1538 Table III, β = 0, δh = 0: body-axis force coefficients of the whole airplane, the
 // leading-edge flap at its 25° limit (the base tables; App. B adds an increment as the flap
-// retracts). TP-1538 says the flap is scheduled on AoA and Mach; at low speed and AoA ≥ 20°
-// it is assumed fully down, so these rows apply as they are. CL = −CZ·cos α + CX·sin α.
+// retracts). TP-1538 p. 34 schedules it as δlef = 1.38α − 9.05 q̄/ps + 1.45 (deg), capped at
+// 25°: at low speed and AoA ≥ 20° it is fully down, so these rows apply as they are.
+// CL = −CZ·cos α + CX·sin α (X forward, Z down). δh = 0 is untrimmed: the trimmed lift at
+// 20–25° differs by the stabilator's own contribution, which these cards ignore.
 const TP1538 = { 20: { cx: 0.12830, cz: -1.41800 }, 25: { cx: 0.13000, cz: -1.65800 } };
 const nasaCl = (aoaDeg) => {
   const { cx, cz } = TP1538[aoaDeg], a = aoaDeg * DEG_TO_RAD;
@@ -66,7 +69,7 @@ const nasaCl = (aoaDeg) => {
 const vAtAoaLimitKts = () => Math.sqrt(2 * f16.massKg * G / (1.225 * f16.wingAreaM2 * nasaCl(25))) / 0.514444;
 
 describe('F-16C vs the USAF fact sheet and Lockheed Martin', () => {
-  it('wingspan is the fact sheet\'s 32 ft 8 in (9.96 m, with tip rails), ±1%', () => {
+  it('wingspan is the fact sheet\'s 32 ft 8 in (9.96 m), ±1%', () => {
     within(f16.wingSpanM, SPAN_M, 0.01);
   });
 
@@ -84,7 +87,8 @@ describe('F-16C vs the USAF fact sheet and Lockheed Martin', () => {
     expect(f16.engine.staticThrustN).toBeGreaterThanOrEqual(27000 * LBF_TO_N);
   });
 
-  // Empty + internal fuel leaves out the pilot, gun ammunition, oil and LOX (~600 lb).
+  // A consistency check of the two cards above (both spec inputs). Empty + internal fuel
+  // leaves out the pilot, gun ammunition, oil and LOX (~600 lb).
   it('static thrust-to-weight is 29,000 lbf over empty + internal fuel (26,700 lb): 1.09, ±3%', () => {
     within(f16.engine.staticThrustN / (f16.massKg * G), THRUST_CLASS_N / ((EMPTY_KG + INTERNAL_FUEL_KG) * G), 0.03);
   });
@@ -96,7 +100,8 @@ describe('F-16C vs NASA TP-1538 wind-tunnel data', () => {
   });
 
   // The model's lift is a straight line to a 28° stall (CL 1.91); NASA's curve bends over
-  // above 20° (1.56 at 25°; at 35°, CX 0.16050 and CZ −2.20000 give its ~1.89 peak).
+  // above 20° (1.56 at 25°), recovers (1.82 at 30°) and peaks near 35° (CX 0.16050, CZ
+  // −2.20000: ~1.89). Not a smooth bend: the fix (0066) has to match 30° too.
   it.fails('KNOWN GAP (0066): lift coefficient at 25° AoA is NASA\'s 1.56, ±5% (model: 1.72)', () => {
     within(liftCoefficient(f16, 25 * DEG_TO_RAD, 0), nasaCl(25), 0.05);
   });
