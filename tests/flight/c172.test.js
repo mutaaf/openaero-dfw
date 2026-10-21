@@ -1,6 +1,6 @@
 // Flight test cards: the Cessna 172S flown headless (harness.js) against the Pilot's
 // Operating Handbook (Cessna 172S POH, Section 5, 2550 lb, sea level ISA unless noted;
-// Fig. 5-3 stall speeds, 5-5 short field takeoff, 5-6 maximum rate of climb, 3-1 maximum
+// Fig. 5-3 stall speeds, 5-5 short field takeoff (p. 5-14), 5-6 maximum rate of climb, 3-1 maximum
 // glide). The model has no instrument error, so stall speeds compare with KCAS.
 //
 // A card the model does not yet meet is a KNOWN GAP: `it.fails` keeps the gate green
@@ -63,6 +63,24 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     const { rollFt, liftoffKts } = shortFieldTakeoff(c172, 0);
     within(rollFt, 960, 0.15);
     within(liftoffKts, 51, 0.08);
+  });
+
+  // POH Fig. 5-5 sheet 1 (p. 5-14), 2550 lb, flaps 10°, full throttle before brake release,
+  // paved level dry runway, zero wind, lift off 51 KIAS, 56 KIAS at 50 ft. Sea level,
+  // interpolated to ISA 15 °C: ground roll (925 + 995) / 2 = 960 ft, total over a 50 ft
+  // obstacle (1575 + 1690) / 2 = 1633 ft. The POH has no flaps-up takeoff table; this is
+  // its only one. Lift-off speed is the card above's job; this one checks the distances
+  // and that the harness pilot flew the technique (rotate at 45, wings level, 56 to 50 ft).
+  it('short-field takeoff: roll near 960 ft, 1633 ft over a 50 ft obstacle (POH Fig. 5-5, ±15%)', () => {
+    const r = shortFieldTakeoff(c172, 0, 50);
+    console.log(`[c172 ${model}] roll ${r.rollFt.toFixed(0)} ft, 50 ft at ${r.totalFt.toFixed(0)} ft; `
+      + `rotate ${r.rotateKts.toFixed(1)} KIAS, peak pitch rate ${r.maxPitchRateDegS.toFixed(1)}°/s, `
+      + `lift-off ${r.liftoffKts.toFixed(1)} KIAS, ${r.clearKts.toFixed(1)} KIAS at 50 ft, heading ±${r.maxHeadingDevDeg.toFixed(2)}°`);
+    expect(Math.abs(r.rotateKts - 45)).toBeLessThan(1);
+    expect(r.maxHeadingDevDeg).toBeLessThan(2);
+    within(r.clearKts, 56, 0.10);
+    within(r.rollFt, 960, 0.15);
+    within(r.totalFt, 1633, 0.15);
   });
 
   card('brakes')('brakes stop the aircraft from 58 kt in about 100 m (μ 0.45 ≈ 0.43 g)', () => {

@@ -1,12 +1,12 @@
 ---
 id: 0064
 title: C172 takeoff roll and 50 ft distance card against the POH
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 63
 ---
 
 ## Why
@@ -37,3 +37,11 @@ Headless flight card as above; no e2e.
 
 ## Out of scope
 Landing roll (0051), short-field technique, wind and slope corrections, 737 and F-16.
+
+## Shipped notes
+The POH has no flaps-up takeoff table: Fig. 5-5 (p. 5-14, Revision 4 copy at befa.org) is
+the short-field table only (flaps 10°, lift off 51 KIAS, 56 KIAS at 50 ft). At sea level,
+interpolated to 15 °C, it reads 960 ft roll and 1633 ft over 50 ft, so the card flies the
+POH's own conditions with the harness's existing short-field rotation (45 KIAS to 11°) and
+climbs at 56 KIAS. Measured: flightModel 959 / 1712 ft, JSBSim 1014 / 1783 ft. The harness
+pilot now holds runway heading with rudder (JSBSim swung 8° left without it).

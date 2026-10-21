@@ -93,15 +93,43 @@ export function settle(body, spec, seconds, pilot, f, settleS = 40) {
 
 // POH short-field takeoff: flaps 10, full power, rotate at 45 KIAS to a nose-high 11°
 // (lift-off near 51 KIAS). Ground roll ends when the wheels leave. `isaDevC`: hot day.
-export function shortFieldTakeoff(spec, isaDevC = 0) {
+// With `clearFt` the run goes on to clear an obstacle that high: the POH's 56 KIAS climb
+// (Fig. 5-5 "Speed at 50 Ft") until the wheels are `clearFt` above the runway. It also
+// reports what the pilot actually flew: IAS at rotation, peak pitch rate, worst heading.
+export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0) {
   const b = makeBody(spec, { throttle: 1, flaps: 1 });
   b.isaDevC = isaDevC;
-  let liftoffKts = null;
-  fly(b, spec, 90, (x) => {
-    if (x.iasKts >= 45) x.elevInput = elevatorForPitch(11, attitude(x).pitchDeg, x.angVel.x);
+  let rollFt = null, liftoffKts = null, rotateKts = null, maxPitchRateDegS = 0, maxHeadingDevDeg = 0;
+  const climb = speedHoldPilot(() => 56);
+  fly(b, spec, 120, (x, dt) => {
+    _e.setFromQuaternion(x.quat, 'YXZ');
+    const yawLeftDeg = _e.y * RAD_TO_DEG;
+    maxHeadingDevDeg = Math.max(maxHeadingDevDeg, Math.abs(yawLeftDeg));
+    // Rudder (and nose-wheel steering) holds the runway heading against the propeller's
+    // left-turning tendency, as a pilot's right foot does. Rudder + = yaw right.
+    x.rudderInput = Math.max(-1, Math.min(1, yawLeftDeg * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15));
+    if (rollFt === null) {
+      if (x.iasKts >= 45) {
+        rotateKts ??= x.iasKts;
+        maxPitchRateDegS = Math.max(maxPitchRateDegS, x.angVel.x * RAD_TO_DEG);
+        x.elevInput = elevatorForPitch(11, attitude(x).pitchDeg, x.angVel.x);
+      }
+    } else {
+      // Take over from the attitude the rotation left, not from the spawn's 0°.
+      x.pitchCmd ??= attitude(x).pitchDeg;
+      climb(x, dt);
+    }
   }, (x) => {
-    if (x.t > 2 && !x.onGround) { liftoffKts = x.iasKts; return true; }
-    return false;
+    if (rollFt === null && x.t > 2 && !x.onGround) {
+      rollFt = x.distM * M_TO_FT;
+      liftoffKts = x.iasKts;
+      b.pitchCmd = null;
+      if (!clearFt) return true;
+    }
+    return rollFt !== null && (x.pos.y - x.groundY - spec.gearHeight) * M_TO_FT >= clearFt;
   });
-  return { rollFt: b.distM * M_TO_FT, liftoffKts };
+  return {
+    rollFt, liftoffKts, rotateKts, maxPitchRateDegS, maxHeadingDevDeg,
+    totalFt: b.distM * M_TO_FT, clearKts: b.iasKts,
+  };
 }
