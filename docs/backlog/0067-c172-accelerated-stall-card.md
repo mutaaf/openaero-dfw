@@ -1,12 +1,12 @@
 ---
 id: 0067
 title: C172 accelerated-stall card: stall speed rises with the square root of load factor
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 68
 ---
 
 ## Why
@@ -16,7 +16,7 @@ base-to-final turn. Stall speed scales with the square root of load factor: at 6
 (2 g) it is 41% higher; at 45° (1.41 g) 19% higher. Source: FAA Pilot's Handbook of
 Aeronautical Knowledge, ch. 5 "Load Factor and Stalling Speed" and the stall-speed-versus-bank
 table, https://www.faa.gov/regulations_policies/handbooks_manuals/aviation/phak and
-FAA-H-8083-3B ch. 4. The sim's lift model is CL·q·S, so this should pass on both models, which
+FAA-H-8083-3C ch. 5. The sim's lift model is CL·q·S, so this should pass on both models, which
 makes it a cheap regression net for 0040-style flap or CLmax edits.
 
 ## What
