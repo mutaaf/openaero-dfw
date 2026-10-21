@@ -214,12 +214,14 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
 // reports print the crews' performance-tool output, the right and the wrong one:
 //  - AAIB Bulletin 6/2019, YR-BMF (737-8Q8), Table 1: 59 t: VR 140, V2 143; 71.3 t: VR 153,
 //    V2 157 (assets.publishing.service.gov.uk/media/5f4681b1d3bf7f5d84a943c8/)
-//  - ATSB AO-2014-162, VH-VZR (737-838, winglets): 66.4 t: V1 145, VR 146, V2 149; 76.4 t:
+//  - ATSB AO-2014-162, VH-VZR (737-838): 66.4 t: V1 145, VR 146, V2 149; 76.4 t:
 //    V1 152, VR 155, V2 158 (read in the verbatim copy at b737.org.uk/incident_vh-vzr.htm,
 //    atsb.gov.au refused the sandbox)
 // Neither prints the flap (the bug card is an image). Scaled to 65 t by √(m / 65 t), the
-// stall-speed law V-speeds follow above the minimum-control speeds: VR 143.0–147.0, V2
-// 145.7–150.1, V2 − VR 3–4 kt. The model has one takeoff notch, 10, and Boeing's field
+// stall-speed law V-speeds follow above the minimum-control speeds (737-800 VMCG/VMCA ~110
+// kt): VR 143.0–147.0, V2 145.7–150.1, V2 − VR 3–4 kt. Caveats: the scaled VR falls a little
+// with weight (146.9, 146.1, 144.4, 143.0), which may mean mixed flaps, and the 59 t case
+// was a derated takeoff (assumed 48 °C). The model has one takeoff notch, 10, and Boeing's field
 // length card above (optimum flap) caps how little lift it can have: with VR 145 the
 // model's all-engines takeoff would need ~5,500 ft. Line crews mostly take off with flaps
 // 1 or 5 on long runways, which lift less and fly faster: those cards are known gaps until
@@ -246,22 +248,30 @@ describe('Boeing 737-800 takeoff speeds vs published crew data (0062)', () => {
     }
   });
 
-  // Every published pair has V2 3–4 kt above VR. Before 0062 the model's was 8.4 kt (Vr 132,
-  // V2 140.4): a rotation that early leaves the jet flying well below its own V2.
-  it('V2 sits just above Vr, as in every published 737-800 case (3–4 kt; model within 1–8 kt)', () => {
+  // A model bound, not the source's: every published pair has V2 3–4 kt above VR (the
+  // known-gap card below); 0062 brought the model from 8.4 kt (Vr 132, V2 140.4) to 6.8, and
+  // this keeps it from sliding back.
+  it('V2 sits at most 7 kt above Vr (model bound; was 8.4 before 0062)', () => {
     const gap = v2() - b738.vrKts;
     expect(gap).toBeGreaterThanOrEqual(1);
-    expect(gap).toBeLessThanOrEqual(8);
+    expect(gap).toBeLessThanOrEqual(7);
   });
 
   // AAIB 6/2019 quotes the 737 FCTM: rotating at VR towards 15° at 2–3°/s, "liftoff attitude
   // is achieved in approximately 3 to 4 seconds depending on airplane weight and thrust
-  // setting". At full thrust the jet gains ~5 kt a second, so it lifts off ~17 kt above Vr;
-  // the ticket's "Vr + 5–10" is a reduced-thrust takeoff's.
+  // setting". At full thrust the model gains ~5 kt a second, so it lifts off ~17 kt above Vr
+  // (Vr + 13 measured at 75% thrust); the ticket's uncited "Vr + 5–10" is not used. This
+  // card held before 0062 too (3.5 s): it guards the rotation, not the refit.
   it('lifts off 3–4 s after Vr at full thrust (737 FCTM, quoted in AAIB Bulletin 6/2019)', () => {
     const { seconds } = takeoff(FLAPS_10).liftoff;
     expect(seconds).toBeGreaterThanOrEqual(3);
     expect(seconds).toBeLessThanOrEqual(4);
+  });
+
+  it.fails('KNOWN GAP (0070): V2 is 3–4 kt above Vr, as in every published case', () => {
+    const gap = v2() - b738.vrKts;
+    expect(gap).toBeGreaterThanOrEqual(3);
+    expect(gap).toBeLessThanOrEqual(4);
   });
 
   it.fails('KNOWN GAP (0070): Vr at 65 t is within 5 kt of the published 145 kt (flap not stated; likely 1 or 5)', () => {

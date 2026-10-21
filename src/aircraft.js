@@ -22,9 +22,10 @@ export const AIRCRAFT_DATABASE = {
     // same stall AoA (the slats are fully out at both), gives ΔCL 0.559: Vref30 150 kt at 65 t.
     // No public Vref30 exists: that shared stall AoA is an assumption, and it sets Vref30
     // (±1° of stall AoA moves it 6–12 kt).
-    // Flaps 10 (the one takeoff notch) is fitted between two limits (0062): Boeing's field
-    // length (optimum flap) caps how little it lifts, and published crew speeds (VR ~145,
-    // V2 ~148 at 65 t, likely flaps 1/5) ask for less: ΔCL 0.38 gives Vs 125.5 kt, V2 142.
+    // Flaps 10 (the one takeoff notch, 0062): published crew speeds (VR ~145, V2 ~148 at 65 t,
+    // flap not stated) ask for less lift, but Boeing's field length (optimum flap) allows
+    // little: ΔCL 0.38 (Vs 125.5 kt, V2 142, +1.2 kt) with Vr 135 leaves 43 ft of its 5,100;
+    // Vr 137 fails it. Most of 0062 is the Vr move; the rest waits for flaps 5 (0070).
     flapDetentsDeg: [0, 10, 30, 40],
     flapCl: [0, 0.38, 0.559, 0.856],
     alphaStallDegByFlap: [14.8, 14.8, 14.12, 14.12],

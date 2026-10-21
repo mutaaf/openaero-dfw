@@ -43,4 +43,5 @@ New flap notches; engine-out yaw.
   met as a known gap, not a pass.
 - Deviation: "lift-off within ~Vr + 12" is replaced by the FCTM's "lift-off attitude in 3–4
   s" (quoted in AAIB 6/2019): at full thrust the jet gains ~5 kt/s, so it lifts off ~Vr + 17
-  (at 75% thrust, Vr + 13). The card flies full thrust.
+  (measured at 75% thrust: Vr + 13). The card flies full thrust. V2 − Vr is 6.8 kt
+  (published 3–4): a known gap for 0070 too; a model bound (≤ 7) keeps it from regressing.
