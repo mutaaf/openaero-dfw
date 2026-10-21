@@ -185,26 +185,34 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S level turns
     });
   }
 
-  // Accelerated stall (ticket 0067). FAA-H-8083-25B ch. 5 "Load Factor and Stalling Speed"
-  // (and its stall-speed-vs-bank chart) / FAA-H-8083-3C ch. 5: in a level turn the stall
-  // speed rises with √(load factor) = √(1/cos(bank)): +19% at 45° (1.41 g), +41% at 60°
-  // (2 g). From the POH's 53 KCAS clean stall (Fig. 5-3): 63 KCAS at 45°, 75 KCAS at 60°.
-  // The harness pilot holds the turn level and bleeds ~1 kt/s on the throttle; the card
-  // also checks it actually flew that turn (bank, load factor, altitude, bleed rate).
-  // Holding 60° level needs full power, and the propeller's thrust·sin(α) then carries a
-  // little of the weight, so the break comes a few percent under the power-off √n number.
+  // Accelerated stall (ticket 0067). POH Fig. 5-3 (power off, flaps up, aft CG): 57 KIAS /
+  // 63 KCAS at 45° of bank, 68 KIAS / 75 KCAS at 60°. That is the 53 KCAS wings-level stall
+  // times √(load factor) = √(1/cos(bank)), the FAA-H-8083-25B ch. 5 "Load Factors and
+  // Stalling Speeds" rule. The harness pilot holds the turn level and coordinated and
+  // bleeds ~1 kt/s on the throttle; the card checks it flew that turn (bank, sideslip,
+  // true load factor, altitude, bleed rate), then checks the break two ways: against the
+  // POH (±10%) and, tighter, against √n times the same pilot's wings-level break (±3%), so
+  // a lift model that scaled like n^0.4 could not pass. A level 60° turn needs full power,
+  // where the POH's figures are power off: power-on stalls come a little lower in the real
+  // airplane too.
+  const levelBreak = {};
   for (const bank of [45, 60]) {
-    const ref = 53 * Math.sqrt(1 / Math.cos((bank * Math.PI) / 180));
-    it(`stalls near ${ref.toFixed(0)} KCAS in a level ${bank}° turn, flaps up (53·√(1/cos ${bank}°), FAA-H-8083-25B ch. 5, ±10%)`, () => {
+    const poh = { 45: [57, 63], 60: [68, 75] }[bank];
+    it(`stalls near ${poh[1]} KCAS in a level ${bank}° turn, flaps up (POH: ${poh[0]} KIAS / ${poh[1]} KCAS, ±10%)`, () => {
+      levelBreak[model] ??= stallInTurn(c172, 0, stallAoaDeg(c172, 0));
+      const r0 = levelBreak[model];
       const r = stallInTurn(c172, bank, stallAoaDeg(c172, 0));
-      console.log(`[c172 ${model}] ${bank}° turn: break ${r.kts.toFixed(1)} KCAS (ref ${ref.toFixed(1)}), `
-        + `${r.n.toFixed(2)} g, bank ${r.bankDeg.toFixed(1)}°, alt ${r.altErrM.toFixed(1)} m, bleed ${r.bleedKtsS.toFixed(2)} kt/s`);
+      const sqrtLaw = r0.kts * Math.sqrt(r.n / r0.n);
+      console.log(`[c172 ${model}] ${bank}° turn: break ${r.kts.toFixed(1)} KCAS (POH ${poh[1]}, √n law ${sqrtLaw.toFixed(1)}), `
+        + `${r.n.toFixed(2)} g, bank ${r.bankDeg.toFixed(1)}°, β ${r.betaDeg.toFixed(2)}°, alt ${r.altErrM.toFixed(1)} m, bleed ${r.bleedKtsS.toFixed(2)} kt/s`);
       expect(Math.abs(r.bankDeg - bank)).toBeLessThan(2);
+      expect(Math.abs(r.betaDeg)).toBeLessThan(1);
       within(r.n, 1 / Math.cos((bank * Math.PI) / 180), 0.05);
       expect(Math.abs(r.altErrM)).toBeLessThan(30);
       expect(r.bleedKtsS).toBeGreaterThan(0.5);
       expect(r.bleedKtsS).toBeLessThan(1.5);
-      within(r.kts, ref, 0.10);
+      within(r.kts, sqrtLaw, 0.03);
+      within(r.kts, poh[1], 0.10);
     });
   }
 });
