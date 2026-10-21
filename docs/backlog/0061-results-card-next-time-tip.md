@@ -1,7 +1,7 @@
 ---
 id: 0061
 title: Results card says the one thing to fix next time
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: player-feel
