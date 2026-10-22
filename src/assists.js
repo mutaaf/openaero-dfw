@@ -127,9 +127,10 @@ export function shapeControls(cfg, st, s, dt, out) {
 // Kid hands-off line-up on a final: bank (deg, + = right) toward a 20°-max intercept of the
 // centreline (crossM + = right of it). Softer than the autopilot's localizer (0.5°/m, full
 // heading gain), which S-turned a hand-flown airplane with no roll-rate feedback of its own;
-// tuned on the flight model (tests/unit/assists.test.js) for the 737 and the 172.
+// tuned on the flight model (tests/unit/assists.test.js) for the 737 and the 172 (0.13°/m
+// since sideslip side force, 0081: at 0.15 the 737 overshot 31 m).
 export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
-  0.7 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.15, -20, 20), curHdgDeg));
+  0.7 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.13, -20, 20), curHdgDeg));
 
 // Kid's automatic gear and flaps from height and vertical speed. Mutates and returns cfgOut
 // { gearDown, flapsIndex } (seeded with the current values). Hysteresis: down/out when

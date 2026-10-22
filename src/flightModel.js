@@ -29,6 +29,7 @@ const _q1 = new Quaternion();
 const _euler = new Euler(0, 0, 0, 'YXZ');
 const _air = {};
 const _gearM = new Vector3();
+const BETA_LIN = 20 * DEG_TO_RAD;
 
 export function stepFlightModel(body, spec, dt) {
   stepSystems(body, spec, dt);
@@ -53,7 +54,8 @@ export function stepFlightModel(body, spec, dt) {
   // Angle of Attack (AoA) and Sideslip (Beta)
   const aoaRad = Math.atan2(w, Math.max(u, 0.1));
   body.aoaDeg = aoaRad * RAD_TO_DEG;
-  body.betaDeg = Math.asin(MathUtils.clamp(v / airspeed, -1, 1)) * RAD_TO_DEG;
+  const betaRad = Math.asin(MathUtils.clamp(v / airspeed, -1, 1));
+  body.betaDeg = betaRad * RAD_TO_DEG;
 
   const qDyn = dynamicPressure(airspeed, air.rho);
 
@@ -84,7 +86,15 @@ export function stepFlightModel(body, spec, dt) {
   // Thrust acts along the nose. (Body-axis lift leaned aft by α and acted as drag.)
   const vHat = _v3.copy(bodyVel).divideScalar(airspeed);
   const liftDir = _v4.set(1, 0, 0).cross(vHat).normalize();
-  const fBodyX = liftDir.x * liftForce - vHat.x * dragForce;
+  // Sideslip pushes the fuselage and fin sideways (CYβ, body axes; + β = relative wind from
+  // the right, so the force is to the left): the side force a wing-low slip banks against.
+  // Linear derivatives, held at their 20° value beyond (a taxiing crosswind is all β, no q).
+  const betaLin = MathUtils.clamp(betaRad, -BETA_LIN, BETA_LIN);
+  // The rudder pushes the fin the other way (CYδr: right rudder, tail left), so a slip's
+  // opposite rudder takes back part of it.
+  const rudderRad = body.rudderInput * (spec.controlThrowsDeg?.rudder ?? 0) * DEG_TO_RAD;
+  const sideForce = ((spec.cyBeta ?? 0) * betaLin - (spec.cyRudder ?? 0) * rudderRad) * qDyn * spec.wingAreaM2;
+  const fBodyX = liftDir.x * liftForce - vHat.x * dragForce + sideForce;
   const fBodyY = liftDir.y * liftForce - vHat.y * dragForce;
   const fBodyZ = liftDir.z * liftForce - vHat.z * dragForce - thrustForce;
 
@@ -160,11 +170,13 @@ export function stepFlightModel(body, spec, dt) {
 
   // Angular Moments & Inertial Damping
   const qRate = (-body.elevInput * (spec.pitchAuthority ?? 1.8) - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
-  // aileron + rolls right (negative body z rate); see autopilot.js for the conventions
-  const pRate = (-body.aileronInput * (spec.rollAuthority ?? 2.8) - body.angVel.z * spec.rollDamping) * (airspeed / 120);
+  // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
+  // Dihedral effect (Clβ): sideslip rolls the windward wing up, as the aileron that makes
+  // the same rolling moment (Clβ·β / Cl of full aileron), so the two keep their real ratio.
+  const dihedral = spec.clBeta ? (spec.clBeta * betaLin) / spec.clAileron : 0;
+  const pRate = (-(body.aileronInput + dihedral) * (spec.rollAuthority ?? 2.8) - body.angVel.z * spec.rollDamping) * (airspeed / 120);
   // Rudder + directional stability: the nose weathervanes into the relative wind, so a
   // banked aircraft actually turns.
-  const betaRad = Math.asin(MathUtils.clamp(v / airspeed, -1, 1));
   const rRate = (-body.rudderInput * 1.2 + sideslipYawAccel(betaRad) - body.angVel.y * spec.yawDamping) * (airspeed / 120);
 
   body.angVel.x += qRate * dt;

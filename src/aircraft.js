@@ -91,6 +91,12 @@ export const AIRCRAFT_DATABASE = {
     pitchDamping: 2.4,
     rollDamping: 3.2,
     yawDamping: 1.8,
+    // Sideslip (0081), per radian: estimates from JSBSim's 737 model (JSBSim-Team/jsbsim
+    // aircraft/737/737.xml; no public Boeing derivatives): CYβ −1.0, Clβ −0.09 against Clδa
+    // 0.10 at its ±0.35 rad aileron. That model has no rudder side force term.
+    cyBeta: -1.0,
+    clBeta: -0.09,
+    clAileron: 0.1 * 0.35,
   },
   c172: {
     name: 'Cessna 172S Skyhawk',
@@ -142,6 +148,13 @@ export const AIRCRAFT_DATABASE = {
     pitchDamping: 3.8,
     rollDamping: 4.2,
     yawDamping: 2.5,
+    // Sideslip (flightModel.js, 0081), per radian, Roskam's Cessna 172 as in our JSBSim C172
+    // (public/jsbsim/): side force CYβ −0.31 and rudder CYδr 0.187 (at the TCDS throw above),
+    // dihedral effect Clβ −0.089 against Clδa 0.178 at the 17.5° mean aileron throw.
+    cyBeta: -0.31,
+    cyRudder: 0.187,
+    clBeta: -0.089,
+    clAileron: 0.178 * 17.5 * Math.PI / 180,
   },
   f16: {
     name: 'F-16C Fighting Falcon',
@@ -176,5 +189,9 @@ export const AIRCRAFT_DATABASE = {
     pitchDamping: 1.8,
     rollDamping: 5.2,
     yawDamping: 2.2,
+    // Sideslip (0081): CYβ −1.146 per radian (NASA TP-1538 as in Stevens & Lewis, −0.02 per
+    // degree; JSBSim f16.xml). No dihedral term: the F-16's stick commands a roll rate and
+    // its flight control computer flies out the sideslip's rolling moment.
+    cyBeta: -1.146,
   },
 };

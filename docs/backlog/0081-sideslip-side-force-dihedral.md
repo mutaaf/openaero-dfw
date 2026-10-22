@@ -1,7 +1,7 @@
 ---
 id: 0081
 title: Side force and dihedral in a sideslip, so a crosswind slip needs a believable wing-low bank
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity

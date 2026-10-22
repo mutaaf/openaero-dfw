@@ -9,7 +9,7 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
-const RUDDER_PER_BETA = 0.3;
+export const RUDDER_PER_BETA = 0.3;
 
 // The flight model under test: null flies flightModel.js; useFdm(jsbsim) flies JSBSim
 // (src/fdm/jsbsim.js, loaded in Node by jsbsimNode.js) through the same cards.
@@ -264,7 +264,7 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
   b.windVec.copy(xwind(xwKts));
   const hold = speedHoldPilot(() => kts);
   let rudInt = 0, bankInt = 0, thrInt = b.throttle, flareFrom = null, td = null;
-  let finalRudder = 0, finalBank = 0, finalBeta = 0, finalN = 0, maxRollOffFt = 0;
+  let finalRudder = 0, finalAileron = 0, finalBank = 0, finalBeta = 0, finalN = 0, maxRollOffFt = 0;
   fly(b, spec, 240, (x, dt) => {
     const yawLeft = yawLeftDegOf(x);
     const { pitchDeg, bankRightDeg } = attitude(x);
@@ -295,7 +295,7 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
       const vsErr = x.vel.y + x.vel.length() * tan3; // + = sinking slower than the path
       thrInt = Math.max(0, Math.min(1, thrInt - (aboveM * 0.01 + vsErr * 0.02) * dt));
       x.throttle = Math.max(0, Math.min(1, thrInt - aboveM * 0.02 - vsErr * 0.05));
-      if (wheelM < 100 / M_TO_FT) { finalRudder += x.rudderInput; finalBank += bankRightDeg; finalBeta += x.betaDeg; finalN++; }
+      if (wheelM < 100 / M_TO_FT) { finalRudder += x.rudderInput; finalAileron += x.aileronInput; finalBank += bankRightDeg; finalBeta += x.betaDeg; finalN++; }
     } else {
       // Flare: idle, and a sink rate that shrinks with the height (autopilot.js flareSinkMps).
       x.throttle = 0;
@@ -317,5 +317,5 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
     }
     return td && Math.hypot(x.vel.x, x.vel.z) < 1;
   });
-  return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalBankDeg: finalBank / finalN, finalBetaDeg: finalBeta / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
+  return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalAileron: finalAileron / finalN, finalBankDeg: finalBank / finalN, finalBetaDeg: finalBeta / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
 }
