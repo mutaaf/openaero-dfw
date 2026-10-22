@@ -10,13 +10,13 @@ import { ilsDots, GS_DOT_DEG } from '../../src/aero.js';
 
 const UNSTABLE = { stable: false, failing: ['FAST', 'GLIDESLOPE'], gateHeight: 500 };
 const STABLE = { stable: true, failing: [], gateHeight: 500 };
-const frame = (o) => ({ gate: null, aaeFt: 1200, vsFpm: -900, iasKts: 160, onGround: false, ...o });
+const frame = (o) => ({ gate: null, aaeFt: 1200, vsFpm: -900, iasKts: 160, throttle: 0.5, flapsIndex: 2, onGround: false, ...o });
 
 // Flies a profile [aaeFt, vsFpm] through the state machine; returns every transition.
-function fly(st, gate, profile) {
+function fly(st, gate, profile, extra = {}) {
   const events = [];
   for (const [aaeFt, vsFpm, iasKts = 150, onGround = false] of profile) {
-    const e = goAroundState(st, frame({ gate, aaeFt, vsFpm, iasKts, onGround }));
+    const e = goAroundState(st, frame({ gate, aaeFt, vsFpm, iasKts, onGround, ...extra }));
     if (e) events.push(e);
   }
   return events;
@@ -33,9 +33,40 @@ describe('goAroundState (0047)', () => {
     expect(fly(st, UNSTABLE, [[450, 400], [499, 600]])).toEqual([]);
     expect(st.phase).toBe('goAround');
     expect(fly(st, UNSTABLE, [[505, 700]])).toEqual(['complete']);
-    expect(st).toMatchObject({ phase: 'complete', lowFt: 420, climbFpm: 700 });
+    expect(st).toMatchObject({ phase: 'complete', callFt: 500, lowFt: 420, climbFpm: 700, callFlaps: 2 });
     // and it fires once.
     expect(fly(st, UNSTABLE, [[600, 700], [700, 700]])).toEqual([]);
+  });
+
+  it('the missed approach is over at 2,000 ft, or when it descends again for another try', () => {
+    for (const end of [[2000, 900], [1500, -400]]) {
+      const st = createGoAround();
+      fly(st, UNSTABLE, [[500, -900], [420, -100], [520, 700]]);
+      expect(fly(st, UNSTABLE, [[1500, 900], [1500, -100], end])).toEqual(['done']);
+      expect(st.phase).toBe('done');
+      expect(fly(st, UNSTABLE, [[400, -700], [0, -200, 140, true]])).toEqual([]); // no cap, no second card
+    }
+  });
+
+  it('an early go-around, below 1,000 ft with go-around power and a real climb, counts too', () => {
+    const st = createGoAround();
+    // Power alone is not a go-around, nor a climb at approach power.
+    fly(st, null, [[1200, -900], [900, -800], [800, -300]]);
+    expect(fly(st, null, [[850, 300], [950, 400]])).toEqual([]);
+    expect(fly(st, null, [[960, 300]], { throttle: 1 })).toEqual(['complete']);
+    expect(st).toMatchObject({ phase: 'complete', callFt: null, lowFt: 800 });
+    // From high up (above 1,000 ft) a climb is not a go-around yet.
+    const hi = createGoAround();
+    expect(fly(hi, null, [[1300, -900], [1250, -300], [1400, 500]], { throttle: 1 })).toEqual([]);
+  });
+
+  it('remembers the flap lever at the call (the most flap of the approach for an early one)', () => {
+    const st = createGoAround();
+    fly(st, null, [[1200, -900]], { flapsIndex: 3 });
+    fly(st, null, [[800, -900]], { flapsIndex: 2 });
+    expect(st.callFlaps).toBe(3);
+    fly(st, UNSTABLE, [[500, -900]], { flapsIndex: 3 });
+    expect(st.callFlaps).toBe(3);
   });
 
   it('never completes without an unstabilized gate: stable, or none at all', () => {
@@ -86,12 +117,14 @@ describe('goAroundState (0047)', () => {
 });
 
 describe('gradeGoAround (0047)', () => {
-  const crisp = { lowFt: 430, gateFt: 500, minIasKts: 150, vrefKts: 136, climbFpm: 1500, flapsUp: true, gearUp: true };
+  const crisp = { callFt: 500, lowFt: 430, gateFt: 500, minIasKts: 150, vrefKts: 136, climbFpm: 1500, flapsUp: true };
   it('a prompt, clean go-around grades S or A', () => {
     const g = gradeGoAround(crisp);
     expect(g.kind).toBe('goAround');
     expect(['S', 'A']).toContain(g.grade);
-    expect(g.factors.map((f) => f.key)).toEqual(['decision', 'climb', 'speed', 'config']);
+    expect(g.factors.map((f) => f.key)).toEqual(['decision', 'climb', 'speed', 'flaps']);
+    expect(g.factors[0].value).toBe('70 ft');
+    expect(g.note).toBeNull();
   });
   it('sinking to 100 ft before climbing scores much lower', () => {
     expect(gradeGoAround({ ...crisp, lowFt: 100 }).score).toBeLessThan(gradeGoAround(crisp).score - 20);
@@ -100,9 +133,16 @@ describe('gradeGoAround (0047)', () => {
     const g = gradeGoAround({ ...crisp, minIasKts: 126 });
     expect(g.factors.find((f) => f.key === 'speed').score).toBeLessThan(50);
   });
-  it('landing flaps and gear left down cost the configuration factor; fixed gear is not a fault', () => {
-    expect(gradeGoAround({ ...crisp, flapsUp: false, gearUp: false }).factors.find((f) => f.key === 'config').score).toBe(0);
-    expect(gradeGoAround({ ...crisp, gearUp: null }).factors.find((f) => f.key === 'config')).toMatchObject({ score: 100, value: /fixed gear/ });
+  it('landing flaps left set cost the flaps factor; when the assist flies the flaps it is not scored', () => {
+    expect(gradeGoAround({ ...crisp, flapsUp: false }).factors.find((f) => f.key === 'flaps').score).toBe(0);
+    const kid = gradeGoAround({ ...crisp, flapsUp: null });
+    expect(kid.factors.map((f) => f.key)).toEqual(['decision', 'climb', 'speed']);
+    expect(kid.score).toBe(gradeGoAround(crisp).score); // a perfect run is still a perfect score
+  });
+  it('an early go-around loses no height and says so', () => {
+    const g = gradeGoAround({ ...crisp, callFt: null, lowFt: 800 });
+    expect(g.factors[0]).toMatchObject({ score: 100, value: /early/ });
+    expect(g.note).toMatch(/early go-around/i);
   });
 });
 
@@ -140,6 +180,8 @@ describe('the go-around coach (0047)', () => {
     expect(coachText('gaFlaps', { touch: true })).toMatch(/tap FLAPS/);
     expect(coachText('gaGear', { touch: true })).toMatch(/tap GEAR/);
     expect(coachText('gaFlaps')).toMatch(/press F/);
+    expect(coachText('gaFlaps', { flapsDeg: 10 })).toBe('Flaps up a notch: press F, to 10°');
+    expect(coachText('gaFlaps', { flapsDeg: 10, touch: true })).toBe('Flaps up a notch: tap FLAPS to 10°');
   });
 });
 

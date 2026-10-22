@@ -65,6 +65,7 @@ const TOUCH_WORDS = {
 export function coachText(key, v = {}) {
   if (key === 'slow' && v.targetKts) return `Slow: fly ${v.targetKts} kt, add power`;
   if (key === 'fast' && v.targetKts) return `Fast: fly ${v.targetKts} kt, ease the power back`;
+  if (key === 'gaFlaps' && typeof v.flapsDeg === 'number') return v.touch ? `Flaps up a notch: tap FLAPS to ${v.flapsDeg}°` : `Flaps up a notch: press F, to ${v.flapsDeg}°`;
   if (key === 'flaps' && v.flapsDeg) return v.touch ? `Landing flaps: tap FLAPS until ${v.flapsDeg}°` : `Landing flaps: press F until ${v.flapsDeg}°`;
   if (v.touch && TOUCH_WORDS[key]) return TOUCH_WORDS[key];
   return COACH_PROMPTS[key];

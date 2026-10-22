@@ -817,28 +817,36 @@ function checkStabilizedGate() {
 // the results card at 500 ft; landing anyway is capped (checkTouchdown). Scalars per frame.
 // goAround.js is a lazy chunk, loaded with the drill (loadScenario), not at boot.
 let goAroundLib = null;
-const _gaIn = { gate: null, aaeFt: 0, vsFpm: 0, iasKts: 0, onGround: false };
-// The missed approach is flown (and coached) from the gate's call up to 2,000 ft.
+const _gaIn = { gate: null, aaeFt: 0, vsFpm: 0, iasKts: 0, throttle: 0, flapsIndex: 0, onGround: false };
+// The missed approach is flown (and coached) from the call until it is over (goAround.js:
+// 2,000 ft, or descending again for another approach).
 const goAroundActive = () => {
   const ga = sim.goAround?.phase;
-  return (ga === 'goAround' || ga === 'complete') && !sim.onGround && sim.aglFt < goAroundLib.GA_CLIMB_TO_FT;
+  return (ga === 'goAround' || ga === 'complete') && !sim.onGround;
 };
 function checkGoAround() {
-  const end = sim.goAround ? sim.activeEnd : null;
-  if (!end || end.id !== sim.goAround.runway) return;
+  const ga = sim.goAround;
+  if (!ga) return;
+  // Height above the drill's runway, whichever runway the airplane ends up over (a landing
+  // on 35L after the call is still a landing the gate said not to make).
+  const end = ga.end;
   _gaIn.gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
   _gaIn.aaeFt = (sim.pos.y - end.thrY) * M_TO_FT;
   _gaIn.vsFpm = sim.vsiFpm;
   _gaIn.iasKts = sim.iasKts;
+  _gaIn.throttle = sim.throttle;
+  _gaIn.flapsIndex = sim.flapsIndex;
   _gaIn.onGround = sim.onGround;
-  const step = goAroundLib.goAroundState(sim.goAround, _gaIn);
+  const step = goAroundLib.goAroundState(ga, _gaIn);
   // Kid: the airplane flies the go-around itself (full power, climb away, as after a takeoff).
   if (step === 'goAround' && assistConfig(sim.assist)?.autoThrottle) assistState.departing = true;
   if (step !== 'complete') return;
-  const ga = sim.goAround;
+  const cfg = assistConfig(sim.assist);
   const result = goAroundLib.gradeGoAround({
-    lowFt: ga.lowFt, gateFt: ga.gate.gateHeight, minIasKts: ga.minIasKts, vrefKts: vrefFor(sim.spec, 2),
-    climbFpm: ga.climbFpm, flapsUp: sim.flapsIndex < 2, gearUp: sim.spec.fixedGear ? null : !sim.gearDown,
+    callFt: ga.callFt, lowFt: ga.lowFt, gateFt: ga.gate ? ga.gate.gateHeight : GATE_VMC_FT,
+    minIasKts: ga.minIasKts, vrefKts: vrefFor(sim.spec, ga.callFlaps), climbFpm: ga.climbFpm,
+    // Kid's assist flies the flaps (assists.js autoConfigure): not the player's to score.
+    flapsUp: cfg?.autoConfig ? null : sim.flapsIndex < ga.callFlaps,
   });
   let best = { isNewBest: false, best: null };
   try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
@@ -852,7 +860,10 @@ function startGoAroundDrill(mission) {
     goAroundLib = lib;
     if (sim.loadedMission !== mission) return; // another mission was picked meanwhile
     sim.goAround = lib.createGoAround();
-    sim.goAround.runway = `${mission.airport}_${mission.rwy}`;
+    sim.goAround.end = runwayEnd(mission.airport, mission.rwy);
+    // Kid's autothrottle holds the drill's fast approach speed down to the gate (the hands-
+    // off guide still flies the path), so the gate calls it and Kid sees the go-around.
+    sim.goAround.holdKts = sim.spec.vrefKts + 5 + (mission.fastKts ?? 0);
   };
   if (goAroundLib) arm(goAroundLib);
   else import('./goAround.js').then(arm).catch((e) => console.warn('[openaero] no go-around drill:', e));
@@ -937,11 +948,16 @@ function showResults(result, best, end, gate) {
   if (bestEl.textContent && sim.assist !== 'pilot') bestEl.textContent = `${sim.assist === 'kid' ? 'Kid' : 'Learner'} level · ${bestEl.textContent}`;
   // Not scored: the stabilized-gate verdict (null when the mission started below the gate).
   const gateEl = document.getElementById('txtStabilized');
-  gateEl.classList.toggle('hidden', !gate);
+  gateEl.classList.toggle('hidden', !gate && !result.note);
   if (gate) {
     gateEl.textContent = gate.stable ? `Stabilized at ${gate.gateHeight} ft ✓`
       : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ')}`;
+    // The drill flown back to stable: landing was the right call (0047).
+    if (gate.stable && sim.goAround) gateEl.textContent += ' You fixed it: landing was right';
     gateEl.classList.toggle('text-emerald-300', gate.stable); // over the amber default (later in the CSS)
+  } else if (result.note) {
+    gateEl.textContent = `${result.note} ✓`;
+    gateEl.classList.add('text-emerald-300');
   }
   const list = document.getElementById('resultsFactors');
   list.innerHTML = '';
@@ -1045,7 +1061,7 @@ function updateCoach(dt) {
     coachInput.goAround = goAroundActive();
     if (coachInput.goAround) {
       coachInput.gearLocked = !sim.spec.fixedGear && sim.gearDown;
-      coachInput.flapsLanding = sim.flapsIndex >= 2;
+      coachInput.flapsLanding = sim.flapsIndex >= sim.goAround.callFlaps;
     }
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
@@ -1082,7 +1098,8 @@ function updateCoach(dt) {
     return;
   }
   coachVals.targetKts = Math.round(vrefFor(sim.spec, sim.flapsIndex) + 5);
-  coachVals.flapsDeg = (sim.spec.flapDetentsDeg ?? sim.flapAngles)[2];
+  const detents = sim.spec.flapDetentsDeg ?? sim.flapAngles;
+  coachVals.flapsDeg = prompt === 'gaFlaps' ? detents[Math.max(0, sim.goAround.callFlaps - 1)] : detents[2];
   coachVals.touch = touchOnly;
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   document.getElementById('txtCoach').textContent = text;
@@ -1953,7 +1970,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
       sim.throttle = 1; // full power until 1,000 ft
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
-      sim.throttle = autoThrottle(kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : 0;
+      sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
     }
@@ -2427,6 +2445,7 @@ function setPaused(paused) {
   menuBtn.classList.toggle('text-sky-300', !sim.paused);
 }
 document.getElementById('btnPause').addEventListener('click', () => {
+  resultsPaused = false; // the player's own pause or resume: KEEP FLYING must not undo it
   setPaused(!sim.paused);
   if (!sim.paused) setHudMenu(false); // on a phone, Resume puts the view back
 });

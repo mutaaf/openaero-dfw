@@ -36,7 +36,7 @@
     <button id="btnCoachSkip" class="pointer-events-auto hud-btn rounded-lg min-h-[44px] min-w-[44px] px-2 text-[11px] text-slate-300" aria-label="Skip the coach">Skip</button>
   </div>
   <!-- Landing results card (src/landing.js grades every touchdown) -->
-  <div id="resultsCard" class="hidden absolute inset-x-3 top-1/2 -translate-y-1/2 z-40 mx-auto max-w-sm hud-glass rounded-2xl p-4 font-mono text-slate-200 border-emerald-400/50 shadow-2xl" role="dialog" aria-labelledby="txtGrade" aria-live="polite">
+  <div id="resultsCard" class="hidden absolute inset-x-3 top-1/2 -translate-y-1/2 z-40 mx-auto max-w-sm max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] overflow-y-auto overscroll-contain hud-glass rounded-2xl p-4 font-mono text-slate-200 border-emerald-400/50 shadow-2xl" role="dialog" aria-labelledby="txtGrade" aria-live="polite">
     <div class="flex items-center gap-4 border-b border-slate-700/80 pb-3">
       <div id="txtGrade" class="text-5xl font-black text-emerald-300 w-20 text-center">A</div>
       <div class="flex-1">
