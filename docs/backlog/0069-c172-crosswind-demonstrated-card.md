@@ -1,7 +1,7 @@
 ---
 id: 0069
 title: C172 card: a 15 kt crosswind takeoff and landing stay on the runway
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
