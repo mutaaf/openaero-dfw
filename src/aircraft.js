@@ -91,6 +91,15 @@ export const AIRCRAFT_DATABASE = {
     pitchDamping: 2.4,
     rollDamping: 3.2,
     yawDamping: 1.8,
+    // Sideslip (0081), per radian: estimates from JSBSim's generic 737 (JSBSim-Team/jsbsim
+    // aircraft/737/737.xml, an Aeromatic model by Dave Culp, not Boeing data; no public Boeing
+    // derivatives exist): CYβ −1.0 on its 1171 ft² (108.8 m²), so −0.873 on our 124.6 m²;
+    // Clβ −0.09 against its low-Mach Clδa 0.10 at ±0.35 rad of aileron (the ratio, so the
+    // reference area cancels; Clδa falls to ~0.074 by M0.78, so cruise dihedral reads ~26%
+    // weak: slips are flown on approach). That model has no rudder side force term.
+    cyBeta: -1.0 * 108.8 / 124.6,
+    clBeta: -0.09,
+    clAileron: 0.1 * 0.35,
   },
   c172: {
     name: 'Cessna 172S Skyhawk',
@@ -142,6 +151,13 @@ export const AIRCRAFT_DATABASE = {
     pitchDamping: 3.8,
     rollDamping: 4.2,
     yawDamping: 2.5,
+    // Sideslip (flightModel.js, 0081), per radian, Roskam's Cessna 172 as in our JSBSim C172
+    // (public/jsbsim/): side force CYβ −0.31 and rudder CYδr 0.187 (at the TCDS throw above),
+    // dihedral effect Clβ −0.089 against Clδa 0.178 at the 17.5° mean aileron throw.
+    cyBeta: -0.31,
+    cyRudder: 0.187,
+    clBeta: -0.089,
+    clAileron: 0.178 * 17.5 * Math.PI / 180,
   },
   f16: {
     name: 'F-16C Fighting Falcon',
@@ -176,5 +192,12 @@ export const AIRCRAFT_DATABASE = {
     pitchDamping: 1.8,
     rollDamping: 5.2,
     yawDamping: 2.2,
+    // Sideslip (0081): CYβ −1.146 per radian (NASA TP-1538 as in Stevens & Lewis, −0.02 per
+    // degree; JSBSim f16.xml). No dihedral term: the F-16's stick commands a roll rate and
+    // its flight control computer flies out the sideslip's rolling moment. Rudder side force
+    // (f16.xml CYδr 0.086, in that file's units) is left out: it is a 7% term next to CYβ at
+    // full rudder and the table's control units are uncertain (per radian there, per 30° in
+    // Stevens & Lewis).
+    cyBeta: -1.146,
   },
 };

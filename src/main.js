@@ -50,7 +50,7 @@ import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
   windBoxRect, windArrowDeg, windReadout, nearRunwayForWind,
 } from './hudLayout.js';
-import { stepFlightModel, trimThrottle } from './flightModel.js';
+import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
 
@@ -1929,6 +1929,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.rollRateRight = -sim.angVel.z;
   _assistIn.aoaDeg = sim.aoaDeg;
   _assistIn.betaDeg = sim.betaDeg;
+  _assistIn.dihedralAil = dihedralAileron(spec, sim.betaDeg * DEG_TO_RAD);
   _assistIn.stallAoaDeg = stallAoaDeg(spec, sim.flapsIndex);
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;
