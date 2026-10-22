@@ -1,7 +1,7 @@
 ---
 id: 0063
 title: Aircraft parts move by physics (control surfaces, gear, flaps, prop)
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity

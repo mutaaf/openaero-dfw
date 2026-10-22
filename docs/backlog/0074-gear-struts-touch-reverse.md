@@ -1,12 +1,12 @@
 ---
 id: 0074
 title: Landing gear on struts (nose + mains), nose-wheel steering, touch REV
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 72
 ---
 
 ## Why
