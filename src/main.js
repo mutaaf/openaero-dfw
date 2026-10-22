@@ -1993,8 +1993,9 @@ function resetApFilters() {
   sim.apGsEndId = null;
 }
 
-function loadScenario(key) {
-  const mission = missionByKey(key, sim.dynamicMissions);
+// `final` (?debug only, 0068): fly the default final to another runway end or distance.
+function loadScenario(key, final = null) {
+  const mission = final ? { ...MISSIONS[0], ...final } : missionByKey(key, sim.dynamicMissions);
   sim.missionKey = mission.key;
   sim.loadedMission = mission;
   sim.brakesOn = false;
@@ -2746,6 +2747,20 @@ function updateDebugOverlay(dt) {
     + ` · px ${resScale.ratio}`;
 }
 
+// ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
+if (debugOverlay) window.openaeroDebugFinal = (airport, rwy, distNm) => runwayEnd(airport, rwy)
+  && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm });
+// The active runway on screen (CSS px): its approach lights' outer end to the far end, as wide
+// as the runway. Read by tests/e2e/runwayVisibility.spec.js.
+function runwayScreen(e) {
+  const d = courseVector(e.hdgT), l = { x: d.z, z: -d.x }, w = e.widthM / 2, rect = simCanvas.getBoundingClientRect();
+  return [-2400 * 0.3048, e.lengthM - e.displacedM].flatMap((s) => [-w, w].map((o) => {
+    const x = e.thrX + d.x * s + l.x * o, z = e.thrZ + d.z * s + l.z * o;
+    const p = _v3.set(x, ground.heightAt(x, z), z).project(camera);
+    return { x: (p.x + 1) / 2 * rect.width, y: (1 - p.y) / 2 * rect.height, z: p.z };
+  }));
+}
+
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {
   _euler.setFromQuaternion(sim.quat, 'YXZ');
@@ -2759,6 +2774,7 @@ window.openaeroDebug = () => {
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
     activeRunway: sim.activeEnd ? sim.activeEnd.id : null,
     runwayHdgT: sim.activeEnd ? sim.activeEnd.hdgT : null,
+    runwayScreen: sim.activeEnd ? runwayScreen(sim.activeEnd) : null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,

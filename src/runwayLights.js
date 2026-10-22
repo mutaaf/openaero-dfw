@@ -100,9 +100,12 @@ void main() {
     on *= a * 1.6;
     size *= 1.0 + a * 0.8;
   }
-  // Far lights shrink a little but never vanish below a pixel and a half.
-  size *= clamp(9000.0 / (dist + 3000.0), 0.55, 1.4);
-  gl_PointSize = max(1.5, size * uPx);
+  // Far edge and centreline lights shrink a little, never below a pixel and a half by day and
+  // three at night. Threshold, end and approach lights and flashers (kind > 1.5), the most
+  // intense lamps and the approach's transition cue (FAA AIM 2-1-1), keep their size out to
+  // 10 NM: on screen, size stands for intensity, not the lamp (0068).
+  size *= clamp(9000.0 / (dist + 3000.0), aKind > 1.5 ? 1.0 : 0.55, 1.4);
+  gl_PointSize = max((1.5 + 1.5 * uNight) * max(1.0, uPx), size * uPx);
   vA = on * facing;
   vCol = aCol;
   gl_Position = projectionMatrix * viewMatrix * wp;
