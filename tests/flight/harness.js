@@ -327,8 +327,8 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
 // to a hold-off a foot above the runway, the nose coming up no further than 1° short of the
 // stall angle, so it touches down on the mains near the stall. Then, as Section 4 says: lower the nose wheel, brakes on
 // hard (after `brakeDelayS`, the pilot's reaction), flaps up. (The POH then says control wheel
-// full back; this pilot holds the nose wheel down instead until gear.js models the brakes'
-// nose-down moment, ticket 0082.)
+// full back; this pilot holds the nose wheel down instead: on flightModel.js the Cessna tips
+// back past its mains at ~10° and gear.js has no braking pitch moment, ticket 0082.)
 // Returns the ground roll (first touch to a stop), the total from the obstacle, and what
 // the pilot flew: touchdown IAS and sink rate, time airborne again after the first touch.
 export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20 } = {}) {
@@ -351,9 +351,10 @@ export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 
       x.brakesOn = s >= brakeDelayS;
       if (x.brakesOn) x.flapsIndex = 0;
       // Nose wheel down and kept there: the pitch held at the three-wheel attitude (0°). The
-      // POH's "full back" relies on the brakes' nose-down moment to keep the nose on the
-      // runway, which gear.js does not model yet (ticket 0082); full back here lifts the nose
-      // to a 15° wheelie and the wing carries the weight instead of the brakes.
+      // POH's "full back" relies on the brakes' nose-down moment and a real tip-back angle to
+      // keep the nose on the runway; flightModel.js's C172 tips back past its mains at ~10° and
+      // gear.js has no braking moment (ticket 0082), so full back rests it on its tail at 15°
+      // and the wing carries the weight instead of the brakes.
       x.elevInput = elevatorForPitch(0, pitchDeg, x.angVel.x);
       return;
     }

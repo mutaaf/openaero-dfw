@@ -43,7 +43,8 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 // on 0.5 s after the touch, the roll is ~355-370 ft against the POH's 575 (-36 to -38%):
 // both brake at ~0.36 g where the book's numbers average ~0.2 g. The air segment is right on
 // flightModel.js (756 ft, POH 1335 - 575 = 760), so its total misses only by the roll
-// (1125 ft, -16%); JSBSim floats further (~940 ft) and its total is inside the band.
+// (1125 ft, -16%). JSBSim floats ~943 ft (+24%): its total (1297 ft) is inside the band only
+// because the short roll cancels the long float, also ticket 0082.
 const GAPS = {
   flightModel: new Set(['landRoll', 'landTotal']),
   jsbsim: new Set(['takeoff', 'landRoll']),
