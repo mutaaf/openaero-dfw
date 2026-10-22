@@ -1,12 +1,12 @@
 ---
 id: 0047
 title: Go-around drill: fly a bad approach, apply power and climb out, and be graded on it
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-19
-pr:
+pr: 79
 ---
 
 ## Why
