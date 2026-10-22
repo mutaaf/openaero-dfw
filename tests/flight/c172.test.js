@@ -14,7 +14,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, stallInTurn, attitude, useFdm } from './harness.js';
+import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -39,7 +39,15 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 //  - brakes 138 m: main-wheel brakes only, load moves to the nose wheel, 0.36 g. The 0.45 μ
 //    reference is flightModel.js's assumption, not the POH; the POH landing-roll card that
 //    should replace it is ticket 0051.
-const GAPS = { flightModel: new Set(), jsbsim: new Set(['takeoff', 'brakes']) };
+//
+// Landing (POH Fig. 5-11, measured in the validator run of 2026-10-22; ticket 0077):
+//  - flightModel: 468 ft roll (-19%), 1075 ft over the obstacle (-18%); the card pilot touches down
+//    at 56 KIAS sinking ~330 fpm, and the idealised brake (0.45 μ) stops short of the POH's technique.
+//  - JSBSim: 424 ft roll (-26%); 1245 ft over the obstacle is inside the band.
+const GAPS = {
+  flightModel: new Set(['landRoll', 'landTotal']),
+  jsbsim: new Set(['takeoff', 'brakes', 'landRoll']),
+};
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
   beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
@@ -91,6 +99,16 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     b.brakesOn = true;
     fly(b, c172, 30, null, (x) => -x.vel.z < 0.5);
     within(b.distM, 30 * 30 / (2 * 0.45 * 9.80665), 0.25);
+  });
+
+  // POH Fig. 5-11 (p. 5-23), flaps 30, power off, max braking, 61 KIAS at 50 ft, sea level:
+  // 565 ft roll / 1320 ft over 50 ft at 10 °C and 585 / 1350 at 20 °C → 575 / 1335 at 15 °C.
+  card('landRoll')('short-field landing: ground roll near 575 ft (POH Fig. 5-11, ±15%)', () => {
+    within(shortFieldLanding(c172).rollFt, 575, 0.15);
+  });
+
+  card('landTotal')('short-field landing: 1335 ft from a 50 ft obstacle to a stop (POH Fig. 5-11, ±15%)', () => {
+    within(shortFieldLanding(c172).totalFt, 1335, 0.15);
   });
 
   // POH Fig. 5-5 at sea level: 960 ft at 15 °C (interpolated), 1150 ft at 40 °C (+20%).

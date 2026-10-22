@@ -197,3 +197,45 @@ export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, 
     bleedKtsS: (first.ias - last.ias) / (last.t - first.t), t: b.t,
   };
 }
+
+// POH short-field landing (Fig. 5-11): flaps 30, power off, 61 KIAS over a 50 ft obstacle,
+// then a flare to a gentle touchdown and maximum braking to a stop. The flare holds a sink
+// rate that shrinks with height (a pilot rounding out: about h/2 fpm per foot... 8 s time
+// constant), the roll-out holds the nose up for aerodynamic braking and then lets it down.
+// Returns the ground roll (touchdown to stop), the distance from the obstacle, and what
+// the pilot actually flew: touchdown IAS and sink rate.
+export function shortFieldLanding(spec, isaDevC = 0) {
+  const b = makeBody(spec, { kts: 61, altM: 50 / M_TO_FT + spec.gearHeight, flaps: 3, throttle: 0 });
+  b.isaDevC = isaDevC;
+  const approach = speedHoldPilot(() => 61);
+  let touchdownM = null, tdKts = null, tdSinkFpm = null, flareDeg = null;
+  const wheels = (x) => (x.pos.y - x.groundY - spec.gearHeight) * M_TO_FT;
+  fly(b, spec, 120, (x, dt) => {
+    x.throttle = 0;
+    _e.setFromQuaternion(x.quat, 'YXZ');
+    const yawLeftDeg = _e.y * RAD_TO_DEG;
+    x.rudderInput = Math.max(-1, Math.min(1, yawLeftDeg * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15));
+    if (x.onGround) {
+      if (touchdownM === null) { touchdownM = x.distM; tdKts = x.iasKts; tdSinkFpm = x.lastSinkFpm; }
+      x.brakesOn = true;
+      x.elevInput = 0;
+    } else {
+      const h = wheels(x);
+      x.lastSinkFpm = vsFpm(x);
+      if (h > 15) approach(x, dt);
+      else {
+        // Round out: sink target tapers to ~100 fpm at the wheels, pitch up to get it.
+        const target = -Math.max(100, h * 40);
+        const { pitchDeg, bankRightDeg } = attitude(x);
+        flareDeg ??= pitchDeg;
+        flareDeg += (target - vsFpm(x)) * 0.0004;
+        flareDeg = Math.max(-5, Math.min(12, flareDeg));
+        x.elevInput = elevatorForPitch(flareDeg, pitchDeg, x.angVel.x);
+        x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+      }
+    }
+  }, (x) => touchdownM !== null && -x.vel.z < 0.5);
+  return {
+    rollFt: (b.distM - touchdownM) * M_TO_FT, totalFt: b.distM * M_TO_FT, tdKts, tdSinkFpm,
+  };
+}
