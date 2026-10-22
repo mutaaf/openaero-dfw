@@ -42,7 +42,7 @@ export function cameraFovDeg(w, h) {
 // head/tail components. It ends above the tapes and above the horizon band (35% of the
 // height) the layout keeps clear; where that leaves no room under the top bar (a phone
 // held sideways) it moves to the right of the altitude tape, level with its top.
-export const WIND_BOX_W = 64;
+export const WIND_BOX_W = 68;
 export const WIND_BOX_H = 50;
 export const WIND_SHOW_COMPONENTS_FT = 1500;
 
@@ -61,11 +61,20 @@ export function windBoxRect(w, h, out = { x: 0, y: 0, w: WIND_BOX_W, h: WIND_BOX
   return out;
 }
 
+// Cross and head/tail components belong to the runway you are about to use: under
+// WIND_SHOW_COMPONENTS_FT, within ~11 NM of its threshold (or on it) and within 1.5 km of
+// its centreline. The active runway is kept after you leave it, so this asks where you are.
+// approach is approachGeometry's { distM, crossM } for that end.
+export function nearRunwayForWind(approach, runwayLengthM, aglFt) {
+  return aglFt < WIND_SHOW_COMPONENTS_FT && approach.distM < 20000
+    && approach.distM > -((runwayLengthM || 4000) + 300) && Math.abs(approach.crossM) < 1500;
+}
+
 // The arrow's screen angle (deg clockwise from straight up = the nose): where the wind blows
 // TO, given where it blows FROM (true) and the aircraft's true heading. Null when there is
 // no direction to show (calm or variable).
 export function windArrowDeg(fromDeg, kts, hdgDeg) {
-  if (fromDeg === null || fromDeg === undefined || !(kts >= 2)) return null;
+  if (fromDeg === null || fromDeg === undefined || !(Math.round(kts) >= 2)) return null;
   return (((fromDeg - hdgDeg + 180) % 360) + 360) % 360;
 }
 
@@ -75,15 +84,21 @@ export function windArrowDeg(fromDeg, kts, hdgDeg) {
 // or the aircraft is above WIND_SHOW_COMPONENTS_FT.
 export function windReadout(wx, comps, out = {}) {
   const kts = Math.round(wx.windKts || 0);
-  out.source = wx.live ? 'METAR WIND' : 'SCENARIO';
+  const vrb = wx.windDirDeg === null || wx.windDirDeg === undefined;
+  out.live = !!wx.live;
+  out.source = out.live ? 'METAR WIND' : 'SCENARIO';
   out.calm = kts < 2;
+  // The arrow reads these, so it always agrees with the text it sits beside.
+  out.dirDeg = vrb ? null : wx.windDirDeg;
+  out.kts = kts;
+  // As the METAR reads it (true direction / speed, G gust), so a pilot can check it.
   out.speed = out.calm ? 'CALM'
-    : `${wx.windDirDeg === null || wx.windDirDeg === undefined ? 'VRB ' : ''}${kts}${wx.gustKts > wx.windKts ? `G${Math.round(wx.gustKts)}` : ' KT'}`;
+    : `${vrb ? 'VRB' : String(Math.round(wx.windDirDeg) % 360).padStart(3, '0')}/${kts}${wx.gustKts > wx.windKts ? `G${Math.round(wx.gustKts)}` : ''}`;
   out.xwKts = null;
   out.hwKts = null;
   out.xw = '';
   out.hw = '';
-  if (comps && !out.calm && wx.windDirDeg !== null && wx.windDirDeg !== undefined) {
+  if (comps && !out.calm && !vrb) {
     const xw = Math.round(comps.crosswindKts), hw = Math.round(comps.headwindKts);
     out.xwKts = xw;
     out.hwKts = hw;

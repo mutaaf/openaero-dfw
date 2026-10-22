@@ -48,7 +48,7 @@ import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, windArrowDeg, windReadout, WIND_SHOW_COMPONENTS_FT,
+  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
@@ -1188,7 +1188,7 @@ function syncWeatherUI(dt) {
   const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
   document.getElementById('txtFlow').textContent = flow === 'NORTH' ? 'NORTH (RWY 35/36)' : 'SOUTH (RWY 17/18)';
   // HUD wind box (0075): components against the active runway only low down, near it.
-  const low = sim.activeEnd && (sim.onGround || sim.aglFt < WIND_SHOW_COMPONENTS_FT);
+  const low = sim.activeEnd && nearRunwayForWind(sim.approach, sim.activeEnd.lengthM, sim.aglFt);
   windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind);
   const rw = document.getElementById('txtRwyWind');
   if (sim.activeEnd && wx.windKts) {
@@ -1678,19 +1678,19 @@ const _windBox = windBoxRect(1, 1);
 function drawWindBox(w, h, hdgDeg) {
   const r = windBoxRect(w, h, _windBox);
   const hw = sim.hudWind;
-  hudCtx.globalAlpha = hw.calm ? 0.6 : 1;
+  // Calm is quiet but still legible: a dim border, the text at full contrast.
   hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';
-  hudCtx.strokeStyle = '#38bdf8';
+  hudCtx.strokeStyle = hw.calm ? '#475569' : '#38bdf8';
   hudCtx.fillRect(r.x, r.y, r.w, r.h);
   hudCtx.strokeRect(r.x, r.y, r.w, r.h);
   hudCtx.textAlign = 'left';
   hudCtx.font = 'bold 9px monospace';
-  hudCtx.fillStyle = sim.wx.live ? '#6ee7b7' : '#cbd5e1';
+  hudCtx.fillStyle = hw.live ? '#6ee7b7' : '#cbd5e1';
   hudCtx.fillText(hw.source, r.x + 3, r.y + 10);
-  const arrow = windArrowDeg(sim.wx.windDirDeg, sim.wx.windKts, hdgDeg);
+  const arrow = windArrowDeg(hw.dirDeg, hw.kts, hdgDeg);
   if (arrow !== null) {
     hudCtx.save();
-    hudCtx.translate(r.x + 12, r.y + 31);
+    hudCtx.translate(r.x + 12, r.y + 37);
     hudCtx.rotate(arrow * DEG_TO_RAD);
     hudCtx.strokeStyle = '#e0f2fe';
     hudCtx.fillStyle = '#e0f2fe';
@@ -1705,13 +1705,12 @@ function drawWindBox(w, h, hdgDeg) {
   }
   hudCtx.font = 'bold 10px monospace';
   hudCtx.fillStyle = '#e0f2fe';
-  hudCtx.fillText(hw.speed, r.x + 24, r.y + 23);
+  hudCtx.fillText(hw.speed, r.x + 3, r.y + 22);
   if (hw.xw) {
     hudCtx.fillText(hw.xw, r.x + 24, r.y + 35);
     hudCtx.fillStyle = hw.hwKts < 0 ? '#fcd34d' : '#e0f2fe';
     hudCtx.fillText(hw.hw, r.x + 24, r.y + 47);
   }
-  hudCtx.globalAlpha = 1;
 }
 
 // Flare cue (0073): under 60 ft, FLARE above the boresight (and IDLE under 30 ft with power on).
@@ -2692,7 +2691,7 @@ window.openaeroDebug = () => {
     aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
     // The HUD wind box (0075): what it says and where it is (canvas px = CSS px).
-    hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.wx.windDirDeg, sim.wx.windKts, (-_euler.y * RAD_TO_DEG + 360) % 360), box: { ..._windBox } },
+    hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, (-_euler.y * RAD_TO_DEG + 360) % 360), box: { ..._windBox } },
     pixelRatio: resScale.ratio,
     paused: sim.paused,
     audio: audio.state,

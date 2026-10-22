@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { headingBoxTop, HEADING_BOX_H, TAPE_TOP, BELOW_TOP_BAR, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg, BASE_FOV_DEG, MIN_HFOV_DEG, MAX_FOV_DEG,
-  windBoxRect, windArrowDeg, windReadout, WIND_BOX_W, WIND_BOX_H } from '../../src/hudLayout.js';
+  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, WIND_BOX_W, WIND_BOX_H } from '../../src/hudLayout.js';
 import { runwayWindComponents, scenarioWeather } from '../../src/weather.js';
 import { runwayEnd } from '../../src/airports.js';
 
@@ -133,7 +133,7 @@ describe('wind readout (0075)', () => {
     expect(Math.abs(r.xwKts)).toBeLessThanOrEqual(2);
     expect(r.xw).toBe('XW 2L');
     expect(r.hw).toBe('HW 10');
-    expect(r.speed).toBe('10 KT');
+    expect(r.speed).toBe('350/10');
     expect(r.source).toBe('METAR WIND');
   });
 
@@ -150,20 +150,42 @@ describe('wind readout (0075)', () => {
   });
 
   it('shows gusts, variable wind and calm honestly, and says when the weather is not live', () => {
-    expect(windReadout({ windDirDeg: 180, windKts: 12, gustKts: 22, live: true }, null).speed).toBe('12G22');
+    expect(windReadout({ windDirDeg: 180, windKts: 12, gustKts: 22, live: true }, null).speed).toBe('180/12G22');
     const vrb = windReadout({ windDirDeg: null, windKts: 4, gustKts: null, live: true }, { headwindKts: 0, crosswindKts: 0 });
-    expect(vrb.speed).toBe('VRB 4 KT');
+    expect(vrb.speed).toBe('VRB/4');
+    expect(windArrowDeg(vrb.dirDeg, vrb.kts, 0)).toBeNull();
     expect(vrb.xw).toBe(''); // no direction, no components
     const calm = windReadout({ windDirDeg: 180, windKts: 1, live: true }, { headwindKts: 1, crosswindKts: 0 });
     expect(calm.calm).toBe(true);
     expect(calm.speed).toBe('CALM');
     expect(calm.xw).toBe('');
+    // 1.6 kt rounds to 2: then it is not calm, and the arrow shows too (one cut-off for both).
+    const two = windReadout({ windDirDeg: 90, windKts: 1.6, live: true }, null);
+    expect(two.calm).toBe(false);
+    expect(windArrowDeg(two.dirDeg, 1.6, 0)).not.toBeNull();
+    expect(windArrowDeg(90, 1.4, 0)).toBeNull();
     expect(windReadout(scenarioWeather(), null).source).toBe('SCENARIO');
+  });
+
+  it('shows components only on (or lined up for) the runway, low down', () => {
+    const L = 4085;
+    expect(nearRunwayForWind({ distM: 7400, crossM: 20 }, L, 1200)).toBe(true); // 4 NM final
+    expect(nearRunwayForWind({ distM: -60, crossM: 0 }, L, 8)).toBe(true); // takeoff roll
+    expect(nearRunwayForWind({ distM: -L + 100, crossM: 5 }, L, 300)).toBe(true); // climbing out over it
+    expect(nearRunwayForWind({ distM: 7400, crossM: 20 }, L, 1600)).toBe(false); // too high
+    expect(nearRunwayForWind({ distM: 37000, crossM: 0 }, L, 1000)).toBe(false); // 20 NM out
+    expect(nearRunwayForWind({ distM: -L - 2000, crossM: 0 }, L, 900)).toBe(false); // departed, 2 km past the end
+    expect(nearRunwayForWind({ distM: 5000, crossM: 4000 }, L, 1000)).toBe(false); // off to the side
   });
 
   it('every line fits the box (bold 10 px monospace is ~6 px a character)', () => {
     const r = windReadout({ windDirDeg: 80, windKts: 35, gustKts: 48, live: true }, { headwindKts: -25, crosswindKts: 34 });
-    for (const s of [r.speed, r.xw, r.hw]) expect(s.length * 6, s).toBeLessThanOrEqual(WIND_BOX_W - 24);
+    expect(r.speed).toBe('080/35G48');
+    const vrb = windReadout({ windDirDeg: null, windKts: 12, gustKts: 25, live: true }, null);
+    expect(vrb.speed).toBe('VRB/12G25');
+    // The speed line spans the box; XW/HW sit right of the arrow.
+    for (const s of [r.speed, vrb.speed]) expect(s.length * 6, s).toBeLessThanOrEqual(WIND_BOX_W - 6);
+    for (const s of [r.xw, r.hw]) expect(s.length * 6, s).toBeLessThanOrEqual(WIND_BOX_W - 24);
     expect(windReadout(scenarioWeather(), null).source.length * 5.5).toBeLessThanOrEqual(WIND_BOX_W - 4);
     expect('METAR WIND'.length * 5.5).toBeLessThanOrEqual(WIND_BOX_W - 4);
   });

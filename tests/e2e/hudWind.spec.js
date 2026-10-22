@@ -29,7 +29,7 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
       await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudWind.xw, { timeout: 10_000 }).toBe('XW 12R');
       const d = await page.evaluate(() => window.openaeroDebug());
       expect(d.activeRunway).toBe('KDFW_35C');
-      expect(d.hudWind).toMatchObject({ source: 'METAR WIND', calm: false, speed: '12 KT', xwKts: 12, hw: 'HW 2' });
+      expect(d.hudWind).toMatchObject({ source: 'METAR WIND', calm: false, speed: '080/12', xwKts: 12, hw: 'HW 2' });
       // Blowing from the right, so the arrow points left (about 270° from the nose).
       expect(Math.abs(d.hudWind.arrowDeg - (80 - d.headingDeg + 180 + 360) % 360)).toBeLessThan(1);
       expect(d.hudWind.arrowDeg).toBeGreaterThan(240);
@@ -74,6 +74,6 @@ test.describe('honest labels', () => {
     await expect.poll(async () => (await offline.evaluate(() => window.openaeroDebug())).hudWind.source, { timeout: 10_000 }).toBe('SCENARIO');
     d = await offline.evaluate(() => window.openaeroDebug());
     expect(d.wxLive).toBe(false);
-    expect(d.hudWind.speed).toMatch(/KT|G/);
+    expect(d.hudWind.speed).toMatch(/^\d{3}\/\d+/);
   });
 });
