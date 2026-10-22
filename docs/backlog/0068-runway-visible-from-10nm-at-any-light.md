@@ -41,7 +41,7 @@ floor, still one draw call), and a brighter threshold bar. Do not add draw calls
 Changing runway geometry or survey data; adding lights to taxiways.
 
 ## Shipped notes
-- `tests/e2e/runwayVisibility.spec.js` measures 35C and 17R at 10 and 3 NM, four presets, over a
+- `tests/e2e/runwayVisibility.spec.js` measures 35C and 17R at 10 NM (four presets) and 3 NM (Night, Day), over a
   dark urban stub; numbers before/after/lights-off are in its header and the PR.
 - Fix: threshold bars and approach lights keep their size at range, and every runway light has a
   3 px floor at night. Night 10 NM: contrast 1.97/2.01 → 2.34/2.27, lit px 8/10 → 14/14

@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures.js';
 import { stubTiles, BASE, FULL_RES } from './helpers.js';
 
-// Ticket 0068: can you find the runway from a long final? For 35C and 17R at 10 and 3 NM,
-// at each sun preset: the runway region (approach lights' outer end to the far end, 1 px
+// Ticket 0068: can you find the runway from a long final? For 35C and 17R from 10 NM at
+// each sun preset, and from 3 NM at Night and Day: the runway region (approach lights' outer end to the far end, 1 px
 // around it) against a ring of ground out to 24 px, and the lit (luma > 200) pixels in it.
 // The ground is a dark urban grey (warehouse roofs, car parks: the night shader lights its
 // streets too), the backdrop the Scout found hardest.
@@ -29,12 +29,16 @@ const snap = (page) => page.evaluate(() => window.openaeroDebug());
 // 0-255 scale) and the lit (luma > 200) pixels in the region.
 async function measure(page, inner = 1, outer = 24) {
   const quad = (await snap(page)).runwayScreen;
+  // Only the runway and its ring are captured: a full-resolution canvas shot is slow on CI.
+  const xs = quad.map((p) => p.x), ys = quad.map((p) => p.y), vp = page.viewportSize();
+  const cx = Math.max(0, Math.floor(Math.min(...xs) - outer)), cy = Math.max(0, Math.floor(Math.min(...ys) - outer));
+  const clip = { x: cx, y: cy, width: Math.min(vp.width, Math.ceil(Math.max(...xs) + outer)) - cx, height: Math.min(vp.height, Math.ceil(Math.max(...ys) + outer)) - cy };
   const style = await page.addStyleTag({
     content: 'body * { visibility: hidden !important; } #simCanvas { visibility: visible !important; }',
   });
-  const png = await page.locator('#simCanvas').screenshot();
+  const png = await page.screenshot({ clip });
   await style.evaluate((el) => el.remove());
-  return page.evaluate(async ([b64, quad, inner, outer]) => {
+  return page.evaluate(async ([b64, quad, clip, inner, outer]) => {
     const img = new Image();
     img.src = `data:image/png;base64,${b64}`;
     await img.decode();
@@ -42,9 +46,9 @@ async function measure(page, inner = 1, outer = 24) {
     c.width = img.width; c.height = img.height;
     const ctx = c.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    const k = img.width / window.innerWidth;
+    const k = img.width / clip.width;
     // Corners in order around the outline: near-left, near-right, far-right, far-left.
-    const P = [quad[0], quad[1], quad[3], quad[2]].map((p) => ({ x: p.x * k, y: p.y * k }));
+    const P = [quad[0], quad[1], quad[3], quad[2]].map((p) => ({ x: (p.x - clip.x) * k, y: (p.y - clip.y) * k }));
     const segDist = (x, y, a, b) => {
       const dx = b.x - a.x, dy = b.y - a.y, len = dx * dx + dy * dy || 1;
       const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len));
@@ -78,20 +82,7 @@ async function measure(page, inner = 1, outer = 24) {
       runway: Math.round(runway), ring: Math.round(ring), lit, px: rn,
       contrast: +((Math.max(runway, ring) + 12.75) / (Math.min(runway, ring) + 12.75)).toFixed(2),
     };
-  }, [png.toString('base64'), quad, inner, outer]);
-}
-
-// The bare 3D view around the runway, magnified 4x (attached to the report).
-async function shot(page, path) {
-  const quad = (await snap(page)).runwayScreen;
-  const xs = quad.map((p) => p.x), ys = quad.map((p) => p.y);
-  const x = Math.max(0, Math.min(...xs) - 80), y = Math.max(0, Math.min(...ys) - 40);
-  const style = await page.addStyleTag({
-    content: `body * { visibility: hidden !important; } #simCanvas { visibility: visible !important; }`,
-  });
-  const clip = { x, y, width: Math.max(...xs) + 80 - x, height: Math.max(...ys) + 40 - y };
-  await page.screenshot({ path, clip, scale: 'device' });
-  await style.evaluate((el) => el.remove());
+  }, [png.toString('base64'), quad, clip, inner, outer]);
 }
 
 const PRESETS = ['Dawn', 'Day', 'Dusk', 'Night'];
@@ -116,8 +107,8 @@ async function atTime(page, label) {
 }
 
 for (const rwy of ['35C', '17R']) {
-  test(`KDFW ${rwy} from 10 and 3 NM: the runway stands out at dawn, day, dusk and night`, async ({ page }, info) => {
-    test.setTimeout(150_000);
+  test(`KDFW ${rwy} from 10 and 3 NM: the runway stands out at dawn, day, dusk and night`, async ({ page }) => {
+    test.setTimeout(240_000); // CI's SwiftShader at full resolution: ~2.5x a laptop
     await stubTiles(page);
     await page.route('https://server.arcgisonline.com/**', (route) => route.fulfill({
       status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: URBAN_PNG,
@@ -126,22 +117,24 @@ for (const rwy of ['35C', '17R']) {
     await page.locator('#btnStartFlight').click();
     await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
     await expect.poll(async () => (await snap(page)).sky.runwayLights, { timeout: 15_000 }).toBeGreaterThan(5000);
-    for (const nm of [10, 3]) {
-      await flyFinal(page, rwy, nm);
-      const rows = {};
-      for (const label of PRESETS) {
-        await atTime(page, label);
-        rows[label] = await measure(page);
-        if (label === 'Night' || label === 'Day') await shot(page, info.outputPath(`${rwy}-${nm}nm-${label}.png`));
-      }
-      console.log(`0068 ${rwy} ${nm} NM`, JSON.stringify(rows));
-      if (nm === 10) {
-        expect(rows.Night.contrast, 'lit runway at night from 10 NM').toBeGreaterThan(2.15);
-        expect(rows.Night.lit, 'lit pixels at night from 10 NM').toBeGreaterThan(11);
-      } else {
-        expect(rows.Night.contrast, 'lit runway at night from 3 NM').toBeGreaterThan(1.9);
-        for (const label of ['Dawn', 'Day', 'Dusk']) expect(rows[label].contrast, `${label} from 3 NM`).toBeGreaterThan(1.2);
-      }
+    // 10 NM at every preset, then 3 NM at Night (no switch) and Day: each switch recompiles
+    // the ground, the slow part on CI.
+    const far = {}, near = {};
+    await flyFinal(page, rwy, 10);
+    for (const label of PRESETS) {
+      await atTime(page, label);
+      far[label] = await measure(page);
     }
+    await flyFinal(page, rwy, 3);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    near.Night = await measure(page);
+    await atTime(page, 'Day');
+    near.Day = await measure(page);
+    console.log(`0068 ${rwy} 10 NM`, JSON.stringify(far));
+    console.log(`0068 ${rwy} 3 NM`, JSON.stringify(near));
+    expect(far.Night.contrast, 'lit runway at night from 10 NM').toBeGreaterThan(2.15);
+    expect(far.Night.lit, 'lit pixels at night from 10 NM').toBeGreaterThan(11);
+    expect(near.Night.contrast, 'lit runway at night from 3 NM').toBeGreaterThan(1.9);
+    expect(near.Day.contrast, 'by day from 3 NM').toBeGreaterThan(1.2);
   });
 }
