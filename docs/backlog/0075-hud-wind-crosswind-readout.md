@@ -1,12 +1,12 @@
 ---
 id: 0075
 title: Wind arrow and crosswind component on the HUD, always visible on final
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 78
 ---
 
 ## Why

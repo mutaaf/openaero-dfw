@@ -180,7 +180,9 @@ src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/resul
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
                     phone's top bar in landscape) and the camera FOV (62° vertical in
                     landscape; portrait opens towards 60° across, capped at 80° vertical:
-                    an iPad gets 60°, a phone ~42°, 0044; pure, tested)
+                    an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the wind box
+                    (0075): over the altitude tape, its text (source, arrow, speed, XW/HW
+                    vs the active runway under 1,500 ft) refreshed once a second
 src/aircraftModel.js  detailed open-licensed glTF aircraft (0045), lazy after the first Fly:
                     GLTFLoader + three's bundled meshopt decoder, public/models/*.glb in the
                     body frame (nose -Z, wheels at -gearHeight), gear_* nodes follow the gear;
@@ -272,7 +274,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npx playwright test --project=devices --no-deps` | The device-class probe alone (iPhone 15 both ways, iPad Air both ways, iPad Pro 12.9 portrait, Pixel 8, Chromium with emulated touch; touch, 4x CPU throttle, layout + frame time; numbers in `docs/PERF.md`) |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 201 kB gzipped at boot, **over it on main: 205.68 kB on 2026-10-22, 206.4 kB after 0063** (the stand-ins' hinged surfaces; surfaces.js itself is a 0.9 kB lazy chunk). Getting back under 201 is Keeper work, or the operator raises the line. (2026-10-21: 201.00 kB after 0045's model hook; the loader,
+Budgets: JS ≤ 201 kB gzipped at boot, **over it on main: 205.68 kB on 2026-10-22, 206.4 kB after 0063, 207.1 kB after 0075's HUD wind box** (the stand-ins' hinged surfaces; surfaces.js itself is a 0.9 kB lazy chunk). Getting back under 201 is Keeper work, or the operator raises the line. (2026-10-21: 201.00 kB after 0045's model hook; the loader,
 decoder and model are lazy, the twin-jet is 29 kB gz. 2026-10-19: 200.27 kB after 0055/0056/0011: the night
 ground shader the imagery needs at first paint, the HUD tapes, clean view and When? picker
 (+3.0 kB); the sky dome (4.9 kB gz) and runway lights (1.9 kB) are lazy chunks and the star
