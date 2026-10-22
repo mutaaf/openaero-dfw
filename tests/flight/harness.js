@@ -3,7 +3,7 @@
 // published performance data. Ground is flat at y = 0; altitude is sim height in metres.
 import { Vector3, Quaternion, Euler } from 'three';
 import { stepFlightModel } from '../../src/flightModel.js';
-import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
+import { trimAoaDeg, elevatorForPitch, aileronForBank, flareSinkMps } from '../../src/autopilot.js';
 import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT } from '../../src/constants.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 
@@ -196,4 +196,126 @@ export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, 
     kts, n: avg('n'), bankDeg: avg('bank'), betaDeg: avg('beta'), altErrM: avg('altErr'),
     bleedKtsS: (first.ias - last.ias) / (last.t - first.t), t: b.t,
   };
+}
+
+// Crosswind (ticket 0069). The runway runs north along x = 0 (the body's spawn heading), so
+// a wind from the right (090°) is an air mass moving west at `xwKts`. Distances across it
+// are feet from the centreline; + = right (east, the upwind side).
+const xwind = (xwKts) => new Vector3(-xwKts * KTS_TO_MPS, 0, 0);
+const yawLeftDegOf = (body) => { _e.setFromQuaternion(body.quat, 'YXZ'); return _e.y * RAD_TO_DEG; };
+
+// Crosswind takeoff, the C172S POH's crosswind technique (Section 4, amplified procedures:
+// minimum flaps, ailerons into the wind, a speed slightly higher than normal, then lift off
+// cleanly): flaps up, full power, the nose wheel lifted at 55 KIAS (normal takeoff) to 9°.
+// The pedals (rudder and nose-wheel steering) hold the runway heading and steer back to the
+// centreline; the ailerons hold the wings level, which in a crosswind means into the wind on
+// a model with a dihedral effect. Up to lift-off it reports the widest the wheels strayed
+// from the centreline, the most rudder, the average rudder over the whole roll and over its
+// second half (the steady pedal, past the low-speed steering), the average aileron, the
+// worst heading and the most bank on the wheels. `pedals: false` keeps the feet flat (the
+// control that shows the wind is felt).
+export function crosswindTakeoff(spec, xwKts, { pedals = true, rotateKts = 55, pitchDeg = 9 } = {}) {
+  const b = makeBody(spec, { throttle: 1, flaps: 0 });
+  b.windVec.copy(xwind(xwKts));
+  let liftoffKts = null, maxOffFt = 0, maxRudder = 0, maxHeadingDevDeg = 0, maxBankDeg = 0;
+  const roll = [];
+  fly(b, spec, 90, (x) => {
+    const yawLeft = yawLeftDegOf(x);
+    const offFt = x.pos.x * M_TO_FT;
+    // Right of the centreline → nose a little left (up to 3°), back towards it.
+    const want = Math.max(-3, Math.min(3, offFt * 0.15 + x.vel.x * M_TO_FT * 0.3));
+    x.rudderInput = pedals ? Math.max(-1, Math.min(1, (yawLeft - want) * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15)) : 0;
+    const { bankRightDeg, pitchDeg: p } = attitude(x);
+    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z) / 0.6; // full throw, not the AP's ±0.6
+    if (x.iasKts >= rotateKts) x.elevInput = elevatorForPitch(pitchDeg, p, x.angVel.x);
+    maxOffFt = Math.max(maxOffFt, Math.abs(offFt));
+    maxRudder = Math.max(maxRudder, Math.abs(x.rudderInput));
+    maxHeadingDevDeg = Math.max(maxHeadingDevDeg, Math.abs(yawLeft));
+    if (x.onGround) maxBankDeg = Math.max(maxBankDeg, Math.abs(bankRightDeg));
+    roll.push([x.rudderInput, x.aileronInput]);
+  }, (x) => {
+    if (x.t > 2 && !x.onGround) { liftoffKts = x.iasKts; return true; }
+    return Math.abs(x.pos.x * M_TO_FT) > 300; // well off the runway: stop
+  });
+  const mean = (a, k) => a.reduce((s, r) => s + r[k], 0) / a.length;
+  return {
+    liftoffKts, maxOffFt, maxRudder, meanRudder: mean(roll, 0), steadyRudder: mean(roll.slice(roll.length >> 1), 0),
+    meanAileron: mean(roll, 1), maxHeadingDevDeg, maxBankDeg, rollFt: b.distM * M_TO_FT, t: b.t,
+  };
+}
+
+// Crosswind landing, wing-low (FAA-H-8083-3C ch. 9, "Crosswind Approach and Landing"), with
+// the POH's minimum flaps for a strong crosswind (flaps 10, 70 KIAS): from `fromFt` on a 3°
+// path to the runway threshold (z = 0) at `kts` with flaps `flaps`, pitch
+// flies the speed and power the path; the rudder keeps the nose on the runway heading and
+// the upwind wing goes down just enough to stop the drift and hold the centreline. Flare
+// from 30 ft at idle, touch down on the upwind main. Reports the touchdown (distance from
+// the centreline, sideways drift across the nose, heading, bank, sink rate), the rudder and
+// bank and sideslip the slip needed on short final, and the widest the wheels strayed on the rollout
+// (brakes on, the pedals still on the centreline) to a stop. `wingLow: false` keeps the
+// feet flat (the ailerons still steer for the centreline, so it arrives crabbed and skating
+// sideways across its nose).
+export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 500, wingLow = true } = {}) {
+  const h0 = fromFt / M_TO_FT;
+  const tan3 = Math.tan(3 * DEG_TO_RAD);
+  const b = makeBody(spec, { kts, altM: h0 + spec.gearHeight, flaps, throttle: 0.3 });
+  b.pos.z = h0 / tan3;
+  b.vel.y = b.vel.z * tan3; // already on the path (vel.z < 0: descending as it goes north)
+  b.windVec.copy(xwind(xwKts));
+  const hold = speedHoldPilot(() => kts);
+  let rudInt = 0, bankInt = 0, thrInt = b.throttle, flareFrom = null, td = null;
+  let finalRudder = 0, finalBank = 0, finalBeta = 0, finalN = 0, maxRollOffFt = 0;
+  fly(b, spec, 240, (x, dt) => {
+    const yawLeft = yawLeftDegOf(x);
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    const wheelM = x.pos.y - x.groundY - spec.gearHeight;
+    const offM = x.pos.x;
+    if (td) {
+      // Rollout: idle, brakes, stick back, ailerons into the wind, feet on the centreline.
+      x.throttle = 0; x.brakesOn = x.t - td.t > 2; x.elevInput = -0.5;
+      const want = Math.max(-3, Math.min(3, offM * M_TO_FT * 0.15 + x.vel.x * M_TO_FT * 0.3));
+      x.rudderInput = Math.max(-1, Math.min(1, (yawLeft - want) * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15));
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z) / 0.6;
+      maxRollOffFt = Math.max(maxRollOffFt, Math.abs(offM * M_TO_FT));
+      return;
+    }
+    // Rudder: nose on the runway heading (an integral holds the slip's steady pedal).
+    rudInt = Math.max(-1, Math.min(1, rudInt + yawLeft * 0.1 * dt));
+    x.rudderInput = wingLow ? Math.max(-1, Math.min(1, rudInt + yawLeft * 0.3 + x.angVel.y * RAD_TO_DEG * 0.3)) : 0;
+    // Ailerons: bank towards the centreline, an integral for the steady wing-low bank.
+    bankInt = Math.max(-20, Math.min(20, bankInt - (offM * 0.05 + x.vel.x * 0.3) * dt));
+    const bankCmd = Math.max(-20, Math.min(20, bankInt - offM * 0.3 - x.vel.x * 2));
+    x.aileronInput = aileronForBank(bankCmd, bankRightDeg, -x.angVel.z);
+    if (flareFrom === null && wheelM < 30 / M_TO_FT) flareFrom = pitchDeg;
+    if (flareFrom === null) {
+      hold(x, dt);
+      x.aileronInput = aileronForBank(bankCmd, bankRightDeg, -x.angVel.z); // hold() levels the wings
+      // Power for the path: height above the 3° line through the threshold, and its rate.
+      const aboveM = x.pos.y - spec.gearHeight - x.pos.z * tan3;
+      const vsErr = x.vel.y + x.vel.length() * tan3; // + = sinking slower than the path
+      thrInt = Math.max(0, Math.min(1, thrInt - (aboveM * 0.01 + vsErr * 0.02) * dt));
+      x.throttle = Math.max(0, Math.min(1, thrInt - aboveM * 0.02 - vsErr * 0.05));
+      if (wheelM < 100 / M_TO_FT) { finalRudder += x.rudderInput; finalBank += bankRightDeg; finalBeta += x.betaDeg; finalN++; }
+    } else {
+      // Flare: idle, and a sink rate that shrinks with the height (autopilot.js flareSinkMps).
+      x.throttle = 0;
+      const sinkErr = x.vel.y - flareSinkMps(Math.max(0, wheelM)) * 0.5;
+      x.pitchCmd = Math.max(-5, Math.min(14, (x.pitchCmd ?? pitchDeg) - sinkErr * 4 * dt));
+      x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
+    }
+  }, (x) => {
+    if (!td && x.onGround) {
+      const { bankRightDeg } = attitude(x);
+      const yawLeft = yawLeftDegOf(x);
+      // Drift across the nose: ground velocity perpendicular to the heading (+ = rightwards).
+      const h = -yawLeft * DEG_TO_RAD;
+      td = {
+        t: x.t, offFt: x.pos.x * M_TO_FT, headingDeg: -yawLeft, bankRightDeg,
+        driftKts: (x.vel.x * Math.cos(h) + x.vel.z * Math.sin(h)) / KTS_TO_MPS,
+        sinkFpm: -(x.lastAirVsi ?? 0), iasKts: x.iasKts, distFt: -x.pos.z * M_TO_FT,
+      };
+    }
+    return td && Math.hypot(x.vel.x, x.vel.z) < 1;
+  });
+  return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalBankDeg: finalBank / finalN, finalBetaDeg: finalBeta / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
 }

@@ -1,12 +1,12 @@
 ---
 id: 0069
 title: C172 card: a 15 kt crosswind takeoff and landing stay on the runway
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 80
 ---
 
 ## Why
@@ -21,12 +21,14 @@ Two harness cards (`crosswindTakeoff`, `crosswindLanding`): 15 kt wind at 90° t
 at a reasonable gust-free steady state, a pilot who crabs/slips as a pilot would. Takeoff: full
 rudder authority holds the centreline within 30 ft to lift-off. Landing: wing-low touchdown
 within half the runway width of the centreline without exceeding side-load limits.
+(Shipped in #80: side load is judged by its proxy, drift across the nose < 2 kt and heading
+< 3° at touchdown; the shallow wing-low bank on flightModel.js became gap card 0081.)
 Record anything the model cannot do as `it.fails` with the measured number.
 
 ## Acceptance criteria
-- [ ] Takeoff stays within the runway half-width (75 ft for a 150 ft runway) at 15 kt crosswind on both models, or is pinned `it.fails` with a ticket.
-- [ ] Landing in the same wind touches down inside the runway edges.
-- [ ] The existing cards are untouched and green.
+- [x] Takeoff stays within the runway half-width (75 ft for a 150 ft runway) at 15 kt crosswind on both models, or is pinned `it.fails` with a ticket.
+- [x] Landing in the same wind touches down inside the runway edges.
+- [x] The existing cards are untouched and green.
 
 ## Test plan
 `tests/flight/c172.test.js` plus harness helpers; compare against a zero-wind control in the same test so a no-op wind cannot pass.
