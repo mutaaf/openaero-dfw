@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: authenticity
 created: 2026-10-21
-pr: 75
+pr: 76
 ---
 
 ## Why
@@ -31,7 +31,7 @@ allocation). Surfaces that a model lacks are skipped silently.
 - [x] Zero per-frame allocations in the update (unit-asserted with a spy)
 - [x] Works at 390x844 and 1280x720; no frame-time regression
 
-## As built (#75)
+## As built (#76)
 `src/surfaces.js` (lazy chunk after boot): pure `surfaceAngles` (C172 throws from FAA TCDS
 3A12: aileron 20 up / 15 down, elevator 28 / 23, rudder 16°10'; F-16 limits from NASA
 TP-1538 as flown by Stevens & Lewis, flaperons mixing flap and roll; 737 throws are
