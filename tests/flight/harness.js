@@ -6,6 +6,7 @@ import { stepFlightModel } from '../../src/flightModel.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank, flareSinkMps } from '../../src/autopilot.js';
 import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT } from '../../src/constants.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
+import { stallAoaDeg } from '../../src/aero.js';
 
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
@@ -318,4 +319,61 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
     return td && Math.hypot(x.vel.x, x.vel.z) < 1;
   });
   return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalAileron: finalAileron / finalN, finalBankDeg: finalBank / finalN, finalBetaDeg: finalBeta / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
+}
+
+// POH short-field landing (Section 4, Fig. 5-11): flaps 30, power off, 61 KIAS (= KCAS here,
+// no instrument error) crossing a 50 ft obstacle on a 3° path, the nose lowered to keep 61
+// at idle; a round-out from 20 ft (a sink that shrinks with the height, 2 s time constant)
+// to a hold-off a foot above the runway, the nose coming up no further than 1° short of the
+// stall angle, so it touches down on the mains near the stall. Then, as Section 4 says: lower the nose wheel, brakes on
+// hard (after `brakeDelayS`, the pilot's reaction), flaps up. (The POH then says control wheel
+// full back; this pilot holds the nose wheel down instead: on flightModel.js the Cessna tips
+// back past its mains at ~10° and gear.js has no braking pitch moment, ticket 0082.)
+// Returns the ground roll (first touch to a stop), the total from the obstacle, and what
+// the pilot flew: touchdown IAS and sink rate, time airborne again after the first touch.
+export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20 } = {}) {
+  const tan3 = Math.tan(3 * DEG_TO_RAD);
+  const b = makeBody(spec, { kts, altM: 50 / M_TO_FT + spec.gearHeight, flaps, throttle: 0 });
+  b.isaDevC = isaDevC;
+  b.vel.y = b.vel.z * tan3;
+  const approach = speedHoldPilot(() => kts);
+  const aoaMax = stallAoaDeg(spec, flaps) - 1;
+  const holdM = 1 / M_TO_FT;
+  let td = null, flareI = null;
+  fly(b, spec, 120, (x, dt) => {
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    x.throttle = 0;
+    x.rudderInput = Math.max(-1, Math.min(1, yawLeftDegOf(x) * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15));
+    if (td) {
+      const s = x.t - td.t;
+      if (!x.onGround) td.bounceS += dt;
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z) / 0.6;
+      x.brakesOn = s >= brakeDelayS;
+      if (x.brakesOn) x.flapsIndex = 0;
+      // Nose wheel down and kept there: the pitch held at the three-wheel attitude (0°). The
+      // POH's "full back" relies on the brakes' nose-down moment and a real tip-back angle to
+      // keep the nose on the runway; flightModel.js's C172 tips back past its mains at ~10° and
+      // gear.js has no braking moment (ticket 0082), so full back rests it on its tail at 15°
+      // and the wing carries the weight instead of the brakes.
+      x.elevInput = elevatorForPitch(0, pitchDeg, x.angVel.x);
+      return;
+    }
+    const wheelM = x.pos.y - x.groundY - spec.gearHeight;
+    if (wheelM > flareFt / M_TO_FT) { approach(x, dt); return; }
+    // PI on the sink error (+ = sinking too fast); the integral stops at the AoA limit.
+    const sinkErr = -x.vel.y - Math.max(0.05, (wheelM - holdM) / 2);
+    const aoaRoom = aoaMax - x.aoaDeg;
+    flareI ??= pitchDeg;
+    if (sinkErr < 0 || aoaRoom > 0) flareI += sinkErr * 3 * dt;
+    x.pitchCmd = Math.max(-5, Math.min(pitchDeg + aoaRoom, flareI + sinkErr * 5));
+    x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
+    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+  }, (x) => {
+    if (!td && x.onGround) td = { t: x.t, distM: x.distM, kts: x.iasKts, sinkFpm: -(x.lastAirVsi ?? 0), bounceS: 0 };
+    return td && Math.hypot(x.vel.x, x.vel.z) < 0.3;
+  });
+  return {
+    rollFt: (b.distM - td.distM) * M_TO_FT, totalFt: b.distM * M_TO_FT,
+    tdKts: td.kts, tdSinkFpm: td.sinkFpm, bounceS: td.bounceS, stopped: Math.hypot(b.vel.x, b.vel.z) < 0.3,
+  };
 }
