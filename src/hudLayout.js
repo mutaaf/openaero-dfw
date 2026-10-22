@@ -36,3 +36,59 @@ export function cameraFovDeg(w, h) {
   const v = 2 * Math.atan(Math.tan((MIN_HFOV_DEG * Math.PI) / 360) / (w / h)) * (180 / Math.PI);
   return Math.min(MAX_FOV_DEG, Math.max(BASE_FOV_DEG, v));
 }
+
+// Wind readout (0075): a small box over the altitude tape with the wind's source, an arrow
+// for where it blows relative to the nose, its speed and, low on a runway, the cross and
+// head/tail components. It ends above the tapes and above the horizon band (35% of the
+// height) the layout keeps clear; where that leaves no room under the top bar (a phone
+// held sideways) it moves to the right of the altitude tape, level with its top.
+export const WIND_BOX_W = 64;
+export const WIND_BOX_H = 50;
+export const WIND_SHOW_COMPONENTS_FT = 1500;
+
+export function windBoxRect(w, h, out = { x: 0, y: 0, w: WIND_BOX_W, h: WIND_BOX_H }) {
+  const cx = w / 2, cy = h / 2;
+  const bottom = Math.min(cy + TAPE_TOP - 2, h * 0.35);
+  if (bottom - WIND_BOX_H >= BELOW_TOP_BAR) {
+    out.x = Math.min(cx + 126, w - WIND_BOX_W - 2);
+    out.y = bottom - WIND_BOX_H;
+  } else {
+    out.x = Math.min(cx + 192, w - WIND_BOX_W - 2);
+    out.y = Math.max(cy + TAPE_TOP, BELOW_TOP_BAR);
+  }
+  out.w = WIND_BOX_W;
+  out.h = WIND_BOX_H;
+  return out;
+}
+
+// The arrow's screen angle (deg clockwise from straight up = the nose): where the wind blows
+// TO, given where it blows FROM (true) and the aircraft's true heading. Null when there is
+// no direction to show (calm or variable).
+export function windArrowDeg(fromDeg, kts, hdgDeg) {
+  if (fromDeg === null || fromDeg === undefined || !(kts >= 2)) return null;
+  return (((fromDeg - hdgDeg + 180) % 360) + 360) % 360;
+}
+
+// The readout's text (pure; main.js refreshes it once a second, so the HUD allocates
+// nothing per frame). wx is the weather module's record ({ windDirDeg, windKts, gustKts,
+// live }); comps is runwayWindComponents for the active runway, or null when there is none
+// or the aircraft is above WIND_SHOW_COMPONENTS_FT.
+export function windReadout(wx, comps, out = {}) {
+  const kts = Math.round(wx.windKts || 0);
+  out.source = wx.live ? 'METAR WIND' : 'SCENARIO';
+  out.calm = kts < 2;
+  out.speed = out.calm ? 'CALM'
+    : `${wx.windDirDeg === null || wx.windDirDeg === undefined ? 'VRB ' : ''}${kts}${wx.gustKts > wx.windKts ? `G${Math.round(wx.gustKts)}` : ' KT'}`;
+  out.xwKts = null;
+  out.hwKts = null;
+  out.xw = '';
+  out.hw = '';
+  if (comps && !out.calm && wx.windDirDeg !== null && wx.windDirDeg !== undefined) {
+    const xw = Math.round(comps.crosswindKts), hw = Math.round(comps.headwindKts);
+    out.xwKts = xw;
+    out.hwKts = hw;
+    out.xw = `XW ${Math.abs(xw)}${xw > 0 ? 'R' : xw < 0 ? 'L' : ''}`;
+    out.hw = `${hw >= 0 ? 'HW' : 'TW'} ${Math.abs(hw)}`;
+  }
+  return out;
+}

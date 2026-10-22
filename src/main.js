@@ -46,7 +46,10 @@ import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
-import { headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg } from './hudLayout.js';
+import {
+  headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
+  windBoxRect, windArrowDeg, windReadout, WIND_SHOW_COMPONENTS_FT,
+} from './hudLayout.js';
 import { stepFlightModel, trimThrottle } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
@@ -103,6 +106,8 @@ const sim = {
   loadedMission: null,
   windVec: new THREE.Vector3(),
   windNowKts: 0,
+  // The HUD wind readout's text (0075), refreshed with the ribbon once a second
+  hudWind: windReadout(scenarioWeather(), null),
   simTime: 0,
 
   // Touchdown detection for the landing grade (landing.js)
@@ -1182,6 +1187,9 @@ function syncWeatherUI(dt) {
   const dfw = sim.wxByIcao.KDFW || scenarioWeather();
   const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
   document.getElementById('txtFlow').textContent = flow === 'NORTH' ? 'NORTH (RWY 35/36)' : 'SOUTH (RWY 17/18)';
+  // HUD wind box (0075): components against the active runway only low down, near it.
+  const low = sim.activeEnd && (sim.onGround || sim.aglFt < WIND_SHOW_COMPONENTS_FT);
+  windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind);
   const rw = document.getElementById('txtRwyWind');
   if (sim.activeEnd && wx.windKts) {
     const c = runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT);
@@ -1607,6 +1615,8 @@ function renderHud() {
   hudCtx.fillText(`${String(hdgDeg).padStart(3, '0')}°`, cx, hdgTop + 16);
   hudCtx.font = '12px monospace';
 
+  drawWindBox(w, h, hdgDeg);
+
   // ILS Guidance Crosshairs
   // Fly-to bars: the localizer bar sits where the centreline is (left when you're right of
   // it), the glideslope bar where the path is (below when you're high).
@@ -1659,6 +1669,49 @@ function drawSpeedBug(x, y) {
   hudCtx.textAlign = 'right';
   hudCtx.fillText(`SPD ${Math.round(target)}`, x, y + 106);
   hudCtx.textAlign = 'left';
+}
+
+// Wind readout (0075): source, an arrow for where the wind blows relative to the nose, its
+// speed and, low near the active runway, the cross and head/tail components. Box geometry in
+// hudLayout.js; the text is refreshed once a second (syncWeatherUI), so nothing is built here.
+const _windBox = windBoxRect(1, 1);
+function drawWindBox(w, h, hdgDeg) {
+  const r = windBoxRect(w, h, _windBox);
+  const hw = sim.hudWind;
+  hudCtx.globalAlpha = hw.calm ? 0.6 : 1;
+  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';
+  hudCtx.strokeStyle = '#38bdf8';
+  hudCtx.fillRect(r.x, r.y, r.w, r.h);
+  hudCtx.strokeRect(r.x, r.y, r.w, r.h);
+  hudCtx.textAlign = 'left';
+  hudCtx.font = 'bold 9px monospace';
+  hudCtx.fillStyle = sim.wx.live ? '#6ee7b7' : '#cbd5e1';
+  hudCtx.fillText(hw.source, r.x + 3, r.y + 10);
+  const arrow = windArrowDeg(sim.wx.windDirDeg, sim.wx.windKts, hdgDeg);
+  if (arrow !== null) {
+    hudCtx.save();
+    hudCtx.translate(r.x + 12, r.y + 31);
+    hudCtx.rotate(arrow * DEG_TO_RAD);
+    hudCtx.strokeStyle = '#e0f2fe';
+    hudCtx.fillStyle = '#e0f2fe';
+    hudCtx.lineWidth = 2;
+    hudCtx.beginPath();
+    hudCtx.moveTo(0, 9); hudCtx.lineTo(0, -4);
+    hudCtx.stroke();
+    hudCtx.beginPath();
+    hudCtx.moveTo(0, -10); hudCtx.lineTo(5, -3); hudCtx.lineTo(-5, -3); hudCtx.closePath();
+    hudCtx.fill();
+    hudCtx.restore();
+  }
+  hudCtx.font = 'bold 10px monospace';
+  hudCtx.fillStyle = '#e0f2fe';
+  hudCtx.fillText(hw.speed, r.x + 24, r.y + 23);
+  if (hw.xw) {
+    hudCtx.fillText(hw.xw, r.x + 24, r.y + 35);
+    hudCtx.fillStyle = hw.hwKts < 0 ? '#fcd34d' : '#e0f2fe';
+    hudCtx.fillText(hw.hw, r.x + 24, r.y + 47);
+  }
+  hudCtx.globalAlpha = 1;
 }
 
 // Flare cue (0073): under 60 ft, FLARE above the boresight (and IDLE under 30 ft with power on).
@@ -2638,6 +2691,8 @@ window.openaeroDebug = () => {
     flapsIndex: sim.flapsIndex,
     aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
+    // The HUD wind box (0075): what it says and where it is (canvas px = CSS px).
+    hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.wx.windDirDeg, sim.wx.windKts, (-_euler.y * RAD_TO_DEG + 360) % 360), box: { ..._windBox } },
     pixelRatio: resScale.ratio,
     paused: sim.paused,
     audio: audio.state,
