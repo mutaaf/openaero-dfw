@@ -1,7 +1,7 @@
 // Flight test cards: the Cessna 172S flown headless (harness.js) against the Pilot's
 // Operating Handbook (Cessna 172S POH, Section 5, 2550 lb, sea level ISA unless noted;
-// Fig. 5-3 stall speeds, 5-5 short field takeoff (p. 5-14), 5-6 maximum rate of climb, 3-1 maximum
-// glide). The model has no instrument error, so stall speeds compare with KCAS.
+// Fig. 5-3 stall speeds, 5-5 short field takeoff (p. 5-14), 5-6 maximum rate of climb, 5-11 short
+// field landing (p. 5-23), 3-1 maximum glide). The model has no instrument error, so stall speeds compare with KCAS.
 //
 // A card the model does not yet meet is a KNOWN GAP: `it.fails` keeps the gate green
 // while the gap exists and turns it red the day the model is fixed, so the fixing PR
@@ -15,7 +15,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
+import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -37,10 +37,17 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 // JSBSim's known gaps (measured, PR #48):
 //  - lift-off 55.2 kt (band edge 55.08, so a small fix promotes the card): the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
 //    proportional only), so the wing reaches lift-off speed later.
-//  - brakes 138 m: main-wheel brakes only, load moves to the nose wheel, 0.36 g. The 0.45 μ
-//    reference is flightModel.js's assumption, not the POH; the POH landing-roll card that
-//    should replace it is ticket 0051.
-const GAPS = { flightModel: new Set(), jsbsim: new Set(['takeoff', 'brakes']) };
+//
+// Short-field landing, both models (ticket 0082): from the POH's 61 KIAS at 50 ft and a near-stall
+// touchdown (52-53 KCAS, 90-160 fpm), with the nose wheel held on the runway and the brakes
+// on 0.5 s after the touch, the roll is ~355-370 ft against the POH's 575 (-36 to -38%):
+// both brake at ~0.36 g where the book's numbers average ~0.2 g. The air segment is right on
+// flightModel.js (756 ft, POH 1335 - 575 = 760), so its total misses only by the roll
+// (1125 ft, -16%); JSBSim floats further (~940 ft) and its total is inside the band.
+const GAPS = {
+  flightModel: new Set(['landRoll', 'landTotal']),
+  jsbsim: new Set(['takeoff', 'landRoll']),
+};
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
   beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
@@ -86,12 +93,30 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     within(r.totalFt, 1633, 0.15);
   });
 
-  card('brakes')('brakes stop the aircraft from 58 kt in about 100 m (μ 0.45 ≈ 0.43 g)', () => {
-    const b = makeBody(c172);
-    b.vel.set(0, 0, -30);
-    b.brakesOn = true;
-    fly(b, c172, 30, null, (x) => -x.vel.z < 0.5);
-    within(b.distM, 30 * 30 / (2 * 0.45 * 9.80665), 0.25);
+  // POH Fig. 5-11 (p. 5-23), 2550 lb, flaps 30°, power off, maximum braking, paved level dry
+  // runway, zero wind, 61 KIAS at 50 ft, short-field technique (Section 4). Sea level,
+  // interpolated to ISA 15 °C: ground roll (565 + 585) / 2 = 575 ft, total over a 50 ft
+  // obstacle (1320 + 1350) / 2 = 1335 ft. This replaces a card that braked from 58 kt against
+  // flightModel.js's own μ 0.45 (not a published figure). The pilot must land like the book:
+  // one touchdown, on the mains, gently, near the stall (KCAS 48 flaps 30, Fig. 5-3).
+  // The pilot is checked on its own (never an it.fails), so a gap card can't hide a bad landing.
+  it('short-field landing pilot: one touchdown on the mains, gently, near the stall, to a stop', () => {
+    const r = shortFieldLanding(c172);
+    console.log(`[c172 ${model}] landing roll ${r.rollFt.toFixed(0)} ft, ${r.totalFt.toFixed(0)} ft from 50 ft; `
+      + `touchdown ${r.tdKts.toFixed(1)} KCAS at ${r.tdSinkFpm} fpm, airborne again ${r.bounceS.toFixed(2)} s`);
+    expect(r.stopped).toBe(true);
+    expect(r.bounceS).toBe(0);
+    expect(r.tdSinkFpm).toBeLessThan(300);
+    expect(r.tdKts).toBeGreaterThan(48);
+    expect(r.tdKts).toBeLessThan(48 * 1.15);
+  });
+
+  card('landRoll')('short-field landing: ground roll near 575 ft (POH Fig. 5-11, ±15%)', () => {
+    within(shortFieldLanding(c172).rollFt, 575, 0.15);
+  });
+
+  card('landTotal')('short-field landing: 1335 ft from a 50 ft obstacle to a stop (POH Fig. 5-11, ±15%)', () => {
+    within(shortFieldLanding(c172).totalFt, 1335, 0.15);
   });
 
   // POH Fig. 5-5 at sea level: 960 ft at 15 °C (interpolated), 1150 ft at 40 °C (+20%).
