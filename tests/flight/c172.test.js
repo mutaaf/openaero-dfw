@@ -219,29 +219,30 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S level turns
 
 // Crosswind (ticket 0069). C172S POH Section 4, Airspeeds for Normal Operation: "Maximum
 // Demonstrated Crosswind Velocity, Takeoff or Landing: 15 KNOTS". A test pilot took off and
-// landed in 15 kt at 90° and kept it on the runway; the model's rudder, nose-wheel steering
-// and ailerons must let our harness pilot do the same (harness.js crosswindTakeoff and
-// crosswindLanding, wind from the right). Runway: 150 ft wide (KDFW 35C/17C), so the edges
-// are 75 ft either side of the centreline. Each card flies a control in the same test: with
-// no wind the same pilot needs no pedal, and in the wind a pilot who does nothing about it
-// (feet flat on the takeoff, no slip on the landing) is blown off the centreline, so a wind
-// the model ignored could not pass. Landing technique: FAA-H-8083-3C ch. 9, wing-low (side
-// slip), touch down on the upwind main with no drift and the nose on the centreline (also
-// the Private Pilot ACS standard), POH Section 4 normal landing, flaps 30°, 65 KIAS.
-// Measured (printed, not judged, as no source gives it): the slip holds with ~1.6° of bank
-// on flightModel.js and ~4.3° on JSBSim. flightModel.js has no side force from the fuselage
-// and fin in sideslip (only drag's sideways part), so its wing-low bank is shallow.
+// landed with a 15 kt crosswind component and kept it on the runway; the model's rudder,
+// nose-wheel steering and ailerons must let our harness pilot do the same, here with the
+// whole 15 kt at 90° from the right. Technique (harness.js crosswindTakeoff and
+// crosswindLanding): the POH's crosswind advice (Section 4 amplified procedures: minimum
+// flaps, ailerons into the wind, lift off cleanly; flaps up and the nose wheel lifted at
+// 55 KIAS for the takeoff, flaps 10 at 70 KIAS for the approach) and FAA-H-8083-3C ch. 9's
+// wing-low landing: touch down on the upwind main with no side drift and the nose along the
+// centreline (also the Private Pilot ACS standard). Runway: 150 ft wide (KDFW 35C/17C), so
+// the edges are 75 ft either side of the centreline. Each card flies controls in the same
+// test: in calm air the same pilot needs no pedal, and in the wind a pilot who does nothing
+// about it (feet flat) leaves the runway on the takeoff and arrives crabbed and skating
+// sideways on the landing, so a wind the model ignored could not pass.
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S 15 kt crosswind vs POH (${model})`, () => {
   beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
   afterAll(() => useFdm(null));
 
-  it('takes off in a 15 kt direct crosswind within 30 ft of the centreline (POH max demonstrated 15 kt)', () => {
+  it('takes off in a 15 kt direct crosswind within 30 ft of the centreline, with pedal to spare (POH max demonstrated 15 kt)', () => {
     const calm = crosswindTakeoff(c172, 0);
     const r = crosswindTakeoff(c172, 15);
     const feetFlat = crosswindTakeoff(c172, 15, { pedals: false });
     console.log(`[c172 ${model}] 15 kt crosswind takeoff: ±${r.maxOffFt.toFixed(1)} ft, heading ±${r.maxHeadingDevDeg.toFixed(1)}°, `
-      + `rudder mean ${r.meanRudder.toFixed(2)} peak ${r.maxRudder.toFixed(2)}, bank ±${r.maxBankDeg.toFixed(1)}°, lift-off ${r.liftoffKts?.toFixed(1)} KIAS `
-      + `in ${r.rollFt.toFixed(0)} ft; calm rudder mean ${calm.meanRudder.toFixed(3)}; feet flat: ${feetFlat.maxOffFt.toFixed(0)} ft off, heading ${feetFlat.maxHeadingDevDeg.toFixed(0)}°`);
+      + `rudder mean ${r.meanRudder.toFixed(2)} steady ${r.steadyRudder.toFixed(2)} peak ${r.maxRudder.toFixed(2)}, aileron mean ${r.meanAileron.toFixed(2)}, `
+      + `bank on the wheels ±${r.maxBankDeg.toFixed(1)}°, lift-off ${r.liftoffKts?.toFixed(1)} KIAS in ${r.rollFt.toFixed(0)} ft; `
+      + `calm rudder mean ${calm.meanRudder.toFixed(3)}; feet flat: ${feetFlat.maxOffFt.toFixed(0)} ft off, heading ${feetFlat.maxHeadingDevDeg.toFixed(0)}°`);
     // Control: no wind, no pedal needed and nowhere to drift.
     expect(Math.abs(calm.meanRudder)).toBeLessThan(0.05);
     expect(calm.maxOffFt).toBeLessThan(5);
@@ -249,36 +250,64 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S 15 kt cross
     // right), and with the feet flat the airplane leaves the runway.
     expect(r.meanRudder).toBeLessThan(-0.1);
     expect(feetFlat.maxOffFt).toBeGreaterThan(75);
-    // The card: it lifts off, on the centreline, pointing down the runway.
+    // The card: it lifts off on the centreline, pointing down the runway, wings level on the
+    // wheels; 15 kt is demonstrated, not limiting, so the steady pedal leaves a margin.
     expect(r.liftoffKts).not.toBeNull();
     expect(r.maxOffFt).toBeLessThan(30);
     expect(r.maxHeadingDevDeg).toBeLessThan(5);
-  });
+    expect(r.maxBankDeg).toBeLessThan(5);
+    expect(Math.abs(r.steadyRudder)).toBeLessThan(0.6);
+  }, 20000);
 
   it('lands wing-low in a 15 kt direct crosswind on the centreline with no drift and stops on the runway (POH, FAA-H-8083-3C)', () => {
     const calm = crosswindLanding(c172, 0);
     const r = crosswindLanding(c172, 15);
     const noSlip = crosswindLanding(c172, 15, { wingLow: false });
     const t = r.td;
-    console.log(`[c172 ${model}] 15 kt crosswind landing: slip on short final rudder ${r.finalRudder.toFixed(2)}, bank ${r.finalBankDeg.toFixed(1)}° right; `
-      + `touchdown ${t.offFt.toFixed(1)} ft off the centreline, drift ${t.driftKts.toFixed(1)} kt, heading ${t.headingDeg.toFixed(1)}°, `
+    console.log(`[c172 ${model}] 15 kt crosswind landing: slip on short final rudder ${r.finalRudder.toFixed(2)}, bank ${r.finalBankDeg.toFixed(1)}° right, `
+      + `β ${r.finalBetaDeg.toFixed(1)}°; touchdown ${t.offFt.toFixed(1)} ft off the centreline, drift ${t.driftKts.toFixed(1)} kt, heading ${t.headingDeg.toFixed(1)}°, `
       + `bank ${t.bankRightDeg.toFixed(1)}°, ${t.sinkFpm} fpm, ${t.iasKts.toFixed(0)} KIAS, ${t.distFt.toFixed(0)} ft past the threshold; `
-      + `rollout ±${r.maxRollOffFt.toFixed(1)} ft; no slip: drift ${noSlip.td.driftKts.toFixed(1)} kt, crab ${noSlip.td.headingDeg.toFixed(1)}°`);
+      + `rollout ±${r.maxRollOffFt.toFixed(1)} ft; feet flat: skating ${noSlip.td.driftKts.toFixed(1)} kt, crab ${noSlip.td.headingDeg.toFixed(1)}°`);
     // Control: in calm air the same pilot touches down on the centreline without a slip.
     expect(Math.abs(calm.finalRudder)).toBeLessThan(0.05);
     expect(Math.abs(calm.td.offFt)).toBeLessThan(10);
-    // The wind is felt: without the slip the airplane arrives crabbed and drifting downwind.
-    expect(Math.abs(noSlip.td.driftKts) > 10 || Math.abs(noSlip.td.headingDeg) > 10).toBe(true);
-    // The slip: upwind (right) wing down, opposite (left) rudder holding the nose straight.
-    expect(r.finalBankDeg).toBeGreaterThan(0.5);
+    // The wind is felt: with the feet flat the airplane arrives crabbed into the wind and
+    // skating sideways across its nose (the side load the slip exists to avoid).
+    expect(Math.abs(noSlip.td.driftKts)).toBeGreaterThan(10);
+    expect(Math.abs(noSlip.td.headingDeg)).toBeGreaterThan(10);
+    // The slip: opposite (left) rudder holding the nose straight, the upwind (right) wing down
+    // (how far down is the gap card below), the upwind main touching first.
     expect(r.finalRudder).toBeLessThan(-0.1);
-    // The card: on the centreline, no side drift, nose aligned, a landing (not an arrival),
-    // and the rollout stays between the edges to a stop.
+    expect(r.finalBankDeg).toBeGreaterThan(0.5);
+    expect(t.bankRightDeg).toBeGreaterThan(0);
+    // The card: on the centreline, no side drift, nose aligned, not a hard landing, and the
+    // rollout stays between the edges to a stop.
     expect(Math.abs(t.offFt)).toBeLessThan(25);
     expect(Math.abs(t.driftKts)).toBeLessThan(2);
     expect(Math.abs(t.headingDeg)).toBeLessThan(3);
-    expect(t.sinkFpm).toBeLessThan(500);
+    expect(t.sinkFpm).toBeLessThan(360);
     expect(r.stopped).toBe(true);
     expect(r.maxRollOffFt).toBeLessThan(75);
-  });
+  }, 20000);
+});
+
+// KNOWN GAP (ticket 0081): flightModel.js has no side force from sideslip (fuselage and fin,
+// Roskam CYβ −0.31 for the C172) and no roll from it (dihedral effect, Roskam Clβ −0.089);
+// sideways, only drag's component pushes. So the 15 kt wing-low slip above holds with ~1.2°
+// of bank where JSBSim, flying our public/jsbsim/ C172 built on those Roskam derivatives,
+// needs ~4°, and on the takeoff roll the wind never asks for aileron. Reference: the JSBSim
+// run of the same pilot in the same test (the same sideslip, ~12.5°). The fixing PR
+// promotes this card to `it`.
+describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim)', () => {
+  afterAll(() => useFdm(null));
+  it.fails('banks for a 15 kt wing-low slip within 30% of JSBSim (side force and dihedral, ticket 0081)', async () => {
+    useFdm(await nodeJsbsim());
+    const ref = crosswindLanding(c172, 15);
+    useFdm(null);
+    const r = crosswindLanding(c172, 15);
+    console.log(`[c172] slip bank: flightModel ${r.finalBankDeg.toFixed(1)}° at β ${r.finalBetaDeg.toFixed(1)}°, `
+      + `JSBSim ${ref.finalBankDeg.toFixed(1)}° at β ${ref.finalBetaDeg.toFixed(1)}°`);
+    within(ref.finalBetaDeg, r.finalBetaDeg, 0.15); // the same slip, so the banks compare
+    within(r.finalBankDeg, ref.finalBankDeg, 0.30);
+  }, 20000);
 });

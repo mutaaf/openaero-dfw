@@ -204,47 +204,58 @@ export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, 
 const xwind = (xwKts) => new Vector3(-xwKts * KTS_TO_MPS, 0, 0);
 const yawLeftDegOf = (body) => { _e.setFromQuaternion(body.quat, 'YXZ'); return _e.y * RAD_TO_DEG; };
 
-// Crosswind takeoff: the short-field technique above (flaps 10, full power, rotate at 45
-// KIAS to 11°) with a 90° crosswind. The pedals (rudder and nose-wheel steering) hold the
-// runway heading and steer back to the centreline, and the ailerons hold the wings level
-// (into the wind, against the dihedral, on a model that has it). Up to lift-off it reports
-// the widest the wheels strayed from the centreline, the most rudder and the average rudder
-// the pilot needed, and the worst heading. With `pedals: false` the feet stay flat (the
+// Crosswind takeoff, the C172S POH's crosswind technique (Section 4, amplified procedures:
+// minimum flaps, ailerons into the wind, a speed slightly higher than normal, then lift off
+// cleanly): flaps up, full power, the nose wheel lifted at 55 KIAS (normal takeoff) to 9°.
+// The pedals (rudder and nose-wheel steering) hold the runway heading and steer back to the
+// centreline; the ailerons hold the wings level, which in a crosswind means into the wind on
+// a model with a dihedral effect. Up to lift-off it reports the widest the wheels strayed
+// from the centreline, the most rudder, the average rudder over the whole roll and over its
+// second half (the steady pedal, past the low-speed steering), the average aileron, the
+// worst heading and the most bank on the wheels. `pedals: false` keeps the feet flat (the
 // control that shows the wind is felt).
-export function crosswindTakeoff(spec, xwKts, { pedals = true } = {}) {
-  const b = makeBody(spec, { throttle: 1, flaps: 1 });
+export function crosswindTakeoff(spec, xwKts, { pedals = true, rotateKts = 55, pitchDeg = 9 } = {}) {
+  const b = makeBody(spec, { throttle: 1, flaps: 0 });
   b.windVec.copy(xwind(xwKts));
-  let liftoffKts = null, maxOffFt = 0, maxRudder = 0, rudSum = 0, n = 0, maxHeadingDevDeg = 0, maxBankDeg = 0;
+  let liftoffKts = null, maxOffFt = 0, maxRudder = 0, maxHeadingDevDeg = 0, maxBankDeg = 0;
+  const roll = [];
   fly(b, spec, 90, (x) => {
     const yawLeft = yawLeftDegOf(x);
     const offFt = x.pos.x * M_TO_FT;
     // Right of the centreline → nose a little left (up to 3°), back towards it.
     const want = Math.max(-3, Math.min(3, offFt * 0.15 + x.vel.x * M_TO_FT * 0.3));
     x.rudderInput = pedals ? Math.max(-1, Math.min(1, (yawLeft - want) * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15)) : 0;
-    const { bankRightDeg } = attitude(x);
+    const { bankRightDeg, pitchDeg: p } = attitude(x);
     x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z) / 0.6; // full throw, not the AP's ±0.6
-    if (x.iasKts >= 45) x.elevInput = elevatorForPitch(11, attitude(x).pitchDeg, x.angVel.x);
+    if (x.iasKts >= rotateKts) x.elevInput = elevatorForPitch(pitchDeg, p, x.angVel.x);
     maxOffFt = Math.max(maxOffFt, Math.abs(offFt));
     maxRudder = Math.max(maxRudder, Math.abs(x.rudderInput));
     maxHeadingDevDeg = Math.max(maxHeadingDevDeg, Math.abs(yawLeft));
-    maxBankDeg = Math.max(maxBankDeg, Math.abs(bankRightDeg));
-    rudSum += x.rudderInput; n++;
+    if (x.onGround) maxBankDeg = Math.max(maxBankDeg, Math.abs(bankRightDeg));
+    roll.push([x.rudderInput, x.aileronInput]);
   }, (x) => {
     if (x.t > 2 && !x.onGround) { liftoffKts = x.iasKts; return true; }
     return Math.abs(x.pos.x * M_TO_FT) > 300; // well off the runway: stop
   });
-  return { liftoffKts, maxOffFt, maxRudder, meanRudder: rudSum / n, maxHeadingDevDeg, maxBankDeg, rollFt: b.distM * M_TO_FT, t: b.t };
+  const mean = (a, k) => a.reduce((s, r) => s + r[k], 0) / a.length;
+  return {
+    liftoffKts, maxOffFt, maxRudder, meanRudder: mean(roll, 0), steadyRudder: mean(roll.slice(roll.length >> 1), 0),
+    meanAileron: mean(roll, 1), maxHeadingDevDeg, maxBankDeg, rollFt: b.distM * M_TO_FT, t: b.t,
+  };
 }
 
-// Crosswind landing, wing-low (FAA-H-8083-3C ch. 9, "Crosswind Approach and Landing"): from
-// `fromFt` on a 3° path to the runway threshold (z = 0) at `kts` with flaps `flaps`, pitch
+// Crosswind landing, wing-low (FAA-H-8083-3C ch. 9, "Crosswind Approach and Landing"), with
+// the POH's minimum flaps for a strong crosswind (flaps 10, 70 KIAS): from `fromFt` on a 3°
+// path to the runway threshold (z = 0) at `kts` with flaps `flaps`, pitch
 // flies the speed and power the path; the rudder keeps the nose on the runway heading and
 // the upwind wing goes down just enough to stop the drift and hold the centreline. Flare
-// from 20 ft at idle, touch down on the upwind main. Reports the touchdown (distance from
+// from 30 ft at idle, touch down on the upwind main. Reports the touchdown (distance from
 // the centreline, sideways drift across the nose, heading, bank, sink rate), the rudder and
-// bank the slip needed on short final, and the widest the wheels strayed on the rollout
-// (brakes on, the pedals still on the centreline) to a stop.
-export function crosswindLanding(spec, xwKts, { kts = 65, flaps = 3, fromFt = 500, wingLow = true } = {}) {
+// bank and sideslip the slip needed on short final, and the widest the wheels strayed on the rollout
+// (brakes on, the pedals still on the centreline) to a stop. `wingLow: false` keeps the
+// feet flat (the ailerons still steer for the centreline, so it arrives crabbed and skating
+// sideways across its nose).
+export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 500, wingLow = true } = {}) {
   const h0 = fromFt / M_TO_FT;
   const tan3 = Math.tan(3 * DEG_TO_RAD);
   const b = makeBody(spec, { kts, altM: h0 + spec.gearHeight, flaps, throttle: 0.3 });
@@ -253,7 +264,7 @@ export function crosswindLanding(spec, xwKts, { kts = 65, flaps = 3, fromFt = 50
   b.windVec.copy(xwind(xwKts));
   const hold = speedHoldPilot(() => kts);
   let rudInt = 0, bankInt = 0, thrInt = b.throttle, flareFrom = null, td = null;
-  let finalRudder = 0, finalBank = 0, finalN = 0, maxRollOffFt = 0;
+  let finalRudder = 0, finalBank = 0, finalBeta = 0, finalN = 0, maxRollOffFt = 0;
   fly(b, spec, 240, (x, dt) => {
     const yawLeft = yawLeftDegOf(x);
     const { pitchDeg, bankRightDeg } = attitude(x);
@@ -275,7 +286,7 @@ export function crosswindLanding(spec, xwKts, { kts = 65, flaps = 3, fromFt = 50
     bankInt = Math.max(-20, Math.min(20, bankInt - (offM * 0.05 + x.vel.x * 0.3) * dt));
     const bankCmd = Math.max(-20, Math.min(20, bankInt - offM * 0.3 - x.vel.x * 2));
     x.aileronInput = aileronForBank(bankCmd, bankRightDeg, -x.angVel.z);
-    if (flareFrom === null && wheelM < 20 / M_TO_FT) flareFrom = pitchDeg;
+    if (flareFrom === null && wheelM < 30 / M_TO_FT) flareFrom = pitchDeg;
     if (flareFrom === null) {
       hold(x, dt);
       x.aileronInput = aileronForBank(bankCmd, bankRightDeg, -x.angVel.z); // hold() levels the wings
@@ -284,7 +295,7 @@ export function crosswindLanding(spec, xwKts, { kts = 65, flaps = 3, fromFt = 50
       const vsErr = x.vel.y + x.vel.length() * tan3; // + = sinking slower than the path
       thrInt = Math.max(0, Math.min(1, thrInt - (aboveM * 0.01 + vsErr * 0.02) * dt));
       x.throttle = Math.max(0, Math.min(1, thrInt - aboveM * 0.02 - vsErr * 0.05));
-      if (wheelM < 100 / M_TO_FT) { finalRudder += x.rudderInput; finalBank += bankRightDeg; finalN++; }
+      if (wheelM < 100 / M_TO_FT) { finalRudder += x.rudderInput; finalBank += bankRightDeg; finalBeta += x.betaDeg; finalN++; }
     } else {
       // Flare: idle, and a sink rate that shrinks with the height (autopilot.js flareSinkMps).
       x.throttle = 0;
@@ -306,5 +317,5 @@ export function crosswindLanding(spec, xwKts, { kts = 65, flaps = 3, fromFt = 50
     }
     return td && Math.hypot(x.vel.x, x.vel.z) < 1;
   });
-  return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalBankDeg: finalBank / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
+  return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalBankDeg: finalBank / finalN, finalBetaDeg: finalBeta / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
 }

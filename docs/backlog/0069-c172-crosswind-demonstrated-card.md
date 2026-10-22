@@ -21,6 +21,8 @@ Two harness cards (`crosswindTakeoff`, `crosswindLanding`): 15 kt wind at 90° t
 at a reasonable gust-free steady state, a pilot who crabs/slips as a pilot would. Takeoff: full
 rudder authority holds the centreline within 30 ft to lift-off. Landing: wing-low touchdown
 within half the runway width of the centreline without exceeding side-load limits.
+(Shipped in #80: side load is judged by its proxy, drift across the nose < 2 kt and heading
+< 3° at touchdown; the shallow wing-low bank on flightModel.js became gap card 0081.)
 Record anything the model cannot do as `it.fails` with the measured number.
 
 ## Acceptance criteria
