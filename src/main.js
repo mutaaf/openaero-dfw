@@ -128,6 +128,9 @@ const sim = {
   gate: null, // { gateHeight, stable, failing[], runway, iasKt } for this approach, or null
   gateLines: [], // HUD lines for the failing items, built once at the gate
   gateShownUntil: 0, // sim time until which the HUD shows the verdict
+  // Go-around drill (0047, goAround.js): the missed approach after an unstabilized gate;
+  // null on every other mission
+  goAround: null,
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
   stick: { x: 0, y: 0, active: false },
@@ -809,6 +812,63 @@ function checkStabilizedGate() {
   if (!gate.stable) audio.callout('unstabilized, go around');
 }
 
+// --- Go-around drill (ticket 0047, goAround.js) -------------------------------------
+// After the gate calls "unstabilized, go around" on the drill, the climb away is graded on
+// the results card at 500 ft; landing anyway is capped (checkTouchdown). Scalars per frame.
+// goAround.js is a lazy chunk, loaded with the drill (loadScenario), not at boot.
+let goAroundLib = null;
+const _gaIn = { gate: null, aaeFt: 0, vsFpm: 0, iasKts: 0, throttle: 0, flapsIndex: 0, onGround: false };
+// The missed approach is flown (and coached) from the call until it is over (goAround.js:
+// 2,000 ft, or descending again for another approach).
+const goAroundActive = () => {
+  const ga = sim.goAround?.phase;
+  return (ga === 'goAround' || ga === 'complete') && !sim.onGround;
+};
+function checkGoAround() {
+  const ga = sim.goAround;
+  if (!ga) return;
+  // Height above the drill's runway, whichever runway the airplane ends up over (a landing
+  // on 35L after the call is still a landing the gate said not to make).
+  const end = ga.end;
+  _gaIn.gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
+  _gaIn.aaeFt = (sim.pos.y - end.thrY) * M_TO_FT;
+  _gaIn.vsFpm = sim.vsiFpm;
+  _gaIn.iasKts = sim.iasKts;
+  _gaIn.throttle = sim.throttle;
+  _gaIn.flapsIndex = sim.flapsIndex;
+  _gaIn.onGround = sim.onGround;
+  const step = goAroundLib.goAroundState(ga, _gaIn);
+  // Kid: the airplane flies the go-around itself (full power, climb away, as after a takeoff).
+  if (step === 'goAround' && assistConfig(sim.assist)?.autoThrottle) assistState.departing = true;
+  if (step !== 'complete') return;
+  const cfg = assistConfig(sim.assist);
+  const result = goAroundLib.gradeGoAround({
+    callFt: ga.callFt, lowFt: ga.lowFt, gateFt: ga.gate ? ga.gate.gateHeight : GATE_VMC_FT,
+    minIasKts: ga.minIasKts, vrefKts: vrefFor(sim.spec, ga.callFlaps), climbFpm: ga.climbFpm,
+    // Kid's assist flies the flaps (assists.js autoConfigure): not the player's to score.
+    flapsUp: cfg?.autoConfig ? null : sim.flapsIndex < ga.callFlaps,
+  });
+  let best = { isNewBest: false, best: null };
+  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
+  showResults(result, best, end, ga.gate);
+}
+
+function startGoAroundDrill(mission) {
+  sim.goAround = null;
+  if (!mission.goAround) return;
+  const arm = (lib) => {
+    goAroundLib = lib;
+    if (sim.loadedMission !== mission) return; // another mission was picked meanwhile
+    sim.goAround = lib.createGoAround();
+    sim.goAround.end = runwayEnd(mission.airport, mission.rwy);
+    // Kid's autothrottle holds the drill's fast approach speed down to the gate (the hands-
+    // off guide still flies the path), so the gate calls it and Kid sees the go-around.
+    sim.goAround.holdKts = sim.spec.vrefKts + 5 + (mission.fastKts ?? 0);
+  };
+  if (goAroundLib) arm(goAroundLib);
+  else import('./goAround.js').then(arm).catch((e) => console.warn('[openaero] no go-around drill:', e));
+}
+
 // --- Landing grade ---------------------------------------------------------------
 let softResetAt = null; // Kid soft landing: sim time at which the mission restarts
 function checkTouchdown(dt) {
@@ -828,7 +888,7 @@ function checkTouchdown(dt) {
   const g = approachGeometry(end, sim.pos);
   const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
   _euler.setFromQuaternion(sim.quat, 'YXZ');
-  const result = gradeLanding({
+  let result = gradeLanding({
     vsFpm: sim.lastAirVsi,
     crossM: g.crossM,
     pastThresholdM: -g.distM,
@@ -841,6 +901,8 @@ function checkTouchdown(dt) {
     gearLocked: gearLocked(sim),
     driftDeg: sim.missionKey === CROSSWIND_KEY ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : undefined,
   });
+  // The go-around drill: landing after the gate called a go-around is capped (0047).
+  if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
   // Kid: a hard landing bounces and starts the approach again instead of crashing.
   if (result.grade === 'CRASH' && assist && assist.softLanding) {
     sim.vel.y = Math.max(sim.vel.y, 2.5);
@@ -864,8 +926,13 @@ function checkTouchdown(dt) {
 }
 
 const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
+let resultsPaused = false; // the go-around's card pauses the flight in the air (0047)
 function showResults(result, best, end, gate) {
   const card = document.getElementById('resultsCard');
+  const goAround = result.kind === 'goAround';
+  document.getElementById('txtResultTitle').textContent = goAround ? 'Go-around complete' : 'Landing grade';
+  document.getElementById('btnKeepRolling').textContent = sim.onGround ? 'KEEP ROLLING' : 'KEEP FLYING';
+  if (!sim.onGround && !sim.paused) { resultsPaused = true; setPaused(true); }
   const gradeEl = document.getElementById('txtGrade');
   gradeEl.textContent = result.grade;
   gradeEl.className = `${result.grade === 'CRASH' ? 'text-2xl' : 'text-5xl'} font-black w-20 text-center ${GRADE_COLOURS[result.grade]}`;
@@ -881,11 +948,16 @@ function showResults(result, best, end, gate) {
   if (bestEl.textContent && sim.assist !== 'pilot') bestEl.textContent = `${sim.assist === 'kid' ? 'Kid' : 'Learner'} level · ${bestEl.textContent}`;
   // Not scored: the stabilized-gate verdict (null when the mission started below the gate).
   const gateEl = document.getElementById('txtStabilized');
-  gateEl.classList.toggle('hidden', !gate);
+  gateEl.classList.toggle('hidden', !gate && !result.note);
   if (gate) {
     gateEl.textContent = gate.stable ? `Stabilized at ${gate.gateHeight} ft ✓`
       : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ')}`;
+    // The drill flown back to stable: landing was the right call (0047).
+    if (gate.stable && sim.goAround) gateEl.textContent += ' You fixed it: landing was right';
     gateEl.classList.toggle('text-emerald-300', gate.stable); // over the amber default (later in the CSS)
+  } else if (result.note) {
+    gateEl.textContent = `${result.note} ✓`;
+    gateEl.classList.add('text-emerald-300');
   }
   const list = document.getElementById('resultsFactors');
   list.innerHTML = '';
@@ -900,12 +972,18 @@ function showResults(result, best, end, gate) {
   card.classList.remove('hidden');
 }
 
+function resumeFromResults() {
+  if (resultsPaused && sim.paused) setPaused(false);
+  resultsPaused = false;
+}
 document.getElementById('btnFlyAgain').addEventListener('click', () => {
   document.getElementById('resultsCard').classList.add('hidden');
+  resumeFromResults();
   loadScenario(sim.missionKey);
 });
 document.getElementById('btnKeepRolling').addEventListener('click', () => {
   document.getElementById('resultsCard').classList.add('hidden');
+  resumeFromResults();
 });
 
 // --- First-flight coach (coach.js) -------------------------------------------------
@@ -919,7 +997,7 @@ let coachDoneS = 0;
 const COACH_DONE_SHOW_S = 4;
 const coachInput = {
   aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false,
-  iasKts: 0, targetKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0,
+  iasKts: 0, targetKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0, goAround: false,
   rollout: { gsKts: 0, canReverse: false, reverserPos: 0, braking: false },
 };
 const coachVals = { targetKts: 0, flapsDeg: 0 };
@@ -978,6 +1056,13 @@ function updateCoach(dt) {
     coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + 3300, LOC_DOT_DEG) : 0;
     coachInput.gearLocked = gearLocked(sim);
     coachInput.flapsLanding = sim.flapsIndex >= 2 && sim.flapPos >= 1.999;
+    // The drill's missed approach (0047): coached from the gate's call to 2,000 ft. Here the
+    // gear prompt means "still down" and the flaps prompt "still at landing flaps" (lever).
+    coachInput.goAround = goAroundActive();
+    if (coachInput.goAround) {
+      coachInput.gearLocked = !sim.spec.fixedGear && sim.gearDown;
+      coachInput.flapsLanding = sim.flapsIndex >= sim.goAround.callFlaps;
+    }
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     const r = coachInput.rollout;
@@ -1013,7 +1098,8 @@ function updateCoach(dt) {
     return;
   }
   coachVals.targetKts = Math.round(vrefFor(sim.spec, sim.flapsIndex) + 5);
-  coachVals.flapsDeg = (sim.spec.flapDetentsDeg ?? sim.flapAngles)[2];
+  const detents = sim.spec.flapDetentsDeg ?? sim.flapAngles;
+  coachVals.flapsDeg = prompt === 'gaFlaps' ? detents[Math.max(0, sim.goAround.callFlaps - 1)] : detents[2];
   coachVals.touch = touchOnly;
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   document.getElementById('txtCoach').textContent = text;
@@ -1234,6 +1320,7 @@ function step6DofPhysics(dt) {
   updateActiveRunway(dt);
   updatePapi();
   checkStabilizedGate();
+  checkGoAround();
   checkTouchdown(dt);
   checkTakeoffCallouts();
 }
@@ -1883,7 +1970,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
       sim.throttle = 1; // full power until 1,000 ft
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
-      sim.throttle = autoThrottle(kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : 0;
+      sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
     }
@@ -1926,17 +2014,21 @@ function loadScenario(key) {
   sim.landingGraded = false;
   sim.airborneTime = 0;
   sim.lastLanding = null;
+  startGoAroundDrill(mission);
   resetCoach();
   coachHandover = false;
   Object.assign(tutor, createTutor());
   document.getElementById('resultsCard').classList.add('hidden');
+  resumeFromResults();
 
   if (mission.kind === 'final') {
     const end = runwayEnd(mission.airport, mission.rwy);
-    const vApp = (sim.spec.vrefKts + 5) * 0.514444; // indicated
+    // The go-around drill (0047) starts fast and high on purpose.
+    const vApp = (sim.spec.vrefKts + 5 + (mission.fastKts ?? 0)) * 0.514444; // indicated
     const airThr = airAt(end.thrY + REF_ELEV_M, sim.isaDevC, sim.altimInHg);
     const vTas = tasFromIas(vApp, airThr.sigma);
-    const s = approachSpawn(end, mission.distNm, vTas);
+    const highM = Math.tan((mission.highDots ?? 0) * GS_DOT_DEG * DEG_TO_RAD) * (mission.distNm * NM_TO_M + AIM_POINT_M);
+    const s = approachSpawn(end, mission.distNm, vTas, highM);
     sim.pos.set(s.pos.x, s.pos.y, s.pos.z);
     sim.vel.set(s.vel.x, s.vel.y, s.vel.z);
     sim.flapsIndex = 2;
@@ -2353,6 +2445,7 @@ function setPaused(paused) {
   menuBtn.classList.toggle('text-sky-300', !sim.paused);
 }
 document.getElementById('btnPause').addEventListener('click', () => {
+  resultsPaused = false; // the player's own pause or resume: KEEP FLYING must not undo it
   setPaused(!sim.paused);
   if (!sim.paused) setHudMenu(false); // on a phone, Resume puts the view back
 });
@@ -2386,9 +2479,13 @@ document.getElementById('btnApApr').addEventListener('click', () => {
 document.getElementById('btnGear').addEventListener('click', () => {
   if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown;
 });
-document.getElementById('btnFlaps').addEventListener('click', () => {
-  sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
-});
+// The flap lever cycles down a notch (wrapping to up); in the drill's missed approach (0047)
+// it comes up a notch, the one direction a go-around needs.
+function moveFlapLever() {
+  if (goAroundActive()) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1);
+  else sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
+}
+document.getElementById('btnFlaps').addEventListener('click', moveFlapLever);
 document.getElementById('btnBrakes').addEventListener('click', () => {
   sim.brakesOn = !sim.brakesOn;
 });
@@ -2551,7 +2648,7 @@ window.addEventListener('keydown', e => {
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
   if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
-  else if (e.code === 'KeyF') { sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length; }
+  else if (e.code === 'KeyF') { moveFlapLever(); }
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (e.code === 'KeyK') { document.getElementById('btnAutobrake').click(); }
   else if (e.code === 'KeyR') { document.getElementById('btnReverse').click(); }
@@ -2702,6 +2799,7 @@ window.openaeroDebug = () => {
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
+    goAround: sim.goAround ? { phase: sim.goAround.phase, lowFt: sim.goAround.lowFt, minIasKts: sim.goAround.minIasKts, climbFpm: sim.goAround.climbFpm } : null,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
       { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),

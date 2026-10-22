@@ -231,3 +231,45 @@ test('phone: telemetry and touch labels are at least 10 px and reach 4.5:1 (0007
   expect(sizes.length).toBe(4);
   for (const px of sizes) expect(px).toBeGreaterThanOrEqual(10);
 });
+
+test('phone: the go-around drill flies by touch alone, and its card fits (0047)', async ({ page }) => {
+  test.setTimeout(240_000);
+  await stubTiles(page);
+  await page.goto(`${BASE}?mission=go_around_drill`);
+  const start = page.locator('#btnStartFlight');
+  await start.scrollIntoViewIfNeeded();
+  await start.tap();
+  await expect(page.locator('#onboardingModal')).toBeHidden();
+  const snap = () => page.evaluate(() => window.openaeroDebug());
+  await expect.poll(async () => (await snap()).stabilizedGate, { timeout: 120_000 }).not.toBeNull();
+  expect((await snap()).stabilizedGate.stable).toBe(false);
+  await expect(page.locator('#txtCoach')).toHaveText(/Go around! Full power/, { timeout: 5_000 });
+  // Thumb on the throttle to the top, thumb on the stick up (this stick: up = nose up) until it climbs.
+  const stick = await page.locator('#touchStick').boundingBox();
+  const thr = await page.locator('#touchThrottle').boundingBox();
+  const s = centre(stick);
+  const t = centre(thr);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: s.x, y: s.y, id: 1 }, { x: t.x, y: t.y, id: 2 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [
+    { x: s.x, y: stick.y + stick.height * 0.15, id: 1 }, { x: t.x, y: thr.y + 2, id: 2 }] });
+  await expect.poll(async () => (await snap()).pitchDeg, { timeout: 20_000 }).toBeGreaterThan(7);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect(page.locator('#txtCoach')).toHaveText(/tap FLAPS/, { timeout: 20_000 });
+  const flaps = (await snap()).flapsIndex;
+  await page.locator('#touchFlaps').tap();
+  expect((await snap()).flapsIndex).toBe(flaps - 1);
+  await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#txtResultTitle')).toHaveText('Go-around complete');
+  const card = await page.locator('#resultsCard').boundingBox();
+  expect(card.x).toBeGreaterThanOrEqual(0);
+  expect(card.x + card.width).toBeLessThanOrEqual(390);
+  expect(card.y).toBeGreaterThanOrEqual(0);
+  expect(card.y + card.height).toBeLessThanOrEqual(844);
+  for (const id of ['#btnFlyAgain', '#btnKeepRolling']) {
+    expect((await page.locator(id).boundingBox()).height).toBeGreaterThanOrEqual(44);
+  }
+  await page.screenshot({ path: test.info().outputPath('go-around-390.png') });
+  await page.locator('#btnKeepRolling').tap();
+  expect((await snap()).paused).toBe(false);
+});

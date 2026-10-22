@@ -1,12 +1,12 @@
 ---
 id: 0047
 title: Go-around drill: fly a bad approach, apply power and climb out, and be graded on it
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-19
-pr:
+pr: 79
 ---
 
 ## Why
@@ -26,10 +26,10 @@ rate after the gate evaluated UNSTABILIZED. Graded on the results card; best kep
 own mission key in `openaero_best`.
 
 ## Acceptance criteria
-- [ ] Mission appears in the start picker (0029) under KDFW with a one-line blurb
-- [ ] Unit test: pure `goAroundState` flags "go-around complete" only after positive rate through 500 ft AGL following an unstabilized gate result
-- [ ] Landing instead of going around grades as "should have gone around" (capped grade, stated on the card)
-- [ ] Works at 390x844 touch and 1280x720 keyboard
+- [x] Mission appears in the start picker (0029) under KDFW with a one-line blurb
+- [x] Unit test: pure `goAroundState` flags "go-around complete" only after positive rate through 500 ft AGL following an unstabilized gate result
+- [x] Landing instead of going around grades as "should have gone around" (capped grade, stated on the card)
+- [x] Works at 390x844 touch and 1280x720 keyboard
 
 ## Test plan
 Unit test for the state machine; e2e loads `?mission=go_around_drill`, applies full throttle, asserts the results card says go-around complete.
