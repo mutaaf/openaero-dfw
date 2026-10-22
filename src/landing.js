@@ -4,7 +4,7 @@
 export const BEST_KEY = 'openaero_best';
 const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
 // Piecewise-linear score through [x, score] points (x ascending).
-function curve(x, pts) {
+export function curve(x, pts) {
   if (x <= pts[0][0]) return pts[0][1];
   for (let i = 1; i < pts.length; i++) {
     if (x <= pts[i][0]) return lerp(pts[i - 1][1], pts[i][1], (x - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0]));
@@ -42,7 +42,7 @@ export function gradeLanding(t) {
   for (const f of factors) f.score = Math.round(f.score);
   const score = Math.round(factors.reduce((s, f) => s + f.score * (WEIGHTS[f.key] || 0), 0));
 
-  let grade = score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';
+  let grade = letterGrade(score);
   let reason = null;
   const offRunway = cross > t.runwayWidthM / 2 || t.pastThresholdM > t.runwayLengthM;
   if (t.gearLocked === false) { grade = 'CRASH'; reason = 'Gear not down and locked: a belly landing.'; }
@@ -51,6 +51,11 @@ export function gradeLanding(t) {
   else if (t.pastThresholdM < 0) { grade = 'D'; reason = 'Touched down short of the runway.'; }
   else if (offRunway) { grade = 'D'; reason = 'Touched down off the runway.'; }
   return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason };
+}
+
+// The letter for a 0-100 score (landings and go-arounds share it).
+export function letterGrade(score) {
+  return score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';
 }
 
 // Drift angle at touchdown: nose heading minus ground track (degrees, + = nose right of the

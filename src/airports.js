@@ -158,14 +158,15 @@ export function selectActiveRunway(ends, pos, headingDeg, current) {
 }
 
 // Spawn state for an N-NM final on a runway end: on the extended centreline, on the 3°
-// path, flying the runway's true heading, descending at the matching rate.
-export function approachSpawn(end, distNm, speedMps = 72) {
+// path (or highM above it: the go-around drill, 0047), flying the runway's true heading,
+// descending at the matching rate.
+export function approachSpawn(end, distNm, speedMps = 72, highM = 0) {
   const d = courseVector(end.hdgT);
   const dist = distNm * NM_TO_M;
   const h = (dist + AIM_POINT_M) * Math.tan(GLIDE_DEG * DEG_TO_RAD);
   const g = GLIDE_DEG * DEG_TO_RAD;
   return {
-    pos: { x: end.thrX - d.x * dist, y: end.thrY + h, z: end.thrZ - d.z * dist },
+    pos: { x: end.thrX - d.x * dist, y: end.thrY + h + highM, z: end.thrZ - d.z * dist },
     vel: { x: d.x * speedMps * Math.cos(g), y: -speedMps * Math.sin(g), z: d.z * speedMps * Math.cos(g) },
     yawRad: -end.hdgT * DEG_TO_RAD,
   };
