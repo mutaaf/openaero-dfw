@@ -157,7 +157,7 @@ const mapCtx = mapCanvas.getContext('2d');
 let renderer, scene, camera, ambientLight, sunLight;
 let aircraftRoot, terrainGroup, terrainLod, photoreal;
 const runwayMeshes = []; // runway surface + markings: hidden under the photoreal mesh
-let animRefs = { prop: null, flame: null, fanL: null, fanR: null, model: null };
+let animRefs = { flame: null, parts: null, model: null };
 let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order)
 
 // Render resolution: the device's pixel ratio capped at 2, stepped down on slow frames (0026).
@@ -514,7 +514,7 @@ async function loadDem() {
 function buildAircraft(type) {
   if (aircraftRoot) scene.remove(aircraftRoot);
   aircraftRoot = new THREE.Group();
-  animRefs = { prop: null, flame: null, fanL: null, fanR: null, model: null };
+  animRefs = { flame: null, parts: null, model: null };
 
   // Shaders & materials
   const fuselageWhite = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, metalness: 0.25, roughness: 0.35 });
@@ -522,6 +522,19 @@ function buildAircraft(type) {
   const cockpitGlass = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.1 });
   const titaniumMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.65, roughness: 0.4 });
   const fanMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+  const surfaceMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.3, roughness: 0.4 });
+  // A control surface (0063): a pivot named for surfaces.js on the hinge line (local +X
+  // along it, `yaw` for a swept hinge), the box hanging `d` aft of it.
+  const hinged = (name, x, y, z, w, h, d, { yaw = 0, pitch = 0, aft = d / 2, mat = surfaceMat } = {}) => {
+    const pivot = new THREE.Group();
+    pivot.name = name;
+    pivot.position.set(x, y, z);
+    pivot.rotation.set(pitch, yaw, 0);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.z = aft;
+    pivot.add(m);
+    return pivot;
+  };
 
   if (type === 'b738') {
     // --- Boeing 737-800 NG ---
@@ -573,6 +586,14 @@ function buildAircraft(type) {
     wingRMesh.scale.set(-1, 1, 1);
     plane.add(wingRMesh);
 
+    // Flaps inboard, ailerons outboard, hinged just ahead of the trailing edge (swept 9°).
+    const teSweep = Math.atan2(2.8, 17.5), teZ = (x) => 1.2 + 2.8 * x / 17.5 - 0.1;
+    for (const [side, sgn] of [['L', -1], ['R', 1]]) {
+      const yaw = -sgn * teSweep;
+      plane.add(hinged(`ctl_flap_${side}`, sgn * 5.6, -0.38, teZ(5.6), 7.0, 0.12, 0.7, { yaw }));
+      plane.add(hinged(`ctl_aileron_${side}`, sgn * 13.2, -0.38, teZ(13.2), 5.6, 0.12, 0.6, { yaw }));
+    }
+
     // Blended Winglets
     [-17.5, 17.5].forEach((wx, idx) => {
       const winglet = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.4, 1.2), airlineBlue);
@@ -592,9 +613,13 @@ function buildAircraft(type) {
       intakeRing.position.set(ex, -1.35, -3.4);
       plane.add(intakeRing);
 
-      const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.1, 16), fanMat);
-      fan.rotation.x = Math.PI / 2;
+      // The fan disc in a holder whose Z is the engine's axis: surfaces.js spins it about Z.
+      const fan = new THREE.Group();
+      fan.name = idx === 0 ? 'fan_L' : 'fan_R';
       fan.position.set(ex, -1.35, -3.2);
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.1, 16), fanMat);
+      disc.rotation.x = Math.PI / 2;
+      fan.add(disc);
       plane.add(fan);
 
       const exhaust = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.4, 16), titaniumMat);
@@ -602,8 +627,6 @@ function buildAircraft(type) {
       exhaust.position.set(ex, -1.35, 1.4);
       plane.add(exhaust);
 
-      if (idx === 0) animRefs.fanL = fan;
-      else animRefs.fanR = fan;
     });
 
     // Vertical Stabilizer / Tail Fin
@@ -618,11 +641,14 @@ function buildAircraft(type) {
     vStab.rotation.y = Math.PI / 2;
     vStab.position.set(0.16, 1.6, 11.5);
     plane.add(vStab);
+    // The rudder on the fin's trailing edge (z 11.5, the fin's extrusion spans x 0.16–0.48).
+    plane.add(hinged('ctl_rudder', 0.32, 4.4, 11.55, 0.26, 4.4, 1.1, { mat: airlineBlue }));
 
-    // Horizontal Stabilizers
-    const hStab = new THREE.Mesh(new THREE.BoxGeometry(11.8, 0.22, 2.8), fuselageWhite);
-    hStab.position.set(0, 1.2, 16.5);
+    // Horizontal Stabilizers, the elevator hinged on their trailing edge
+    const hStab = new THREE.Mesh(new THREE.BoxGeometry(11.8, 0.22, 2.0), fuselageWhite);
+    hStab.position.set(0, 1.2, 16.1);
     plane.add(hStab);
+    plane.add(hinged('ctl_elevator', 0, 1.2, 17.1, 11.0, 0.16, 0.9));
 
     aircraftRoot.add(plane);
 
@@ -646,25 +672,32 @@ function buildAircraft(type) {
     cGroup.add(windshield);
 
     // High Wing
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.18, 1.65), fuselageWhite);
-    wing.position.set(0, 0.95, -0.4);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.18, 1.25), fuselageWhite);
+    wing.position.set(0, 0.95, -0.6);
     cGroup.add(wing);
+    // Flaps inboard, ailerons outboard, on the trailing edge (0.4 m of the 1.65 m chord).
+    for (const [side, sgn] of [['L', -1], ['R', 1]]) {
+      cGroup.add(hinged(`ctl_flap_${side}`, sgn * 1.85, 0.95, 0.025, 2.3, 0.1, 0.4));
+      cGroup.add(hinged(`ctl_aileron_${side}`, sgn * 4.25, 0.95, 0.025, 2.5, 0.1, 0.4));
+    }
 
     // Propeller
     const prop = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.2, 0.06), fanMat);
     prop.position.set(0, 0, -4.05);
+    prop.name = 'prop';
     cGroup.add(prop);
-    animRefs.prop = prop;
 
-    // Tail
-    const vTail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.0, 1.6), airlineBlue);
-    vTail.position.set(0, 1.1, 3.6);
-    vTail.rotation.x = -0.3;
+    // Tail: fin and rudder (raked), stabilizer and elevator
+    const vTail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.0, 1.1), airlineBlue);
+    vTail.position.set(0, 1.1, 3.35);
+    vTail.rotation.x = 0.3; // the fin leans aft
     cGroup.add(vTail);
+    cGroup.add(hinged('ctl_rudder', 0, 1.3, 3.9, 0.12, 1.5, 0.5, { pitch: 0.3, mat: airlineBlue })); // clear of the elevator
 
-    const hTail = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 0.8), fuselageWhite);
-    hTail.position.set(0, 0.35, 4.0);
+    const hTail = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 0.45), fuselageWhite);
+    hTail.position.set(0, 0.35, 3.82);
     cGroup.add(hTail);
+    cGroup.add(hinged('ctl_elevator', 0, 0.35, 4.05, 3.4, 0.08, 0.35));
 
     aircraftRoot.add(cGroup);
 
@@ -689,13 +722,19 @@ function buildAircraft(type) {
     canopy.position.set(0, 0.62, -3.5);
     fGroup.add(canopy);
 
-    const wings = new THREE.Mesh(new THREE.BoxGeometry(9.96, 0.14, 3.8), titaniumMat);
-    wings.position.set(0, 0, 0.8);
+    const wings = new THREE.Mesh(new THREE.BoxGeometry(9.96, 0.14, 3.3), titaniumMat);
+    wings.position.set(0, 0, 0.55);
     fGroup.add(wings);
+    // Flaperons (flaps and ailerons in one), all-moving stabilators, rudder.
+    for (const [side, sgn] of [['L', -1], ['R', 1]]) {
+      fGroup.add(hinged(`ctl_aileron_${side}`, sgn * 2.6, 0, 2.2, 2.8, 0.1, 0.7));
+      fGroup.add(hinged(`ctl_elevator_${side}`, sgn * 2.2, 0, 5.1, 2.4, 0.1, 1.8, { aft: 0.2 }));
+    }
 
-    const vFin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.2, 2.8), airlineBlue);
-    vFin.position.set(0, 1.7, 4.3);
+    const vFin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 3.2, 2.2), airlineBlue);
+    vFin.position.set(0, 1.7, 4.0);
     fGroup.add(vFin);
+    fGroup.add(hinged('ctl_rudder', 0, 1.7, 5.1, 0.14, 2.8, 0.6, { mat: airlineBlue }));
 
     const flame = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.5, 12), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
     flame.rotation.x = Math.PI / 2;
@@ -706,8 +745,17 @@ function buildAircraft(type) {
     aircraftRoot.add(fGroup);
   }
 
+  rigSurfaces(animRefs, aircraftRoot);
   scene.add(aircraftRoot);
   attachDetailedModel(type);
+}
+
+// Moving parts (0063, src/surfaces.js): a small chunk loaded after boot. Until it arrives
+// the surfaces sit at neutral; a model attached meanwhile brings its own rig.
+let surfaces = null;
+const surfacesReady = import('./surfaces.js').then((m) => { surfaces = m; return m; });
+function rigSurfaces(refs, root) {
+  surfacesReady.then((m) => { if (!refs.parts) refs.parts = m.rigParts(root); }).catch(() => {});
 }
 
 // The detailed glTF model (ticket 0045) replaces the primitive stand-in once it has loaded.
@@ -1166,13 +1214,8 @@ function step6DofPhysics(dt) {
   }
 
   // Secondary visual animations
-  if (animRefs.prop) {
-    animRefs.prop.rotation.z += (35 + sim.throttle * 70) * dt;
-  }
-  if (animRefs.fanL) {
-    animRefs.fanL.rotation.z += (30 + sim.throttle * 90) * dt;
-    animRefs.fanR.rotation.z += (30 + sim.throttle * 90) * dt;
-  }
+  // Control surfaces, gear swing and prop/fans (0063): from the state the physics just used.
+  if (surfaces && animRefs.parts) surfaces.poseParts(animRefs.parts, sim.spec, sim, surfaces.spinRate(sim.engineN) * dt);
   if (animRefs.flame) {
     animRefs.flame.scale.set(1, 1, 0.8 + sim.throttle * 1.6);
     animRefs.flame.visible = sim.throttle > 0.6;
@@ -2577,6 +2620,11 @@ window.openaeroDebug = () => {
     pos: { x: sim.pos.x, y: sim.pos.y, z: sim.pos.z },
     aircraft: sim.aircraftKey,
     aircraftModel: animRefs.model?.name,
+    brakesOn: sim.brakesOn,
+    // Moving parts (0063): the rigged node names and each one's pose (deg) right now.
+    parts: animRefs.parts ? [...animRefs.parts.parts, ...animRefs.parts.gear].map((p) => ({
+      name: p.name, deg: 2 * Math.acos(Math.min(1, Math.abs(p.rest.dot(p.node.quaternion)))) * RAD_TO_DEG, visible: p.node.visible,
+    })) : [],
     gearDown: sim.gearDown,
     fdm: jsbsim && jsbsim.flies(sim.aircraftKey) ? 'jsbsim' : 'builtin',
     groundY: sim.groundY,

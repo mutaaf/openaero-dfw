@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { AIRCRAFT_MODELS, modelUrl, gearNodes, showGear, parseModel, loadAircraftModel, rotationLift } from '../../src/aircraftModel.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
+import { poseParts } from '../../src/surfaces.js';
 
 const read = (file) => {
   const b = readFileSync(`public/${file}`);
@@ -111,11 +112,12 @@ describe('aircraft models', () => {
     const root = new THREE.Group();
     const standIn = new THREE.Group();
     root.add(standIn);
-    const refs = { fanL: {}, fanR: {}, model: null };
+    const refs = { parts: { parts: [], gear: [], spin: [] }, model: null };
     const { attachModel } = await import('../../src/aircraftModel.js?attach'); // its own cache
     await attachModel(root, 'b738', '/openaero/', refs, () => true);
     expect(standIn.visible).toBe(false);
-    expect(refs.fanL).toBeNull();
+    // The stand-in's surfaces and fans are hidden with it: the rig is now the model's (0063).
+    expect(refs.parts.gear.map((p) => p.name).sort()).toEqual(['gear_main_L', 'gear_main_R', 'gear_nose']);
     expect(refs.model.name).toBe('twinjet');
     const model = root.children[1];
     const pitch = (deg) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), deg * Math.PI / 180);
@@ -124,9 +126,11 @@ describe('aircraft models', () => {
     expect(model.position.y).toBeCloseTo(0.204, 2);
     sim.quat = pitch(0);
     sim.gearDown = false;
+    sim.gearPos = 0;
     refs.model.update(sim);
+    poseParts(refs.parts, { }, sim, 0);
     expect(model.position.y).toBe(0);
-    expect(gearNodes(model).every((o) => !o.visible)).toBe(true);
+    expect(gearNodes(model).filter((o) => o.parent === model).every((o) => !o.visible)).toBe(true);
     // A rebuilt aircraft drops a late model.
     const other = new THREE.Group();
     await attachModel(other, 'b738', '/openaero/', {}, () => false);

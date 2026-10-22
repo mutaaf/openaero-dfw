@@ -1,12 +1,12 @@
 ---
 id: 0063
 title: Aircraft parts move by physics (control surfaces, gear, flaps, prop)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 76
 ---
 
 ## Why
@@ -24,11 +24,24 @@ frame, pivots at hinge lines, deflections capped at each aircraft's real throw (
 allocation). Surfaces that a model lacks are skipped silently.
 
 ## Acceptance criteria
-- [ ] Unit: input to node rotation mapping has the right sign and the throw limits
-- [ ] e2e: full left stick vs full right stick changes the chase-view pixels around the wing tips
-- [ ] Flaps notch to the POH angles; gear animates over ~6 s, not instantly
-- [ ] Zero per-frame allocations in the update (unit-asserted with a spy)
-- [ ] Works at 390x844 and 1280x720; no frame-time regression
+- [x] Unit: input to node rotation mapping has the right sign and the throw limits
+- [x] e2e: full left stick vs full right stick changes the chase-view pixels around the wing tips
+- [x] Flaps follow the actual flap angle (systems.js) to the POH detents; the gear swings over
+      its hydraulic travel time (737: 10 s down, 7 s up), not instantly
+- [x] Zero per-frame allocations in the update (unit-asserted with a spy)
+- [x] Works at 390x844 and 1280x720; no frame-time regression
+
+## As built (#76)
+`src/surfaces.js` (lazy chunk after boot): pure `surfaceAngles` (C172 throws from FAA TCDS
+3A12: aileron 20 up / 15 down, elevator 28 / 23, rudder 16°10'; F-16 limits from NASA
+TP-1538 as flown by Stevens & Lewis, flaperons mixing flap and roll; 737 throws are
+estimates), `rigParts` / `poseParts` (no allocation per frame), spin by the engine spool.
+The primitive C172, F-16 and 737 stand-ins have hinged `ctl_*` surfaces. The twin-jet glTF
+gets its gear legs on hinge pivots at load (nose forward, mains inboard, split per side);
+its wing is one mesh with the body, so **its surfaces don't move yet**: cutting them out of
+the model (blend-to-glb.py) is follow-up work. Prop/fans spin at a visual rate that rises
+with the spool, not the real 2,700 rpm (that strobes at 60 fps); strut compression is not
+drawn.
 
 ## Test plan
 Unit for the mapping; e2e screenshot diff in chase view with stick left/right.
