@@ -19,9 +19,10 @@ Likely causes, to measure before fitting: (1) flightModel.js treats the C172's t
 as tyre-limited (μ 0.45, systems.js DEFAULTS); a light single's small disc brakes are
 torque-limited well below the tyre's grip; (2) the transition from touchdown to full
 braking (nose down, flaps up) is instant in the harness; (3) gear.js applies only the
-struts' normal forces: the tyres' braking friction acts ~1.7 m below the CG and adds no
-nose-down moment, so in flightModel.js full back elevator under braking lifts the nose
-to a 15° wheelie (JSBSim pitches ~2.5° nose down, as the real airplane does), which is why
+struts' normal forces: the tyres' braking friction acts below the CG (1.65 m, flightModel's
+gearHeight; our JSBSim C172 puts the wheels 1.22 m below it: check which is right) and
+adds no nose-down moment, so in flightModel.js full back elevator under braking lifts the
+nose to a 15° wheelie (JSBSim, measured in #83, pitches ~2.5° nose down), which is why
 the landing harness has to hold the nose on the runway instead of the POH's "full back".
 
 ## What
@@ -33,7 +34,8 @@ don't regress.
 
 ## Acceptance criteria
 - [ ] `landRoll` and `landTotal` pass on both models and drop out of `GAPS`
-- [ ] With brakes on and the wheel full back, flightModel.js keeps the nose wheel on the runway (a unit or flight test)
+- [ ] With brakes on and the wheel full back from 50 kt, flightModel.js's nose-gear load stays > 0 and pitch stays ≤ 1° nose-up to the stop (gear.js unit test)
+- [ ] `shortFieldLanding` flies the POH's "control wheel full back" after the nose wheel is down (the 0° nose hold is removed) and the nose wheel stays on the runway to the stop
 - [ ] No other flight card regresses (`npm test -- tests/flight`)
 
 ## Test plan

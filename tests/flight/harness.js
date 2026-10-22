@@ -321,12 +321,14 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
   return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalAileron: finalAileron / finalN, finalBankDeg: finalBank / finalN, finalBetaDeg: finalBeta / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
 }
 
-// POH short-field landing (Section 4, Fig. 5-11): flaps 30, power off, 61 KIAS crossing a
-// 50 ft obstacle on a 3° path, the nose lowered to keep 61 at idle; a round-out from 20 ft
-// (a sink that shrinks with the height, 2 s time constant) to a hold-off a foot above the
-// runway, the nose coming up no further than 1° short of the stall angle, so it touches
-// down on the mains near the stall. Then, as Section 4 says: lower the nose wheel, brakes on
-// hard (after `brakeDelayS`, the pilot's reaction), flaps up, control wheel full back.
+// POH short-field landing (Section 4, Fig. 5-11): flaps 30, power off, 61 KIAS (= KCAS here,
+// no instrument error) crossing a 50 ft obstacle on a 3° path, the nose lowered to keep 61
+// at idle; a round-out from 20 ft (a sink that shrinks with the height, 2 s time constant)
+// to a hold-off a foot above the runway, the nose coming up no further than 1° short of the
+// stall angle, so it touches down on the mains near the stall. Then, as Section 4 says: lower the nose wheel, brakes on
+// hard (after `brakeDelayS`, the pilot's reaction), flaps up. (The POH then says control wheel
+// full back; this pilot holds the nose wheel down instead until gear.js models the brakes'
+// nose-down moment, ticket 0082.)
 // Returns the ground roll (first touch to a stop), the total from the obstacle, and what
 // the pilot flew: touchdown IAS and sink rate, time airborne again after the first touch.
 export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20 } = {}) {
