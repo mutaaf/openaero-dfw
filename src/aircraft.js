@@ -27,6 +27,10 @@ export const AIRCRAFT_DATABASE = {
     // little: ΔCL 0.38 (Vs 125.5 kt, V2 142, +1.2 kt) with Vr 135 leaves 43 ft of its 5,100;
     // Vr 137 fails it. Most of 0062 is the Vr move; the rest waits for flaps 5 (0070).
     flapDetentsDeg: [0, 10, 30, 40],
+    // Control-surface throws (°, surfaces.js; drawn on the stand-in only, the twin-jet model has
+    // no separate surfaces yet): estimates, no public Boeing rigging
+    // figures; the roll spoilers that help the 737's ailerons are not drawn.
+    controlThrowsDeg: { aileronUp: 20, aileronDown: 15, elevatorUp: 20, elevatorDown: 15, rudder: 26 },
     flapCl: [0, 0.38, 0.559, 0.856],
     alphaStallDegByFlap: [14.8, 14.8, 14.12, 14.12],
     // Flaps 0/10/30/40 drag. Landing flaps on an airliner are draggy: with gear down at
@@ -105,6 +109,10 @@ export const AIRCRAFT_DATABASE = {
     // Flaps 0/10/20/30: ΔCL and stall AoA fitted to the POH stall speeds (2550 lb, power
     // off, most rearward CG): 53 / 50 / – / 48 KCAS; flaps 20 interpolated.
     flapDetentsDeg: [0, 10, 20, 30],
+    // Control-surface throws (°): FAA TCDS 3A12, Model 172S (aileron up 20 / down 15,
+    // elevator up 28 / down 23, rudder 16°10' each way measured parallel to the waterline; the
+    // drawing turns it about the raked hinge, a degree or two short of the hinge-line angle).
+    controlThrowsDeg: { aileronUp: 20, aileronDown: 15, elevatorUp: 28, elevatorDown: 23, rudder: 16.2 },
     flapCl: [0, 0.19, 0.30, 0.40],
     alphaStallDegByFlap: [14.1, 14.1, 13.7, 13.3],
     // Electric flaps, 0 → 30° in ~10 s (an estimate); toe brakes, no autobrake or reverse.
@@ -146,6 +154,11 @@ export const AIRCRAFT_DATABASE = {
     cl0: 0.15,
     clAlpha: 3.6,
     clMaxFlaps: 1.8,
+    // Control-surface limits (°): the F-16 model of NASA TP-1538 as flown in Stevens & Lewis,
+    // Aircraft Control and Simulation: stabilator ±25, flaperons ±21.5, rudder ±30. The
+    // flaperons are also its flaps (surfaces.js adds the two).
+    controlThrowsDeg: { aileronUp: 21.5, aileronDown: 21.5, elevatorUp: 25, elevatorDown: 25, rudder: 30 },
+    flaperons: true,
     alphaStallDeg: 28.0,
     maxThrustN: 130000, // F110-GE-129 afterburner
     engine: { type: 'turbofan', staticThrustN: 130000, idleFraction: 0.04, machLapse: [0.3, 0.3], densityExp: 0.8, spoolTau: 0.8 },

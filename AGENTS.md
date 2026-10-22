@@ -186,6 +186,10 @@ src/aircraftModel.js  detailed open-licensed glTF aircraft (0045), lazy after th
                     body frame (nose -Z, wheels at -gearHeight), gear_* nodes follow the gear;
                     the primitive in main.js buildAircraft stays as the fallback. Built by
                     scripts/build-models.mjs from assets-src/models/ (README: sources, rules)
+src/surfaces.js     moving parts (0063, lazy chunk after boot): ctl_* surfaces from the control
+                    state at each aircraft's real throws (spec.controlThrowsDeg), flaps from
+                    flapDeg, gear legs swung by gearPos, prop/fans by the spool; pure mapping,
+                    poseParts allocates nothing. The twin-jet glTF has no ctl_* nodes yet
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
                     integration on a `body` (main.js passes `sim`). Pure: flown headless by
                     tests/flight/ against published performance data
@@ -268,7 +272,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npx playwright test --project=devices --no-deps` | The device-class probe alone (iPhone 15 both ways, iPad Air both ways, iPad Pro 12.9 portrait, Pixel 8, Chromium with emulated touch; touch, 4x CPU throttle, layout + frame time; numbers in `docs/PERF.md`) |
 | `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 201 kB gzipped at boot (2026-10-21: 201.00 kB after 0045's model hook; the loader,
+Budgets: JS ≤ 201 kB gzipped at boot, **over it on main: 205.68 kB on 2026-10-22, 206.4 kB after 0063** (the stand-ins' hinged surfaces; surfaces.js itself is a 0.9 kB lazy chunk). Getting back under 201 is Keeper work, or the operator raises the line. (2026-10-21: 201.00 kB after 0045's model hook; the loader,
 decoder and model are lazy, the twin-jet is 29 kB gz. 2026-10-19: 200.27 kB after 0055/0056/0011: the night
 ground shader the imagery needs at first paint, the HUD tapes, clean view and When? picker
 (+3.0 kB); the sky dome (4.9 kB gz) and runway lights (1.9 kB) are lazy chunks and the star
