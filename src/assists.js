@@ -8,7 +8,8 @@
 //   - fore/aft stick moves a held pitch attitude (release = hold it: auto-trim), capped;
 //   - angle-of-attack protection keeps the wing below its stall angle: a stall becomes a
 //     gentle nose-drop;
-//   - auto-coordination: the rudder cancels sideslip unless the pilot is using it.
+//   - auto-coordination: the rudder cancels sideslip unless the pilot is using it; when they
+//     do, the aileron the sideslip's dihedral effect asks for is fed forward (0081).
 // Kid adds hands-off guidance (let go of the stick and the airplane eases back to level
 // flight, or onto the localizer and glidepath when it is on a final), a no-dive floor
 // below ~500 ft and an auto-flare near the ground, and main.js adds the autothrottle, automatic
@@ -64,7 +65,7 @@ export function updateDeparture(st, onGround, aglFt) {
 
 // One sub-step of input shaping. cfg = assistConfig(level) (never null here).
 // s: { pitchIn, rollIn, yawIn (raw stick targets: pitch + = nose down, roll + = right),
-//      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), aoaDeg, betaDeg,
+//      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), aoaDeg, betaDeg, dihedralAil,
 //      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
 //      localizer bank and glidepath angle on a final) }
@@ -114,7 +115,9 @@ export function shapeControls(cfg, st, s, dt, out) {
   const bankCmd = Math.abs(s.rollIn) <= DEAD && cfg.handsOff
     ? clamp(s.guideBankDeg, -bankShare, bankShare)
     : clamp(s.rollIn, -1, 1) * bankShare;
-  out.ail = aileronForBank(bankCmd, s.bankRightDeg, s.rollRateRight);
+  // Plus the aileron that cancels the sideslip's rolling moment (s.dihedralAil, flightModel.js
+  // dihedralAileron), fed forward like trim: a held rudder must not out-roll the bank hold.
+  out.ail = clamp(aileronForBank(bankCmd, s.bankRightDeg, s.rollRateRight) - (s.dihedralAil ?? 0), -1, 1);
   // A bank past the cap (gust, upset) is rolled back at full authority.
   if (Math.abs(s.bankRightDeg) > bankLimit) out.ail = -Math.sign(s.bankRightDeg);
 
@@ -127,10 +130,11 @@ export function shapeControls(cfg, st, s, dt, out) {
 // Kid hands-off line-up on a final: bank (deg, + = right) toward a 20°-max intercept of the
 // centreline (crossM + = right of it). Softer than the autopilot's localizer (0.5°/m, full
 // heading gain), which S-turned a hand-flown airplane with no roll-rate feedback of its own;
-// tuned on the flight model (tests/unit/assists.test.js) for the 737 and the 172 (0.13°/m
-// since sideslip side force, 0081: at 0.15 the 737 overshot 31 m).
+// tuned on the flight model (tests/unit/assists.test.js) for the 737 and the 172 (0.8 of the
+// heading bank since the sideslip side force, 0081: at 0.7 the 737 overshot 31 m; the
+// 0.15°/m intercept is kept, since a crosswind's steady offset goes as 1/that).
 export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
-  0.7 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.13, -20, 20), curHdgDeg));
+  0.8 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.15, -20, 20), curHdgDeg));
 
 // Kid's automatic gear and flaps from height and vertical speed. Mutates and returns cfgOut
 // { gearDown, flapsIndex } (seeded with the current values). Hysteresis: down/out when

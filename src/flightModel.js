@@ -171,9 +171,8 @@ export function stepFlightModel(body, spec, dt) {
   // Angular Moments & Inertial Damping
   const qRate = (-body.elevInput * (spec.pitchAuthority ?? 1.8) - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
-  // Dihedral effect (Clβ): sideslip rolls the windward wing up, as the aileron that makes
-  // the same rolling moment (Clβ·β / Cl of full aileron), so the two keep their real ratio.
-  const dihedral = spec.clBeta ? (spec.clBeta * betaLin) / spec.clAileron : 0;
+  // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
+  const dihedral = dihedralAileron(spec, betaRad);
   const pRate = (-(body.aileronInput + dihedral) * (spec.rollAuthority ?? 2.8) - body.angVel.z * spec.rollDamping) * (airspeed / 120);
   // Rudder + directional stability: the nose weathervanes into the relative wind, so a
   // banked aircraft actually turns.
@@ -219,6 +218,13 @@ export function stepFlightModel(body, spec, dt) {
     }
   }
 }
+
+// The dihedral effect (Clβ) as the aileron that makes the same rolling moment (Clβ·β / Cl of
+// full aileron), so the two keep their real ratio; + = rolls right. β linear to 20°. The
+// assists (assists.js) feed its opposite forward so the stick still commands a bank.
+export const dihedralAileron = (spec, betaRad) => (spec.clBeta && spec.clAileron
+  ? (spec.clBeta * MathUtils.clamp(betaRad, -BETA_LIN, BETA_LIN)) / spec.clAileron
+  : 0);
 
 // Throttle that holds `iasMps` on a steady flight path of `gammaDeg` (negative = descent)
 // at the trim angle of attack, out of ground effect: thrust·cos α = D + W·sin γ. Spawns use

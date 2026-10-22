@@ -10,11 +10,12 @@
 // Every card flies twice: flightModel.js (the game's default) and JSBSim (src/fdm/jsbsim.js
 // flying our public/jsbsim/ C172, ?fdm=jsbsim in the game). Gaps are per model.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, RUDDER_PER_BETA } from './harness.js';
+import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -154,7 +155,8 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S level turns
     const b = makeBody(c172, { kts, altM: 1500, throttle: 0.75 });
     const alt0 = b.pos.y;
     const hold = speedHoldPilot(() => kts);
-    let heading0 = null, t0 = null, tasSum = 0, tanSum = 0, betaSum = 0, n = 0, rudInt = 0;
+    let heading0 = null, t0 = null, tasSum = 0, tanSum = 0, ballSum = 0, n = 0, rudInt = 0;
+    const prevVel = b.vel.clone(), f = new Vector3(), inv = new Quaternion();
     const headingDeg = (x) => (Math.atan2(x.vel.x, -x.vel.z) * 180) / Math.PI;
     let unwrapped = 0, last = headingDeg(b);
     fly(b, c172, 45, (x, dt) => {
@@ -166,28 +168,34 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S level turns
       x.pitchCmd = Math.max(-5, Math.min(20, x.pitchTrim + (alt0 - x.pos.y) * 0.02 - vsErr * 0.001));
       x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
       x.aileronInput = aileronForBank(bank, bankRightDeg, -x.angVel.z);
-      // Coordinated, as the handbook's turn is: rudder holds the ball in the middle (with
-      // sideslip the fin's side force takes back part of the lift's turning component).
-      const beta = x.betaDeg ?? 0;
-      rudInt = Math.max(-1, Math.min(1, rudInt + beta * RUDDER_PER_BETA * 0.5 * dt));
-      x.rudderInput = Math.max(-1, Math.min(1, rudInt + beta * RUDDER_PER_BETA));
+      // Coordinated, as the handbook's turn is: rudder centres the ball, i.e. no sideways
+      // specific force (the formula assumes none; sideslip and the rudder each push the fin).
+      // Ball = (dv/dt + g up) across the airframe, in g, + = pushed right.
+      f.subVectors(x.vel, prevVel).divideScalar(dt);
+      f.y += 9.80665;
+      prevVel.copy(x.vel);
+      const ball = f.applyQuaternion(inv.copy(x.quat).invert()).x / 9.80665;
+      rudInt = Math.max(-1, Math.min(1, rudInt - ball * 4 * dt));
+      x.rudderInput = Math.max(-1, Math.min(1, rudInt - ball * 2));
       x.throttle = Math.max(0.2, Math.min(1, x.throttle + (kts - (x.iasKts ?? kts)) * 0.02 * dt));
       const h = headingDeg(x);
       let d = h - last; if (d > 180) d -= 360; if (d < -180) d += 360;
       unwrapped += d; last = h;
       if (x.t > 25 && heading0 === null) { heading0 = unwrapped; t0 = x.t; }
-      if (x.t > 25) { tasSum += x.tasKts; tanSum += Math.tan((attitude(x).bankRightDeg * Math.PI) / 180); betaSum += Math.abs(x.betaDeg ?? 0); n++; }
+      if (x.t > 25) { tasSum += x.tasKts; tanSum += Math.tan((attitude(x).bankRightDeg * Math.PI) / 180); ballSum += ball; n++; }
     });
-    return { rateDegS: (unwrapped - heading0) / (b.t - t0), altErrM: b.pos.y - alt0, tasKts: tasSum / n, tanBank: tanSum / n, betaDeg: betaSum / n };
+    return { rateDegS: (unwrapped - heading0) / (b.t - t0), altErrM: b.pos.y - alt0, tasKts: tasSum / n, tanBank: tanSum / n, ballG: ballSum / n };
   }
   for (const bank of [30, 45]) {
     // V is true airspeed and bank the one actually flown (the harness pilot rolls in and
     // holds ~${bank}°), so this checks the model's turn dynamics, not the pilot's accuracy.
-    it(`turns at 1091·tan(bank)/TAS °/s at ~${bank}° bank, 90 KIAS, 5,000 ft (FAA-H-8083-25B, ±10%)`, () => {
-      const { rateDegS, altErrM, tasKts, tanBank, betaDeg } = levelTurn(bank, 90);
+    it(`turns at 1091·tan(bank)/TAS °/s at ~${bank}° bank, 90 KIAS, 5,000 ft, ball centred (FAA-H-8083-25B, ±5%)`, () => {
+      const { rateDegS, altErrM, tasKts, tanBank, ballG } = levelTurn(bank, 90);
+      const book = (1091 * Math.abs(tanBank)) / tasKts;
+      console.log(`[c172 ${model}] ${bank}° turn: ${Math.abs(rateDegS).toFixed(2)}°/s vs ${book.toFixed(2)}°/s (${((Math.abs(rateDegS) / book - 1) * 100).toFixed(1)}%), ball ${ballG.toFixed(3)} g`);
       expect(Math.abs(altErrM)).toBeLessThan(60);
-      expect(betaDeg).toBeLessThan(1); // it flew the coordinated turn
-      within(Math.abs(rateDegS), (1091 * Math.abs(tanBank)) / tasKts, 0.10);
+      expect(Math.abs(ballG)).toBeLessThan(0.01); // it flew the coordinated turn
+      within(Math.abs(rateDegS), book, 0.05);
     });
   }
 
@@ -303,6 +311,9 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S 15 kt cross
 // wing-low slip above held with 1.2° of bank where JSBSim, flying our public/jsbsim/ C172
 // built on those derivatives, needs 4.2°, and the slip needed no aileron into the wind.
 // Reference: the JSBSim run of the same pilot in the same test (the same sideslip, ~12.5°).
+// Still different on the crosswind takeoff roll: flightModel.js banks ±0.7° on the wheels
+// with aileron 0.01, JSBSim ±4.3° with 0.07 (the gear: JSBSim's spring-steel mains give more
+// than gear.js's struts). No published figure decides it, so it is printed, not carded.
 describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim)', () => {
   afterAll(() => useFdm(null));
   it('banks for a 15 kt wing-low slip within 30% of JSBSim, holding aileron into the wind (side force and dihedral, ticket 0081)', async () => {

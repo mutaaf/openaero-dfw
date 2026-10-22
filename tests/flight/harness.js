@@ -9,7 +9,7 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
-export const RUDDER_PER_BETA = 0.3;
+const RUDDER_PER_BETA = 0.3;
 
 // The flight model under test: null flies flightModel.js; useFdm(jsbsim) flies JSBSim
 // (src/fdm/jsbsim.js, loaded in Node by jsbsimNode.js) through the same cards.

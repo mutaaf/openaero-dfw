@@ -6,6 +6,7 @@ import {
   autoConfigure, kidTargetKts, kidLocalizerBankDeg, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
+import { dihedralAileron } from '../../src/flightModel.js';
 import { Euler } from 'three';
 
 const memStorage = (init = {}) => {
@@ -159,6 +160,38 @@ describe('Kid hands-off guidance', () => {
     expect(learner.pitchHoldDeg).toBe(-8);
     expect(out.ail).toBeCloseTo(0, 5);
   });
+});
+
+// Sideslip rolls the airplane (dihedral, 0081): a held rudder key (full, it is digital) slips
+// the 737 ~20°, a rolling moment worth 0.9 of full aileron, more than the bank hold's 0.6.
+// The assist feeds that aileron forward (like auto-trim), so the stick still commands bank.
+describe('Kid and Learner hold bank against a held rudder (dihedral, 0081)', () => {
+  for (const [name, spec, kts] of [['737-800', AIRCRAFT_DATABASE.b738, 160], ['Cessna 172', AIRCRAFT_DATABASE.c172, 90]]) {
+    for (const level of ['kid', 'learner']) {
+      it(`${name} ${level}: full rudder held 20 s, stick centred, stays inside the bank cap and the height`, () => {
+        const b = makeBody(spec, { kts, altM: 600, flaps: 0, throttle: 0.5 });
+        b.apMaster = false;
+        const st = createAssistState(), cfg = assistConfig(level), s = {}, out = {};
+        let maxBank = 0, maxBeta = 0;
+        fly(b, spec, 20, (x, dt) => {
+          const { pitchDeg, bankRightDeg } = attitude(x);
+          Object.assign(s, {
+            pitchIn: 0, rollIn: 0, yawIn: 1, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+            aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * Math.PI / 180),
+            stallAoaDeg: stallAoaDeg(spec, 0), tailstrikeDeg: 15, onGround: false, wheelHeightM: 600, airspeedMps: x.vel.length(),
+            guideBankDeg: 0, guideGammaDeg: 0,
+          });
+          shapeControls(cfg, st, s, dt, out);
+          x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
+          maxBank = Math.max(maxBank, Math.abs(bankRightDeg));
+          maxBeta = Math.max(maxBeta, Math.abs(x.betaDeg ?? 0));
+        });
+        expect(maxBeta).toBeGreaterThan(3); // the rudder did slip it
+        expect(maxBank).toBeLessThan(cfg.bankMaxDeg * 0.5);
+        expect(b.pos.y).toBeGreaterThan(450);
+      });
+    }
+  }
 });
 
 describe('Kid hands-off line-up (headless, runway heading north, x = cross-track)', () => {

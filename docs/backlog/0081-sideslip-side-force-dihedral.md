@@ -6,7 +6,7 @@ priority: P2
 size: M
 lens: authenticity
 created: 2026-10-22
-pr:
+pr: 81
 ---
 
 ## Why
@@ -35,4 +35,5 @@ roll terms. Check the autopilot's and the assists' coordination laws still settl
 `npm test -- tests/flight`; the gap card is the test that fails without the change.
 
 ## Out of scope
-Rudder side force (CYδr), adverse yaw, propeller slipstream effects.
+Adverse yaw, propeller slipstream effects. (Rudder side force, CYδr, was listed here but
+shipped with the rest: JSBSim has it, and without it the slip banked 5.8° against 4.2°.)
