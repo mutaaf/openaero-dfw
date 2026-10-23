@@ -44,6 +44,28 @@ for (const { name, viewport, insets } of IPHONE_15) {
       expect(await outside(FLYING)).toEqual([]);
       expect(await page.evaluate(() => [window.scrollX, window.scrollY])).toEqual([0, 0]);
       await page.screenshot({ path: `test-results/installed-${name}-flying.png` });
+      // GPWS and stall alerts stay in the safe area and never cover the top bar (panel, 0086).
+      const ALERTS = ['#masterAlertBanner', '#stallAlertBanner'];
+      // The sim re-hides them every frame, so force them on with a stylesheet while measuring.
+      const forced = await page.addStyleTag({ content: `${ALERTS.join(',')} { display: block !important; }` });
+      expect(await outside(ALERTS)).toEqual([]);
+      for (const alert of ALERTS) {
+        const a = await page.locator(alert).boundingBox();
+        for (const bar of ['#btnMenu', '#phoneTelemetry']) {
+          const b = await page.locator(bar).boundingBox();
+          const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+          expect(overlap, `${alert} over ${bar}`).toBe(false);
+        }
+      }
+      await forced.evaluate((el) => el.remove());
+      if (name === 'landscape') {
+        // The open menu sheet stops above the function-button row, inset included.
+        await page.locator('#btnMenu').tap();
+        await expect(page.locator('#hudMenu')).toBeVisible();
+        const sheet = await page.locator('#hudMenu').boundingBox();
+        const row = await page.locator('#touchButtons').boundingBox();
+        expect(sheet.y + sheet.height).toBeLessThanOrEqual(row.y - 8);
+      }
       expect(errors).toEqual([]);
     });
   });

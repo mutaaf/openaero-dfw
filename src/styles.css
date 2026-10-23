@@ -125,6 +125,11 @@ input[type=range] { accent-color: #38bdf8; }
 /* The coach card yields to the open menu sheet (they meet in phone landscape). */
 .hud-menu-open #coach { visibility: hidden; }
 
+/* The alert banners stand under the top bar, which moves down by the status bar's inset when
+   installed (0086); a phone held sideways puts them in the coach's slot below. */
+#masterAlertBanner { top: calc(5rem + env(safe-area-inset-top)); }
+#stallAlertBanner { top: calc(7rem + env(safe-area-inset-top)); }
+
 /* Phone held sideways (ticket 0025): the canvas tapes fill most of the height, so the
    controls go to the edges. Throttle on the left edge, a stick on the right sized to
    clear the altitude tape, the four function buttons as one row under the tapes, the
@@ -146,7 +151,7 @@ input[type=range] { accent-color: #38bdf8; }
   #btnMenu { flex: none; width: 4.5rem; overflow: hidden; white-space: nowrap; }
   #phoneTelemetry { flex: none; width: var(--tel-w); }
   /* The sheet stops above the function-button row; touching the stick folds it. */
-  #hudMenu.open { max-height: calc(100dvh - 8.5rem); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; }
+  #hudMenu.open { max-height: calc(100dvh - 8.5rem - env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; }
   #touchDeck > div {
     padding-left: max(0.75rem, var(--safe-left));
     padding-right: max(0.75rem, var(--safe-right));

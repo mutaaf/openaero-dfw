@@ -1,8 +1,7 @@
 {
   "name": "OpenAero DFW",
   "short_name": "OpenAero",
-  "description": "Fly a 6-DOF flight model over the real Dallas-Fort Worth metroplex.",
-  "id": "./",
+  "description": "Fly a 6-DOF flight model over real Dallas-Fort Worth satellite imagery.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

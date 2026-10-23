@@ -30,7 +30,9 @@ describe('web app manifest', () => {
     expect(manifest.theme_color).toBe('#020617');
     expect(new URL(manifest.start_url, MANIFEST_URL).href).toBe(SITE);
     expect(new URL(manifest.scope, MANIFEST_URL).href).toBe(SITE);
-    expect(new URL(manifest.id, MANIFEST_URL).href).toBe(SITE);
+    // No id: it defaults to start_url (/openaero/). An id resolves against the origin, not
+    // the manifest, so "./" would name the whole site (panel, 0086).
+    expect(manifest.id).toBeUndefined();
   });
 
   it('lists 192, 512 and a maskable 512 icon, each a PNG of its stated size under the base path', () => {
