@@ -172,7 +172,7 @@ let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order
 const resScale = createResScale(window.devicePixelRatio || 1);
 let resCounting = false;
 // WebGL context lost and not yet restored (0034); see the webglcontextlost handler.
-const gfx = { lost: false, pausedIt: false, reloadTimer: 0 };
+const gfx = { lost: false, pausedIt: false, hidPaused: false, reloadTimer: 0 };
 
 try {
   renderer = new THREE.WebGLRenderer({
@@ -2439,6 +2439,7 @@ document.getElementById('btnTimeOfDay').addEventListener('click', toggleTimeOfDa
 
 function setPaused(paused) {
   if (!paused && gfx.lost) return; // nothing to fly by until the GPU is back (0034)
+  gfx.hidPaused = false;
   sim.paused = paused;
   audio.pause(paused);
   document.getElementById('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
@@ -2460,7 +2461,7 @@ document.getElementById('btnPause').addEventListener('click', () => {
 // the player taps Resume, so a landing never starts without them. Before the first ENTER
 // COCKPIT nothing is flying and there is no sound yet.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && !sim.paused && cockpitEntered) setPaused(true);
+  if (document.hidden && !sim.paused && cockpitEntered) { setPaused(true); gfx.hidPaused = true; }
 });
 
 // Ticket 0034: phones and integrated GPUs take the WebGL context back (backgrounding, memory
@@ -2468,23 +2469,31 @@ document.addEventListener('visibilitychange', () => {
 // overlay. three.js re-uploads what it still holds on restore; the imagery cache is dropped
 // on loss and streams in again. The player resumes with a tap; no restore in 5 s offers Reload.
 const gfxLostEl = document.getElementById('gfxLost');
+const gfxPanel = document.getElementById('gfxLostPanel');
+const txtGfxLost = document.getElementById('txtGfxLost');
+const txtGfxLostTitle = document.getElementById('txtGfxLostTitle');
 const btnGfxResume = document.getElementById('btnGfxResume');
 const btnGfxReload = document.getElementById('btnGfxReload');
 simCanvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
   if (gfx.lost) return;
-  gfx.pausedIt = !sim.paused;
+  // A phone usually loses the context in the background, after hiding paused the flight:
+  // that pause was the system's, so RESUME FLIGHT may undo it. The player's own pause stays.
+  // A second loss before the card is dismissed keeps the first one's answer.
+  if (gfxLostEl.classList.contains('hidden')) gfx.pausedIt = !sim.paused || gfx.hidPaused;
   setPaused(true);
   gfx.lost = true;
   terrainLod?.reset();
-  document.getElementById('txtGfxLost').textContent = 'The browser reclaimed the GPU. Waiting for it to come back…';
+  txtGfxLostTitle.textContent = 'Graphics paused';
+  txtGfxLost.textContent = 'Your device needed its graphics chip for a moment. Hang on, it should be right back…';
   btnGfxResume.classList.add('hidden');
   btnGfxReload.classList.add('hidden');
   gfxLostEl.classList.remove('hidden');
+  gfxPanel.focus();
   clearTimeout(gfx.reloadTimer);
   gfx.reloadTimer = setTimeout(() => {
     if (!gfx.lost) return;
-    document.getElementById('txtGfxLost').textContent = 'The GPU has not come back. Reload to fly again.';
+    txtGfxLost.textContent = 'The graphics did not come back. Reload to start a new flight (your best scores are saved).';
     btnGfxReload.classList.remove('hidden');
     btnGfxReload.focus();
   }, 5000);
@@ -2492,7 +2501,9 @@ simCanvas.addEventListener('webglcontextlost', (e) => {
 simCanvas.addEventListener('webglcontextrestored', () => {
   gfx.lost = false;
   clearTimeout(gfx.reloadTimer);
-  document.getElementById('txtGfxLost').textContent = 'Graphics are back.';
+  txtGfxLostTitle.textContent = 'Graphics are back';
+  txtGfxLost.textContent = gfx.pausedIt ? 'Ready when you are.' : 'Your flight is still paused, as you left it.';
+  btnGfxResume.textContent = gfx.pausedIt ? 'RESUME FLIGHT' : 'CONTINUE';
   btnGfxReload.classList.add('hidden');
   btnGfxResume.classList.remove('hidden');
   btnGfxResume.focus();
@@ -2502,6 +2513,18 @@ btnGfxResume.addEventListener('click', () => {
   if (gfx.pausedIt) setPaused(false);
   gfx.pausedIt = false;
 });
+// While the card is up it owns the keyboard: Tab cycles its buttons, and no flight key, the
+// start screen's Escape or its Tab trap reaches anything behind it. Enter/Space press buttons.
+document.addEventListener('keydown', (e) => {
+  if (gfxLostEl.classList.contains('hidden')) return;
+  e.stopImmediatePropagation();
+  if (e.key !== 'Tab') return;
+  e.preventDefault();
+  const items = [btnGfxResume, btnGfxReload].filter((b) => !b.classList.contains('hidden'));
+  if (!items.length) { gfxPanel.focus(); return; }
+  const i = items.indexOf(document.activeElement);
+  items[(i + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+}, true);
 btnGfxReload.addEventListener('click', () => window.location.reload());
 
 document.getElementById('btnReset').addEventListener('click', () => {

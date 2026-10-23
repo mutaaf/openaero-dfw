@@ -23,7 +23,7 @@ test.describe('lost WebGL context', () => {
 
     await loseContext(page);
     await expect(page.locator('#gfxLost')).toBeVisible();
-    await expect(page.locator('#txtGfxLost')).toContainText('reclaimed the GPU');
+    await expect(page.locator('#txtGfxLost')).toContainText('graphics chip');
     await expect(page.locator('#btnGfxResume')).toBeHidden();
     const a = await debug(page);
     expect(a.gfxLost).toBe(true);
@@ -57,9 +57,55 @@ test.describe('lost WebGL context', () => {
     await loseContext(page);
     await expect(page.locator('#gfxLost')).toBeVisible();
     await restoreContext(page);
+    await expect(page.locator('#btnGfxResume')).toHaveText('CONTINUE'); // it won't fly for them
     await page.locator('#btnGfxResume').click();
     await expect(page.locator('#gfxLost')).toBeHidden();
     expect((await debug(page)).paused).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
+  test('a phone backgrounded then losing the GPU twice: RESUME FLIGHT (Space) flies again', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.addInitScript(() => {
+      window.__hidden = false;
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__hidden });
+    });
+    await enterCockpit(page);
+    await expect.poll(async () => (await debug(page)).simTime).toBeGreaterThan(0.5);
+    // Hiding pauses (0032), then the context goes while hidden: the system's pause, not theirs.
+    await page.evaluate(() => { window.__hidden = true; document.dispatchEvent(new Event('visibilitychange')); });
+    expect((await debug(page)).paused).toBe(true);
+    await loseContext(page);
+    await page.evaluate(() => { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); });
+    await restoreContext(page);
+    await expect(page.locator('#btnGfxResume')).toBeVisible();
+    await loseContext(page); // flapping under memory pressure, before the player tapped
+    await expect(page.locator('#btnGfxResume')).toBeHidden();
+    await restoreContext(page);
+    await expect(page.locator('#btnGfxResume')).toHaveText('RESUME FLIGHT');
+    await expect(page.locator('#btnGfxResume')).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(page.locator('#gfxLost')).toBeHidden();
+    expect((await debug(page)).paused).toBe(false);
+    expect(errors).toEqual([]);
+  });
+
+  test('on the start screen the card owns the keyboard: Escape and Tab stay in it', async ({ page }) => {
+    const errors = collectErrors(page);
+    await page.goto('/openaero/');
+    await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+    await loseContext(page);
+    await expect(page.locator('#gfxLostPanel')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('KeyG');
+    await expect(page.locator('#onboardingModal')).toBeVisible(); // Escape didn't close it behind the card
+    await restoreContext(page);
+    await expect(page.locator('#btnGfxResume')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#btnGfxResume')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#gfxLost')).toBeHidden();
+    await expect(page.locator('#onboardingModal')).toBeVisible();
     expect(errors).toEqual([]);
   });
 
