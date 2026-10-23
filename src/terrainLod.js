@@ -214,6 +214,22 @@ export function createTerrainLod({ scene, ground, renderOrder = -5, maxZoom, ani
     evict();
   }
 
+  // The WebGL context was lost (ticket 0034): drop every tile so the imagery streams in
+  // again, coarse first, on the restored context. Loads still in flight find their tile gone.
+  function reset() {
+    for (const [, t] of tiles) {
+      group.remove(t.mesh);
+      t.mesh.geometry.dispose();
+      t.mesh.material.map?.dispose();
+      t.mesh.material.dispose();
+    }
+    tiles.clear();
+    queue.length = 0;
+    trees = [];
+    timer = 0;
+    stats.drawn = 0; stats.cached = 0; stats.triangles = 0; stats.finestZoom = 0;
+  }
+
   // Elevation arrived (or changed): re-drape every cached tile.
   function redrape() {
     for (const [, t] of tiles) {
@@ -232,7 +248,7 @@ export function createTerrainLod({ scene, ground, renderOrder = -5, maxZoom, ani
     }
   }
 
-  return { group, update, redrape, setTint, stats, setVisible: (v) => { group.visible = v; } };
+  return { group, update, redrape, reset, setTint, stats, setVisible: (v) => { group.visible = v; } };
 }
 
 const _plain = new THREE.Color(0x233827);

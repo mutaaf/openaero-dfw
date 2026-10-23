@@ -171,6 +171,8 @@ let papiLamps = null; // THREE.Points, 4 lamps per runway end (RUNWAY_ENDS order
 // Render resolution: the device's pixel ratio capped at 2, stepped down on slow frames (0026).
 const resScale = createResScale(window.devicePixelRatio || 1);
 let resCounting = false;
+// WebGL context lost and not yet restored (0034); see the webglcontextlost handler.
+const gfx = { lost: false, pausedIt: false, reloadTimer: 0 };
 
 try {
   renderer = new THREE.WebGLRenderer({
@@ -2436,6 +2438,7 @@ document.getElementById('btnMouseYoke').addEventListener('click', () => {
 document.getElementById('btnTimeOfDay').addEventListener('click', toggleTimeOfDay);
 
 function setPaused(paused) {
+  if (!paused && gfx.lost) return; // nothing to fly by until the GPU is back (0034)
   sim.paused = paused;
   audio.pause(paused);
   document.getElementById('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
@@ -2459,6 +2462,47 @@ document.getElementById('btnPause').addEventListener('click', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && !sim.paused && cockpitEntered) setPaused(true);
 });
+
+// Ticket 0034: phones and integrated GPUs take the WebGL context back (backgrounding, memory
+// pressure). preventDefault() asks for it back; until then the sim is paused behind an
+// overlay. three.js re-uploads what it still holds on restore; the imagery cache is dropped
+// on loss and streams in again. The player resumes with a tap; no restore in 5 s offers Reload.
+const gfxLostEl = document.getElementById('gfxLost');
+const btnGfxResume = document.getElementById('btnGfxResume');
+const btnGfxReload = document.getElementById('btnGfxReload');
+simCanvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  if (gfx.lost) return;
+  gfx.pausedIt = !sim.paused;
+  setPaused(true);
+  gfx.lost = true;
+  terrainLod?.reset();
+  document.getElementById('txtGfxLost').textContent = 'The browser reclaimed the GPU. Waiting for it to come back…';
+  btnGfxResume.classList.add('hidden');
+  btnGfxReload.classList.add('hidden');
+  gfxLostEl.classList.remove('hidden');
+  clearTimeout(gfx.reloadTimer);
+  gfx.reloadTimer = setTimeout(() => {
+    if (!gfx.lost) return;
+    document.getElementById('txtGfxLost').textContent = 'The GPU has not come back. Reload to fly again.';
+    btnGfxReload.classList.remove('hidden');
+    btnGfxReload.focus();
+  }, 5000);
+});
+simCanvas.addEventListener('webglcontextrestored', () => {
+  gfx.lost = false;
+  clearTimeout(gfx.reloadTimer);
+  document.getElementById('txtGfxLost').textContent = 'Graphics are back.';
+  btnGfxReload.classList.add('hidden');
+  btnGfxResume.classList.remove('hidden');
+  btnGfxResume.focus();
+});
+btnGfxResume.addEventListener('click', () => {
+  gfxLostEl.classList.add('hidden');
+  if (gfx.pausedIt) setPaused(false);
+  gfx.pausedIt = false;
+});
+btnGfxReload.addEventListener('click', () => window.location.reload());
 
 document.getElementById('btnReset').addEventListener('click', () => {
   loadScenario(document.getElementById('selScenario').value);
@@ -2685,7 +2729,7 @@ function renderLoop(time) {
   lastTime = time;
   // Frames behind the modal, paused or hidden are not load; resScale also drops lone stalls.
   // (Photoreal tile LOD follows the CSS size, not the pixel ratio: nothing else to resize.)
-  const idle = sim.paused || document.hidden || modalOpen();
+  const idle = sim.paused || gfx.lost || document.hidden || modalOpen();
   if (idle) {
     if (resCounting) resetResScale(resScale);
     resCounting = false;
@@ -2703,7 +2747,7 @@ function renderLoop(time) {
   syncWeatherUI(dt);
   updateCamera();
   updateSkyAndLights(time / 1000);
-  terrainLod.update(dt, camera);
+  if (!gfx.lost) terrainLod.update(dt, camera);
   photoreal.update(dt);
   updateDebugOverlay(dt);
   renderer.render(scene, camera);
@@ -2808,6 +2852,7 @@ window.openaeroDebug = () => {
     hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, (-_euler.y * RAD_TO_DEG + 360) % 360), box: { ..._windBox } },
     pixelRatio: resScale.ratio,
     paused: sim.paused,
+    gfxLost: gfx.lost,
     audio: audio.state,
     wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },

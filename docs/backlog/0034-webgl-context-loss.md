@@ -1,12 +1,12 @@
 ---
 id: 0034
 title: Survive a lost WebGL context instead of freezing on a black canvas
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: tech-health
 created: 2026-10-18
-pr:
+pr: 90
 ---
 
 ## Why
@@ -23,9 +23,9 @@ then let the player resume. If the context does not return in 5 s, offer a "Relo
 Touches `src/main.js` (renderer setup), `src/terrainLod.js` (cache reset), `index.html` overlay.
 
 ## Acceptance criteria
-- [ ] Forcing `WEBGL_lose_context.loseContext()` shows the overlay and pauses the sim
-- [ ] `restoreContext()` returns to a rendering scene (canvas not blank, per `distinctColours()`)
-- [ ] Zero console errors during both transitions; no per-frame allocations added
+- [x] Forcing `WEBGL_lose_context.loseContext()` shows the overlay and pauses the sim
+- [x] `restoreContext()` returns to a rendering scene (canvas not blank, per `distinctColours()`)
+- [x] Zero console errors during both transitions; no per-frame allocations added
 
 ## Test plan
 e2e: start flight, call `loseContext()` via the extension, assert overlay and paused sim,

@@ -169,7 +169,9 @@ src/photoreal.js    Google Photorealistic 3D Tiles (lazy 3d-tiles-renderer): exa
                     thresholds, attribution, ?debug usage readout
 src/tileTree.js     quadtree LOD selection for the streamed imagery (pure, tested)
 src/terrainLod.js   streamed Esri imagery draped on terrain.js: per-tile height grids with
-                    skirts, hillshade in vertex colours, load queue, LRU cache
+                    skirts, hillshade in vertex colours, load queue, LRU cache; reset() drops it
+                    when the WebGL context is lost (0034: main.js pauses behind #gfxLost, Resume
+                    after restore, Reload after 5 s)
 src/sun.js          real sun (NOAA solar position) over DFW, Now/Dawn/Noon/Dusk/Night presets
                     (each with its moment, `at`), sky zenith/horizon/glow, haze (= horizon) and
                     light colours by sun elevation; night ambient keeps the imagery moonlit
