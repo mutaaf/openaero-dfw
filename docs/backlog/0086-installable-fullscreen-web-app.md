@@ -1,12 +1,12 @@
 ---
 id: 0086
 title: Add to Home Screen opens the sim fullscreen, like an app, on iPhone, iPad and Android
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: accessibility
 created: 2026-10-23
-pr:
+pr: 89
 ---
 
 ## Why
