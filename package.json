@@ -13,8 +13,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
-    "check": "node scripts/check-backlog.mjs && npm test && npm run e2e",
-    "check:fast": "node scripts/check-backlog.mjs && npm test && npm run build"
+    "check": "node scripts/check-backlog.mjs && npm test && npm run build && node scripts/check-budget.mjs && npm run e2e",
+    "check:fast": "node scripts/check-backlog.mjs && npm test && npm run build && node scripts/check-budget.mjs"
   },
   "dependencies": {
     "@0x62/jsbsim-wasm": "1.2.4-beta.4",

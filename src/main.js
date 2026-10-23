@@ -27,7 +27,7 @@ import {
   fogDensityForVisibility, metarAgeMinutes, flowForWind, pickCrosswindRunway,
 } from './weather.js';
 import { createTerrainLod } from './terrainLod.js';
-import { createPhotoreal, photorealAllowed } from './photoreal.js';
+import { createLazyPhotoreal, photorealAllowed } from './photorealLazy.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './terrain.js';
 import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
 import {
@@ -392,7 +392,7 @@ function buildSatelliteTerrain() {
   applyGroundLight();
   loadDem();
 
-  photoreal = createPhotoreal({
+  photoreal = createLazyPhotoreal({
     scene, camera, renderer,
     base: import.meta.env.BASE_URL,
     storage: safeStorage(),
