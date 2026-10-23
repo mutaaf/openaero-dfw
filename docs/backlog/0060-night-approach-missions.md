@@ -1,7 +1,7 @@
 ---
 id: 0060
 title: Night and dusk approaches that use the runway lights
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: content
