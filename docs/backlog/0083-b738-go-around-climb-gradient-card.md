@@ -1,7 +1,7 @@
 ---
 id: 0083
 title: 737 go-around card: 3.2% climb gradient and the 8-second spool-up
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity

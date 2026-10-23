@@ -18,7 +18,7 @@ import { airAt } from '../../src/atmosphere.js';
 import { liftCoefficient, dragCoefficient, stallSpeedKts, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
-import { makeBody, fly, attitude } from './harness.js';
+import { makeBody, fly, attitude, vsFpm } from './harness.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
 const vApp = (b738.vrefKts + 5) * 0.514444;
@@ -290,4 +290,62 @@ describe('Boeing 737-800 takeoff speeds vs published crew data (0062)', () => {
 // 143,300 lb is 65,000 kg: the weight the cards above read the charts at.
 it('the charts are read at the model mass (65,000 kg = 143,300 lb)', () => {
   expect(Math.abs(b738.massKg * LB_PER_KG - 143300)).toBeLessThan(100);
+});
+
+// Go-around (ticket 0083). 14 CFR 25.119 (landing climb): with all engines operating, in the
+// landing configuration, at the thrust available 8 s after the levers leave minimum flight
+// idle, and at VREF, the steady gradient of climb must be at least 3.2%. 14 CFR 33.73
+// (engine power response): from minimum flight idle to 95% of takeoff thrust within 5 s.
+// https://www.ecfr.gov/current/title-14/chapter-I/subchapter-C/part-25/subpart-B/subject-group-ECFR14f0e2fcc647a42/section-25.119
+// https://www.ecfr.gov/current/title-14/chapter-I/subchapter-C/part-33/subpart-E/section-33.73
+// The model has no separate go-around thrust rating: the lever goes to full (takeoff) thrust.
+describe('Boeing 737-800 go-around (14 CFR 25.119 and 33.73)', () => {
+  const air = airAt(300);
+  const vref = b738.vrefKts;
+
+  // Pilot: wings level, pitch holds VREF with gains stiff enough to stay within a few
+  // knots through the surge of thrust (the harness speedHoldPilot lets it balloon +10 kt).
+  const holdVref = () => {
+    let last = null, trend = 0;
+    return (b, dt) => {
+      const { pitchDeg, bankRightDeg } = attitude(b);
+      if (last !== null) trend += ((b.iasKts - last) / dt - trend) * Math.min(1, dt * 4);
+      last = b.iasKts;
+      const err = b.iasKts - vref;
+      b.pitchTrim = (b.pitchTrim ?? b.pitchCmd) + err * 0.15 * dt;
+      b.pitchCmd = Math.max(-15, Math.min(25, b.pitchTrim + err * 3 + trend * 8));
+      b.elevInput = elevatorForPitch(b.pitchCmd, pitchDeg, b.angVel.x);
+      b.aileronInput = aileronForBank(0, bankRightDeg, -b.angVel.z);
+    };
+  };
+
+  it('climbs at VREF, gear down, flaps 30, at least 3.2% from 8 s after the levers move (25.119)', () => {
+    const thr = trimThrottle(b738, vref * KTS_TO_MPS, FLAPS_30, -3, true, air);
+    const b = makeBody(b738, { kts: vref, altM: 300, flaps: FLAPS_30, throttle: thr });
+    const pilot = holdVref();
+    fly(b, b738, 20, (x, dt) => { x.throttle = thr; pilot(x, dt); }); // stabilised 3° final
+    fly(b, b738, 8, (x, dt) => { x.throttle = 1; pilot(x, dt); });
+    let sum = 0, n = 0, dev = 0;
+    fly(b, b738, 12, (x, dt) => {
+      x.throttle = 1; pilot(x, dt);
+      sum += x.vel.y / Math.hypot(x.vel.x, x.vel.z); n++;
+      dev = Math.max(dev, Math.abs(x.iasKts - vref));
+    });
+    const gradient = sum / n;
+    expect(vsFpm(b)).toBeGreaterThan(0);
+    expect(dev).toBeLessThanOrEqual(4); // held VREF ± 4 kt (± 2 would need a stiffer pilot than a crew flies)
+    expect(gradient).toBeGreaterThanOrEqual(0.032);
+  });
+
+  it('spools from minimum flight idle to 95% of takeoff thrust within 5 s (33.73)', () => {
+    const b = makeBody(b738, { kts: vref, altM: 300, flaps: FLAPS_30, throttle: 0 });
+    b.engineN = 0;
+    const pilot = holdVref();
+    const full = engineThrust(b738, 1, vref * KTS_TO_MPS, air, 0.23, 0);
+    let t95 = null;
+    fly(b, b738, 10, (x, dt) => { x.throttle = 1; pilot(x, dt); },
+      (x) => { if (t95 === null && engineThrust(b738, x.engineN, vref * KTS_TO_MPS, air, 0.23, 0) >= 0.95 * full) t95 = x.t; return t95 !== null; });
+    expect(t95).not.toBeNull();
+    expect(t95).toBeLessThanOrEqual(5);
+  });
 });
