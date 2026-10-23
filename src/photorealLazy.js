@@ -28,7 +28,8 @@ export function createLazyPhotoreal(opts, load = () => import('./photoreal.js'))
         impl = createPhotoreal(opts);
         if (visible !== null) impl.setVisible(visible);
         return impl.start(configUrl);
-      }, (err) => {
+      }).catch((err) => { // the chunk failed to load (or to build): the free terrain stays
+        if (impl) return;
         idle.status = 'unavailable';
         idle.reason = err?.message || 'error';
         opts.onUnavailable?.(idle.reason);

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { bootScripts, budgetKb, checkBudget } from '../../scripts/check-budget.mjs';
+import { bootScripts, budgetKb, checkBudget, threeCopies } from '../../scripts/check-budget.mjs';
 
 const HTML = `<!doctype html><html><head>
 <script type="module" crossorigin src="/openaero/assets/index-abc.js"></script>
@@ -44,6 +44,13 @@ describe('boot JS budget (0084)', () => {
     expect(budgetKb('Budgets: JS ≤ 201 kB gzipped at boot (measured by ...)')).toBe(201);
     expect(budgetKb(readFileSync('AGENTS.md', 'utf8'))).toBeGreaterThan(0);
     expect(() => budgetKb('no budget here')).toThrow();
+  });
+
+  it('counts the copies of three in the bundle (minified or not)', () => {
+    writeFileSync(join(dir, 'assets/three-a.js'), 'class e{constructor(){this.isObject3D=!0}}');
+    expect(threeCopies(dir)).toBe(1);
+    writeFileSync(join(dir, 'assets/three-b.js'), 'class Object3D { constructor() { this.isObject3D = true; } }');
+    expect(threeCopies(dir)).toBe(2);
   });
 
   it('fails loudly when the HTML loads no module script', () => {

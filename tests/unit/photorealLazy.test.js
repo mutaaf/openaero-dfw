@@ -60,6 +60,14 @@ describe('lazy photoreal (0084)', () => {
     expect(onUnavailable).toHaveBeenCalledWith('chunk 404');
   });
 
+  it('a module that throws while building reports unavailable too', async () => {
+    const onUnavailable = vi.fn();
+    const p = createLazyPhotoreal({ onUnavailable }, async () => ({ createPhotoreal() { throw new Error('boom'); } }));
+    await p.start('/x');
+    expect(p.state.status).toBe('unavailable');
+    expect(onUnavailable).toHaveBeenCalledWith('boom');
+  });
+
   it('photorealAllowed: the live origin or ?photoreal only', () => {
     expect(photorealAllowed({ origin: 'https://mutaafaziz.com', search: '' })).toBe(true);
     expect(photorealAllowed({ origin: 'http://localhost:4173', search: '' })).toBe(false);

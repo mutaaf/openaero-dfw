@@ -3,7 +3,10 @@
 // first paint (the entry module plus its modulepreloads, i.e. the chunks it imports
 // statically) and fails above the limit written in AGENTS.md § 5 ("JS ≤ N kB gzipped at
 // boot"). kB = 1000 bytes of gzip -9. Run after `npm run build`; `npm run check` does.
-import { readFileSync } from 'node:fs';
+// It also fails unless the bundle holds exactly one copy of three: `three` resolves to its
+// source (vite.config.js), which drops three's own "multiple instances" warning, and a second
+// copy (e.g. an import of three/webgpu or three/build/*) would break instanceof silently.
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -35,9 +38,18 @@ export function checkBudget(distDir, limitKb) {
   return { files, totalKb, limitKb, ok: totalKb <= limitKb };
 }
 
+// How many times three's Object3D is defined across the built JS (1 = one copy of three).
+export function threeCopies(distDir) {
+  const dir = join(distDir, 'assets');
+  return readdirSync(dir).filter((f) => /\.m?js$/.test(f))
+    .reduce((n, f) => n + (readFileSync(join(dir, f), 'utf8').match(/\bisObject3D\s*=\s*(?:!0|true)/g) || []).length, 0);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const r = checkBudget(process.argv[2] || 'dist/openaero', budgetKb(readFileSync('AGENTS.md', 'utf8')));
   for (const f of r.files) console.log(`${f.kb.toFixed(2).padStart(8)} kB  ${f.path}`);
   console.log(`boot JS ${r.totalKb.toFixed(2)} kB gz, budget ${r.limitKb} kB: ${r.ok ? 'ok' : 'OVER'}`);
-  if (!r.ok) process.exit(1);
+  const copies = threeCopies(process.argv[2] || 'dist/openaero');
+  console.log(`three.js copies in the bundle: ${copies}${copies === 1 ? '' : ' (expected 1)'}`);
+  if (!r.ok || copies !== 1) process.exit(1);
 }
