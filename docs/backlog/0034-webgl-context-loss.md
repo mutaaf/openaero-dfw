@@ -1,8 +1,8 @@
 ---
 id: 0034
 title: Survive a lost WebGL context instead of freezing on a black canvas
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: tech-health
 created: 2026-10-18
