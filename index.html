@@ -2,10 +2,18 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>OpenAero DFW · Fly the real Dallas–Fort Worth</title>
   <meta name="description" content="OpenAero DFW: fly a 6-DOF flight model over real Dallas-Fort Worth satellite imagery in your browser." />
   <meta name="theme-color" content="#020617" />
+  <!-- Add to Home Screen launches fullscreen, like an app (0086); no service worker -->
+  <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+  <link rel="icon" href="%BASE_URL%icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="%BASE_URL%icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="OpenAero" />
   <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
 </head>
 <body class="relative w-full h-full overflow-hidden">
@@ -56,7 +64,7 @@
 
   <!-- Onboarding & Flight Academy Modal -->
   <div id="onboardingModal" role="dialog" aria-modal="true" aria-labelledby="txtModalTitle" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md transition-opacity duration-200">
-    <div id="modalPanel" tabindex="-1" class="outline-none hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-2xl p-4 sm:p-6 flex flex-col gap-3 text-slate-200 border-sky-400/40 shadow-2xl">
+    <div id="modalPanel" tabindex="-1" class="outline-none hud-glass max-w-2xl w-full max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden rounded-2xl p-4 sm:p-6 flex flex-col gap-3 text-slate-200 border-sky-400/40 shadow-2xl">
       <div class="shrink-0 flex items-center justify-between border-b border-slate-700/80 pb-3">
         <div class="flex items-center gap-3">
           <span class="brand-mark" aria-hidden="true"></span>
@@ -391,7 +399,7 @@
 
   <!-- Touch flight deck (below lg): throttle under the left thumb, stick under the right -->
   <div id="touchDeck" class="lg:hidden absolute inset-x-0 bottom-0 z-20 pointer-events-none font-mono"
-       style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
+       style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
     <div class="flex items-end justify-between gap-2 px-3">
       <div class="pointer-events-auto flex flex-col items-center gap-1">
         <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1.5">THR <b id="txtTouchThr" class="text-emerald-400">44%</b></span>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- OpenAero DFW app icon (original work, CC0): the start screen's brand mark (dusk sky, sun)
+       with a jet climbing out. scripts/build-icons.mjs renders the PNGs in public/icons/. -->
+  <defs>
+    <linearGradient id="sky" x1="0.33" y1="0" x2="0.67" y2="1">
+      <stop offset="0" stop-color="#0c4a6e"/>
+      <stop offset="0.45" stop-color="#1e3a8a"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <circle cx="358" cy="143" r="46" fill="#fde68a"/>
+  <g id="glyph" transform="translate(256 286) rotate(-35) scale(1.25)">
+    <!-- top view, nose up: fuselage, swept wings, tailplane -->
+    <path fill="#f8fafc" d="M0 -120 C10 -110 13 -92 13 -70 L13 -24 L110 28 L110 46 L13 22 L11 78 L44 100 L44 114 L0 104 L-44 114 L-44 100 L-11 78 L-13 22 L-110 46 L-110 28 L-13 -24 L-13 -70 C-13 -92 -10 -110 0 -120 Z"/>
+  </g>
+</svg>

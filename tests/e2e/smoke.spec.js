@@ -79,3 +79,29 @@ test('every mission loads without errors', async ({ page }) => {
   }
   expect(errors).toEqual([]);
 });
+
+// Ticket 0086: Add to Home Screen opens the sim fullscreen. The page links a manifest the
+// server returns as JSON, and every icon it lists is served from under the base path.
+test('links a web app manifest whose icons are served under the base path', async ({ page, request }) => {
+  const errors = collectErrors(page);
+  await page.goto(BASE);
+  const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+  expect(href).toBe(`${BASE}manifest.webmanifest`);
+  const res = await request.get(href);
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toMatch(/json/);
+  const manifest = await res.json();
+  expect(manifest.display).toBe('fullscreen');
+  const manifestUrl = new URL(href, 'http://localhost:4173');
+  for (const icon of manifest.icons) {
+    const url = new URL(icon.src, manifestUrl);
+    expect(url.pathname.startsWith(BASE)).toBe(true);
+    const r = await request.get(url.pathname);
+    expect(r.status(), url.pathname).toBe(200);
+    expect(r.headers()['content-type']).toBe('image/png');
+  }
+  const touch = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
+  expect((await request.get(touch)).status()).toBe(200);
+  await page.waitForTimeout(1000);
+  expect(errors).toEqual([]);
+});

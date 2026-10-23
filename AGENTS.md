@@ -116,6 +116,10 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
 
 ```
 index.html          markup: viewport canvases, HUD panels, onboarding modal (Tailwind classes)
+                    + the installable app (0086): public/manifest.webmanifest (fullscreen,
+                    relative start_url/scope, no service worker), icons in public/icons/ drawn by
+                    scripts/build-icons.mjs from assets-src/icons/icon.svg; viewport-fit=cover, so
+                    every edge element keeps clear of env(safe-area-inset-*)
 src/main.js         renderer + scene build, 6-DOF integrator, camera, HUD/radar drawing,
                     scenarios, UI event wiring, render loop. Still large (ported glue):
                     the Keeper carves it into modules, no behavior change per PR.

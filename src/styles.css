@@ -81,11 +81,26 @@ input[type=range] { accent-color: #38bdf8; }
   position: absolute;
   z-index: 30;
   left: 50%;
-  bottom: 1px;
+  /* Above the home indicator when installed fullscreen (0086); the touch deck pads the same
+     inset plus 0.75rem, so the credit stays in the gap under its controls. */
+  bottom: max(1px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   text-align: center;
   white-space: nowrap;
   pointer-events: auto;
+}
+
+/* Start screen inside the safe area: installed fullscreen (0086) the page runs under the
+   notch, the status bar and the home indicator (viewport-fit=cover). */
+#onboardingModal {
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+}
+@media (min-width: 640px) {
+  #onboardingModal {
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+      max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
 }
 
 /* Touch controls own their gestures: no scroll, zoom or text selection. */
