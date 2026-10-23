@@ -11,7 +11,7 @@ const IPHONE_15 = [
   { name: 'landscape', viewport: { width: 844, height: 390 }, insets: { top: 0, right: 59, bottom: 21, left: 59 } },
 ];
 const START = ['#modalPanel', '#btnStartFlight'];
-const FLYING = ['#btnMenu', '#phoneTelemetry', '#touchThrottle', '#touchStick', '#touchButtons', '#coach', '#mapCredits'];
+const FLYING = ['#btnMenu', '#phoneTelemetry', '#touchThrottle', '#touchStick', '#touchButtons', '#coach'];
 
 for (const { name, viewport, insets } of IPHONE_15) {
   test.describe(`installed on an iPhone 15, ${name}`, () => {
@@ -42,6 +42,13 @@ for (const { name, viewport, insets } of IPHONE_15) {
       await expect(page.locator('#onboardingModal')).toBeHidden();
       await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
       expect(await outside(FLYING)).toEqual([]);
+      // The imagery credit sits above the home indicator, under the touch deck's controls. Its
+      // width is the font's (one nowrap line, wider than a 390 px phone with some fallback fonts,
+      // as on main), so only its height is this ticket's.
+      const credit = await page.locator('#mapCredits').boundingBox();
+      expect(credit.y + credit.height).toBeLessThanOrEqual(safe.y1 + 0.5);
+      const deck = await page.locator('#touchButtons').boundingBox();
+      expect(credit.y).toBeGreaterThanOrEqual(deck.y + deck.height - 0.5);
       expect(await page.evaluate(() => [window.scrollX, window.scrollY])).toEqual([0, 0]);
       await page.screenshot({ path: `test-results/installed-${name}-flying.png` });
       // GPWS and stall alerts stay in the safe area and never cover the top bar (panel, 0086).
