@@ -19,7 +19,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, noseSteerYawRate, tailVsMainsAccel } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -132,7 +132,7 @@ export function stepFlightModel(body, spec, dt) {
   if (normalForce > 0) {
     body.onGround = true;
 
-    // Tyres: rolling resistance (μ·N, brakes μ 0.45) along the nose, and a stiff side
+    // Tyres: rolling resistance (μ·N, plus the brakes: systems.js) along the nose, and a stiff side
     // force across it so the aircraft rolls where it points instead of skating sideways.
     // (The prototype used friction ∝ speed, which capped the takeoff roll near 75 kt.)
     const fwd = _v3.set(0, 0, -1).applyQuaternion(body.quat);
@@ -143,10 +143,15 @@ export function stepFlightModel(body, spec, dt) {
     const vSideZ = body.vel.z - fwd.z * vAlong;
     // Raymer: rolling μ 0.03 on concrete/asphalt; the brakes add up to what anti-skid gets
     // from the runway (systems.js). A belly slides at μ ~0.5.
-    const mu = locked ? brakeMu(spec, body.brakePress) : 0.5;
-    const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
-    totalForceWorld.x += fwd.x * roll;
-    totalForceWorld.z += fwd.z * roll;
+    // On struts the friction acts per wheel at its axle (gear.js): brakes on the mains, and
+    // their pull below the CG loads the nose wheel.
+    if (struts) gearFriction(body, spec, fwd, vAlong, totalForceWorld, _gearM);
+    else {
+      const mu = locked ? brakeMu(spec, body.brakePress) : 0.5;
+      const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
+      totalForceWorld.x += fwd.x * roll;
+      totalForceWorld.z += fwd.z * roll;
+    }
     const sideMax = 0.8 * normalForce;
     totalForceWorld.x += MathUtils.clamp(-vSideX * spec.massKg * 4, -sideMax, sideMax);
     totalForceWorld.z += MathUtils.clamp(-vSideZ * spec.massKg * 4, -sideMax, sideMax);

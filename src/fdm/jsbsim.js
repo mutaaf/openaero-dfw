@@ -27,9 +27,11 @@ const KTS_PER_FPS = 0.592484;
 const FPS = M_TO_FT; // m/s → ft/s
 const RHO0_SLUG_FT3 = 0.0023769;
 const PSF_PER_INHG = 70.7262;
-// Brakes on: full pressure on both main-wheel brakes (POH maximum braking). JSBSim adds
-// the brake times static friction (0.8) to rolling friction on each braked wheel.
-const BRAKE_CMD = 1;
+// Brakes on: both main-wheel brakes at the C172's maximum (POH maximum braking). JSBSim
+// blends rolling friction towards static friction (0.8) by the command, the tyres' grip; a
+// Skyhawk's small disc brakes are torque-limited well below it, so full pedal is 0.42,
+// fitted to POH Fig. 5-11's 575 ft roll (tests/flight/c172.test.js, ticket 0082).
+const BRAKE_CMD = 0.42;
 // Lean for best power (POH: lean above 3,000 ft for climb): a slow loop on the fuel/air
 // ratio, as a pilot leaning to peak RPM would. JSBSim's piston model makes most power near
 // AFR 11.3 (full rich at sea level, measured); thinner air richens it, so it leans aloft.

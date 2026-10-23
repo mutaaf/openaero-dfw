@@ -38,16 +38,14 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 //  - lift-off 55.2 kt (band edge 55.08, so a small fix promotes the card): the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
 //    proportional only), so the wing reaches lift-off speed later.
 //
-// Short-field landing, both models (ticket 0082): from the POH's 61 KIAS at 50 ft and a near-stall
-// touchdown (52-53 KCAS, 90-160 fpm), with the nose wheel held on the runway and the brakes
-// on 0.5 s after the touch, the roll is ~355-370 ft against the POH's 575 (-36 to -38%):
-// both brake at ~0.36 g where the book's numbers average ~0.2 g. The air segment is right on
-// flightModel.js (756 ft, POH 1335 - 575 = 760), so its total misses only by the roll
-// (1125 ft, -16%). JSBSim floats ~943 ft (+24%): its total (1297 ft) is inside the band only
-// because the short roll cancels the long float, also ticket 0082.
+// Short-field landing, both models (ticket 0082): the C172's mains at their POH arm, the
+// tyres' friction below the CG (gear.js) and the brakes on the mains, torque-limited (fitted
+// to Fig. 5-11: flightModel.js μ 0.39, JSBSim's brake command 0.42). flightModel.js rolls
+// ~578 ft and its air segment is 754 ft (POH 1335 - 575 = 760). JSBSim floats ~943 ft
+// (+24%), ticket 0085; its total (~1485 ft, +11%) is inside the band despite it.
 const GAPS = {
-  flightModel: new Set(['landRoll', 'landTotal']),
-  jsbsim: new Set(['takeoff', 'landRoll']),
+  flightModel: new Set(),
+  jsbsim: new Set(['takeoff', 'landAir']),
 };
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
@@ -110,10 +108,18 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     expect(r.tdSinkFpm).toBeLessThan(300);
     expect(r.tdKts).toBeGreaterThan(48);
     expect(r.tdKts).toBeLessThan(48 * 1.15);
+    // "Hold the control wheel full back" (Section 4): the brakes keep the nose wheel down.
+    expect(r.noseDownS).not.toBeNull();
+    expect(r.noseOffS).toBe(0);
+    expect(r.rollPitchMaxDeg).toBeLessThanOrEqual(1);
   });
 
   card('landRoll')('short-field landing: ground roll near 575 ft (POH Fig. 5-11, ±15%)', () => {
     within(shortFieldLanding(c172).rollFt, 575, 0.15);
+  });
+
+  card('landAir')('short-field landing: 760 ft from the 50 ft obstacle to touchdown (POH Fig. 5-11 total - roll, ±15%)', () => {
+    within(shortFieldLanding(c172).airFt, 1335 - 575, 0.15);
   });
 
   card('landTotal')('short-field landing: 1335 ft from a 50 ft obstacle to a stop (POH Fig. 5-11, ±15%)', () => {
