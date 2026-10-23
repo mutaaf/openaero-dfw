@@ -47,12 +47,15 @@ export const AIRCRAFT_DATABASE = {
     // Flap load relief and the autobrake decelerations are Boeing's (737 NG FCOM 9.20 /
     // 14.10: flaps 40 → 30 above the 162 kt placard; autobrake 1/2/3/MAX = 4/5/7.2/14
     // ft/s²). Reverser effectiveness (a fraction of forward thrust at the same N1) and the
-    // ~2 s sleeve travel are estimates for the CFM56-7 cascade reverser.
+    // ~2 s sleeve travel are estimates for the CFM56-7 cascade reverser. Brakes on the
+    // mains only (0082): μ 0.55 on their load keeps what 0.45 on every wheel gave, autobrake
+    // MAX's 14 ft/s² with room to spare and full pedals a little harder (Boeing: maximum
+    // manual braking can exceed MAX).
     systems: {
       hydraulics: { psi: 3000 },
       gear: { extendS: 10, retractS: 7 },
       flaps: { degPerS: 1.5, loadRelief: { fromIndex: 3, toIndex: 2, aboveKts: 162 } },
-      brakes: { tauS: 0.3, muMax: 0.45 },
+      brakes: { tauS: 0.3, muMax: 0.55 },
       autobrake: { decelFtS2: [0, 4, 5, 7.2, 14] },
       reverser: { deployS: 2, effectiveness: 0.35 },
     },
@@ -124,8 +127,11 @@ export const AIRCRAFT_DATABASE = {
     controlThrowsDeg: { aileronUp: 20, aileronDown: 15, elevatorUp: 28, elevatorDown: 23, rudder: 16.2 },
     flapCl: [0, 0.19, 0.30, 0.40],
     alphaStallDegByFlap: [14.1, 14.1, 13.7, 13.3],
-    // Electric flaps, 0 → 30° in ~10 s (an estimate); toe brakes, no autobrake or reverse.
-    systems: { flaps: { degPerS: 3 } },
+    // Electric flaps, 0 → 30° in ~10 s (an estimate); toe brakes on the mains, no autobrake or
+    // reverse. The small disc brakes are torque-limited below the tyres' grip: μ 0.39 at full
+    // pedal is fitted to POH Fig. 5-11 (575 ft roll from a near-stall touchdown, 1335 ft from
+    // 50 ft; tests/flight/c172.test.js), not a measured brake torque (ticket 0082).
+    systems: { flaps: { degPerS: 3 }, brakes: { tauS: 0.3, muMax: 0.39 } },
     alphaStallDeg: 14.1,
     maxThrustN: 2100, // Lycoming IO-360-L2A, 180 hp, fixed-pitch prop (static)
     // Sea-level full-throttle thrust vs TAS (m/s). 0: 2070 N measured static thrust of a
@@ -139,11 +145,18 @@ export const AIRCRAFT_DATABASE = {
     vrKts: 55,
     stallCleanKts: 48,
     gearHeight: 1.65,
-    // Struts (gear.js): ~1.65 m wheelbase, 2.54 m main track (POH Section 1 dimensions), the
-    // nose carrying ~18%; spring-steel mains and a nose oleo, stroke and damping estimates;
-    // ±10° pedal nose-wheel steering (POH Section 7). Inertia: JSBSim c172x (948 / 1346 /
-    // 1967 slug·ft²).
-    gear: { noseZ: 1.35, mainZ: 0.3, trackM: 2.54, strokeM: 0.08, zeta: 0.6, steerDeg: 10 },
+    // Struts (gear.js): 65 in wheelbase (POH Fig. 1-1 note 2), 2.54 m main track (POH Section
+    // 1). Nose wheel at arm -6.8 in and mains at 58.2 in (POH Section 6 equipment list, wheel
+    // assemblies), the CG at 41.0 in, the forward limit at 2550 lb (POH Section 2): the mains
+    // 17.2 in (0.437 m) aft, the nose 47.8 in (1.214 m) ahead, carrying ~26.5% (ticket 0082;
+    // it was 0.3 m, a tip-back angle of ~10°, so a flare attitude sat the Cessna on its tail).
+    // Tip-back is now atan(0.437 / 1.73) ≈ 14°; gearHeight (the CG 1.73 m above the axles) is
+    // taller than a real Skyhawk's (~1.22 m, the thrust line: 11.25 in prop clearance + the
+    // 38 in prop radius, as public/jsbsim puts it), kept because spawns, ground effect and the
+    // takeoff cards are fitted to it. Spring-steel mains and a nose oleo, stroke and damping
+    // estimates; ±10° pedal nose-wheel steering (POH Section 7). Inertia: JSBSim c172x (948 /
+    // 1346 / 1967 slug·ft²).
+    gear: { noseZ: 1.214, mainZ: 0.437, trackM: 2.54, strokeM: 0.08, zeta: 0.6, steerDeg: 10 },
     inertia: { roll: 1285, pitch: 1825, yaw: 2667 },
     eyeOffset: new Vector3(0, 1.85, -1.3),
     chaseDist: 18,

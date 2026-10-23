@@ -6,7 +6,9 @@
 // and the nose comes down on its own (the weight sits ahead of the mains) unless the pilot
 // holds it off; the aircraft rotates about the main wheels on takeoff; a wing-low touchdown
 // lands on one main and rolls level; struts compress and rebound. The pedals steer the
-// nose wheel while it carries weight.
+// nose wheel while it carries weight. The tyres' friction acts at each axle, below the CG,
+// so braking pitches the nose down onto its wheel; the brakes are on the mains only (toe
+// brakes on the C172, the 737's and F-16's main-wheel brakes; no nose-wheel brakes).
 //
 // spec.gear: { noseZ (m ahead of the CG, positive), mainZ (m aft), trackM (between the
 // mains), strokeM (static compression of the struts), zeta (damping ratio),
@@ -15,6 +17,7 @@
 // spec.inertia: { pitch, roll, yaw } kg·m² for the gear's moments.
 import { Vector3, Quaternion } from 'three';
 import { GRAVITY } from './constants.js';
+import { brakeMu, ROLLING_MU } from './systems.js';
 
 const _r = new Vector3();
 const _w = new Vector3();
@@ -23,6 +26,7 @@ const _m = new Vector3();
 const _omega = new Vector3();
 const _qi = new Quaternion();
 export const REBOUND = 3; // rebound damping over compression damping
+const BUMP_STOP = 10; // a bottomed strut's stiffness over its spring's
 
 // Per-wheel static load share and spring/damper constants, cached per spec.
 const cache = new WeakMap();
@@ -68,7 +72,9 @@ export function gearForces(body, spec, force, moment) {
     // Oleos damp the rebound (extending, axle rising) harder than the compression: the
     // struts settle instead of springing the airframe off the runway.
     const damp = c.d[i] * (_w.y > 0 ? REBOUND : 1);
-    const n = Math.max(0, c.k[i] * Math.min(comp, c.maxStroke) - damp * _w.y);
+    // Past its full stroke a strut is bottomed: a stiff stop (10× the spring), not slack,
+    // so hard braking can't fold the nose down onto the pitch floor (0082).
+    const n = Math.max(0, c.k[i] * (Math.min(comp, c.maxStroke) + BUMP_STOP * Math.max(0, comp - c.maxStroke)) - damp * _w.y);
     loads[i] = n;
     total += n;
     force.y += n;
@@ -79,6 +85,36 @@ export function gearForces(body, spec, force, moment) {
     if (i > 0) body.mainPitchMomentNm -= _m.x;
   }
   return total;
+}
+
+// The tyres' friction along the ground track, per wheel at its axle: rolling μ on every
+// wheel, the brakes (systems.js brakeMu) on the mains only. Adds the force (world, N) to
+// `force` and its moment about the CG (body axes) to `moment`: below the CG, braking pitches
+// the nose down. `fwd` is the horizontal unit vector along the nose, `vAlong` the
+// groundspeed along it (m/s). Needs body.wheelLoads from gearForces this sub-step.
+export function gearFriction(body, spec, fwd, vAlong, force, moment) {
+  const loads = body.wheelLoads;
+  if (Math.abs(vAlong) <= 0.3) {
+    // Nearly stopped: hold it (a damper, no moment), as flightModel.js does without struts.
+    const f = -vAlong * spec.massKg * 2;
+    force.x += fwd.x * f;
+    force.z += fwd.z * f;
+    return;
+  }
+  const c = gearConstants(spec);
+  _qi.copy(body.quat).invert();
+  const braked = brakeMu(spec, body.brakePress ?? 0);
+  const s = -Math.sign(vAlong);
+  for (let i = 0; i < 3; i++) {
+    if (!(loads[i] > 0)) continue;
+    const f = s * (i === 0 ? ROLLING_MU : braked) * loads[i];
+    _f.set(fwd.x * f, 0, fwd.z * f);
+    force.x += _f.x;
+    force.z += _f.z;
+    _r.copy(c.wheels[i]).applyQuaternion(body.quat);
+    _m.copy(_r).cross(_f).applyQuaternion(_qi);
+    moment.add(_m);
+  }
 }
 
 // Pedal steering of the nose wheel: the yaw rate a wheel turned by the pedals makes at this

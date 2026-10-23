@@ -137,9 +137,10 @@ export function stepSystems(body, spec, dt) {
 
 // Tyre friction for the brake pressure (flightModel.js): rolling μ, plus the brakes up to
 // what anti-skid lets the runway give (dry concrete).
+export const ROLLING_MU = 0.03;
 export function brakeMu(spec, brakePress) {
-  const muMax = systemsOf(spec).brakes.muMax;
-  return 0.03 + (muMax - 0.03) * Math.min(1, Math.max(0, brakePress));
+  const muMax = (spec.systems?.brakes ?? DEFAULTS.brakes).muMax;
+  return ROLLING_MU + (muMax - ROLLING_MU) * Math.min(1, Math.max(0, brakePress));
 }
 
 // Net thrust after the reversers: deployed sleeves turn the fan stream forward at the

@@ -70,7 +70,7 @@ describe('systems (hydraulics, brakes, reversers)', () => {
   });
   it('brake friction runs from rolling to the anti-skid limit', () => {
     expect(brakeMu(b738, 0)).toBeCloseTo(0.03);
-    expect(brakeMu(b738, 1)).toBeCloseTo(0.45);
+    expect(brakeMu(b738, 1)).toBeCloseTo(0.55) // on the mains only (0082);
   });
   it('GPWS "too low, gear" and a gear-up landing', () => {
     expect(isGearWarning(400, -700, false, false)).toBe(true);

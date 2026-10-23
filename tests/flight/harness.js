@@ -16,6 +16,8 @@ const RUDDER_PER_BETA = 0.3;
 // (src/fdm/jsbsim.js, loaded in Node by jsbsimNode.js) through the same cards.
 let fdm = null;
 export const useFdm = (f) => { fdm = f; };
+// Whether the nose wheel carries weight: gear.js's strut load, or JSBSim's weight-on-wheels.
+export const noseWheelOn = (body) => (fdm ? fdm.get('gear/unit[0]/WOW') > 0 : body.wheelLoads?.[0] > 0);
 
 // A body heading north, in trim at `kts` indicated when airborne, or parked on the runway.
 export function makeBody(spec, { kts = 0, altM = 0, flaps = 0, gearDown = true, throttle = 0 } = {}) {
@@ -326,12 +328,15 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
 // at idle; a round-out from 20 ft (a sink that shrinks with the height, 2 s time constant)
 // to a hold-off a foot above the runway, the nose coming up no further than 1° short of the
 // stall angle, so it touches down on the mains near the stall. Then, as Section 4 says: lower the nose wheel, brakes on
-// hard (after `brakeDelayS`, the pilot's reaction), flaps up. (The POH then says control wheel
-// full back; this pilot holds the nose wheel down instead: on flightModel.js the Cessna tips
-// back past its mains at ~10° and gear.js has no braking pitch moment, ticket 0082.)
-// Returns the ground roll (first touch to a stop), the total from the obstacle, and what
-// the pilot flew: touchdown IAS and sink rate, time airborne again after the first touch.
-export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20 } = {}) {
+// hard (after `brakeDelayS`, the pilot's reaction), flaps up, and once the nose wheel is down
+// the control wheel full back, brought back over `backS`. The 2 s is a pilot easing the wheel
+// back, and also what keeps JSBSim's nose down: snatched back at 50 kt with the flaps still
+// out its tail lifts the nose (1.4° at 1 s, 1.9° and off the runway at 0.5 s; 0082).
+// Returns the ground roll (first touch to a stop), the total from the obstacle, the air
+// segment, and what the pilot flew: touchdown IAS and sink rate, time airborne again after
+// the first touch, when the nose wheel came down, and the highest pitch and the time with
+// the nose wheel off the runway after it settled (0.5 s after it touched).
+export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2 } = {}) {
   const tan3 = Math.tan(3 * DEG_TO_RAD);
   const b = makeBody(spec, { kts, altM: 50 / M_TO_FT + spec.gearHeight, flaps, throttle: 0 });
   b.isaDevC = isaDevC;
@@ -350,12 +355,16 @@ export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 
       x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z) / 0.6;
       x.brakesOn = s >= brakeDelayS;
       if (x.brakesOn) x.flapsIndex = 0;
-      // Nose wheel down and kept there: the pitch held at the three-wheel attitude (0°). The
-      // POH's "full back" relies on the brakes' nose-down moment and a real tip-back angle to
-      // keep the nose on the runway; flightModel.js's C172 tips back past its mains at ~10° and
-      // gear.js has no braking moment (ticket 0082), so full back rests it on its tail at 15°
-      // and the wing carries the weight instead of the brakes.
-      x.elevInput = elevatorForPitch(0, pitchDeg, x.angVel.x);
+      // POH Section 4: "Immediately after touchdown, lower the nose wheel and apply heavy
+      // braking ... retract the flaps, hold the control wheel full back". The nose is lowered
+      // towards the three-wheel attitude; once its wheel touches, full back, and the brakes'
+      // pull below the CG keeps it on the runway (gear.js, ticket 0082).
+      if (td.noseDownS === null && noseWheelOn(x)) td.noseDownS = s;
+      x.elevInput = td.noseDownS !== null ? -Math.min(1, (s - td.noseDownS) / backS) : elevatorForPitch(0, pitchDeg, x.angVel.x);
+      if (td.noseDownS !== null && s > td.noseDownS + 0.5) {
+        td.maxPitchDeg = Math.max(td.maxPitchDeg, pitchDeg);
+        if (!noseWheelOn(x)) td.noseOffS += dt;
+      }
       return;
     }
     const wheelM = x.pos.y - x.groundY - spec.gearHeight;
@@ -369,11 +378,12 @@ export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 
     x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
     x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
   }, (x) => {
-    if (!td && x.onGround) td = { t: x.t, distM: x.distM, kts: x.iasKts, sinkFpm: -(x.lastAirVsi ?? 0), bounceS: 0 };
+    if (!td && x.onGround) td = { t: x.t, distM: x.distM, kts: x.iasKts, sinkFpm: -(x.lastAirVsi ?? 0), bounceS: 0, noseDownS: null, maxPitchDeg: -90, noseOffS: 0 };
     return td && Math.hypot(x.vel.x, x.vel.z) < 0.3;
   });
   return {
     rollFt: (b.distM - td.distM) * M_TO_FT, totalFt: b.distM * M_TO_FT,
     tdKts: td.kts, tdSinkFpm: td.sinkFpm, bounceS: td.bounceS, stopped: Math.hypot(b.vel.x, b.vel.z) < 0.3,
+    airFt: td.distM * M_TO_FT, noseDownS: td.noseDownS, rollPitchMaxDeg: td.maxPitchDeg, noseOffS: td.noseOffS,
   };
 }

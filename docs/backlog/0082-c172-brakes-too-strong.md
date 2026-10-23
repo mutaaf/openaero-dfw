@@ -1,12 +1,12 @@
 ---
 id: 0082
 title: C172 brakes stop it ~40% short of the POH, and the Cessna tips back onto its tail on the rollout
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-22
-pr:
+pr: 85
 ---
 
 ## Why
@@ -47,15 +47,44 @@ citing the table. Check the 737 braking/autobrake cards and the crosswind rollou
 don't regress.
 
 ## Acceptance criteria
-- [ ] `landRoll` and `landTotal` pass on both models and drop out of `GAPS`
-- [ ] With brakes on and the wheel full back from 50 kt, flightModel.js's nose-gear load stays > 0 and pitch stays ≤ 1° nose-up to the stop (gear.js unit test)
-- [ ] `shortFieldLanding` flies the POH's "control wheel full back" after the nose wheel is down (the 0° nose hold is removed) and the nose wheel stays on the runway to the stop
-- [ ] With the stick neutral after touchdown, flightModel.js's nose wheel comes down by itself (as gear.js's header promises)
-- [ ] JSBSim's air segment (50 ft to touchdown) is within 15% of the POH's 760 ft, or pinned as its own gap
-- [ ] No other flight card regresses (`npm test -- tests/flight`)
+- [x] `landRoll` and `landTotal` pass on both models and drop out of `GAPS`
+- [x] With brakes on and the wheel full back from 50 kt, flightModel.js's nose-gear load stays > 0 and pitch stays ≤ 1° nose-up to the stop (gear.js unit test)
+- [x] `shortFieldLanding` flies the POH's "control wheel full back" after the nose wheel is down (the 0° nose hold is removed) and the nose wheel stays on the runway to the stop
+- [x] With the stick neutral after touchdown, flightModel.js's nose wheel comes down by itself (as gear.js's header promises)
+- [x] JSBSim's air segment (50 ft to touchdown) is within 15% of the POH's 760 ft, or pinned as its own gap
+- [x] No other flight card regresses (`npm test -- tests/flight`)
 
 ## Test plan
 `npm test -- tests/flight`; a gear.js unit test that hard braking moves load onto the nose wheel.
 
 ## Out of scope
 Anti-skid on the Cessna, tyre models, grass runways (Fig. 5-11 note 3).
+
+## Shipped
+- Gear geometry from the POH: nose wheel arm −6.8 in, mains 58.2 in (Section 6 equipment
+  list), 65 in wheelbase (Fig. 1-1 note 2), CG 41.0 in (the 2550 lb forward limit, Section
+  2): `mainZ` 0.3 → 0.437 m, `noseZ` 1.35 → 1.214 m, the nose carrying 26.5%. Tip-back is
+  now ~14°, past any flare attitude, so the nose comes down by itself.
+- gear.js `gearFriction`: rolling and brake friction per wheel at its axle, with its moment
+  about the CG; brakes on the mains only (every airframe with struts: none of ours has
+  nose-wheel brakes). The 737's `muMax` is refitted 0.45 → 0.55 on the mains (panel: at
+  0.45 autobrake MAX saturated, 12.7 ft/s²): MAX 13.9 ft/s², full pedals 15.0, ACAP landing
+  3,200 ft as before. The F-16 keeps the default 0.45 on its mains; its soft nose strut
+  bottomed under full braking from 120 kt and folded onto the -6.9° pitch floor (panel), so
+  gear.js gives a bottomed strut a stiff stop (10× its spring): -3.2° now, with a test.
+- Brakes fitted to Fig. 5-11: flightModel.js `muMax` 0.39 (578 ft roll, 1331 ft total),
+  JSBSim full pedal = brake command 0.42 (541 ft, 1485 ft). Both are torque-limit fits, not
+  measured brake torques.
+- `shortFieldLanding` lowers the nose, brakes, flaps up, and brings the wheel full back over
+  2 s once the nose wheel is down; the pilot test now asserts the nose wheel stays on the
+  runway (pitch ≤ 1°). Snatched full back at 50 kt with the flaps still out, JSBSim's tail
+  lifts the nose (14° at brake command 0.4); the 2 s ramp is the pilot, not a fit.
+- The 2 s ramp is also what keeps JSBSim's nose down (max 0.94° against the 1° limit; 1.4°
+  with a 1 s ramp), so that check is close to a fit on JSBSim.
+- Not done: `gearHeight` (the CG 1.73 m above the axles) is still taller than a Skyhawk's
+  ~1.22 m (the thrust line, as public/jsbsim has it). Lowering it moved the takeoff cards
+  (lift-off speed out of its band), so it needs its own refit. It also flatters this ticket:
+  a CG 1.73 m up moves ~40% more load onto the nose under braking than a real Skyhawk's,
+  which helps the nose stay down and leaves less on the braked mains, so μ 0.39 will need
+  refitting when gearHeight is fixed. JSBSim's float (943 ft vs
+  760) is pinned as the `landAir` gap, ticket 0085.
