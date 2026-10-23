@@ -17,14 +17,6 @@ import { createGoogleSession, ROOT_URL, PhotorealUnavailable, GOOGLE_FETCH } fro
 import { courseVector } from './airports.js';
 import { patchNightGround } from './nightGround.js';
 
-export const PHOTOREAL_ORIGINS = ['https://mutaafaziz.com'];
-
-// The key is referrer-restricted to mutaafaziz.com/openaero/*: elsewhere (previews,
-// localhost) Google would refuse, so don't ask. `?photoreal` forces it (tests, debugging).
-export function photorealAllowed(loc) {
-  return PHOTOREAL_ORIGINS.includes(loc.origin) || new URLSearchParams(loc.search).has('photoreal');
-}
-
 const CALIB_EVERY_S = 1.5;
 const CALIB_MAX_M = 8;
 const CALIB_RANGE_M = 2500;

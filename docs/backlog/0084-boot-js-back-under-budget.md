@@ -1,12 +1,12 @@
 ---
 id: 0084
 title: Boot JS is 208.7 kB gz against a 201 kB budget: win 8 kB back
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: tech-health
 created: 2026-10-23
-pr:
+pr: 87
 ---
 
 ## Why

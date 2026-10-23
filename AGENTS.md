@@ -158,6 +158,8 @@ src/terrain.js      the one ground truth: baked DEM (public/terrain/dfw-dem-v1.b
 src/ecef.js         WGS84 ECEF ↔ geodetic ↔ sim (geoid plane fit), rigid ECEF→sim matrix
 src/googleSession.js  the billable part of Google 3D Tiles: one root per page, quota
                     back-off, signed URLs, usage counters (pure, tested)
+src/photorealLazy.js  boot stand-in for photoreal.js (same API, idle until Fly loads the chunk) +
+                    photorealAllowed (0084)
 src/photoreal.js    Google Photorealistic 3D Tiles (lazy 3d-tiles-renderer): exact per-
                     vertex ECEF → sim remap on load, vertical calibration against runway
                     thresholds, attribution, ?debug usage readout
@@ -276,11 +278,18 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npx wrangler dev --local --port 8799` | Build first; serves assets **and** the edge Worker locally (real METARs) |
 | `npm test` | Unit tests (Vitest) |
 | `npm run e2e` | Playwright e2e (builds first) |
-| `npm run check` | **The gate**: backlog validator + unit + build + e2e. CI runs exactly this. |
+| `npm run check` | **The gate**: backlog validator + unit + build + boot JS budget + e2e. CI runs exactly this. |
 | `npx playwright test --project=devices --no-deps` | The device-class probe alone (iPhone 15 both ways, iPad Air both ways, iPad Pro 12.9 portrait, Pixel 8, Chromium with emulated touch; touch, 4x CPU throttle, layout + frame time; numbers in `docs/PERF.md`) |
-| `npm run check:fast` | Everything but e2e, for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
+| `npm run check:fast` | Everything but e2e (budget included), for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 
-Budgets: JS ≤ 201 kB gzipped at boot, **over it on main: 205.68 kB on 2026-10-22, 206.4 kB after 0063, 207.1 kB after 0075's HUD wind box, 208.1 kB after 0047's go-around wiring and coach prompts (the drill's logic is a 1.0 kB lazy chunk), 208.5 kB after 0081's sideslip terms, 208.7 kB after 0068's ?debug final and runway-on-screen readout, 208.9 kB after 0082's per-wheel tyre friction** (the stand-ins' hinged surfaces; surfaces.js itself is a 0.9 kB lazy chunk). Getting back under 201 is Keeper work, or the operator raises the line. (2026-10-21: 201.00 kB after 0045's model hook; the loader,
+Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
+`check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+`three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
+need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
+is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's
+runtime helpers, `__exportAll is not a function` at boot, and `strictExecutionOrder` cost 7 kB); photoreal.js + googleSession.js load on Fly through `src/photorealLazy.js`. Vite's own per-file gzip column reads
+~1% higher than the script. History: 208.9 kB after 0082, 205.68 kB on 2026-10-22 (over the line since 0045). (2026-10-21: 201.00 kB after 0045's model hook; the loader,
 decoder and model are lazy, the twin-jet is 29 kB gz. 2026-10-19: 200.27 kB after 0055/0056/0011: the night
 ground shader the imagery needs at first paint, the HUD tapes, clean view and When? picker
 (+3.0 kB); the sky dome (4.9 kB gz) and runway lights (1.9 kB) are lazy chunks and the star
