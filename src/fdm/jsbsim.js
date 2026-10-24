@@ -42,6 +42,15 @@ const BEST_POWER_AFR = 11.3;
 const LEVER_TO_PLATE = [[0, 0], [0.004, 0.4], [0.069, 0.5], [0.166, 0.6], [0.316, 0.7], [0.554, 0.8], [0.84, 0.9], [1, 1]];
 // Pitch trim on the ground: POH "trim TAKEOFF"; JSBSim's own trim for Vy, 74 KIAS clean.
 const TAKEOFF_TRIM = -0.11;
+// JSBSim's propagation integrators (0 = none: the state holds still while the rest runs).
+const INTEGRATORS = ['simulation/integrator/rate/rotational', 'simulation/integrator/rate/translational',
+  'simulation/integrator/position/rotational', 'simulation/integrator/position/translational'];
+// The engine has settled when the propeller and the power change less than this over half a
+// second (the manifold pressure lags, so the rpm alone can pause before it falls).
+const SETTLE_WINDOW_STEPS = 60;
+const SETTLE_RPM = 1;
+const SETTLE_HP = 0.2;
+const SETTLE_MAX_STEPS = 1800;
 
 const interp = (table, x, from, to) => {
   if (x <= table[0][from]) return table[0][to];
@@ -86,7 +95,8 @@ export function createJsbsimFdm(sdk, model = 'c172') {
     // the pitch trim is kept: the trim also moves throttle and attitude, so the run starts
     // again from the body's state. JSBSim's trim ignores the wind, so it trims in still air
     // on the air-relative velocity.
-    if (body.pos.y - body.groundY - spec.gearHeight > 3) {
+    const airborne = body.pos.y - body.groundY - spec.gearHeight > 3;
+    if (airborne) {
       setIc(body, true);
       set('atmosphere/wind-north-fps', 0);
       set('atmosphere/wind-east-fps', 0);
@@ -100,6 +110,7 @@ export function createJsbsimFdm(sdk, model = 'c172') {
     }
     setIc(body);
     start();
+    if (airborne) settleEngine();
     carry = 0;
   }
 
@@ -130,6 +141,26 @@ export function createJsbsimFdm(sdk, model = 'c172') {
   function start() {
     sdk.runIc();
     set('propulsion/set-running', -1);
+  }
+
+  // set-running leaves the engine where its own steady-state search ends (2,283 rpm and
+  // 137 hp with the throttle closed, measured at 61 KIAS), and the propeller then takes ~3 s
+  // to wind down, pushing the aircraft along: the short-field landing floated ~180 ft on it
+  // (ticket 0085). With JSBSim's integrators off the airframe holds still while the engine
+  // and propeller run to their own steady state at the body's throttle.
+  function settleEngine() {
+    const was = INTEGRATORS.map(get);
+    for (const k of INTEGRATORS) set(k, 0);
+    let rpm = get('propulsion/engine/propeller-rpm'), hp = get('propulsion/engine/power-hp');
+    for (let i = 1; i <= SETTLE_MAX_STEPS; i++) {
+      sdk.run();
+      if (i % SETTLE_WINDOW_STEPS) continue;
+      const nowRpm = get('propulsion/engine/propeller-rpm'), nowHp = get('propulsion/engine/power-hp');
+      if (Math.abs(nowRpm - rpm) < SETTLE_RPM && Math.abs(nowHp - hp) < SETTLE_HP) break;
+      rpm = nowRpm;
+      hp = nowHp;
+    }
+    INTEGRATORS.forEach((k, i) => set(k, was[i]));
   }
 
   // A non-finite command (a NaN from a control law) would poison JSBSim's state: centre it.
