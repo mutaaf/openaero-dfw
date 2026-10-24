@@ -41,6 +41,15 @@ export const COACH_PROMPTS = {
   gaGear: 'Positive rate: gear up (G)',
   gaClimb: 'Climb straight ahead to 2,000 ft',
   gaKid: 'Going around: the plane climbs for another try',
+  // The stall recovery drill (0087): slow it at idle until it stalls, then recover.
+  stIdle: 'Power to idle (throttle all the way back)',
+  stSlow: 'Ease back, hold height: let it slow and stall',
+  stNose: 'Stall! Nose down',
+  stPower: 'Power in: full throttle',
+  stWings: 'Wings level',
+  stClimb: 'Climb away',
+  stKidSlow: 'Let go: the plane slows down until it stalls',
+  stKid: 'Stall! The plane noses down and climbs away',
 };
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
 const RANK = {
@@ -48,6 +57,7 @@ const RANK = {
   slow: 2, flaps: 2, sink: 2, gear: 3, flare: 3, decrab: 3, idle: 4,
   done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6,
   gaPower: 4, gaPitch: 4, gaFlaps: 4, gaGear: 4, gaClimb: 4, gaKid: 4,
+  stIdle: 4, stSlow: 4, stKidSlow: 4, stPower: 4, stWings: 4, stClimb: 4, stNose: 5, stKid: 5,
 };
 
 // On a touch screen the keys are buttons.
@@ -83,13 +93,27 @@ export function goAroundTarget(s) {
   return 'gaClimb';
 }
 
+// The stall drill, step by step (s.stall: stallDrill.js's phase, set by main.js): s.throttle,
+// s.bankDeg, s.kid. Nothing once it is graded.
+export function stallTarget(s) {
+  if (s.stall === 'armed') return s.kid ? 'stKidSlow' : s.throttle > 0.05 ? 'stIdle' : 'stSlow';
+  if (s.stall === 'stalled') return s.kid ? 'stKid' : 'stNose';
+  if (s.stall !== 'unstalled') return null;
+  if (s.kid) return 'stKid';
+  if (s.throttle < 0.9) return 'stPower';
+  if (Math.abs(s.bankDeg ?? 0) > 5) return 'stWings';
+  return 'stClimb';
+}
+
 // s: { aglFt, vsiFpm, papiWhite (0..4, null = no runway ahead), throttle (0..1),
 //      onGround, autopilot, kid (Kid assist level: the airplane flies power and flare),
 //      optional: iasKts, targetKts (Vref + 5), locDots (+ = right of the centreline),
 //      gearLocked, flapsLanding, flareFt (default 50), idleFt (default 30), driftDeg,
-//      goAround (the go-around drill's missed approach: goAroundTarget) }
+//      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
+//      drill's phase: stallTarget) }
 export function coachTarget(s) {
   if (s.onGround || s.autopilot) return null;
+  if (s.stall) return stallTarget(s);
   if (s.goAround) return goAroundTarget(s);
   if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : 'kid';
   if (s.aglFt < (s.idleFt ?? 30) && s.throttle > 0.05) return 'idle';
