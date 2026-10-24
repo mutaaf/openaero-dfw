@@ -96,7 +96,7 @@ describe('approachSpawn', () => {
 import { MISSIONS } from '../../src/missions.js';
 describe('missions', () => {
   it('every approach/takeoff mission names a real runway end', () => {
-    for (const m of MISSIONS.filter((x) => x.kind !== 'tour')) {
+    for (const m of MISSIONS.filter((x) => x.kind === 'final' || x.kind === 'takeoff')) {
       expect(runwayEnd(m.airport, m.rwy), m.key).not.toBeNull();
     }
   });

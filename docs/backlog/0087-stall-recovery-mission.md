@@ -1,12 +1,12 @@
 ---
 id: 0087
 title: Stall recovery drill: feel the stall, recover it, get graded
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: content
 created: 2026-10-24
-pr:
+pr: 93
 ---
 
 ## Why
