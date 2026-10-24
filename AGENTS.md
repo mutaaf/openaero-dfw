@@ -210,7 +210,8 @@ src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear 
                     force spec.cyBeta/cyRudder and dihedral spec.clBeta (as aileron, /clAileron)
 src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFlightModel on
                     JSBSim (LGPL WASM, own chunk, lazy after Start flight); trims the
-                    elevator and settles the engine at its throttle on an airborne spawn (0085), lever→plate map. fdm/loadJsbsim.js loads it
+                    elevator and settles the engine at its throttle on an airborne spawn
+                    (0085), lever→plate throttle map. fdm/loadJsbsim.js loads it
                     in the browser, tests/flight/jsbsimNode.js in Node. The aircraft it flies
                     is our own MIT data: public/jsbsim/ (C172 from POH + Roskam)
 src/systems.js      aircraft systems (pure, run first in every flightModel sub-step): hydraulic
