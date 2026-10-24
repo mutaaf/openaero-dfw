@@ -41,11 +41,13 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 // Short-field landing, both models (ticket 0082): the C172's mains at their POH arm, the
 // tyres' friction below the CG (gear.js) and the brakes on the mains, torque-limited (fitted
 // to Fig. 5-11: flightModel.js μ 0.39, JSBSim's brake command 0.42). flightModel.js rolls
-// ~578 ft and its air segment is 754 ft (POH 1335 - 575 = 760). JSBSim floats ~943 ft
-// (+24%), ticket 0085; its total (~1485 ft, +11%) is inside the band despite it.
+// ~578 ft and its air segment is 754 ft (POH 1335 - 575 = 760). JSBSim floated ~943 ft
+// (+24%) until 0085: its glide (7.2:1 at 61 KIAS, flaps 30, idle) and flare (20 ft to
+// touchdown) were within about 2% of flightModel.js, but every airborne spawn started its engine at
+// 2,283 rpm and ~135 hp whatever the throttle, so the first ~3 s were powered. Now ~751 ft.
 const GAPS = {
   flightModel: new Set(),
-  jsbsim: new Set(['takeoff', 'landAir']),
+  jsbsim: new Set(['takeoff']),
 };
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
@@ -112,6 +114,14 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     expect(r.noseDownS).not.toBeNull();
     expect(r.noseOffS).toBe(0);
     expect(r.rollPitchMaxDeg).toBeLessThanOrEqual(1);
+  });
+
+  // The POH's short-field approach is power off at 50 ft: an airborne spawn with the throttle
+  // closed must not carry power the pilot never set (JSBSim's engine start did, 0085).
+  it('an airborne spawn at idle makes no power (under 2%) from its first 0.1 s (Fig. 5-11: power off)', () => {
+    const b = makeBody(c172, { kts: 61, altM: 100, flaps: 3, throttle: 0 });
+    fly(b, c172, 0.1, null);
+    expect(b.engineN).toBeLessThan(0.02);
   });
 
   card('landRoll')('short-field landing: ground roll near 575 ft (POH Fig. 5-11, ±15%)', () => {

@@ -1,12 +1,12 @@
 ---
 id: 0085
 title: JSBSim's Cessna floats 24% too far in the short-field flare
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-23
-pr:
+pr: 92
 ---
 
 ## Why
@@ -25,9 +25,9 @@ and ground effect in `public/jsbsim/aircraft/c172/c172.xml` (the flare happens i
 what is wrong in the JSBSim data, citing the POH; don't tune the harness pilot per model.
 
 ## Acceptance criteria
-- [ ] `landAir` (tests/flight/c172.test.js) passes on JSBSim and drops out of `GAPS.jsbsim`
-- [ ] `landRoll` and `landTotal` still pass on both models
-- [ ] No other flight card regresses (`npm test -- tests/flight`), including the glide and
+- [x] `landAir` (tests/flight/c172.test.js) passes on JSBSim and drops out of `GAPS.jsbsim`
+- [x] `landRoll` and `landTotal` still pass on both models
+- [x] No other flight card regresses (`npm test -- tests/flight`), including the glide and
       climb cards
 
 ## Test plan
@@ -35,3 +35,17 @@ what is wrong in the JSBSim data, citing the POH; don't tune the harness pilot p
 
 ## Out of scope
 flightModel.js's flare (it is within 1%); the C172's gearHeight (0082 notes).
+
+## Outcome (2026-10-24)
+Measured first: JSBSim's idle glide at 61 KIAS flaps 30 was 7.24:1 against flightModel.js's
+7.09:1, and the flare (20 ft to touchdown) was within 1%, so the prop drag, ground effect and
+speed hold were not the cause. The float was the spawn: JSBSim's `propulsion/set-running`
+starts the engine at 2,283 rpm and ~135 hp whatever the throttle, and with the throttle closed
+the propeller took ~3 s to wind down, so the first 150-190 ft after "50 ft, power off" were
+powered. src/fdm/jsbsim.js now lets the engine settle at the body's throttle with JSBSim's
+integrators off (the airframe holds still) on every airborne spawn. Air segment 943 → 751 ft
+(POH 760), roll 542, total 1293 (POH 575 / 1335).
+
+Found on the way, not changed here: the harness's `shortFieldLanding` starts at level flight's
+attitude on a 3° path (AoA 3° above trim), and JSBSim's spawn trim keeps whatever elevator the
+pilot holds at that instant as the opposite trim.
