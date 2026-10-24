@@ -144,23 +144,28 @@ export function createJsbsimFdm(sdk, model = 'c172') {
   }
 
   // set-running leaves the engine where its own steady-state search ends (2,283 rpm and
-  // 137 hp with the throttle closed, measured at 61 KIAS), and the propeller then takes ~3 s
+  // ~135 hp with the throttle closed, measured at 61 KIAS; ~150 hp by the first step), and the propeller then takes ~3 s
   // to wind down, pushing the aircraft along: the short-field landing floated ~180 ft on it
   // (ticket 0085). With JSBSim's integrators off the airframe holds still while the engine
   // and propeller run to their own steady state at the body's throttle.
   function settleEngine() {
     const was = INTEGRATORS.map(get);
     for (const k of INTEGRATORS) set(k, 0);
-    let rpm = get('propulsion/engine/propeller-rpm'), hp = get('propulsion/engine/power-hp');
-    for (let i = 1; i <= SETTLE_MAX_STEPS; i++) {
-      sdk.run();
-      if (i % SETTLE_WINDOW_STEPS) continue;
-      const nowRpm = get('propulsion/engine/propeller-rpm'), nowHp = get('propulsion/engine/power-hp');
-      if (Math.abs(nowRpm - rpm) < SETTLE_RPM && Math.abs(nowHp - hp) < SETTLE_HP) break;
-      rpm = nowRpm;
-      hp = nowHp;
+    try {
+      let rpm = get('propulsion/engine/propeller-rpm'), hp = get('propulsion/engine/power-hp');
+      for (let i = 1; i <= SETTLE_MAX_STEPS; i++) {
+        sdk.run();
+        if (i % SETTLE_WINDOW_STEPS) continue;
+        const nowRpm = get('propulsion/engine/propeller-rpm'), nowHp = get('propulsion/engine/power-hp');
+        // A non-finite engine won't settle: stop, and step()'s blow-up guard takes it from there.
+        if (!Number.isFinite(nowRpm + nowHp)) break;
+        if (Math.abs(nowRpm - rpm) < SETTLE_RPM && Math.abs(nowHp - hp) < SETTLE_HP) break;
+        rpm = nowRpm;
+        hp = nowHp;
+      }
+    } finally {
+      INTEGRATORS.forEach((k, i) => set(k, was[i]));
     }
-    INTEGRATORS.forEach((k, i) => set(k, was[i]));
   }
 
   // A non-finite command (a NaN from a control law) would poison JSBSim's state: centre it.

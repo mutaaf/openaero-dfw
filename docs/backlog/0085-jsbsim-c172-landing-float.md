@@ -40,7 +40,7 @@ flightModel.js's flare (it is within 1%); the C172's gearHeight (0082 notes).
 Measured first: JSBSim's idle glide at 61 KIAS flaps 30 was 7.24:1 against flightModel.js's
 7.09:1, and the flare (20 ft to touchdown) was within 1%, so the prop drag, ground effect and
 speed hold were not the cause. The float was the spawn: JSBSim's `propulsion/set-running`
-starts the engine at 2,283 rpm and 137 hp whatever the throttle, and with the throttle closed
+starts the engine at 2,283 rpm and ~135 hp whatever the throttle, and with the throttle closed
 the propeller took ~3 s to wind down, so the first 150-190 ft after "50 ft, power off" were
 powered. src/fdm/jsbsim.js now lets the engine settle at the body's throttle with JSBSim's
 integrators off (the airframe holds still) on every airborne spawn. Air segment 943 → 751 ft

@@ -44,7 +44,7 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 // ~578 ft and its air segment is 754 ft (POH 1335 - 575 = 760). JSBSim floated ~943 ft
 // (+24%) until 0085: its glide (7.2:1 at 61 KIAS, flaps 30, idle) and flare (20 ft to
 // touchdown) were within 2% of flightModel.js, but every airborne spawn started its engine at
-// 2,283 rpm and 137 hp whatever the throttle, so the first ~3 s were powered. Now ~751 ft.
+// 2,283 rpm and ~135 hp whatever the throttle, so the first ~3 s were powered. Now ~751 ft.
 const GAPS = {
   flightModel: new Set(),
   jsbsim: new Set(['takeoff']),
