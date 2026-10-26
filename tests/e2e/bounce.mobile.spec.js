@@ -2,7 +2,7 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0091 on a phone (390x844, touch): the bounce prompt and the results card with its
-// "Bounced ×1" line fit the screen without a scroll, upright and held sideways.
+// "Bounced once" line fit the screen without a scroll, upright and held sideways.
 test('phone: the bounce prompt and the capped results card fit 390x844', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = collectErrors(page);
@@ -28,7 +28,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   expect(c.x + c.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('bounce-390-coach.png') });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('#txtGradeReason')).toContainText('Bounced ×1');
+  await expect(page.locator('#txtGradeReason')).toContainText('Bounced once');
   const box = await page.locator('#resultsCard').boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);

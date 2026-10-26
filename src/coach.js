@@ -12,6 +12,9 @@ export const COACH_MISSION = 'kdfw_35c_final';
 export const COACH_MIN_HOLD_S = 1.5;
 // After touchdown "Touchdown!" stays this long before the rollout prompts take over.
 export const COACH_DONE_HOLD_S = 2;
+// The FAA Airplane Flying Handbook saves only a slight bounce (power to cushion it); a severe
+// one is a go-around, and the Flight Safety Foundation puts "don't try to land" at ~5 ft.
+export const BOUNCE_HIGH_FT = 5;
 
 export const COACH_PROMPTS = {
   papi: 'Keep two white, two red on the PAPI',
@@ -38,6 +41,8 @@ export const COACH_PROMPTS = {
   // down": pushing the nose over on a bounce flies the nose wheel into the runway.
   bounce: 'Bounced: hold the attitude, add a little power',
   bounceGa: 'Bounced again: go around! Full power',
+  bounceHigh: 'Big bounce: go around! Full power', // AFH: a severe bounce is not saved
+  bounceKid: 'Bounced! Let go: the plane lands itself', // Kid: the autothrottle has the power
   // The go-around (0047, after the gate called it): power, pitch, flaps a notch, gear, climb.
   gaPower: 'Go around! Full power',
   gaPitch: 'Pitch up: stop the descent',
@@ -59,7 +64,7 @@ export const COACH_PROMPTS = {
 const RANK = {
   papi: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
   slow: 2, flaps: 2, sink: 2, gear: 3, flare: 3, decrab: 3, idle: 4,
-  done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6, bounce: 5, bounceGa: 5,
+  done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6, bounce: 5, bounceGa: 5, bounceHigh: 5, bounceKid: 5,
   gaPower: 4, gaPitch: 4, gaFlaps: 4, gaGear: 4, gaClimb: 4, gaKid: 4,
   stIdle: 4, stSlow: 4, stKidSlow: 4, stPower: 4, stWings: 4, stClimb: 4, stNose: 5, stKid: 5,
 };
@@ -165,15 +170,16 @@ function settle(c, target, dt) {
 
 // Advances the coach one frame; mutates and returns c (no per-frame allocation). After the
 // touchdown, s.rollout (rolloutTarget's input) drives the rollout prompts, and s.bounces
-// (landing.js stepBounce's count) the bounce prompts while the wheels are off again.
+// (landing.js stepBounce's count) the bounce prompts while the wheels are off again, and
+// s.bounceHigh (the wheels went past BOUNCE_HIGH_FT) turns the first one into a go-around.
 export function stepCoach(c, s, dt) {
   if (c.done) {
     if (s.bounces > 0 && !s.onGround) {
-      c.prompt = s.bounces >= 2 ? 'bounceGa' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
+      c.prompt = s.kid ? 'bounceKid' : s.bounces >= 2 ? 'bounceGa' : s.bounceHigh ? 'bounceHigh' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
       return c;
     }
     // Back on the wheels: the bounce prompt clears, the rollout prompts follow after the hold.
-    if ((c.prompt === 'bounce' || c.prompt === 'bounceGa') && s.onGround) c.prompt = null;
+    if (c.prompt?.startsWith('bounce') && s.onGround) c.prompt = null;
     c.doneS += dt;
     if (c.prompt === 'stopped' || !s.onGround || c.doneS < COACH_DONE_HOLD_S || !s.rollout) return c;
     const target = rolloutTarget(s.rollout);

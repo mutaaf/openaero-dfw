@@ -3,7 +3,7 @@ import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0091: a bounced landing is noticed, coached and graded. The ILS autoland flies the
 // flare challenge to touchdown, then the ?debug hook throws the airplane back off the runway
-// (a scripted bounce); the card waits for the wheels to settle, says "Bounced ×1" and the
+// (a scripted bounce); the card waits for the wheels to settle, says "Bounced once" and the
 // grade is C at best.
 test('a bounce after the touchdown is coached, then caps the grade on the results card', async ({ page }) => {
   test.setTimeout(150_000);
@@ -28,7 +28,7 @@ test('a bounce after the touchdown is coached, then caps the grade on the result
   await expect(page.locator('#txtCoach')).toHaveText(/Bounced: hold the attitude/, { timeout: 5_000 });
   await expect(page.locator('#resultsCard')).toBeHidden(); // not over the bounce
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('#txtGradeReason')).toContainText('Bounced ×1');
+  await expect(page.locator('#txtGradeReason')).toContainText('Bounced once');
   expect(['C', 'D']).toContain((await page.locator('#txtGrade').textContent()).trim());
   expect((await snap()).lastLanding.bounces).toBe(1);
   const box = await page.locator('#resultsCard').boundingBox();

@@ -16,8 +16,8 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, BOUNCE_MIN_S } from './landing.js';
-import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
+import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S } from './landing.js';
+import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
 import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
@@ -929,11 +929,25 @@ let softResetAt = null; // Kid soft landing: sim time at which the mission resta
 const bounce = createBounceTracker();
 let pendingLanding = null;
 function checkBounce(dt) {
-  stepBounce(bounce, (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT, sim.onGround, dt);
-  if (sim.aglFt > 50) {
+  const wheelFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
+  stepBounce(bounce, wheelFt, sim.onGround, dt);
+  // Back on the runway after a bounce: not graded again, but a hard hit is still a crash.
+  if (bounce.bounces && sim.onGround && !sim.wasOnGround) {
+    _euler.setFromQuaternion(sim.quat, 'YXZ');
+    const reason = recontactCrash(sim.lastAirVsi, _euler.z * RAD_TO_DEG);
+    if (reason) {
+      const p = pendingLanding;
+      pendingLanding = null;
+      const crash = { ...p.result, grade: 'CRASH', score: 0, reason, bounces: bounce.bounces };
+      if (!kidSoftLanding(crash)) finishLanding(crash, p.end, p.gate, p.bestKey);
+      return;
+    }
+  }
+  if (wheelFt > 50) {
     pendingLanding = null;
+    sim.lastLanding = null; // a go-around (or a balloon away), not a landing
     resetCoach();
-    if (bounce.bounces) showToast('Going around after the bounce: good call');
+    if (bounce.bounces && sim.throttle > 0.9) showToast('Going around after the bounce: good call');
   } else if (bounce.settled) {
     const p = pendingLanding;
     pendingLanding = null;
@@ -953,7 +967,6 @@ function checkTouchdown(dt) {
   sim.landingGraded = true;
   sim.airborneTime = 0;
   const end = sim.activeEnd || selectActiveRunway(RUNWAY_ENDS, sim.pos, 0, null);
-  const assist = assistConfig(sim.assist);
   if (!end) return;
   const g = approachGeometry(end, sim.pos);
   const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
@@ -973,14 +986,7 @@ function checkTouchdown(dt) {
   });
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
-  // Kid: a hard landing bounces and starts the approach again instead of crashing.
-  if (result.grade === 'CRASH' && assist && assist.softLanding) {
-    sim.vel.y = Math.max(sim.vel.y, 2.5);
-    coach.done = true; coach.prompt = null; // no "Touchdown!" over the bounce
-    showToast(`Boing! ${result.reason} Let's try again!`);
-    softResetAt = sim.simTime + 2; // counted in sim time: a pause holds it
-    return;
-  }
+  if (kidSoftLanding(result)) return;
   const gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
   sim.lastLanding = {
     pastThresholdM: -g.distM, crossM: g.crossM, vsFpm: sim.lastAirVsi,
@@ -994,6 +1000,16 @@ function checkTouchdown(dt) {
   if (result.grade === 'CRASH') { finishLanding(result, end, gate, bestKey); return; }
   Object.assign(bounce, createBounceTracker());
   pendingLanding = { result, end, gate, bestKey };
+}
+
+// Kid: a hard landing bounces and starts the approach again instead of crashing.
+function kidSoftLanding(result) {
+  if (result.grade !== 'CRASH' || !assistConfig(sim.assist)?.softLanding) return false;
+  sim.vel.y = Math.max(sim.vel.y, 2.5);
+  coach.done = true; coach.prompt = null; // no "Touchdown!" over the bounce
+  showToast(`Boing! ${result.reason} Let's try again!`);
+  softResetAt = sim.simTime + 2; // counted in sim time: a pause holds it
+  return true;
 }
 
 function finishLanding(result, end, gate, bestKey) {
@@ -1043,7 +1059,7 @@ const COACH_DONE_SHOW_S = 4;
 const coachInput = {
   aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false,
   iasKts: 0, targetKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0, goAround: false,
-  stall: null, bankDeg: 0, bounces: 0,
+  stall: null, bankDeg: 0, bounces: 0, bounceHigh: false,
   rollout: { gsKts: 0, canReverse: false, reverserPos: 0, braking: false },
 };
 const coachVals = { targetKts: 0, flapsDeg: 0 };
@@ -1116,6 +1132,7 @@ function updateCoach(dt) {
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
     coachInput.bounces = pendingLanding && bounce.airS >= BOUNCE_MIN_S ? bounce.bounces : 0;
+    coachInput.bounceHigh = bounce.peakFt > BOUNCE_HIGH_FT;
     const r = coachInput.rollout;
     r.gsKts = sim.gsKts;
     r.canReverse = !!systemsOf(sim.spec).reverser;
@@ -2005,7 +2022,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.onGround = sim.onGround;
   _assistIn.wheelHeightM = wheelHeightM;
   _assistIn.airspeedMps = sim.tasKts * 0.514444;
-  const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround, sim.aglFt);
+  // A touchdown waiting to settle (0091) is a landing, not a touch-and-go: Kid holds the flare at
+  // idle through a bounce instead of climbing away from it, so the bounce is graded.
+  const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround && !pendingLanding, sim.aglFt);
   // Kid hands-off guide: level flight, or the localizer and glidepath on a final ahead.
   _assistIn.guideBankDeg = 0;
   _assistIn.guideGammaDeg = 0;

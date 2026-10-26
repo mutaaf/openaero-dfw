@@ -239,7 +239,17 @@ describe('bounced landing prompts (0091)', () => {
     c = stepCoach(c, { ...full, onGround: true, rollout }, COACH_DONE_HOLD_S);
     expect(c.prompt).toBe('brake');
   });
+  it('a big first bounce (wheels past 5 ft) is a go-around, not one to save (AFH)', () => {
+    const c = stepCoach(landed(), { ...full, onGround: false, bounces: 1, bounceHigh: true, rollout }, 0.016);
+    expect(c.prompt).toBe('bounceHigh');
+    expect(COACH_PROMPTS.bounceHigh).toMatch(/go around/i);
+  });
+  it('Kid: let go (the autothrottle has the power), never "add power"', () => {
+    const c = stepCoach(landed(), { ...full, kid: true, onGround: false, bounces: 2, rollout }, 0.016);
+    expect(c.prompt).toBe('bounceKid');
+    expect(COACH_PROMPTS.bounceKid).not.toMatch(/power/i);
+  });
   it('the words fit a phone card', () => {
-    for (const k of ['bounce', 'bounceGa']) expect(coachText(k).length).toBeLessThanOrEqual(48);
+    for (const k of ['bounce', 'bounceGa', 'bounceHigh', 'bounceKid']) expect(coachText(k).length).toBeLessThanOrEqual(48);
   });
 });

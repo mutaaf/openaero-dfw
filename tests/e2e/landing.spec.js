@@ -14,6 +14,8 @@ test('a landing is graded and the personal best survives a reload', async ({ pag
   const grade = await page.locator('#txtGrade').textContent();
   expect(['S', 'A', 'B', 'C', 'D', 'CRASH']).toContain(grade.trim());
   await expect(page.locator('#resultsFactors li')).toHaveCount(5);
+  // The autoland's flare is no bounce (0091: no false positive on the card).
+  expect((await page.evaluate(() => window.openaeroDebug())).lastLanding.bounces).toBe(0);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_best') || 'null'));
   if (grade.trim() !== 'CRASH') {
     expect(stored.v).toBe(1);

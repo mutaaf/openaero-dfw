@@ -61,13 +61,18 @@ export function gradeLanding(t) {
 export const BOUNCE_FT = 2;
 export const BOUNCE_MIN_S = 0.3;
 export const BOUNCE_SETTLE_S = 1;
-export const createBounceTracker = () => ({ bounces: 0, airS: 0, groundS: 0, settled: false });
+// peakFt: the highest the wheels went after the touchdown (over ~5 ft is no bounce to save).
+export const createBounceTracker = () => ({ bounces: 0, airS: 0, groundS: 0, settled: false, contact: true, peakFt: 0 });
+// A new bounce counts only after the wheels touched again (contact): wheels wandering around
+// 2 ft in ground effect are one bounce, not several.
 export function stepBounce(b, wheelFt, onGround, dt) {
   if (b.settled) return b;
+  if (onGround) b.contact = true;
+  if (wheelFt > b.peakFt) b.peakFt = wheelFt;
   if (wheelFt > BOUNCE_FT) {
     b.groundS = 0;
     b.airS += dt;
-    if (b.airS >= BOUNCE_MIN_S && b.airS - dt < BOUNCE_MIN_S) b.bounces++;
+    if (b.contact && b.airS >= BOUNCE_MIN_S) { b.bounces++; b.contact = false; }
   } else {
     b.airS = 0;
     b.groundS = onGround ? b.groundS + dt : 0;
@@ -76,13 +81,21 @@ export function stepBounce(b, wheelFt, onGround, dt) {
   return b;
 }
 
+// A touchdown after a bounce is not graded again, but it can still break the airplane: the
+// reason it is a crash (gradeLanding's limits), or null.
+export function recontactCrash(vsFpm, bankDeg) {
+  if (-vsFpm > 600) return 'Hard landing after the bounce: the gear would not survive that.';
+  if (Math.abs(bankDeg) > 10) return 'Wingtip strike after the bounce: too much bank.';
+  return null;
+}
+
 // One bounce caps the grade at C (score 69), two or more at D (54); the touchdown factors
 // stay the first touchdown's. A D (off the runway, short) stays a D; a crash stays a crash.
 export function capBounced(result, bounces) {
   if (!bounces || result.grade === 'CRASH') return result;
   const score = Math.min(result.score, bounces > 1 ? 54 : 69);
   // Short (it fits the card on a phone held sideways); the coach gave the advice in the air.
-  const note = `Bounced ×${bounces}: capped at ${bounces > 1 ? 'D' : 'C'}.`;
+  const note = `Bounced ${bounces > 1 ? `×${bounces}: best grade D` : 'once: best grade C'}.`;
   return { ...result, grade: result.grade === 'D' ? 'D' : letterGrade(score), score, bounces, reason: result.reason ? `${note} ${result.reason}` : note };
 }
 
