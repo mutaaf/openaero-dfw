@@ -4,15 +4,15 @@ import { runwayEnd } from '../../src/airports.js';
 
 // NOAA NCEI declination calculator, WMM-2025, 2026-10-26, sea level (east positive):
 // https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml
-const NCEI_2026_10 = { KDFW: 2.68, KDAL: 2.56, KADS: 2.55, KAFW: 2.84, KFTW: 2.87, KGKY: 3.05 };
+const NCEI_2026_10 = { KDFW: 2.68, KDAL: 2.56, KADS: 2.55, KAFW: 2.84, KFTW: 2.87, KGKY: 2.71 };
 
 const end = runwayEnd;
 
 describe('magvar (0078)', () => {
-  it('is the WMM declination over DFW, one value within 0.4° of every field', () => {
+  it('is the WMM declination over DFW, one value within 0.2° of every field', () => {
     expect(Math.abs(MAG_VAR_DEG - NCEI_2026_10.KDFW)).toBeLessThan(0.05);
     for (const [icao, dec] of Object.entries(NCEI_2026_10)) {
-      expect(Math.abs(MAG_VAR_DEG - dec), icao).toBeLessThan(0.4);
+      expect(Math.abs(MAG_VAR_DEG - dec), icao).toBeLessThan(0.2);
     }
   });
 

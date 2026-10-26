@@ -24,7 +24,7 @@ test('every approach mission starts lined up on its real runway', async ({ page 
 
 // 0078: the compass agrees with the runway, like a pilot's: 35C is 0.3° true, 357.6° magnetic
 // today (WMM), so the HUD reads 358°M, not 000°.
-test('lined up on 35C the HUD heading, TRK and NAV1 course read magnetic', async ({ page }) => {
+test('lined up on 35C the HUD heading, HDG and NAV1 runway course read magnetic', async ({ page }) => {
   await enterCockpit(page);
   await page.selectOption('#selScenario', 'kdfw_takeoff');
   await page.waitForTimeout(300);
@@ -34,7 +34,7 @@ test('lined up on 35C the HUD heading, TRK and NAV1 course read magnetic', async
   expect(Math.abs(trueToMag(s.headingDeg) - 357.6)).toBeLessThan(1);
   expect(s.hudHeading).not.toMatch(/^(000|360)/);
   await expect(page.locator('#txtRadarHdg')).toHaveText(/^35[789]°M$/);
-  await expect(page.locator('#txtNav1')).toContainText('358°M');
+  await expect(page.locator('#txtNav1')).toContainText('RWY 358°M');
 });
 
 test('the runway is visible ahead on a 4 NM final (no depth-fight with the imagery)', async ({ page }) => {

@@ -90,6 +90,7 @@ const sim = {
   apMaster: false, apHdgHold: false, apAltHold: false, apApproach: false,
   apPrevIasKts: null, apIasRate: 0, apGsIntegral: 0, apGsEndId: null, apAt: { trim: 0 }, // autothrottle / glidepath filter state
   targetHdgDeg: 360, targetAltFt: 1880,
+  hudHdg: '', // the HUD heading box's text (0078), for tests
 
   // Camera System
   cameraMode: 0,
@@ -2267,7 +2268,7 @@ function syncUI() {
   if (sim.activeEnd) {
     const distNm = Math.max(0, sim.approach.distM) / NM_TO_M;
     byId('txtNavDist').textContent = `DME ${distNm.toFixed(1)} NM`;
-    nav1.textContent = `NAV1: ${sim.activeEnd.name} ILS · ${magHeadingText(sim.activeEnd.hdgT)}°M`;
+    nav1.textContent = `NAV1: ${sim.activeEnd.name} ILS · RWY ${magHeadingText(sim.activeEnd.hdgT)}°M`;
   } else {
     byId('txtNavDist').textContent = 'DME ---';
     nav1.textContent = 'NAV1: no runway ahead';

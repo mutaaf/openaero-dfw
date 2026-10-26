@@ -29,10 +29,10 @@ physics, geometry and `hdgT` stay true. Label the box `MAG` (or add a small `M` 
 so it is honest. The ATIS-style wind text (0030) is out of scope here.
 
 ## Acceptance criteria
-- [ ] Lined up on a runway end, the HUD heading is within 1° of that end's published magnetic heading (FAA chart), not its true heading
-- [ ] Physics, autopilot, approach geometry and every existing test are unchanged (conversion only at display)
-- [ ] The heading box is labelled magnetic
-- [ ] Works at 390x844 and 1280x720; no HUD overlap introduced
+- [x] Lined up on a runway end, the HUD heading is within 1° of that end's magnetic heading today (WMM-2025), not its true heading. Amended at build: FAA charts carry their own variation epoch; Addison's (2025) agrees within 0.4°, but KDFW's diagram and ILS plates (2015) print 35C as 356° vs 357.6° today
+- [x] Physics, autopilot, approach geometry and every existing test are unchanged (conversion only at display)
+- [x] The heading box is labelled magnetic
+- [x] Works at 390x844 and 1280x720; no HUD overlap introduced
 
 ## Test plan
 Unit test `magvar.js` (round trip, wrap at 0/360, known value against the NCEI figure

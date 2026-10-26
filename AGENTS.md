@@ -161,7 +161,7 @@ src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA.
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,
                     angVel.y + = nose left, angVel.z + = roll left.
 src/magvar.js       magnetic variation (0078): WMM-2025 2.7° E over DFW (NCEI, cited); the HUD heading,
-                    TRK, NAV1 course and tutor read magnetic (°M), physics/geometry/wind stay true
+                    HDG, NAV1 runway course and tutor read magnetic (°M), physics/geometry/wind stay true
 src/geo.js          Web Mercator tile math, lat/lon → sim metres, Esri tile URLs
 src/terrain.js      the one ground truth: baked DEM (public/terrain/dfw-dem-v1.bin, from
                     AWS Terrain Tiles via scripts/bake-terrain.mjs) + every runway
