@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
-// Ticket 0036 on a phone (390x844, touch), Kid level: the dead-stick glide put on a 1.2 NM
+// Ticket 0036 on a phone (390x844, touch), Kid level: the dead-stick glide put on a 0.8 NM
 // final far too low to make it (the ?debug hook), hands off. Kid's guide holds best glide and
 // flares it into the field short of the runway: the card says by how much, and fits. ILS AUTO
 // can't be engaged with the engine out (it would fly a glidepath it has no power for).
@@ -22,8 +22,8 @@ test('phone, Kid: a dead-stick glide that falls short says how far it missed the
   expect(await page.evaluate(() => document.getElementById('touchIls').classList.contains('active-amber'))).toBe(false);
   await expect(page.locator('#txtTouchThr')).toHaveText('OUT'); // the touch throttle's readout
   await page.screenshot({ path: test.info().outputPath('deadstick-390-coach.png') });
-  // 1.2 NM out at 250 ft: a 9:1 glide needs ~810 ft.
-  await page.evaluate(() => window.openaeroDebugDeadStick(1.2, 250));
+  // 0.8 NM out at 150 ft: a 9:1 glide needs ~540 ft.
+  await page.evaluate(() => window.openaeroDebugDeadStick(0.8, 150));
   await expect(page.locator('#txtCoach')).toHaveText('No engine: the plane glides to the runway', { timeout: 10_000 });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 120_000 });
   await expect(page.locator('#txtResultTitle')).toHaveText('Dead-stick landing');
