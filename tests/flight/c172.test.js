@@ -12,7 +12,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { M_TO_FT } from '../../src/constants.js';
+import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
+import { trimThrottle } from '../../src/flightModel.js';
+import { airAt } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
@@ -384,7 +386,7 @@ describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim
 // The second card holds the stick full back at idle through the stall: never above a D.
 const STALL_ALT_M = 4500 * 0.3048;
 function stallDrill(recover) {
-  const b = makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 });
+  const b = Object.assign(makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 }), { autoTrim: false });
   const st = createStallDrill();
   const entry = speedHoldPilot((x) => Math.max(20, 80 - x.t));
   const climb = speedHoldPilot(() => 74);
@@ -416,16 +418,16 @@ function stallDrill(recover) {
   return { st, result: gradeStallRecovery(stallResultInput(st)), vsFpm: vsFpm(b), bankDeg: endBank };
 }
 
-// KNOWN GAP (ticket 0090): flightModel.js has no static pitch stability. Its pitch rate is the
-// elevator against damping, so with the stick released at the stall the nose stays where it
-// was (10.5°) and the wing sinks deeper (α 26° after 7 s); JSBSim, flying our C172 with
-// Roskam's Cmα −0.89, drops the nose and flies again in ~1 s. A neutral stick also holds a
-// dive (a -22° dive held at 150 kt in the game), and an over-pull can lock at α 90°.
-const STALL_GAPS = { flightModel: new Set(['release']), jsbsim: new Set() };
+// Static pitch stability (ticket 0090, was a known gap): before it, flightModel.js's pitch rate
+// was the elevator against damping, so with the stick released at the stall the nose stayed
+// where it was (10.5°) and the wing sank deeper (α 26° after 7 s); JSBSim, flying our C172
+// with Roskam's Cmα −0.89, drops the nose and flies again in ~1 s. Both models now do.
+const STALL_GAPS = { flightModel: new Set(), jsbsim: new Set() };
 
 // Released at the stall: idle, stick neutral, wings level. Seconds until the wing flies again.
 function releasedAtStall() {
-  const b = makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 });
+  // Trimmed at 80 kt and pulled to the stall without retrimming, as the POH's stall entry is flown.
+  const b = Object.assign(makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 }), { autoTrim: false });
   const entry = speedHoldPilot((x) => Math.max(20, 80 - x.t));
   const sa = stallAoaDeg(c172, 0);
   let stallT = null, flyingS = null;
@@ -468,5 +470,36 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S stall recov
     console.log(`[c172 ${model}] stick held back: ${st.phase}, ${st.stalledS.toFixed(1)} s stalled, lost ${(st.stallFt - st.lowFt).toFixed(0)} ft, ${result.grade} ${result.score}`);
     expect(['complete', 'failed']).toContain(st.phase);
     expect(result.grade).toBe('D');
+  });
+});
+
+// Hands off, trimmed (ticket 0090): bumped 10 kt fast and let go, a stable airplane trades the
+// speed for height and back in a damped phugoid and settles on the speed it is trimmed for,
+// not on an attitude. Stick neutral throughout, wings held level, trim and power left alone.
+function handsOffUpset(kts) {
+  const altM = 1500;
+  const throttle = trimThrottle(c172, kts * KTS_TO_MPS, 0, 0, true, airAt(altM));
+  const b = Object.assign(makeBody(c172, { kts, altM, throttle }), { autoTrim: false });
+  fly(b, c172, 1, (x) => { x.elevInput = 0; });
+  const pitch0 = attitude(b).pitchDeg;
+  b.vel.multiplyScalar((kts + 10) / kts);
+  let maxPitch = -90;
+  fly(b, c172, 180, (x) => {
+    x.elevInput = 0;
+    x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+    maxPitch = Math.max(maxPitch, attitude(x).pitchDeg);
+  });
+  return { iasKts: b.iasKts, noseUpDeg: maxPitch - pitch0 };
+}
+
+// flightModel.js only: the upset is written into the body's velocity, which JSBSim (with its
+// own Cmα, out of the ticket's scope) keeps in its own state and would not see.
+const model = 'flightModel';
+describe('Cessna 172S hands off in trim (flightModel, ticket 0090)', () => {
+  for (const kts of [70, 90, 110]) it(`trimmed at ${kts} KIAS, 10 kt fast and let go: the nose comes up and the speed is back within 2 kt in 3 min`, () => {
+    const { iasKts, noseUpDeg } = handsOffUpset(kts);
+    console.log(`[c172 ${model}] hands off at ${kts} kt: ${iasKts.toFixed(1)} kt after 3 min, nose up ${noseUpDeg.toFixed(1)}°`);
+    expect(noseUpDeg).toBeGreaterThan(2);
+    expect(Math.abs(iasKts - kts)).toBeLessThan(2);
   });
 });

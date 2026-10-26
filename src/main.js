@@ -1428,6 +1428,9 @@ function integrateSubStep(dt) {
   }
 
   stallPullIn = Math.max(0, -targetPitch); // elevator + = nose down
+  // The assists and a pitch-holding autopilot trim as they fly; Pilot's trim stays where the
+  // spawn (or the autopilot it took over from) set it, so a released stick flies that trim (0090).
+  sim.autoTrim = !!assist || (sim.apMaster && (sim.apApproach || sim.apAltHold));
   if (assist) {
     applyAssists(assist, targetPitch, targetRoll, targetYaw, dt);
   } else {
@@ -2069,6 +2072,7 @@ function loadScenario(key, final = null) {
     if (mission.aircraft !== sim.aircraftKey) { aircraftBeforeMission ??= sim.aircraftKey; setAircraft(mission.aircraft); }
   } else if (aircraftBeforeMission) { setAircraft(aircraftBeforeMission); aircraftBeforeMission = null; }
   sim.missionKey = mission.key;
+  let trimAlpha = null;
   sim.loadedMission = mission;
   sim.brakesOn = false;
   sim.apMaster = false;
@@ -2122,6 +2126,8 @@ function loadScenario(key, final = null) {
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0;
     sim.flapsIndex = 1;
+    // Takeoff trim: a neutral stick flies the climb-out speed (1.2 Vr, in m/s) once it lifts off.
+    trimAlpha = trimAoaDeg(sim.spec, sim.spec.vrKts * 0.617, 1);
     sim.gearDown = true;
     sim.onGround = true;
     sim.activeEnd = end;
@@ -2150,11 +2156,14 @@ function loadScenario(key, final = null) {
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), yaw);
     sim.throttle = mission.throttle;
     sim.flapsIndex = 0;
+    trimAlpha = trimAoaDeg(sim.spec, mission.speedMps, 0);
     sim.gearDown = !!sim.spec.fixedGear;
     sim.onGround = false;
     sim.activeEnd = null;
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
+  // A final and the drill spawn in trim: their first step's angle of attack is the trim (0090).
+  sim.trimAlphaDeg = trimAlpha;
   sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
   // Airline practice on a final: autobrake 2 armed, reversers stowed (systems.js). The
   // gear and flaps start where the spawn put the levers.
@@ -2888,7 +2897,7 @@ function updateSkyAndLights(t) {
 // ?debug: a one-line usage readout of the Google session (to verify the free tier holds).
 const debugOverlay = new URLSearchParams(window.location.search).has('debug') ? document.createElement('div') : null;
 if (debugOverlay) {
-  debugOverlay.style.cssText = 'position:absolute;left:8px;bottom:14px;z-index:40;font:10px monospace;color:#a7f3d0;background:rgba(2,6,23,.7);padding:2px 6px;border-radius:4px;pointer-events:none';
+  debugOverlay.className = 'debug-overlay'; // styles.css
   document.body.appendChild(debugOverlay);
 }
 let debugTimer = 0;
