@@ -15,8 +15,10 @@ attack, but there is no trim control: the spawn sets the trim and a stick held o
 trims its pressure away over ~8 s (`src/main.js`, capped 4° short of the stall). Holding a
 new speed on the keyboard means holding or pulsing W/S for a few seconds, and touch players
 have no way to set it at all. Real airplanes are flown trimmed. Also still there: a stick
-held fully back after a stall drives the Cessna to α 80–90°, a falling leaf, until it hits the
-ground (the stability term is clamped at 30° of α, and pitch moments scale with airspeed/120).
+held fully back after a stall drives the Cessna into a falling leaf until it hits the
+ground: with the stability term no longer clamped at 30° (0090's physics panel) it cycles
+between α ~13° and ~69° instead of locking at 90°, still far deeper than a real 172 goes
+(pitch moments scale with airspeed/120, so the tail is weak when slow).
 
 ## What
 Trim up/down keys (and a gamepad mapping, a ≥44 px touch control in the touch deck) that move

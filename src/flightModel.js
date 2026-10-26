@@ -31,7 +31,8 @@ const _euler = new Euler(0, 0, 0, 'YXZ');
 const _air = {};
 const _gearM = new Vector3();
 const BETA_LIN = 20 * DEG_TO_RAD;
-const ALPHA_LIN = 30 * DEG_TO_RAD;
+// Wider than any airframe's elevatorAlphaDeg, so no held stick out-pulls the restoring moment.
+const ALPHA_LIN = 90 * DEG_TO_RAD;
 
 export function stepFlightModel(body, spec, dt) {
   stepSystems(body, spec, dt);

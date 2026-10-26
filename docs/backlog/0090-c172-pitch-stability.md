@@ -53,7 +53,7 @@ than 4° to the stall (main.js); the assists, a pitch-holding autopilot
 and the harness pilots trim as they fly (`autoTrim`), and the F-16 (`pitchFbw`) self-trims
 as before. Cards: release at the stall flies again in ≤ 2 s (promoted from `it.fails`), hands
 off after a 10 kt upset at 70/90/110 KIAS the speed is back within 2 kt in a damped phugoid;
-e2e: push and let go in Pilot (keyboard, touch) and the nose comes back up.
+a stick-fixed takeoff (no self-rotation below 1.4 Vr); e2e: push and let go in Pilot (keyboard, touch) and the nose comes back up.
 Still open (0094): a trim control (keys, touch, gamepad), and a stick held fully back after a
-stall still drives the Cessna to α 80–90° (a falling leaf). Frame time: O(1) arithmetic per
+stall still swings the Cessna between α ~13° and ~69° (a falling leaf; before, it locked at 90°). Frame time: O(1) arithmetic per
 sub-step, no allocations.

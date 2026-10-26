@@ -16,9 +16,9 @@ import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
-import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
+import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
-import { DT, makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
+import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -501,5 +501,27 @@ describe('Cessna 172S hands off in trim (flightModel, ticket 0090)', () => {
     console.log(`[c172 ${model}] hands off at ${kts} kt: ${iasKts.toFixed(1)} kt after 3 min, nose up ${noseUpDeg.toFixed(1)}°`);
     expect(noseUpDeg).toBeGreaterThan(2);
     expect(Math.abs(iasKts - kts)).toBeLessThan(2);
+  });
+});
+
+// Stick-fixed takeoff (0090), the trim set as main.js's takeoff spawn sets it (1.2 Vr, flaps
+// 1): full power and a neutral stick never rotate the Cessna by themselves before 1.4 Vr, and
+// with the stick held back the nose comes up near Vr as before.
+function stickFixedNoseLiftKts(elev) {
+  const b = Object.assign(makeBody(c172, { flaps: 1, throttle: 1 }), { autoTrim: false, trimAlphaDeg: trimAoaDeg(c172, c172.vrKts * 1.2 * KTS_TO_MPS, 1) });
+  let liftKts = null;
+  fly(b, c172, 60, (x) => { x.elevInput = x.iasKts >= c172.vrKts ? elev : 0; x.brakesOn = false; },
+    (x) => { if (x.t > 1 && !noseWheelOn(x)) liftKts = x.iasKts; return liftKts !== null; });
+  return liftKts;
+}
+
+describe('Cessna 172S stick-fixed takeoff (flightModel, ticket 0090)', () => {
+  it('takeoff trim, neutral stick: the nose wheel stays down until 1.4 Vr; full back stick at Vr lifts it within 8 kt', () => {
+    const hands = stickFixedNoseLiftKts(0);
+    const pulled = stickFixedNoseLiftKts(-1);
+    console.log(`[c172 flightModel] stick-fixed nose lift: neutral ${hands?.toFixed(0)} kt, pulled at Vr ${pulled?.toFixed(0)} kt`);
+    expect(hands === null || hands > 1.4 * c172.vrKts).toBe(true);
+    expect(pulled).not.toBeNull();
+    expect(pulled).toBeLessThan(c172.vrKts + 8);
   });
 });

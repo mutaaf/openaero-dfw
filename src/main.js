@@ -1430,7 +1430,7 @@ function integrateSubStep(dt) {
   stallPullIn = Math.max(0, -targetPitch); // elevator + = nose down
   // The assists and a pitch-holding autopilot trim as they fly; Pilot's trim stays where the
   // spawn (or the autopilot it took over from) set it, so a released stick flies that trim (0090).
-  sim.autoTrim = !!assist || (sim.apMaster && (sim.apApproach || sim.apAltHold));
+  sim.autoTrim = sim.assist !== 'pilot' || (sim.apMaster && (sim.apApproach || sim.apAltHold));
   // No trim control yet: a stick held off centre trims its pressure away over ~8 s, as a pilot
   // would, but never closer than 4° to the stall, so letting go there still lowers the nose.
   if (!sim.autoTrim && sim.trimAlphaDeg != null && Math.abs(sim.elevInput) > 0.05) {
