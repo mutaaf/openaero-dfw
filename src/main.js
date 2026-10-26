@@ -16,9 +16,9 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades } from './landing.js';
-import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
-import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
+import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S, GRADE_COLOURS } from './landing.js';
+import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
+import { createTutor, tutorOn, setTutorOn } from './tutorPrefs.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
   flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
@@ -924,8 +924,39 @@ function startStallDrill(mission) {
 
 // --- Landing grade ---------------------------------------------------------------
 let softResetAt = null; // Kid soft landing: sim time at which the mission restarts
+// A landing waits for the wheels to settle before its card (0091): a bounce caps the grade,
+// and a go-around after it drops the landing (the right call, not a grade).
+const bounce = createBounceTracker();
+let pendingLanding = null;
+function checkBounce(dt) {
+  const wheelFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
+  stepBounce(bounce, wheelFt, sim.onGround, dt);
+  // Back on the runway after a bounce: not graded again, but a hard hit is still a crash.
+  if (bounce.bounces && sim.onGround && !sim.wasOnGround) {
+    _euler.setFromQuaternion(sim.quat, 'YXZ');
+    const reason = recontactCrash(sim.lastAirVsi, _euler.z * RAD_TO_DEG);
+    if (reason) {
+      const p = pendingLanding;
+      pendingLanding = null;
+      const crash = { ...p.result, grade: 'CRASH', score: 0, reason, bounces: bounce.bounces };
+      if (!kidSoftLanding(crash)) finishLanding(crash, p.end, p.gate, p.bestKey);
+      return;
+    }
+  }
+  if (wheelFt > 50) {
+    pendingLanding = null;
+    sim.lastLanding = null; // a go-around (or a balloon away), not a landing
+    resetCoach();
+    if (bounce.bounces && sim.throttle > 0.9) showToast('Going around after the bounce: good call');
+  } else if (bounce.settled) {
+    const p = pendingLanding;
+    pendingLanding = null;
+    finishLanding(capBounced(p.result, bounce.bounces), p.end, p.gate, p.bestKey);
+  }
+}
 function checkTouchdown(dt) {
   if (softResetAt !== null && sim.simTime >= softResetAt) { softResetAt = null; loadScenario(sim.missionKey); return; }
+  if (pendingLanding) checkBounce(dt);
   if (!sim.onGround) {
     sim.airborneTime += dt;
     if (sim.aglFt > 50) sim.landingGraded = false;
@@ -936,7 +967,6 @@ function checkTouchdown(dt) {
   sim.landingGraded = true;
   sim.airborneTime = 0;
   const end = sim.activeEnd || selectActiveRunway(RUNWAY_ENDS, sim.pos, 0, null);
-  const assist = assistConfig(sim.assist);
   if (!end) return;
   const g = approachGeometry(end, sim.pos);
   const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
@@ -956,73 +986,51 @@ function checkTouchdown(dt) {
   });
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
-  // Kid: a hard landing bounces and starts the approach again instead of crashing.
-  if (result.grade === 'CRASH' && assist && assist.softLanding) {
-    sim.vel.y = Math.max(sim.vel.y, 2.5);
-    coach.done = true; coach.prompt = null; // no "Touchdown!" over the bounce
-    showToast(`Boing! ${result.reason} Let's try again!`);
-    softResetAt = sim.simTime + 2; // counted in sim time: a pause holds it
-    return;
-  }
+  if (kidSoftLanding(result)) return;
+  const gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
   sim.lastLanding = {
     pastThresholdM: -g.distM, crossM: g.crossM, vsFpm: sim.lastAirVsi,
     pitchDeg: _euler.x * RAD_TO_DEG, bankRightDeg: -_euler.z * RAD_TO_DEG,
-    grade: result.grade, score: result.score, runway: end.id,
-    stabilized: sim.gate && sim.gate.runway === end.id ? sim.gate.stable : null,
+    grade: result.grade, score: result.score, runway: end.id, bounces: 0,
+    stabilized: gate ? gate.stable : null,
   };
-  let best = { isNewBest: false, best: null };
   // The crosswind challenge moves runway with the weather: its best is kept per runway end.
   // Kid and Learner keep their own bests (assists.js); Pilot keeps the mission's key.
   const bestKey = assistBestKey(sim.missionKey === CROSSWIND_KEY ? `${CROSSWIND_KEY}:${end.id}` : sim.missionKey, sim.assist);
-  try { best = recordBest(window.localStorage, bestKey, result); } catch { /* storage unavailable */ }
-  showResults(result, best, end, sim.gate && sim.gate.runway === end.id ? sim.gate : null);
+  if (result.grade === 'CRASH') { finishLanding(result, end, gate, bestKey); return; }
+  Object.assign(bounce, createBounceTracker());
+  pendingLanding = { result, end, gate, bestKey };
 }
 
-const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
+// Kid: a hard landing bounces and starts the approach again instead of crashing.
+function kidSoftLanding(result) {
+  if (result.grade !== 'CRASH' || !assistConfig(sim.assist)?.softLanding) return false;
+  sim.vel.y = Math.max(sim.vel.y, 2.5);
+  coach.done = true; coach.prompt = null; // no "Touchdown!" over the bounce
+  showToast(`Boing! ${result.reason} Let's try again!`);
+  softResetAt = sim.simTime + 2; // counted in sim time: a pause holds it
+  return true;
+}
+
+function finishLanding(result, end, gate, bestKey) {
+  Object.assign(sim.lastLanding, { grade: result.grade, score: result.score, bounces: result.bounces ?? 0 });
+  let best = { isNewBest: false, best: null };
+  try { best = recordBest(window.localStorage, bestKey, result); } catch { /* storage unavailable */ }
+  showResults(result, best, end, gate);
+}
+
 let resultsPaused = false; // the go-around's card pauses the flight in the air (0047)
+// The results card is a lazy chunk (results.js), fetched after boot (a dropped connection
+// mid-flight still gets its card) and retried if that fetch failed.
+let resultsChunk = null;
+const loadResults = () => (resultsChunk ??= import('./results.js').catch((e) => { resultsChunk = null; throw e; }));
 function showResults(result, best, end, gate) {
-  const card = byId('resultsCard');
-  const goAround = result.kind === 'goAround';
-  byId('txtResultTitle').textContent = result.title ?? (goAround ? 'Go-around complete' : 'Landing grade');
-  byId('btnKeepRolling').textContent = sim.onGround ? 'KEEP ROLLING' : 'KEEP FLYING';
-  if (!sim.onGround && !sim.paused) { resultsPaused = true; setPaused(true); }
-  const gradeEl = byId('txtGrade');
-  gradeEl.textContent = result.grade;
-  gradeEl.className = `${result.grade === 'CRASH' ? 'text-2xl' : 'text-5xl'} font-black w-20 text-center ${GRADE_COLOURS[result.grade]}`;
-  byId('txtScore').textContent = String(result.score);
-  byId('txtResultRunway').textContent = end.name;
-  const reason = byId('txtGradeReason');
-  reason.textContent = result.reason || '';
-  reason.classList.toggle('hidden', !result.reason);
-  const bestEl = byId('txtBest');
-  if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
-  else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';
-  // Kid and Learner bests are their own (assists.js): say which level this grade is for.
-  if (bestEl.textContent && sim.assist !== 'pilot') bestEl.textContent = `${sim.assist === 'kid' ? 'Kid' : 'Learner'} level · ${bestEl.textContent}`;
-  // Not scored: the stabilized-gate verdict (null when the mission started below the gate).
-  const gateEl = byId('txtStabilized');
-  gateEl.classList.toggle('hidden', !gate && !result.note);
-  if (gate) {
-    gateEl.textContent = gate.stable ? `Stabilized at ${gate.gateHeight} ft ✓`
-      : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ')}`;
-    // The drill flown back to stable: landing was the right call (0047).
-    if (gate.stable && sim.goAround) gateEl.textContent += ' You fixed it: landing was right';
-    gateEl.classList.toggle('text-emerald-300', gate.stable); // over the amber default (later in the CSS)
-  } else if (result.note) {
-    gateEl.textContent = `${result.note} ✓`;
-    gateEl.classList.add('text-emerald-300');
-  }
-  const list = byId('resultsFactors');
-  list.innerHTML = '';
-  for (const f of result.factors) {
-    const li = document.createElement('li');
-    li.className = 'flex flex-col gap-0.5';
-    const tone = f.score >= 85 ? 'bg-emerald-400' : f.score >= 60 ? 'bg-amber-400' : 'bg-red-400';
-    li.innerHTML = `<div class="flex justify-between"><span class="text-slate-400">${f.label}</span><span>${f.value}</span></div>`
-      + `<div class="h-1.5 rounded bg-slate-800 overflow-hidden"><div class="h-full ${tone}" style="width:${f.score}%"></div></div>`;
-    list.appendChild(li);
-  }
-  card.classList.remove('hidden');
+  const flight = sim.loadedMission;
+  loadResults().then((m) => {
+    if (sim.loadedMission !== flight) return; // restarted meanwhile: not this flight's card
+    if (!sim.onGround && !sim.paused) { resultsPaused = true; setPaused(true); }
+    m.showResults(sim, result, best, end, gate);
+  }).catch(() => showToast(`${result.title ?? 'Landing'}: ${result.grade} · ${result.score}`));
 }
 
 function resumeFromResults() {
@@ -1051,7 +1059,7 @@ const COACH_DONE_SHOW_S = 4;
 const coachInput = {
   aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false,
   iasKts: 0, targetKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0, goAround: false,
-  stall: null, bankDeg: 0,
+  stall: null, bankDeg: 0, bounces: 0, bounceHigh: false,
   rollout: { gsKts: 0, canReverse: false, reverserPos: 0, braking: false },
 };
 const coachVals = { targetKts: 0, flapsDeg: 0 };
@@ -1069,6 +1077,10 @@ let apGlowShown = false;
 // --- Autopilot tutor (apTutor.js): while the autopilot flies it explains itself in the
 // coach's card, speaks when sound is on, and offers "Your turn" (hand-over to the coach).
 const tutor = createTutor();
+// The tutor's phases and words (apTutor.js) are a lazy chunk, fetched right after boot; until
+// it arrives (or if it can't) the tutor is quiet.
+let tutorLib = null;
+import('./apTutor.js').then((m) => { tutorLib = m; }).catch((e) => console.warn('[openaero] no autopilot tutor:', e));
 let tutorEnabled = true;
 let coachHandover = false; // the player took over from the autopilot on a final
 const tutorInput = {
@@ -1078,7 +1090,7 @@ const tutorInput = {
 const tutorVals = { targetKts: 0, hdgDeg: 0, altFt: 0 };
 
 function updateTutor(dt) {
-  if (!tutorEnabled) { tutor.caption = null; return null; }
+  if (!tutorEnabled || !tutorLib) { tutor.caption = null; return null; }
   tutorInput.apMaster = sim.apMaster;
   tutorInput.apApproach = sim.apApproach;
   tutorInput.apHdgHold = sim.apHdgHold;
@@ -1089,7 +1101,7 @@ function updateTutor(dt) {
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
   tutorInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
-  stepTutor(tutor, tutorInput, dt);
+  tutorLib.stepTutor(tutor, tutorInput, dt);
   return tutor.caption;
 }
 
@@ -1122,6 +1134,9 @@ function updateCoach(dt) {
     coachInput.stall = sim.stallDrill?.phase ?? null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
+    // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
+    coachInput.bounces = pendingLanding && bounce.airS >= BOUNCE_MIN_S ? bounce.bounces : 0;
+    coachInput.bounceHigh = bounce.peakFt > BOUNCE_HIGH_FT;
     const r = coachInput.rollout;
     r.gsKts = sim.gsKts;
     r.canReverse = !!systemsOf(sim.spec).reverser;
@@ -1148,7 +1163,7 @@ function updateCoach(dt) {
     tutorVals.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
     tutorVals.hdgDeg = magHeadingText(sim.targetHdgDeg);
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
-    const text = TUTOR_TEXT[caption](tutorVals);
+    const text = tutorLib.TUTOR_TEXT[caption](tutorVals);
     byId('txtCoach').textContent = text;
     // The GPWS callouts own the last 100 ft; the tutor speaks above them.
     if (sim.aglFt > 100 || caption === 'rollout') audio.teach(text);
@@ -2011,7 +2026,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.onGround = sim.onGround;
   _assistIn.wheelHeightM = wheelHeightM;
   _assistIn.airspeedMps = sim.tasKts * 0.514444;
-  const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround, sim.aglFt);
+  // A touchdown waiting to settle (0091) is a landing, not a touch-and-go: Kid holds the flare at
+  // idle through a bounce instead of climbing away from it, so the bounce is graded.
+  const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround && !pendingLanding, sim.aglFt);
   // Kid hands-off guide: level flight, or the localizer and glidepath on a final ahead.
   _assistIn.guideBankDeg = 0;
   _assistIn.guideGammaDeg = 0;
@@ -2100,6 +2117,7 @@ function loadScenario(key, final = null) {
   sim.landingGraded = false;
   sim.airborneTime = 0;
   sim.lastLanding = null;
+  pendingLanding = null;
   startGoAroundDrill(mission);
   startStallDrill(mission);
   resetCoach();
@@ -2931,6 +2949,8 @@ function updateDebugOverlay(dt) {
 // ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
 if (debugOverlay) window.openaeroDebugFinal = (airport, rwy, distNm) => runwayEnd(airport, rwy)
   && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm });
+// ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce.
+if (debugOverlay) window.openaeroDebugHop = (mps) => { sim.vel.y = mps; };
 // The active runway on screen (CSS px): its approach lights' outer end to the far end, as wide
 // as the runway. Read by tests/e2e/runwayVisibility.spec.js.
 function runwayScreen(e) {
@@ -3134,6 +3154,7 @@ function boot() {
     refreshWeather(); // clouds
     applySun();       // sky, stars, Moon and the caption
   }).catch((err) => console.warn('Sky unavailable, plain haze instead:', err.message));
+  loadResults().catch(() => {}); // retried at the card
   buildAircraft('b738');
   // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap.
   const linked = missionFromLink(window.location.search);

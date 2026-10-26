@@ -134,7 +134,11 @@ src/landmarks.js    Dallas landmarks at true lat/lon (cited) + real heights, via
                     DOWNTOWN_DALLAS (map dot, skyline tour), ATT_STADIUM
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
 src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +
-                    versioned personal bests
+                    versioned personal bests + the bounce tracker (0091: wheels > 2 ft for 0.3 s
+                    after a contact; the card waits for 1 s on the wheels; 1 bounce caps C, 2+ D,
+                    a re-contact past 600 fpm or 10° bank is a CRASH; wheels past 50 ft drop the
+                    landing as a go-around; Kid holds the flare through a bounce)
+src/results.js      the results card (lazy chunk, prefetched after boot, retried at the card)
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
@@ -155,7 +159,9 @@ src/stallDrill.js   stall recovery drill (0087, lazy chunk like goAround.js): th
                     recovery without power; only a slow, idle stall counts) and drillAssist
                     (Kid/Learner stall protection off until the stall); coach.js has its prompts
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
-                    state machine like coach.js); shown in the coach card, spoken, Your turn
+                    state machine like coach.js); shown in the coach card, spoken, Your turn.
+                    A lazy chunk fetched right after boot (0091); its on/off flag and blank
+                    state are src/tutorPrefs.js, at boot
 src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign
                     conventions (pinned by tests):** aileron + = roll right, elevator + =
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,
@@ -285,7 +291,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `?mission=<key>` | that mission from `src/missions.js` (wins over `?airport`) |
 | `?view=terrain` | free terrain map this visit: no Google config/session request at all |
 | `?photoreal` | force photoreal off the live origin (tests/debugging; Google refuses other referrers) |
-| `?debug` | debug overlay; `openaeroDebugFinal(airport, rwy, nm)` flies the final to any runway end from any distance (tests, 0068) |
+| `?debug` | debug overlay; `openaeroDebugFinal(airport, rwy, nm)` flies the final to any runway end from any distance (tests, 0068); `openaeroDebugHop(mps)` throws the airplane up off the runway, a scripted bounce (0091) |
 
 ## 5 · Commands
 
@@ -306,7 +312,7 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
 is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's

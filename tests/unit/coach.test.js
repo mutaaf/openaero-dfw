@@ -207,3 +207,49 @@ describe('landing coach (0073)', () => {
     expect(coachText('papi')).toBe(COACH_PROMPTS.papi);
   });
 });
+
+describe('bounced landing prompts (0091)', () => {
+  const rollout = { gsKts: 50, canReverse: false, reverserPos: 0, braking: false };
+  const landed = () => stepCoach(stepCoach(createCoach(), full, 0.1), { ...full, onGround: true, rollout }, 0.016);
+  it('first bounce: hold the attitude, a little power (never "pitch down"); second: go around', () => {
+    let c = landed();
+    expect(c.prompt).toBe('done');
+    c = stepCoach(c, { ...full, onGround: false, bounces: 1, rollout }, 0.016);
+    expect(c.prompt).toBe('bounce');
+    expect(COACH_PROMPTS.bounce).toMatch(/hold the attitude.*power/i);
+    expect(COACH_PROMPTS.bounce).not.toMatch(/pitch down|nose down|push/i);
+    c = stepCoach(c, { ...full, onGround: false, bounces: 2, rollout }, 0.016);
+    expect(c.prompt).toBe('bounceGa');
+    expect(COACH_PROMPTS.bounceGa).toMatch(/go around/i);
+  });
+  it('appears only after a first touchdown, and only while airborne', () => {
+    let c = stepCoach(createCoach(), { ...full, bounces: 1 }, 0.1); // still on the approach
+    expect(c.prompt).not.toMatch(/^bounce/);
+    c = landed();
+    c = stepCoach(c, { ...full, onGround: true, bounces: 1, rollout }, 0.016);
+    expect(c.prompt).toBe('done');
+  });
+  it('clears back on the wheels, and the rollout prompts follow after the hold', () => {
+    let c = landed();
+    c = stepCoach(c, { ...full, onGround: false, bounces: 1, rollout }, 0.5);
+    c = stepCoach(c, { ...full, onGround: false, bounces: 0, rollout }, 0.1); // wheels under 2 ft
+    expect(c.prompt).toBe('bounce');
+    c = stepCoach(c, { ...full, onGround: true, bounces: 0, rollout }, 0.016);
+    expect(c.prompt).toBeNull();
+    c = stepCoach(c, { ...full, onGround: true, rollout }, COACH_DONE_HOLD_S);
+    expect(c.prompt).toBe('brake');
+  });
+  it('a big first bounce (wheels past 5 ft) is a go-around, not one to save (AFH)', () => {
+    const c = stepCoach(landed(), { ...full, onGround: false, bounces: 1, bounceHigh: true, rollout }, 0.016);
+    expect(c.prompt).toBe('bounceHigh');
+    expect(COACH_PROMPTS.bounceHigh).toMatch(/go around/i);
+  });
+  it('Kid: let go (the autothrottle has the power), never "add power"', () => {
+    const c = stepCoach(landed(), { ...full, kid: true, onGround: false, bounces: 2, rollout }, 0.016);
+    expect(c.prompt).toBe('bounceKid');
+    expect(COACH_PROMPTS.bounceKid).not.toMatch(/power/i);
+  });
+  it('the words fit a phone card', () => {
+    for (const k of ['bounce', 'bounceGa', 'bounceHigh', 'bounceKid']) expect(coachText(k).length).toBeLessThanOrEqual(48);
+  });
+});

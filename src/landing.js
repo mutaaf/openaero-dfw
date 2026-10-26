@@ -53,6 +53,55 @@ export function gradeLanding(t) {
   return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason };
 }
 
+// Bounced landings (ticket 0091). A bounce is the wheels back above BOUNCE_FT for at least
+// BOUNCE_MIN_S after a touchdown (a strut rebound is shorter); the landing is settled once
+// the wheels have stayed on the runway for BOUNCE_SETTLE_S. wheelFt is the wheels' height
+// (pos.y - groundY - spec.gearHeight, never aglFt: LESSONS 2026-10-21). Mutates b, allocates
+// nothing; tested in tests/unit/landing.test.js and flown in tests/flight/bounce.test.js.
+export const BOUNCE_FT = 2;
+export const BOUNCE_MIN_S = 0.3;
+export const BOUNCE_SETTLE_S = 1;
+// peakFt: the highest the wheels went after the touchdown (over ~5 ft is no bounce to save).
+export const createBounceTracker = () => ({ bounces: 0, airS: 0, groundS: 0, settled: false, contact: true, peakFt: 0 });
+// A new bounce counts only after the wheels touched again (contact): wheels wandering around
+// 2 ft in ground effect are one bounce, not several.
+export function stepBounce(b, wheelFt, onGround, dt) {
+  if (b.settled) return b;
+  if (onGround) b.contact = true;
+  if (wheelFt > b.peakFt) b.peakFt = wheelFt;
+  if (wheelFt > BOUNCE_FT) {
+    b.groundS = 0;
+    b.airS += dt;
+    if (b.contact && b.airS >= BOUNCE_MIN_S) { b.bounces++; b.contact = false; }
+  } else {
+    b.airS = 0;
+    b.groundS = onGround ? b.groundS + dt : 0;
+    if (b.groundS >= BOUNCE_SETTLE_S) b.settled = true;
+  }
+  return b;
+}
+
+// A touchdown after a bounce is not graded again, but it can still break the airplane: the
+// reason it is a crash (gradeLanding's limits), or null.
+export function recontactCrash(vsFpm, bankDeg) {
+  if (-vsFpm > 600) return 'Hard landing after the bounce: the gear would not survive that.';
+  if (Math.abs(bankDeg) > 10) return 'Wingtip strike after the bounce: too much bank.';
+  return null;
+}
+
+// One bounce caps the grade at C (score 69), two or more at D (54); the touchdown factors
+// stay the first touchdown's. A D (off the runway, short) stays a D; a crash stays a crash.
+export function capBounced(result, bounces) {
+  if (!bounces || result.grade === 'CRASH') return result;
+  const score = Math.min(result.score, bounces > 1 ? 54 : 69);
+  // Short (it fits the card on a phone held sideways); the coach gave the advice in the air.
+  const note = `Bounced ${bounces > 1 ? `×${bounces}: best grade D` : 'once: best grade C'}.`;
+  return { ...result, grade: result.grade === 'D' ? 'D' : letterGrade(score), score, bounces, reason: result.reason ? `${note} ${result.reason}` : note };
+}
+
+// Tailwind text colour per grade (the results card, the mission picker's bests).
+export const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
+
 // The letter for a 0-100 score (landings and go-arounds share it).
 export function letterGrade(score) {
   return score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';

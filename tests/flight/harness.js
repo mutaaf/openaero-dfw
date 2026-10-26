@@ -340,7 +340,7 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
 // segment, and what the pilot flew: touchdown IAS and sink rate, time airborne again after
 // the first touch, when the nose wheel came down, and the highest pitch and the time with
 // the nose wheel off the runway after it settled (0.5 s after it touched).
-export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2 } = {}) {
+export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2, onStep = null } = {}) {
   const tan3 = Math.tan(3 * DEG_TO_RAD);
   const b = makeBody(spec, { kts, altM: 50 / M_TO_FT + spec.gearHeight, flaps, throttle: 0 });
   b.isaDevC = isaDevC;
@@ -383,6 +383,7 @@ export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 
     x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
   }, (x) => {
     if (!td && x.onGround) td = { t: x.t, distM: x.distM, kts: x.iasKts, sinkFpm: -(x.lastAirVsi ?? 0), bounceS: 0, noseDownS: null, maxPitchDeg: -90, noseOffS: 0 };
+    onStep?.(x, !!td);
     return td && Math.hypot(x.vel.x, x.vel.z) < 0.3;
   });
   return {

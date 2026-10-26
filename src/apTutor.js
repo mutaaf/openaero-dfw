@@ -3,7 +3,10 @@
 // tested in tests/unit/apTutor.test.js. main.js shows the caption, speaks it when sound is
 // on, lights the stick and throttle the autopilot is moving, and offers "Your turn".
 
-export const TUTOR_KEY = 'openaero_tutor_v1';
+// The tutor's on/off flag and its blank state live in tutorPrefs.js (boot: the start screen's
+// checkbox); this module is a lazy chunk main.js loads after boot (0091, boot JS budget).
+import { TUTOR_KEY, createTutor, tutorOn, setTutorOn } from './tutorPrefs.js';
+export { TUTOR_KEY, createTutor, tutorOn, setTutorOn };
 // A same-or-lower-rank caption waits until its condition has held this long, and the
 // caption on screen stays at least TUTOR_MIN_READ_S so it can be read.
 export const TUTOR_MIN_HOLD_S = 1.5;
@@ -47,8 +50,6 @@ export function tutorTarget(s) {
   return null;
 }
 
-export const createTutor = () => ({ caption: null, shownS: 0, pending: null, pendingS: 0 });
-
 // Advances the tutor one frame; mutates and returns t (no per-frame allocation).
 export function stepTutor(t, s, dt) {
   const target = tutorTarget(s);
@@ -67,18 +68,4 @@ export function stepTutor(t, s, dt) {
     t.caption = target; t.shownS = 0; t.pending = null; t.pendingS = 0;
   }
   return t;
-}
-
-// The tutor is on unless the player turned it off (remembered).
-export function tutorOn(storage) {
-  try {
-    const data = JSON.parse(storage.getItem(TUTOR_KEY) || 'null');
-    return !(data && data.v === 1 && data.on === false);
-  } catch {
-    return true;
-  }
-}
-
-export function setTutorOn(storage, on, now = Date.now()) {
-  try { storage.setItem(TUTOR_KEY, JSON.stringify({ v: 1, on, at: now })); } catch { /* private mode */ }
 }
