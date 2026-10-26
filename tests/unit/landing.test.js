@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gradeLanding, loadBest, recordBest, BEST_KEY, driftAngleDeg } from '../../src/landing.js';
+import { gradeLanding, loadBest, recordBest, BEST_KEY, driftAngleDeg, createBounceTracker, stepBounce, capBounced } from '../../src/landing.js';
 
 const good = { vsFpm: -110, crossM: 0.8, pastThresholdM: 320, runwayLengthM: 4085, runwayWidthM: 45.7, pitchDeg: 3.5, bankDeg: 0.5, iasKts: 140, vrefKts: 136 };
 
@@ -94,5 +94,66 @@ describe('crab / de-crab (crosswind challenge)', () => {
     expect(decrabbed.score).toBe(plain.score);
     expect(crabbed.score).toBe(plain.score);
     expect(plain.factors).toHaveLength(5);
+  });
+});
+
+// Ticket 0091: a wheel-height trace (ft) at 60 Hz through the tracker, from the first touchdown.
+function track(segments) {
+  const b = createBounceTracker();
+  const dt = 1 / 60;
+  for (const [ft, s, onGround = ft <= 0] of segments) {
+    for (let t = 0; t < s - 1e-9; t += dt) stepBounce(b, ft, onGround, dt);
+  }
+  return b;
+}
+
+describe('bounced landings (0091)', () => {
+  it('a 3 ft, 0.5 s hop after the touchdown is one bounce, then the landing settles', () => {
+    const b = track([[0, 0.2], [3, 0.5], [0, 1.2]]);
+    expect(b.bounces).toBe(1);
+    expect(b.settled).toBe(true);
+  });
+  it('a trace that never leaves 1 ft is no bounce', () => {
+    const b = track([[0, 0.1], [1, 0.8], [0.5, 0.5], [0, 1.2]]);
+    expect(b.bounces).toBe(0);
+    expect(b.settled).toBe(true);
+  });
+  it('a strut rebound shorter than 0.3 s is no bounce, even above 2 ft', () => {
+    expect(track([[0, 0.2], [2.5, 0.2], [0, 1.2]]).bounces).toBe(0);
+  });
+  it('two hops are two bounces, and a long one counts once', () => {
+    expect(track([[0, 0.2], [4, 2], [0, 0.3], [3, 0.6], [0, 1.2]]).bounces).toBe(2);
+  });
+  it('does not settle while the wheels skim the runway without touching it', () => {
+    const b = track([[0, 0.2], [1, 3, false]]);
+    expect(b.settled).toBe(false);
+  });
+  it('stops counting once settled (a later lift-off is a takeoff, not a bounce)', () => {
+    expect(track([[0, 1.2], [10, 2]]).bounces).toBe(0);
+  });
+  it('allocates nothing per step (returns the same object)', () => {
+    const b = createBounceTracker();
+    expect(stepBounce(b, 0, true, 0.016)).toBe(b);
+  });
+  it('one bounce caps the grade at C, two or more at D; none leaves it alone', () => {
+    const a = gradeLanding(good);
+    expect(capBounced(a, 0)).toBe(a);
+    const one = capBounced(a, 1);
+    expect(one.grade).toBe('C');
+    expect(one.score).toBeLessThan(70);
+    expect(one.reason).toMatch(/Bounced ×1/);
+    expect(one.factors).toEqual(a.factors); // scored on the first touchdown
+    const two = capBounced(a, 3);
+    expect(two.grade).toBe('D');
+    expect(two.score).toBeLessThan(55);
+    expect(two.reason).toMatch(/Bounced ×3.*go around/);
+  });
+  it('a cap never improves a worse grade and leaves a crash alone', () => {
+    const off = gradeLanding({ ...good, crossM: 40 }); // D, off the runway
+    const c = capBounced(off, 1);
+    expect(c.grade).toBe('D');
+    expect(c.reason).toMatch(/Bounced ×1.*off the runway/);
+    const crash = gradeLanding({ ...good, vsFpm: -700 });
+    expect(capBounced(crash, 2)).toBe(crash);
   });
 });

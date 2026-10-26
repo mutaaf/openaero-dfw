@@ -53,6 +53,38 @@ export function gradeLanding(t) {
   return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason };
 }
 
+// Bounced landings (ticket 0091). A bounce is the wheels back above BOUNCE_FT for at least
+// BOUNCE_MIN_S after a touchdown (a strut rebound is shorter); the landing is settled once
+// the wheels have stayed on the runway for BOUNCE_SETTLE_S. wheelFt is the wheels' height
+// (pos.y - groundY - spec.gearHeight, never aglFt: LESSONS 2026-10-21). Mutates b, allocates
+// nothing; tested in tests/unit/landing.test.js and flown in tests/flight/bounce.test.js.
+export const BOUNCE_FT = 2;
+export const BOUNCE_MIN_S = 0.3;
+export const BOUNCE_SETTLE_S = 1;
+export const createBounceTracker = () => ({ bounces: 0, airS: 0, groundS: 0, settled: false });
+export function stepBounce(b, wheelFt, onGround, dt) {
+  if (b.settled) return b;
+  if (wheelFt > BOUNCE_FT) {
+    b.groundS = 0;
+    b.airS += dt;
+    if (b.airS >= BOUNCE_MIN_S && b.airS - dt < BOUNCE_MIN_S) b.bounces++;
+  } else {
+    b.airS = 0;
+    b.groundS = onGround ? b.groundS + dt : 0;
+    if (b.groundS >= BOUNCE_SETTLE_S) b.settled = true;
+  }
+  return b;
+}
+
+// One bounce caps the grade at C (score 69), two or more at D (54); the touchdown factors
+// stay the first touchdown's. A D (off the runway, short) stays a D; a crash stays a crash.
+export function capBounced(result, bounces) {
+  if (!bounces || result.grade === 'CRASH') return result;
+  const score = Math.min(result.score, bounces > 1 ? 54 : 69);
+  const note = bounces > 1 ? `Bounced ×${bounces}: after a second bounce, go around.` : 'Bounced ×1: hold the attitude, add a little power.';
+  return { ...result, grade: result.grade === 'D' ? 'D' : letterGrade(score), score, bounces, reason: result.reason ? `${note} ${result.reason}` : note };
+}
+
 // The letter for a 0-100 score (landings and go-arounds share it).
 export function letterGrade(score) {
   return score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';
