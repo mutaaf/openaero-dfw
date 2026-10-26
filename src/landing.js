@@ -81,7 +81,8 @@ export function stepBounce(b, wheelFt, onGround, dt) {
 export function capBounced(result, bounces) {
   if (!bounces || result.grade === 'CRASH') return result;
   const score = Math.min(result.score, bounces > 1 ? 54 : 69);
-  const note = bounces > 1 ? `Bounced ×${bounces}: after a second bounce, go around.` : 'Bounced ×1: hold the attitude, add a little power.';
+  // Short (it fits the card on a phone held sideways); the coach gave the advice in the air.
+  const note = `Bounced ×${bounces}: capped at ${bounces > 1 ? 'D' : 'C'}.`;
   return { ...result, grade: result.grade === 'D' ? 'D' : letterGrade(score), score, bounces, reason: result.reason ? `${note} ${result.reason}` : note };
 }
 

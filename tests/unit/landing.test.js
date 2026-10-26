@@ -146,7 +146,7 @@ describe('bounced landings (0091)', () => {
     const two = capBounced(a, 3);
     expect(two.grade).toBe('D');
     expect(two.score).toBeLessThan(55);
-    expect(two.reason).toMatch(/Bounced ×3.*go around/);
+    expect(two.reason).toMatch(/Bounced ×3: capped at D/);
   });
   it('a cap never improves a worse grade and leaves a crash alone', () => {
     const off = gradeLanding({ ...good, crossM: 40 }); // D, off the runway

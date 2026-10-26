@@ -16,7 +16,7 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced } from './landing.js';
+import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, BOUNCE_MIN_S } from './landing.js';
 import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen } from './coach.js';
 import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
 import {
@@ -994,7 +994,6 @@ function checkTouchdown(dt) {
   if (result.grade === 'CRASH') { finishLanding(result, end, gate, bestKey); return; }
   Object.assign(bounce, createBounceTracker());
   pendingLanding = { result, end, gate, bestKey };
-  loadResults(); // fetched while the wheels settle
 }
 
 function finishLanding(result, end, gate, bestKey) {
@@ -1005,13 +1004,17 @@ function finishLanding(result, end, gate, bestKey) {
 }
 
 let resultsPaused = false; // the go-around's card pauses the flight in the air (0047)
-// The results card is a lazy chunk (results.js), fetched at the touchdown or a drill's end.
-const loadResults = () => import('./results.js');
+// The results card is a lazy chunk (results.js), fetched after boot (a dropped connection
+// mid-flight still gets its card) and retried if that fetch failed.
+let resultsChunk = null;
+const loadResults = () => (resultsChunk ??= import('./results.js').catch((e) => { resultsChunk = null; throw e; }));
 function showResults(result, best, end, gate) {
+  const flight = sim.loadedMission;
   loadResults().then((m) => {
+    if (sim.loadedMission !== flight) return; // restarted meanwhile: not this flight's card
     if (!sim.onGround && !sim.paused) { resultsPaused = true; setPaused(true); }
     m.showResults(sim, result, best, end, gate);
-  }).catch((e) => console.warn('[openaero] no results card:', e));
+  }).catch(() => showToast(`${result.title ?? 'Landing'}: ${result.grade} · ${result.score}`));
 }
 
 function resumeFromResults() {
@@ -1111,8 +1114,8 @@ function updateCoach(dt) {
     coachInput.stall = sim.stallDrill?.phase ?? null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
-    // Only while the wheels are up out of a counted bounce (landing.js stepBounce).
-    coachInput.bounces = pendingLanding && bounce.airS > 0 ? bounce.bounces : 0;
+    // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
+    coachInput.bounces = pendingLanding && bounce.airS >= BOUNCE_MIN_S ? bounce.bounces : 0;
     const r = coachInput.rollout;
     r.gsKts = sim.gsKts;
     r.canReverse = !!systemsOf(sim.spec).reverser;
@@ -3128,6 +3131,7 @@ function boot() {
     refreshWeather(); // clouds
     applySun();       // sky, stars, Moon and the caption
   }).catch((err) => console.warn('Sky unavailable, plain haze instead:', err.message));
+  loadResults().catch(() => {}); // retried at the card
   buildAircraft('b738');
   // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap.
   const linked = missionFromLink(window.location.search);
