@@ -22,7 +22,8 @@ test('engine out at Addison: no thrust at full throttle, coached, and a glide th
   expect(spawn.aglFt).toBeLessThan(3700);
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText('Engine failure! Pitch for 68 knots', { timeout: 10_000 });
+  // Kid level: its guide flies the glide and the turns (Pilot's words are unit-tested in deadStick.test.js).
+  await expect(page.locator('#txtCoach')).toHaveText('Engine stopped! Let go: the plane glides', { timeout: 10_000 });
   await expect(page.locator('#txtThrottle')).toHaveText('ENG OUT');
   // Full throttle: the lever moves, the engine stays dead (the prop windmills, n = 0).
   await page.locator('#rngThrottle').fill('100');

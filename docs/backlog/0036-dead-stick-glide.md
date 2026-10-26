@@ -40,14 +40,18 @@ card says how far from the threshold you stopped if you did not. Personal best k
 `tests/e2e/missions.spec.js` or a new `deadstick.spec.js`.
 
 ## As built (PR #98)
-The engine failure is `engineFailed` on the flight model (flightModel.js and the JSBSim
-adapter: no power whatever the throttle; the idle prop's windmill drag, already fitted to the
-POH glide, not a negative `maxThrustN`). The coach is its own lazy module, `src/deadStick.js`
+The engine failure is `engineFailed` on the flight model (flightModel.js: no power whatever
+the throttle, the idle prop's windmill drag, already fitted to the POH glide, not a negative
+`maxThrustN`; JSBSim: the fuel is cut, the engine stops and the prop windmills). The coach is its own lazy module, `src/deadStick.js`
 (prompts fed to coach.js as `s.ds`), not new code in coach.js; its words are `DS_TEXT`. The
 glide-ratio check is a flight card in `tests/flight/c172.test.js` (both models, throttle full
 forward), plus cards that fly the mission's pattern. The card's miss distance is to the
-runway's pavement (the threshold for a landing short of it). Spawned at 85 KIAS (the failure
-happens in cruise), trimmed for 68.
+runway's pavement (for 16, the pavement starts at its 979 ft displaced section), with advice
+by the way it was missed (short, long, beside). Spawned at 75 KIAS, trimmed for 68. The
+validation panel added a pattern to the coach ("glide on till I say turn", then "turn left
+now" toward a 1 NM final), which Kid's hands-off guide also flies (without it a hands-off Kid
+glided straight away from Addison), and judges low/high with the glide ratio by flaps and
+the wind.
 
 ## Out of scope
 Engine-out after takeoff ("impossible turn"), restart procedures, random failures in other

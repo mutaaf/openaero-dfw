@@ -22,7 +22,7 @@ import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFie
 import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
-import { DEADSTICK_KEY, deadStickTarget } from '../../src/deadStick.js';
+import { DEADSTICK_KEY, createDeadStick, deadStickPrompt, kidGuide } from '../../src/deadStick.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -551,12 +551,12 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S engine fail
 });
 
 // The challenge as spawned (missions.js): 3,500 ft above the ground, 2 NM abeam the middle of
-// Addison's runway on a left downwind for 16 at 85 KIAS, engine dead. A tight pattern at 68
+// Addison's runway on a left downwind for 16 at 75 KIAS, engine dead. A tight pattern at 68
 // KIAS (downwind to 0.5 NM before the threshold, base, a 1 NM final) gets there ~950 ft high:
-// the height is the puzzle. Flown the way the coach (deadStick.js) asks, a downwind extended
-// to 1.5 NM, then landing flaps when it says "high" on final, crosses the threshold at a
-// normal height. Flat ground.
-function deadStickPattern(downwindNm, obeyHigh) {
+// the height is the puzzle. Flown the way the coach (deadStick.js) says, gliding on until it
+// says turn, then to the runway line (Kid's hands-off guide steers exactly this), and landing
+// flaps when it says "high" on final, it crosses the threshold at a normal height. Flat ground.
+function deadStickPattern(mode) {
   const m = missionByKey(DEADSTICK_KEY);
   const end = runwayEnd('KADS', '16');
   const b = Object.assign(makeBody(c172, { kts: m.kias, altM: m.aglFt * 0.3048 }), { engineFailed: true });
@@ -566,47 +566,60 @@ function deadStickPattern(downwindNm, obeyHigh) {
   b.pos.x = m.pos[0]; b.pos.z = m.pos[1];
   const d = { x: Math.sin(end.hdgT * Math.PI / 180), z: -Math.cos(end.hdgT * Math.PI / 180) };
   const at = (beforeM, rightM) => ({ x: end.thrX - d.x * beforeM - d.z * rightM, z: end.thrZ - d.z * beforeM + d.x * rightM });
-  const wps = [at(downwindNm * 1852, -3704), at(1852, 0), at(-300, 0)];
+  const wps = [at(926, -3704), at(1852, 0), at(-300, 0)];
   let wp = 0;
   const hold = speedHoldPilot(() => c172.vGlideKts);
+  const st = createDeadStick(0), guide = {};
   const prompts = [];
-  let overFt = null;
+  let overFt = null, maxDistNm = 0, lined = false;
   fly(b, c172, 600, (x, dt) => {
     hold(x, dt);
-    if (wp < 2 && Math.hypot(wps[wp].x - x.pos.x, wps[wp].z - x.pos.z) < 250) wp++;
     const track = Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI;
-    const brg = Math.atan2(wps[wp].x - x.pos.x, -(wps[wp].z - x.pos.z)) * 180 / Math.PI;
-    const err = ((brg - track) % 360 + 540) % 360 - 180;
-    x.aileronInput = aileronForBank(Math.max(-25, Math.min(25, err * 1.5)), attitude(x).bankRightDeg, -x.angVel.z);
-    x.rudderInput = Math.max(-1, Math.min(1, (x.betaDeg ?? 0) * 0.1));
-    const p = deadStickTarget({ t: x.t, iasKts: x.iasKts, aglFt: x.pos.y * M_TO_FT, x: x.pos.x, z: x.pos.z, trackDeg: (track + 360) % 360 });
+    const sim = { simTime: x.t, iasKts: x.iasKts, aglFt: x.pos.y * M_TO_FT, pos: x.pos, vel: x.vel, flapsIndex: x.flapsIndex, gsKts: x.gsKts, tasKts: x.tasKts, assist: 'pilot' };
+    const p = deadStickPrompt(st, sim);
     if (p && p !== prompts[prompts.length - 1]) prompts.push(p);
-    if (obeyHigh && wp === 2 && p === 'dsHigh') x.flapsIndex = 3;
+    let bank;
+    if (mode === 'tight') {
+      if (wp < 2 && Math.hypot(wps[wp].x - x.pos.x, wps[wp].z - x.pos.z) < 250) wp++;
+      const brg = Math.atan2(wps[wp].x - x.pos.x, -(wps[wp].z - x.pos.z)) * 180 / Math.PI;
+      bank = Math.max(-25, Math.min(25, (((brg - track) % 360 + 540) % 360 - 180) * 1.5));
+    } else {
+      bank = kidGuide(st, sim, guide).guideBankDeg;
+      if (p === 'dsHigh') x.flapsIndex = 3;
+    }
+    x.aileronInput = aileronForBank(bank, attitude(x).bankRightDeg, -x.angVel.z);
+    x.rudderInput = Math.max(-1, Math.min(1, (x.betaDeg ?? 0) * 0.1));
+    maxDistNm = Math.max(maxDistNm, Math.hypot(x.pos.x - end.thrX, x.pos.z - end.thrZ) / 1852);
+    lined ||= p === 'dsFinal' || p === 'dsHigh';
   }, (x) => {
-    if (wp === 2 && approachGeometry(end, x.pos).distM <= 0) { overFt = (x.pos.y - c172.gearHeight) * M_TO_FT; return true; }
+    const g = approachGeometry(end, x.pos);
+    if ((mode === 'tight' ? wp === 2 : lined) && g.distM <= 0) { overFt = (x.pos.y - c172.gearHeight) * M_TO_FT; return true; }
     return x.pos.y < c172.gearHeight;
   });
-  return { overFt, prompts, flaps: b.flapsIndex };
+  return { overFt, prompts, flaps: b.flapsIndex, maxDistNm, t: b.t };
 }
 
 describe('Cessna 172S dead-stick challenge at Addison (flightModel, ticket 0036)', () => {
   it('a tight pattern at best glide reaches Addison 16 high: makeable, and the coach calls it high', () => {
-    const { overFt, prompts } = deadStickPattern(0.5, false);
+    const { overFt, prompts } = deadStickPattern('tight');
     console.log(`[c172 flightModel] dead-stick tight pattern: ${overFt?.toFixed(0)} ft over the threshold; coach ${prompts.join(' > ')}`);
     expect(overFt).toBeGreaterThan(300);
     expect(prompts[0]).toBe('dsFail');
-    expect(prompts).toContain('dsLeft');
     expect(prompts).toContain('dsHigh');
     expect(prompts).not.toContain('dsLow');
   });
 
-  it('downwind extended to 1.5 NM and landing flaps when the coach says high: over the threshold at 20 to 200 ft', () => {
-    const { overFt, prompts, flaps } = deadStickPattern(1.5, true);
-    console.log(`[c172 flightModel] dead-stick extended pattern: ${overFt?.toFixed(0)} ft over the threshold, flaps ${flaps}; coach ${prompts.join(' > ')}`);
+  it('flown as the coach says (glide on, turn when told, flaps when high): over the threshold at 20 to 250 ft', () => {
+    const { overFt, prompts, flaps, maxDistNm, t } = deadStickPattern('coach');
+    console.log(`[c172 flightModel] dead-stick as coached: ${overFt?.toFixed(0)} ft over the threshold, flaps ${flaps}, out to ${maxDistNm.toFixed(1)} NM, ${t.toFixed(0)} s; coach ${prompts.join(' > ')}`);
     expect(overFt).toBeGreaterThan(20);
-    expect(overFt).toBeLessThan(200);
-    expect(flaps).toBe(3);
-    expect(prompts.slice(-2)).toEqual(['dsHigh', 'dsFinal']);
+    expect(overFt).toBeLessThan(250);
+    expect(maxDistNm).toBeLessThan(4);
+    const turn = prompts.indexOf('dsTurnL');
+    expect(prompts.indexOf('dsLeft')).toBeGreaterThan(0);
+    expect(turn).toBeGreaterThan(prompts.indexOf('dsLeft'));
+    expect(prompts.indexOf('dsFinal') > turn || prompts.indexOf('dsHigh') > turn).toBe(true);
     expect(prompts).not.toContain('dsLow');
+    expect(prompts).not.toContain('dsTurnR');
   });
 });

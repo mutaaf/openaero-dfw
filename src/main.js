@@ -1007,7 +1007,7 @@ function checkTouchdown(dt) {
   });
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
-  if (sim.deadStick) result = deadLib.deadStickResult(result, deadLib.missM(end, sim.pos));
+  if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos);
   if (kidSoftLanding(result)) return;
   const gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
   sim.lastLanding = {
@@ -1081,7 +1081,7 @@ const COACH_DONE_SHOW_S = 4;
 const coachInput = {
   aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false,
   iasKts: 0, targetKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0, goAround: false,
-  stall: null, ds: null, bankDeg: 0, bounces: 0, bounceHigh: false,
+  stall: null, ds: null, noPower: false, bankDeg: 0, bounces: 0, bounceHigh: false,
   rollout: { gsKts: 0, canReverse: false, reverserPos: 0, braking: false },
 };
 const coachVals = { targetKts: 0, flapsDeg: 0 };
@@ -1136,7 +1136,8 @@ function updateCoach(dt) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
-    coachInput.throttle = sim.throttle;
+    coachInput.throttle = sim.engineFailed ? 0 : sim.throttle; // no "idle" call with no engine
+    coachInput.noPower = sim.engineFailed; // a bounce is ridden out, not powered (0036)
     coachInput.onGround = sim.onGround;
     coachInput.autopilot = sim.apMaster || sim.apApproach;
     coachInput.kid = sim.assist === 'kid';
@@ -1197,7 +1198,7 @@ function updateCoach(dt) {
   const detents = sim.spec.flapDetentsDeg ?? sim.flapAngles;
   coachVals.flapsDeg = prompt === 'gaFlaps' ? detents[Math.max(0, sim.goAround.callFlaps - 1)] : detents[2];
   coachVals.touch = touchOnly;
-  const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals) ?? deadLib?.DS_TEXT[prompt] ?? stallLib.STALL_TEXT[prompt];
+  const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   byId('txtCoach').textContent = text;
   // Spoken too when sound is on; the GPWS callouts own the last 100 ft.
   if (sim.aglFt > 100 || sim.onGround) audio.teach(text);
@@ -2066,8 +2067,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
       _assistIn.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
     }
   }
-  // No engine (0036): Kid's hands-off guide flies best glide, not a glidepath it can't hold.
-  if (sim.engineFailed && deadLib) _assistIn.guideGammaDeg = deadLib.kidGlideGammaDeg(sim.iasKts);
+  // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
+  // Addison, not a glidepath it can't hold (deadStick.js kidGuide).
+  if (sim.deadStick) deadLib.kidGuide(sim.deadStick, sim, _assistIn);
   _assistIn.noFloor = sim.engineFailed;
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
   if (sim.onGround) {
@@ -2343,6 +2345,7 @@ function syncUI() {
   }
   byId('txtSurfaceState').textContent = sim.onGround ? 'TOUCHDOWN / GROUND' : 'AIRBORNE';
 
+  if (sim.engineFailed) sim.apMaster = sim.apApproach = false; // no engine, no autopilot (0036)
   byId('btnApMaster').classList.toggle('active', sim.apMaster);
   byId('btnApHdg').classList.toggle('active', sim.apHdgHold);
   byId('btnApAlt').classList.toggle('active', sim.apAltHold);

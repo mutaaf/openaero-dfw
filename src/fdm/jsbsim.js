@@ -175,8 +175,9 @@ export function createJsbsimFdm(sdk, model = 'c172') {
     set('fcs/aileron-cmd-norm', cmd(body.aileronInput));
     set('fcs/rudder-cmd-norm', cmd(body.rudderInput));
     set('fcs/steer-cmd-norm', cmd(body.rudderInput));
-    set('fcs/throttle-cmd-norm', plateForLever(body.engineFailed ? 0 : cmd(body.throttle))); // 0036: idle, not a stopped engine
-    set('fcs/mixture-cmd-norm', mixture);
+    set('fcs/throttle-cmd-norm', plateForLever(body.engineFailed ? 0 : cmd(body.throttle)));
+    // A failed engine (0036): fuel off, so it stops and the prop windmills (the POH's glide).
+    set('fcs/mixture-cmd-norm', body.engineFailed ? 0 : mixture);
     set('fcs/flap-cmd-norm', (body.flapsIndex ?? 0) / 3);
     const brake = body.brakesOn ? BRAKE_CMD : 0;
     set('fcs/left-brake-cmd-norm', brake);

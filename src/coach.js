@@ -44,16 +44,13 @@ export const COACH_PROMPTS = {
   bounceHigh: 'Big bounce: go around! Full power', // AFH: a severe bounce is not saved
   bounceKid: 'Bounced! Let go: the plane lands itself', // Kid: the autothrottle has the power
   // The go-around (0047, after the gate called it): power, pitch, flaps a notch, gear, climb.
-  gaPower: 'Go around! Full power',
-  gaPitch: 'Pitch up: stop the descent',
   gaFlaps: 'Flaps up one notch: press F',
-  gaGear: 'Positive rate: gear up (G)',
-  gaClimb: 'Climb straight ahead to 2,000 ft',
-  gaKid: 'Going around: the plane climbs for another try',
 };
-// The drills' own prompts are ranked here and worded in their lazy chunks (no boot bytes):
-// the stall drill's st* in stallDrill.js STALL_TEXT, the dead-stick's ds* in deadStick.js
-// DS_TEXT (rank 1); coachText returns undefined for them.
+// The drills' own prompts are ranked here and worded in their lazy chunks (no boot bytes),
+// which add their words to DRILL_TEXT when they load: the go-around's ga* (goAround.js
+// GA_TEXT; gaFlaps stays here, it has numbers), the stall drill's st* (stallDrill.js
+// STALL_TEXT) and the dead-stick's ds* (deadStick.js DS_TEXT, rank 1).
+export const DRILL_TEXT = {};
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
 const RANK = {
   papi: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
@@ -81,7 +78,7 @@ export function coachText(key, v = {}) {
   if (key === 'gaFlaps' && typeof v.flapsDeg === 'number') return v.touch ? `Flaps up a notch: tap FLAPS to ${v.flapsDeg}°` : `Flaps up a notch: press F, to ${v.flapsDeg}°`;
   if (key === 'flaps' && v.flapsDeg) return v.touch ? `Landing flaps: tap FLAPS until ${v.flapsDeg}°` : `Landing flaps: press F until ${v.flapsDeg}°`;
   if (v.touch && TOUCH_WORDS[key]) return TOUCH_WORDS[key];
-  return COACH_PROMPTS[key];
+  return COACH_PROMPTS[key] ?? DRILL_TEXT[key];
 }
 
 // The missed approach, step by step (s.goAround, set by main.js after the gate called it):
@@ -171,7 +168,7 @@ function settle(c, target, dt) {
 export function stepCoach(c, s, dt) {
   if (c.done) {
     if (s.bounces > 0 && !s.onGround) {
-      c.prompt = s.kid ? 'bounceKid' : s.bounces >= 2 ? 'bounceGa' : s.bounceHigh ? 'bounceHigh' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
+      c.prompt = s.kid ? 'bounceKid' : s.noPower ? 'dsBounce' : s.bounces >= 2 ? 'bounceGa' : s.bounceHigh ? 'bounceHigh' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
       return c;
     }
     // Back on the wheels: the bounce prompt clears, the rollout prompts follow after the hold.

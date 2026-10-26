@@ -185,7 +185,7 @@ describe('stall drill coach prompts (0087)', () => {
     expect(STALL_TEXT.stNose).toMatch(/Nose down/);
     // Worded in the drill's lazy chunk; every key stallTarget can pick has short words.
     for (const k of ['stIdle', 'stSlow', 'stNose', 'stPower', 'stWings', 'stClimb', 'stKidSlow', 'stKid']) {
-      expect(coachText(k)).toBeUndefined();
+      expect(coachText(k)).toBe(STALL_TEXT[k]); // added by the chunk when it loads
       expect(STALL_TEXT[k].length).toBeLessThanOrEqual(48);
     }
   });

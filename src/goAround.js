@@ -5,8 +5,18 @@
 // The FAA's Airplane Flying Handbook (ch. 8, "Go-Arounds (Rejected Landings)") is the
 // procedure. Pure: no THREE, no DOM. Tested in tests/unit/goAround.test.js.
 import { curve, letterGrade } from './landing.js';
+import { DRILL_TEXT } from './coach.js';
 
 export const GO_AROUND_KEY = 'go_around_drill';
+// The coach's words for the missed approach (coach.js picks the keys: goAroundTarget).
+export const GA_TEXT = {
+  gaPower: 'Go around! Full power',
+  gaPitch: 'Pitch up: stop the descent',
+  gaGear: 'Positive rate: gear up (G)',
+  gaClimb: 'Climb straight ahead to 2,000 ft',
+  gaKid: 'Going around: the plane climbs for another try',
+};
+Object.assign(DRILL_TEXT, GA_TEXT);
 // Complete = climbing at least this fast through 500 ft above the runway, after the gate.
 export const GA_COMPLETE_FT = 500;
 export const GA_MIN_CLIMB_FPM = 100;
