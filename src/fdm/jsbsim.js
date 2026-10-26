@@ -175,7 +175,7 @@ export function createJsbsimFdm(sdk, model = 'c172') {
     set('fcs/aileron-cmd-norm', cmd(body.aileronInput));
     set('fcs/rudder-cmd-norm', cmd(body.rudderInput));
     set('fcs/steer-cmd-norm', cmd(body.rudderInput));
-    set('fcs/throttle-cmd-norm', plateForLever(cmd(body.throttle)));
+    set('fcs/throttle-cmd-norm', plateForLever(body.engineFailed ? 0 : cmd(body.throttle))); // 0036: idle, not a stopped engine
     set('fcs/mixture-cmd-norm', mixture);
     set('fcs/flap-cmd-norm', (body.flapsIndex ?? 0) / 3);
     const brake = body.brakesOn ? BRAKE_CMD : 0;

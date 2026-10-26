@@ -50,16 +50,10 @@ export const COACH_PROMPTS = {
   gaGear: 'Positive rate: gear up (G)',
   gaClimb: 'Climb straight ahead to 2,000 ft',
   gaKid: 'Going around: the plane climbs for another try',
-  // The stall recovery drill (0087): slow it at idle until it stalls, then recover.
-  stIdle: 'Power to idle (throttle all the way back)',
-  stSlow: 'Ease back, more and more: hold height to a stall',
-  stNose: 'Stall! Nose down',
-  stPower: 'Power in: full throttle',
-  stWings: 'Wings level',
-  stClimb: 'Climb away',
-  stKidSlow: 'Let go: the plane slows down until it stalls',
-  stKid: 'Stall! The plane noses down and climbs away',
 };
+// The drills' own prompts are ranked here and worded in their lazy chunks (no boot bytes):
+// the stall drill's st* in stallDrill.js STALL_TEXT, the dead-stick's ds* in deadStick.js
+// DS_TEXT (rank 1); coachText returns undefined for them.
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
 const RANK = {
   papi: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
@@ -120,10 +114,12 @@ export function stallTarget(s) {
 //      optional: iasKts, targetKts (Vref + 5), locDots (+ = right of the centreline),
 //      gearLocked, flapsLanding, flareFt (default 50), idleFt (default 30), driftDeg,
 //      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
-//      drill's phase: stallTarget) }
+//      drill's phase: stallTarget), ds (the dead-stick challenge's prompt key, its words in
+//      deadStick.js DS_TEXT; rank 1) }
 export function coachTarget(s) {
   if (s.onGround || s.autopilot) return null;
   if (s.stall) return stallTarget(s);
+  if (s.ds) return s.ds; // the dead-stick challenge's own prompt (deadStick.js), above the flare
   if (s.goAround) return goAroundTarget(s);
   if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : 'kid';
   if (s.aglFt < (s.idleFt ?? 30) && s.throttle > 0.05) return 'idle';
@@ -159,7 +155,7 @@ export const createCoach = () => ({ prompt: null, pending: null, pendingS: 0, fl
 // hold for COACH_MIN_HOLD_S.
 function settle(c, target, dt) {
   if (target === c.prompt) { c.pending = null; c.pendingS = 0; return; }
-  if (target === null || c.prompt === null || RANK[target] > RANK[c.prompt]) {
+  if (target === null || c.prompt === null || (RANK[target] ?? 1) > (RANK[c.prompt] ?? 1)) {
     c.prompt = target; c.pending = null; c.pendingS = 0;
     return;
   }

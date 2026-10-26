@@ -20,6 +20,9 @@ import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilo
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
 import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
+import { missionByKey } from '../../src/missions.js';
+import { runwayEnd, approachGeometry } from '../../src/airports.js';
+import { DEADSTICK_KEY, deadStickTarget } from '../../src/deadStick.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -523,5 +526,87 @@ describe('Cessna 172S stick-fixed takeoff (flightModel, ticket 0090)', () => {
     expect(hands === null || hands > 1.4 * c172.vrKts).toBe(true);
     expect(pulled).not.toBeNull();
     expect(pulled).toBeLessThan(c172.vrKts + 8);
+  });
+});
+
+// Dead-stick challenge (ticket 0036). POH Section 3, engine failure during flight: "Airspeed 68
+// KIAS (best glide)"; Fig. 3-1 Maximum Glide: 1.5 NM per 1,000 ft (~9:1), flaps up, prop
+// windmilling, zero wind. The failed engine makes no power whatever the throttle says.
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S engine failure (${model}, ticket 0036)`, () => {
+  beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
+  afterAll(() => useFdm(null));
+
+  it('engine failed, throttle full forward: no power, and it glides 8:1 to 11:1 at 68 KIAS (POH Fig. 3-1)', () => {
+    const g = Object.assign(makeBody(c172, { kts: 68, altM: 1067, throttle: 1 }), { engineFailed: true });
+    const pilot = speedHoldPilot(() => c172.vGlideKts);
+    fly(g, c172, 60, pilot);
+    const h0 = g.pos.y, d0 = g.distM;
+    fly(g, c172, 30, pilot);
+    const ratio = (g.distM - d0) / (h0 - g.pos.y);
+    console.log(`[c172 ${model}] engine out, throttle 1: glide ${ratio.toFixed(1)}:1, ${vsFpm(g).toFixed(0)} fpm at ${g.iasKts.toFixed(0)} KIAS`);
+    expect(g.throttle).toBe(1);
+    expect(ratio).toBeGreaterThanOrEqual(8);
+    expect(ratio).toBeLessThanOrEqual(11);
+  });
+});
+
+// The challenge as spawned (missions.js): 3,500 ft above the ground, 2 NM abeam the middle of
+// Addison's runway on a left downwind for 16 at 85 KIAS, engine dead. A tight pattern at 68
+// KIAS (downwind to 0.5 NM before the threshold, base, a 1 NM final) gets there ~950 ft high:
+// the height is the puzzle. Flown the way the coach (deadStick.js) asks, a downwind extended
+// to 1.5 NM, then landing flaps when it says "high" on final, crosses the threshold at a
+// normal height. Flat ground.
+function deadStickPattern(downwindNm, obeyHigh) {
+  const m = missionByKey(DEADSTICK_KEY);
+  const end = runwayEnd('KADS', '16');
+  const b = Object.assign(makeBody(c172, { kts: m.kias, altM: m.aglFt * 0.3048 }), { engineFailed: true });
+  const yaw = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -m.hdg * Math.PI / 180);
+  b.quat.premultiply(yaw);
+  b.vel.applyQuaternion(yaw);
+  b.pos.x = m.pos[0]; b.pos.z = m.pos[1];
+  const d = { x: Math.sin(end.hdgT * Math.PI / 180), z: -Math.cos(end.hdgT * Math.PI / 180) };
+  const at = (beforeM, rightM) => ({ x: end.thrX - d.x * beforeM - d.z * rightM, z: end.thrZ - d.z * beforeM + d.x * rightM });
+  const wps = [at(downwindNm * 1852, -3704), at(1852, 0), at(-300, 0)];
+  let wp = 0;
+  const hold = speedHoldPilot(() => c172.vGlideKts);
+  const prompts = [];
+  let overFt = null;
+  fly(b, c172, 600, (x, dt) => {
+    hold(x, dt);
+    if (wp < 2 && Math.hypot(wps[wp].x - x.pos.x, wps[wp].z - x.pos.z) < 250) wp++;
+    const track = Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI;
+    const brg = Math.atan2(wps[wp].x - x.pos.x, -(wps[wp].z - x.pos.z)) * 180 / Math.PI;
+    const err = ((brg - track) % 360 + 540) % 360 - 180;
+    x.aileronInput = aileronForBank(Math.max(-25, Math.min(25, err * 1.5)), attitude(x).bankRightDeg, -x.angVel.z);
+    x.rudderInput = Math.max(-1, Math.min(1, (x.betaDeg ?? 0) * 0.1));
+    const p = deadStickTarget({ t: x.t, iasKts: x.iasKts, aglFt: x.pos.y * M_TO_FT, x: x.pos.x, z: x.pos.z, trackDeg: (track + 360) % 360 });
+    if (p && p !== prompts[prompts.length - 1]) prompts.push(p);
+    if (obeyHigh && wp === 2 && p === 'dsHigh') x.flapsIndex = 3;
+  }, (x) => {
+    if (wp === 2 && approachGeometry(end, x.pos).distM <= 0) { overFt = (x.pos.y - c172.gearHeight) * M_TO_FT; return true; }
+    return x.pos.y < c172.gearHeight;
+  });
+  return { overFt, prompts, flaps: b.flapsIndex };
+}
+
+describe('Cessna 172S dead-stick challenge at Addison (flightModel, ticket 0036)', () => {
+  it('a tight pattern at best glide reaches Addison 16 high: makeable, and the coach calls it high', () => {
+    const { overFt, prompts } = deadStickPattern(0.5, false);
+    console.log(`[c172 flightModel] dead-stick tight pattern: ${overFt?.toFixed(0)} ft over the threshold; coach ${prompts.join(' > ')}`);
+    expect(overFt).toBeGreaterThan(300);
+    expect(prompts[0]).toBe('dsFail');
+    expect(prompts).toContain('dsLeft');
+    expect(prompts).toContain('dsHigh');
+    expect(prompts).not.toContain('dsLow');
+  });
+
+  it('downwind extended to 1.5 NM and landing flaps when the coach says high: over the threshold at 20 to 200 ft', () => {
+    const { overFt, prompts, flaps } = deadStickPattern(1.5, true);
+    console.log(`[c172 flightModel] dead-stick extended pattern: ${overFt?.toFixed(0)} ft over the threshold, flaps ${flaps}; coach ${prompts.join(' > ')}`);
+    expect(overFt).toBeGreaterThan(20);
+    expect(overFt).toBeLessThan(200);
+    expect(flaps).toBe(3);
+    expect(prompts.slice(-2)).toEqual(['dsHigh', 'dsFinal']);
+    expect(prompts).not.toContain('dsLow');
   });
 });

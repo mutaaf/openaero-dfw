@@ -147,6 +147,7 @@ export const AIRCRAFT_DATABASE = {
     vrefKts: 62,
     vrKts: 55,
     stallCleanKts: 48,
+    vGlideKts: 68, // best glide, 2,550 lb (POH Section 3, engine failure; the dead-stick drill, 0036)
     gearHeight: 1.65,
     // Struts (gear.js): 65 in wheelbase (POH Fig. 1-1 note 2), 2.54 m main track (POH Section
     // 1). Nose wheel at arm -6.8 in and mains at 58.2 in (POH Section 6 equipment list, wheel

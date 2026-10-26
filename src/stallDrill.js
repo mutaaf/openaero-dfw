@@ -8,6 +8,17 @@
 import { curve, letterGrade } from './landing.js';
 
 export const STALL_KEY = 'c172_stall_recovery';
+// The coach's words for the drill (coach.js ranks and picks the keys: stallTarget).
+export const STALL_TEXT = {
+  stIdle: 'Power to idle (throttle all the way back)',
+  stSlow: 'Ease back, more and more: hold height to a stall',
+  stNose: 'Stall! Nose down',
+  stPower: 'Power in: full throttle',
+  stWings: 'Wings level',
+  stClimb: 'Climb away',
+  stKidSlow: 'Let go: the plane slows down until it stalls',
+  stKid: 'Stall! The plane noses down and climbs away',
+};
 // The stall warning sounds 5 kt above the stall (aero.js stallWarningKts): on the C172's lift
 // curve that is ~3° of angle of attack below the stall angle (CL ∝ 1/V², (53/58)² of CLmax).
 // Below it the wing is flying again: "unstalled".
