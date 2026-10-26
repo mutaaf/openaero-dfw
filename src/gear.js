@@ -128,7 +128,7 @@ export function noseSteerYawRate(body, spec, alongMps) {
 
 // The tail against the mains (rad/s², body x: + = nose up). The flight model's elevator is a
 // pitch-rate command tuned in the air, where most of a real tail's power goes into balancing
-// the static stability the rate model leaves out. On the ground that power works against
+// the static stability (flightModel.js models it softly about the trim α, 0090). On the ground that power works against
 // the weight on the main wheels: full elevator cancels the mains' moment at and above
 // 0.8 Vr, less as q falls with the square of the speed (so the nose can't be lifted at taxi
 // speeds, and it comes down by itself after touchdown with the stick neutral).

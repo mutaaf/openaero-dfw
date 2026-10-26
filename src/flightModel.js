@@ -5,7 +5,8 @@
 // `body` carries the state and the control positions under the same names as main.js's
 // `sim`: pos, vel, quat, angVel (world frame, see autopilot.js for the sign conventions),
 // elevInput, aileronInput, rudderInput, throttle, flapsIndex, gearDown, brakesOn, apMaster,
-// windVec (air-mass velocity) and groundY (terrain height under the aircraft); optional
+// windVec (air-mass velocity) and groundY (terrain height under the aircraft), trimAlphaDeg
+// (the angle of attack the elevator trim flies; autoTrim = it follows α); optional
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
 // writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY,
 // sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn),
@@ -30,6 +31,8 @@ const _euler = new Euler(0, 0, 0, 'YXZ');
 const _air = {};
 const _gearM = new Vector3();
 const BETA_LIN = 20 * DEG_TO_RAD;
+// Wider than any airframe's elevatorAlphaDeg, so no held stick out-pulls the restoring moment.
+const ALPHA_LIN = 90 * DEG_TO_RAD;
 
 export function stepFlightModel(body, spec, dt) {
   stepSystems(body, spec, dt);
@@ -174,7 +177,18 @@ export function stepFlightModel(body, spec, dt) {
   }
 
   // Angular Moments & Inertial Damping
-  const qRate = (-body.elevInput * (spec.pitchAuthority ?? 1.8) - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
+  // Static pitch stability (Cmα, ticket 0090): the nose is pulled back to the angle of attack
+  // the elevator trim is set for (body.trimAlphaDeg), and the stick moves that angle by the
+  // elevator balance: full stick = spec.elevatorAlphaDeg of α (Cmδe·δe / Cmα), so a released
+  // stick flies the trimmed speed. Its stiffness is the pitch authority over that angle (the
+  // short period is as soft as the elevator is weak; the trim α per stick is the source's). A
+  // pilot or autopilot that trims as it holds a pitch (body.autoTrim), or a fly-by-wire pitch
+  // law (spec.pitchFbw), carries the trim with the angle of attack, so the term is zero.
+  const authority = spec.pitchAuthority ?? 1.8;
+  if (body.autoTrim || spec.pitchFbw || body.trimAlphaDeg == null) body.trimAlphaDeg = body.aoaDeg;
+  const stiffness = spec.elevatorAlphaDeg ? authority / (spec.elevatorAlphaDeg * DEG_TO_RAD) : 0;
+  const alphaErr = MathUtils.clamp(aoaRad - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
+  const qRate = (-body.elevInput * authority - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
   // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
   const dihedral = dihedralAileron(spec, betaRad);

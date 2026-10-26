@@ -43,7 +43,7 @@ export const COACH_PROMPTS = {
   gaKid: 'Going around: the plane climbs for another try',
   // The stall recovery drill (0087): slow it at idle until it stalls, then recover.
   stIdle: 'Power to idle (throttle all the way back)',
-  stSlow: 'Ease back, hold height: let it slow and stall',
+  stSlow: 'Ease back, more and more: hold height to a stall',
   stNose: 'Stall! Nose down',
   stPower: 'Power in: full throttle',
   stWings: 'Wings level',

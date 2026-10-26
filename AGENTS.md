@@ -215,7 +215,11 @@ src/surfaces.js     moving parts (0063, lazy chunk after boot): ctl_* surfaces f
 src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear contact and
                     integration on a `body` (main.js passes `sim`). Pure: flown headless by
                     tests/flight/ against published performance data. Sideslip (0081): side
-                    force spec.cyBeta/cyRudder and dihedral spec.clBeta (as aileron, /clAileron)
+                    force spec.cyBeta/cyRudder and dihedral spec.clBeta (as aileron, /clAileron).
+                    Pitch stability (0090): the nose returns to body.trimAlphaDeg, full stick =
+                    spec.elevatorAlphaDeg (Cmδe/Cmα); autoTrim (assists, AP, harness pilots) and
+                    spec.pitchFbw (F-16) carry the trim with α; Pilot's is the spawn's (or the
+                    autopilot's), moved only by a held stick (main.js, ~8 s, 4° short of the stall)
 src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFlightModel on
                     JSBSim (LGPL WASM, own chunk, lazy after Start flight); trims the
                     elevator and settles the engine at its throttle on an airborne spawn
@@ -301,7 +305,8 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
-state machine, grade and card text are a lazy chunk). 10 B of headroom: the next boot feature trims first. 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
 is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's

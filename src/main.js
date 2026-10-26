@@ -1251,6 +1251,9 @@ async function fetchWeather() {
   }
   refreshWeather();
   refreshCrosswindMission();
+  // Before the first Fly, spawn again in the weather that just arrived: the boot spawn folded
+  // the scenario wind into its ground speed, and the new wind was a ~15 kt shear (0090).
+  if (!detailedModelsArmed) loadScenario(sim.missionKey, sim.missionKey.startsWith('debug_') && sim.loadedMission);
 }
 
 // Re-pick today's crosswind challenge from the live METARs. A flight already under way keeps
@@ -1428,6 +1431,14 @@ function integrateSubStep(dt) {
   }
 
   stallPullIn = Math.max(0, -targetPitch); // elevator + = nose down
+  // The assists and a pitch-holding autopilot trim as they fly; Pilot's trim stays where the
+  // spawn (or the autopilot it took over from) set it, so a released stick flies that trim (0090).
+  sim.autoTrim = sim.assist !== 'pilot' || (sim.apMaster && (sim.apApproach || sim.apAltHold));
+  // No trim control yet: a stick held off centre trims its pressure away over ~8 s, as a pilot
+  // would, but never closer than 4° to the stall, so letting go there still lowers the nose.
+  if (!sim.autoTrim && sim.trimAlphaDeg != null && Math.abs(sim.elevInput) > 0.05) {
+    sim.trimAlphaDeg = Math.min(stallAoaDeg(sim.spec, sim.flapsIndex) - 4, sim.trimAlphaDeg + (sim.aoaDeg - sim.trimAlphaDeg) * dt / 8);
+  }
   if (assist) {
     applyAssists(assist, targetPitch, targetRoll, targetYaw, dt);
   } else {
@@ -2069,6 +2080,7 @@ function loadScenario(key, final = null) {
     if (mission.aircraft !== sim.aircraftKey) { aircraftBeforeMission ??= sim.aircraftKey; setAircraft(mission.aircraft); }
   } else if (aircraftBeforeMission) { setAircraft(aircraftBeforeMission); aircraftBeforeMission = null; }
   sim.missionKey = mission.key;
+  let trimAlpha = null;
   sim.loadedMission = mission;
   sim.brakesOn = false;
   sim.apMaster = false;
@@ -2111,6 +2123,7 @@ function loadScenario(key, final = null) {
     const pitch = (trimAoaDeg(sim.spec, vApp, sim.flapsIndex) - 3) * DEG_TO_RAD;
     sim.quat.setFromEuler(_euler.set(pitch, s.yawRad, 0, 'YXZ'));
     sim.throttle = trimThrottle(sim.spec, vApp, sim.flapsIndex, -3, true, airThr);
+    trimAlpha = trimAoaDeg(sim.spec, vApp, sim.flapsIndex);
     sim.gearDown = true;
     sim.onGround = false;
     sim.activeEnd = end;
@@ -2122,6 +2135,8 @@ function loadScenario(key, final = null) {
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0;
     sim.flapsIndex = 1;
+    // Takeoff trim: a neutral stick flies the climb-out speed (1.2 Vr, in m/s) once it lifts off.
+    trimAlpha = trimAoaDeg(sim.spec, sim.spec.vrKts * 0.617, 1);
     sim.gearDown = true;
     sim.onGround = true;
     sim.activeEnd = end;
@@ -2139,6 +2154,7 @@ function loadScenario(key, final = null) {
     sim.gearDown = !!sim.spec.fixedGear;
     sim.quat.setFromEuler(_euler.set(trimAoaDeg(sim.spec, vIas, 0) * DEG_TO_RAD, -mission.hdg * DEG_TO_RAD, 0, 'YXZ'));
     sim.throttle = trimThrottle(sim.spec, vIas, 0, 0, sim.gearDown, air);
+    trimAlpha = trimAoaDeg(sim.spec, vIas, 0);
     sim.onGround = false;
     sim.activeEnd = null;
   } else {
@@ -2155,6 +2171,9 @@ function loadScenario(key, final = null) {
     sim.activeEnd = null;
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
+  // Finals and the drill are trimmed for their speed (the wind can change the airspeed after the
+  // spawn); tours spawn level, so their first step's angle of attack is the trim (0090).
+  sim.trimAlphaDeg = trimAlpha;
   sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
   // Airline practice on a final: autobrake 2 armed, reversers stowed (systems.js). The
   // gear and flaps start where the spawn put the levers.
@@ -2475,6 +2494,7 @@ function setAircraft(key) {
   byId('selAircraft').value = key;
   sim.aircraftKey = key;
   sim.spec = AIRCRAFT_DATABASE[sim.aircraftKey];
+  sim.trimAlphaDeg = null; // the new airframe trims where it flies now (0090)
   if (sim.spec.fixedGear) sim.gearDown = true;
   if (!systemsOf(sim.spec).autobrake) sim.autobrake = 0;
   seedSystems(sim.spec, sim); // the new airframe's gear and flaps where its levers are
@@ -2564,6 +2584,7 @@ document.addEventListener('visibilitychange', () => {
 const gfxLostEl = byId('gfxLost');
 const gfxPanel = byId('gfxLostPanel');
 const txtGfxLost = byId('txtGfxLost');
+const gfxWaitText = txtGfxLost.textContent; // index.html's first line
 const txtGfxLostTitle = byId('txtGfxLostTitle');
 const btnGfxResume = byId('btnGfxResume');
 const btnGfxReload = byId('btnGfxReload');
@@ -2578,7 +2599,7 @@ simCanvas.addEventListener('webglcontextlost', (e) => {
   gfx.lost = true;
   terrainLod?.reset();
   txtGfxLostTitle.textContent = 'Graphics paused';
-  txtGfxLost.textContent = 'Your device needed its graphics chip for a moment. Hang on, it should be right back…';
+  txtGfxLost.textContent = gfxWaitText;
   btnGfxResume.classList.add('hidden');
   btnGfxReload.classList.add('hidden');
   gfxLostEl.classList.remove('hidden');
@@ -2888,7 +2909,7 @@ function updateSkyAndLights(t) {
 // ?debug: a one-line usage readout of the Google session (to verify the free tier holds).
 const debugOverlay = new URLSearchParams(window.location.search).has('debug') ? document.createElement('div') : null;
 if (debugOverlay) {
-  debugOverlay.style.cssText = 'position:absolute;left:8px;bottom:14px;z-index:40;font:10px monospace;color:#a7f3d0;background:rgba(2,6,23,.7);padding:2px 6px;border-radius:4px;pointer-events:none';
+  debugOverlay.className = 'debug-overlay'; // styles.css
   document.body.appendChild(debugOverlay);
 }
 let debugTimer = 0;

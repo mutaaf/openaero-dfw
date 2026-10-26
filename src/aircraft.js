@@ -92,6 +92,9 @@ export const AIRCRAFT_DATABASE = {
     chaseDist: 48,
     chaseHeight: 12.5,
     pitchDamping: 2.4,
+    // Elevator balance (flightModel.js, 0090): JSBSim's generic 737 (the Aeromatic model above,
+    // not Boeing data): Cmα −0.6 against its low-Mach Cmδe −1.2 at ±0.3 rad of elevator.
+    elevatorAlphaDeg: (1.2 / 0.6) * 0.3 * 180 / Math.PI,
     rollDamping: 3.2,
     yawDamping: 1.8,
     // Sideslip (0081), per radian: estimates from JSBSim's generic 737 (JSBSim-Team/jsbsim
@@ -162,6 +165,9 @@ export const AIRCRAFT_DATABASE = {
     chaseDist: 18,
     chaseHeight: 4.5,
     pitchDamping: 3.8,
+    // Elevator balance (flightModel.js, 0090): Roskam's Cmα −0.89 against Cmδe −1.28 per
+    // radian, as in our JSBSim C172 (public/jsbsim/), at the TCDS's 25.5° mean elevator throw.
+    elevatorAlphaDeg: (1.28 / 0.89) * 25.5,
     rollDamping: 4.2,
     yawDamping: 2.5,
     // Sideslip (flightModel.js, 0081), per radian, Roskam's Cessna 172 as in our JSBSim C172
@@ -203,6 +209,9 @@ export const AIRCRAFT_DATABASE = {
     chaseDist: 24,
     chaseHeight: 5.5,
     pitchDamping: 1.8,
+    // Fly-by-wire pitch (flightModel.js, 0090): the F-16's relaxed-stability airframe is flown
+    // by its flight control computer, which trims itself (a 1 g command); here a released stick holds the nose where it is, as before.
+    pitchFbw: true,
     rollDamping: 5.2,
     yawDamping: 2.2,
     // Sideslip (0081): CYβ −1.146 per radian (NASA TP-1538 as in Stevens & Lewis, −0.02 per

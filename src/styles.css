@@ -266,3 +266,9 @@ details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before { content: '▸'; display: inline-block; width: 1em; transition: transform 0.15s; }
 details[open] > summary::before { transform: rotate(90deg); }
+
+/* ?debug usage readout (main.js debugOverlay): kept here, out of the boot JS budget. */
+.debug-overlay {
+  position: absolute; left: 8px; bottom: 14px; z-index: 40; font: 10px monospace; color: #a7f3d0;
+  background: rgba(2, 6, 23, .7); padding: 2px 6px; border-radius: 4px; pointer-events: none;
+}
