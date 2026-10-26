@@ -18,7 +18,7 @@ import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions 
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
 import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S } from './landing.js';
 import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
-import { TUTOR_TEXT, createTutor, stepTutor, tutorOn, setTutorOn } from './apTutor.js';
+import { createTutor, tutorOn, setTutorOn } from './tutorPrefs.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
   flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
@@ -1077,6 +1077,10 @@ let apGlowShown = false;
 // --- Autopilot tutor (apTutor.js): while the autopilot flies it explains itself in the
 // coach's card, speaks when sound is on, and offers "Your turn" (hand-over to the coach).
 const tutor = createTutor();
+// The tutor's phases and words (apTutor.js) are a lazy chunk, fetched right after boot; until
+// it arrives (or if it can't) the tutor is quiet.
+let tutorLib = null;
+import('./apTutor.js').then((m) => { tutorLib = m; }).catch((e) => console.warn('[openaero] no autopilot tutor:', e));
 let tutorEnabled = true;
 let coachHandover = false; // the player took over from the autopilot on a final
 const tutorInput = {
@@ -1086,7 +1090,7 @@ const tutorInput = {
 const tutorVals = { targetKts: 0, hdgDeg: 0, altFt: 0 };
 
 function updateTutor(dt) {
-  if (!tutorEnabled) { tutor.caption = null; return null; }
+  if (!tutorEnabled || !tutorLib) { tutor.caption = null; return null; }
   tutorInput.apMaster = sim.apMaster;
   tutorInput.apApproach = sim.apApproach;
   tutorInput.apHdgHold = sim.apHdgHold;
@@ -1097,7 +1101,7 @@ function updateTutor(dt) {
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
   tutorInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
-  stepTutor(tutor, tutorInput, dt);
+  tutorLib.stepTutor(tutor, tutorInput, dt);
   return tutor.caption;
 }
 
@@ -1159,7 +1163,7 @@ function updateCoach(dt) {
     tutorVals.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
     tutorVals.hdgDeg = magHeadingText(sim.targetHdgDeg);
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
-    const text = TUTOR_TEXT[caption](tutorVals);
+    const text = tutorLib.TUTOR_TEXT[caption](tutorVals);
     byId('txtCoach').textContent = text;
     // The GPWS callouts own the last 100 ft; the tutor speaks above them.
     if (sim.aglFt > 100 || caption === 'rollout') audio.teach(text);
