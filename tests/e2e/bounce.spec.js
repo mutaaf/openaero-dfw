@@ -22,10 +22,10 @@ test('a bounce after the touchdown is coached, then caps the grade on the result
       const b = document.getElementById(id);
       if (b.classList.contains('active')) b.click();
     }
-    window.openaeroDebugHop(5);
+    window.openaeroDebugHop(3);
   });
   await expect.poll(async () => (await snap()).onGround, { timeout: 5_000, intervals: [50] }).toBe(false);
-  await expect(page.locator('#txtCoach')).toHaveText(/Bounced: hold the attitude/, { timeout: 5_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/Bounced: hold the attitude/, { timeout: 5_000 }); // a slight bounce
   await expect(page.locator('#resultsCard')).toBeHidden(); // not over the bounce
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('#txtGradeReason')).toContainText('Bounced once');

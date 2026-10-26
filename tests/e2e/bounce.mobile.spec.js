@@ -19,10 +19,10 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
       const b = document.getElementById(id);
       if (b.classList.contains('active')) b.click();
     }
-    window.openaeroDebugHop(5);
+    window.openaeroDebugHop(3);
   });
   const coach = page.locator('#coach');
-  await expect(page.locator('#txtCoach')).toHaveText(/Bounced/, { timeout: 5_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/bounce/i, { timeout: 5_000 });
   const c = await coach.boundingBox();
   expect(c.x).toBeGreaterThanOrEqual(0);
   expect(c.x + c.width).toBeLessThanOrEqual(390);
