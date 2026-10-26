@@ -1,12 +1,12 @@
 ---
 id: 0078
 title: Show magnetic headings: the HUD compass agrees with the runway numbers and the chart
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-10-22
-pr:
+pr: 95
 ---
 
 ## Why
