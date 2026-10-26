@@ -1,7 +1,7 @@
 ---
 id: 0090
 title: Static pitch stability in flightModel.js: a released stick lets the nose find its trim
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity
