@@ -218,7 +218,8 @@ src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear 
                     force spec.cyBeta/cyRudder and dihedral spec.clBeta (as aileron, /clAileron).
                     Pitch stability (0090): the nose returns to body.trimAlphaDeg, full stick =
                     spec.elevatorAlphaDeg (Cmδe/Cmα); autoTrim (assists, AP, harness pilots) and
-                    spec.pitchFbw (F-16) carry the trim with α; Pilot's stays at the spawn's
+                    spec.pitchFbw (F-16) carry the trim with α; Pilot's is the spawn's (or the
+                    autopilot's), moved only by a held stick (main.js, ~8 s, 4° short of the stall)
 src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFlightModel on
                     JSBSim (LGPL WASM, own chunk, lazy after Start flight); trims the
                     elevator and settles the engine at its throttle on an airborne spawn

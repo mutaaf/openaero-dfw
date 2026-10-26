@@ -1431,6 +1431,11 @@ function integrateSubStep(dt) {
   // The assists and a pitch-holding autopilot trim as they fly; Pilot's trim stays where the
   // spawn (or the autopilot it took over from) set it, so a released stick flies that trim (0090).
   sim.autoTrim = !!assist || (sim.apMaster && (sim.apApproach || sim.apAltHold));
+  // No trim control yet: a stick held off centre trims its pressure away over ~8 s, as a pilot
+  // would, but never closer than 4° to the stall, so letting go there still lowers the nose.
+  if (!sim.autoTrim && sim.trimAlphaDeg != null && Math.abs(sim.elevInput) > 0.05) {
+    sim.trimAlphaDeg = Math.min(stallAoaDeg(sim.spec, sim.flapsIndex) - 4, sim.trimAlphaDeg + (sim.aoaDeg - sim.trimAlphaDeg) * dt / 8);
+  }
   if (assist) {
     applyAssists(assist, targetPitch, targetRoll, targetYaw, dt);
   } else {
@@ -2156,13 +2161,12 @@ function loadScenario(key, final = null) {
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), yaw);
     sim.throttle = mission.throttle;
     sim.flapsIndex = 0;
-    trimAlpha = trimAoaDeg(sim.spec, mission.speedMps, 0);
     sim.gearDown = !!sim.spec.fixedGear;
     sim.onGround = false;
     sim.activeEnd = null;
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
-  // A final and the drill spawn in trim: their first step's angle of attack is the trim (0090).
+  // Finals and the drill spawn in trim, tours level: their first step's angle of attack is the trim (0090).
   sim.trimAlphaDeg = trimAlpha;
   sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
   // Airline practice on a final: autobrake 2 armed, reversers stowed (systems.js). The
@@ -2484,6 +2488,7 @@ function setAircraft(key) {
   byId('selAircraft').value = key;
   sim.aircraftKey = key;
   sim.spec = AIRCRAFT_DATABASE[sim.aircraftKey];
+  sim.trimAlphaDeg = null; // the new airframe trims where it flies now (0090)
   if (sim.spec.fixedGear) sim.gearDown = true;
   if (!systemsOf(sim.spec).autobrake) sim.autobrake = 0;
   seedSystems(sim.spec, sim); // the new airframe's gear and flaps where its levers are
@@ -2573,6 +2578,7 @@ document.addEventListener('visibilitychange', () => {
 const gfxLostEl = byId('gfxLost');
 const gfxPanel = byId('gfxLostPanel');
 const txtGfxLost = byId('txtGfxLost');
+const gfxWaitText = txtGfxLost.textContent; // index.html's first line
 const txtGfxLostTitle = byId('txtGfxLostTitle');
 const btnGfxResume = byId('btnGfxResume');
 const btnGfxReload = byId('btnGfxReload');
@@ -2587,7 +2593,7 @@ simCanvas.addEventListener('webglcontextlost', (e) => {
   gfx.lost = true;
   terrainLod?.reset();
   txtGfxLostTitle.textContent = 'Graphics paused';
-  txtGfxLost.textContent = 'Your device needed its graphics chip for a moment. Hang on, it should be right back…';
+  txtGfxLost.textContent = gfxWaitText;
   btnGfxResume.classList.add('hidden');
   btnGfxReload.classList.add('hidden');
   gfxLostEl.classList.remove('hidden');

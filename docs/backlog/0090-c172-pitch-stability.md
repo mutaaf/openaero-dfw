@@ -46,9 +46,14 @@ pitch authority over `spec.elevatorAlphaDeg` (Cmδe·δe / Cmα: Roskam's C172 �
 25.5° mean throw, 36.7°; JSBSim's generic 737 −1.2/−0.6 at 0.3 rad, 34.4°), so a neutral stick
 flies the trim and the stick moves α by the source's balance. The short period is as soft as
 the model's elevator (~0.8 rad/s at 50 KIAS, about a third of the 2.2 rad/s Roskam's Cmα and
-the C172's Iyy give): closing that needs a stronger elevator, and every pitch law retuned. Trim: spawns set it (final/drill: the spawn's
-trim α; takeoff: 1.2 Vr flaps 1; tours: their speed); the assists, a pitch-holding autopilot
+the C172's Iyy give): closing that needs a stronger elevator, and every pitch law retuned. Trim: spawns set it (finals, the drill and the level
+tours: the first step's α; takeoff: 1.2 Vr flaps 1; a new airframe: where it flies), and with
+no trim control yet a stick held off centre trims its pressure away over ~8 s, never closer
+than 4° to the stall (main.js); the assists, a pitch-holding autopilot
 and the harness pilots trim as they fly (`autoTrim`), and the F-16 (`pitchFbw`) self-trims
 as before. Cards: release at the stall flies again in ≤ 2 s (promoted from `it.fails`), hands
 off after a 10 kt upset at 70/90/110 KIAS the speed is back within 2 kt in a damped phugoid;
 e2e: push and let go in Pilot (keyboard, touch) and the nose comes back up.
+Still open (0094): a trim control (keys, touch, gamepad), and a stick held fully back after a
+stall still drives the Cessna to α 80–90° (a falling leaf). Frame time: O(1) arithmetic per
+sub-step, no allocations.
