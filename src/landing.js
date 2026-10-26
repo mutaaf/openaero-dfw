@@ -99,6 +99,9 @@ export function capBounced(result, bounces) {
   return { ...result, grade: result.grade === 'D' ? 'D' : letterGrade(score), score, bounces, reason: result.reason ? `${note} ${result.reason}` : note };
 }
 
+// Tailwind text colour per grade (the results card, the mission picker's bests).
+export const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
+
 // The letter for a 0-100 score (landings and go-arounds share it).
 export function letterGrade(score) {
   return score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D';

@@ -1,8 +1,9 @@
 // The results card (lazy chunk, loaded by main.js at the touchdown or a drill's end): the
 // grade, score, personal best, the stabilized-gate verdict and one bar per factor. DOM only;
 // main.js pauses the flight first when the card comes up in the air (0047).
+import { GRADE_COLOURS } from './landing.js';
+
 const byId = (id) => document.getElementById(id);
-const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
 export function showResults(sim, result, best, end, gate) {
   const card = byId('resultsCard');
   const goAround = result.kind === 'goAround';

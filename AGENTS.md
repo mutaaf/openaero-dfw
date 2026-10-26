@@ -312,7 +312,7 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-26 (0091): 200.55 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
 is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's

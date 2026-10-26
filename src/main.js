@@ -16,7 +16,7 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S } from './landing.js';
+import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S, GRADE_COLOURS } from './landing.js';
 import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
 import { createTutor, tutorOn, setTutorOn } from './tutorPrefs.js';
 import {
