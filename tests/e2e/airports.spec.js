@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { stubTiles, enterCockpit, FULL_RES } from './helpers.js';
+import { trueToMag, magHeadingText } from '../../src/magvar.js';
 
 test.use(FULL_RES);
 
@@ -19,6 +20,21 @@ test('every approach mission starts lined up on its real runway', async ({ page 
     expect(dh, `${m} heading ${s.headingDeg} vs runway ${s.runwayHdgT}`).toBeLessThan(2);
     expect(Math.abs(s.crossM), `${m} cross-track`).toBeLessThan(30);
   }
+});
+
+// 0078: the compass agrees with the runway, like a pilot's: 35C is 0.3° true, 357.6° magnetic
+// today (WMM), so the HUD reads 358°M, not 000°.
+test('lined up on 35C the HUD heading, TRK and NAV1 course read magnetic', async ({ page }) => {
+  await enterCockpit(page);
+  await page.selectOption('#selScenario', 'kdfw_takeoff');
+  await page.waitForTimeout(300);
+  const s = await page.evaluate(() => window.openaeroDebug());
+  expect(s.activeRunway).toBe('KDFW_35C');
+  expect(s.hudHeading).toBe(`${magHeadingText(s.headingDeg)}°M`);
+  expect(Math.abs(trueToMag(s.headingDeg) - 357.6)).toBeLessThan(1);
+  expect(s.hudHeading).not.toMatch(/^(000|360)/);
+  await expect(page.locator('#txtRadarHdg')).toHaveText(/^35[789]°M$/);
+  await expect(page.locator('#txtNav1')).toContainText('358°M');
 });
 
 test('the runway is visible ahead on a 4 NM final (no depth-fight with the imagery)', async ({ page }) => {
