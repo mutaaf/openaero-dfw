@@ -25,6 +25,10 @@ export const STALL_SECONDARY_S = 10;
 export const STALL_HELD_S = 3;
 export const STALL_PULL = 0.5;
 export const STALL_PULL_WINDOW_S = 5;
+// A power-off stall is entered slowly at idle: a stall above the warning speed + this (a yank
+// at cruise, ~1.3 g at the C172's numbers) or with power on is not the drill's, and it stays armed.
+export const STALL_ENTRY_KTS = 4;
+export const STALL_ENTRY_THROTTLE = 0.2;
 // Climbing away needs power: a zoom at idle on the speed the dive built is not a recovery.
 export const STALL_MIN_THROTTLE = 0.8;
 // Not recovered: this much height lost, or this long since the stall, or this low.
@@ -45,13 +49,14 @@ export const createStallDrill = () => ({
 
 // One frame. st is mutated (no allocation); s: { t (sim time, s), dt, altFt (any datum, the
 // same each frame), aglFt, aoaDeg, stallAoaDeg (for the flaps set), vsFpm, bankDeg,
-// pullIn (the player's back stick, 0..1, before any assist), throttle (0..1) }.
+// pullIn (the player's back stick, 0..1, before any assist), throttle (0..1), iasKts,
+// warnKts (aero.js stallWarningKts for the flaps set) }.
 // Returns the transition this frame: 'stalled' | 'unstalled' | 'secondary' | 'complete' |
 // 'failed' | ''.
 export function stallDrillState(st, s) {
   const stalled = s.aoaDeg > s.stallAoaDeg;
   if (st.phase === 'armed') {
-    if (!stalled) return '';
+    if (!stalled || s.iasKts > s.warnKts + STALL_ENTRY_KTS || s.throttle > STALL_ENTRY_THROTTLE) return '';
     st.phase = 'stalled'; st.stallT = s.t; st.stallFt = s.altFt; st.lowFt = s.altFt;
     st.peakBankDeg = Math.abs(s.bankDeg);
     return 'stalled';
@@ -60,7 +65,10 @@ export function stallDrillState(st, s) {
   if (s.altFt < st.lowFt) st.lowFt = s.altFt;
   const bank = Math.abs(s.bankDeg);
   if (bank > st.peakBankDeg) st.peakBankDeg = bank;
-  if (stalled || (s.pullIn >= STALL_PULL && s.t - st.stallT <= STALL_PULL_WINDOW_S)) st.stalledS += s.dt;
+  // Back stick counts while the wing is still near its stall angle (the assist holding it there),
+  // not a firm pull-out once it flies.
+  if (stalled || (s.pullIn >= STALL_PULL && s.t - st.stallT <= STALL_PULL_WINDOW_S
+    && s.aoaDeg >= s.stallAoaDeg - STALL_WARN_MARGIN_DEG)) st.stalledS += s.dt;
   if (st.stallFt - st.lowFt > STALL_FAIL_LOST_FT || s.t - st.stallT > STALL_FAIL_S || s.aglFt < STALL_FAIL_AGL_FT) {
     st.phase = 'failed';
     return 'failed';
@@ -102,6 +110,9 @@ const WEIGHTS = { reaction: 0.35, height: 0.3, bank: 0.2, secondary: 0.15 };
 export const STALL_SECONDARY_CAP = 69; // the top of a C
 export const STALL_HELD_CAP = 54; // the top of a D
 export const STALL_SECONDARY_REASON = 'Secondary stall: ease out of the dive, don\'t yank. Capped at C.';
+// Diving the height away: at 1.5x the POH's figure the height scores 40, and with every
+// other input perfect the grade is no better than a B.
+export const STALL_DIVE_FT = 1.5 * POH_STALL_LOSS_FT;
 export const STALL_HELD_REASON = 'Held the stick back through the stall: lower the nose first. Capped at D.';
 export const STALL_PLACE = { name: 'Over Grapevine Lake · 4,500 ft' };
 export const STALL_KID_NOTE = 'Kid level: the plane lowered its nose and added power for you';
@@ -115,7 +126,7 @@ export function gradeStallRecovery(t) {
     { key: 'reaction', label: 'Nose down (stall to flying)', value: t.recoverS === null ? 'never' : `${t.recoverS.toFixed(1)} s`,
       score: t.recoverS === null ? 0 : curve(t.recoverS, [[0.5, 100], [1.5, 85], [3, 40], [5, 0]]) },
     { key: 'height', label: 'Altitude lost', value: `${Math.max(0, Math.round(t.lostFt))} ft (POH: up to ${POH_STALL_LOSS_FT})`,
-      score: curve(t.lostFt, [[POH_STALL_LOSS_FT, 100], [400, 70], [700, 30], [STALL_FAIL_LOST_FT, 0]]) },
+      score: curve(t.lostFt, [[POH_STALL_LOSS_FT, 100], [STALL_DIVE_FT, 40], [460, 15], [700, 0]]) },
     { key: 'bank', label: 'Most bank', value: `${Math.round(t.peakBankDeg)}°`,
       score: curve(t.peakBankDeg, [[10, 100], [20, 70], [45, 0]]) },
     { key: 'secondary', label: 'Secondary stall', value: t.secondary ? 'yes' : 'none', score: t.secondary ? 0 : 100 },

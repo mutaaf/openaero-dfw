@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
-import { stallAoaDeg } from '../../src/aero.js';
+import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
 import { DT, makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
@@ -407,7 +407,7 @@ function stallDrill(recover) {
     endBank = bankRightDeg;
   }, (x) => {
     Object.assign(s, { t: x.t, altFt: x.pos.y * M_TO_FT, aglFt: x.pos.y * M_TO_FT, aoaDeg: x.aoaDeg, vsFpm: vsFpm(x), bankDeg: attitude(x).bankRightDeg,
-      pullIn: Math.max(0, -x.elevInput), throttle: x.throttle });
+      pullIn: Math.max(0, -x.elevInput), throttle: x.throttle, iasKts: x.iasKts, warnKts: stallWarningKts(c172, 0) });
     stallDrillState(st, s);
     return st.phase === 'complete' || st.phase === 'failed';
   });

@@ -883,7 +883,7 @@ function startGoAroundDrill(mission) {
 // once it climbs away (or fails). stallDrill.js is a lazy chunk, loaded with the drill.
 let stallLib = null;
 let aircraftBeforeMission = null; // yours, while a mission flies its own airframe (the drill's)
-const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0 };
+const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0, iasKts: 0, warnKts: 0 };
 let stallPullIn = 0; // the player's back stick this sub-step, before the assists
 let drillCoach = false; // the drill is always coached (its only instructions) until Skip
 const stallLive = () => sim.stallDrill && sim.stallDrill.phase !== 'complete' && sim.stallDrill.phase !== 'failed';
@@ -896,6 +896,7 @@ function checkStallDrill(dt) {
   _stIn.aoaDeg = sim.aoaDeg; _stIn.stallAoaDeg = stallAoaDeg(sim.spec, sim.flapsIndex);
   _stIn.vsFpm = sim.vsiFpm; _stIn.bankDeg = -_euler.z * RAD_TO_DEG;
   _stIn.pullIn = stallPullIn; _stIn.throttle = sim.throttle;
+  _stIn.iasKts = sim.iasKts; _stIn.warnKts = stallWarningKts(sim.spec, sim.flapsIndex);
   const step = stallLib.stallDrillState(st, _stIn);
   if (step !== 'complete' && step !== 'failed') return;
   const result = stallLib.gradeStallRecovery(stallLib.stallResultInput(st, sim.assist === 'kid'));
@@ -2060,10 +2061,7 @@ function loadScenario(key, final = null) {
   // without one gives yours back.
   if (mission.aircraft) {
     if (mission.aircraft !== sim.aircraftKey) { aircraftBeforeMission ??= sim.aircraftKey; setAircraft(mission.aircraft); }
-  } else if (aircraftBeforeMission) {
-    if (aircraftBeforeMission !== sim.aircraftKey) setAircraft(aircraftBeforeMission);
-    aircraftBeforeMission = null;
-  }
+  } else if (aircraftBeforeMission) { setAircraft(aircraftBeforeMission); aircraftBeforeMission = null; }
   sim.missionKey = mission.key;
   sim.loadedMission = mission;
   sim.brakesOn = false;
@@ -2465,7 +2463,7 @@ document.getElementById('missionList').addEventListener('click', (e) => {
 document.getElementById('selAircraft').addEventListener('change', (e) => {
   aircraftBeforeMission = null; // you picked this one
   // The stall drill is the Cessna's (its POH figure, its best): another airframe ends it.
-  if (sim.stallDrill && e.target.value !== sim.loadedMission?.aircraft) { sim.stallDrill = null; updateCoach(0); }
+  sim.stallDrill = null;
   setAircraft(e.target.value);
 });
 function setAircraft(key) {

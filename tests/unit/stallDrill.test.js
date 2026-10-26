@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   STALL_KEY, createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput, drillAssist,
-  STALL_SECONDARY_S, STALL_HELD_CAP, STALL_SECONDARY_CAP,
+  STALL_SECONDARY_S, STALL_HELD_CAP, STALL_SECONDARY_CAP, STALL_DIVE_FT,
 } from '../../src/stallDrill.js';
 import { coachTarget, coachText, stallTarget } from '../../src/coach.js';
 import { MISSIONS, missionByKey, groupMissions } from '../../src/missions.js';
 import { missionFromLink } from '../../src/deeplink.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { stallAoaDeg } from '../../src/aero.js';
+import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
 import { assistConfig, createAssistState, shapeControls, assistBestKey } from '../../src/assists.js';
 import { makeBody, fly, attitude, vsFpm } from '../flight/harness.js';
 import { M_TO_FT } from '../../src/constants.js';
@@ -20,7 +20,9 @@ function trace(st, samples, t0 = { t: 0 }) {
   const events = [];
   for (const [aoaDeg, altFt, vsFpm = 0, bankDeg = 0, pullIn = 0, throttle = 1] of samples) {
     t0.t += DT;
-    const e = stallDrillState(st, { t: t0.t, dt: DT, altFt, aglFt: altFt, aoaDeg, stallAoaDeg: SA, vsFpm, bankDeg, pullIn, throttle });
+    // Entered slowly at idle (the drill's power-off stall); the throttle comes in after it.
+    const iasKts = st.phase === 'armed' ? 54 : 70, thr = st.phase === 'armed' ? 0 : throttle;
+    const e = stallDrillState(st, { t: t0.t, dt: DT, altFt, aglFt: altFt, aoaDeg, stallAoaDeg: SA, vsFpm, bankDeg, pullIn, throttle: thr, iasKts, warnKts: 58 });
     if (e) events.push(e);
   }
   return events;
@@ -67,9 +69,10 @@ describe('stallDrillState (0087)', () => {
   it('back stick held after the stall counts as held even when an assist unstalls the wing at once (panel)', () => {
     const st = createStallDrill(), clock = { t: 0 };
     trace(st, [[14.5, 4500, -300, 0, 1]], clock);
-    // The protection has the wing flying in 0.1 s, but the stick stays full back.
-    expect(trace(st, [[10, 4480, -800, 0, 1]], clock)).toEqual(['unstalled']);
-    trace(st, hold(50, [8, 4460, 200, 0, 1]), clock);
+    // The protection has the wing flying at once and holds it just below the stall angle,
+    // but the stick stays full back.
+    expect(trace(st, [[11, 4480, -800, 0, 1]], clock)).toEqual(['unstalled']);
+    trace(st, hold(50, [12, 4460, 200, 0, 1]), clock);
     trace(st, climbOut(Math.round(STALL_SECONDARY_S / DT) + 1, 4460), clock);
     expect(st.phase).toBe('complete');
     const r = gradeStallRecovery(stallResultInput(st));
@@ -81,6 +84,28 @@ describe('stallDrillState (0087)', () => {
     trace(ok, [[10, 4480, -800]], c2);
     trace(ok, hold(50, [8, 4460, 200, 0, 0.3]), c2);
     expect(ok.stalledS).toBeLessThan(0.5);
+    // Nor is a firm pull-out once the wing flies well below its stall angle (physics panel).
+    const firm = createStallDrill(), c3 = { t: 0 };
+    trace(firm, [[14.5, 4500, -300]], c3);
+    trace(firm, [[10, 4480, -800]], c3);
+    trace(firm, hold(30, [8, 4460, -200, 0, 1]), c3);
+    expect(firm.stalledS).toBeLessThan(0.5);
+  });
+
+  it('a yank at speed or a stall with power on is not the drill\'s stall: it stays armed (physics panel)', () => {
+    const st = createStallDrill();
+    const s = { t: 0.1, dt: DT, altFt: 4500, aglFt: 4500, aoaDeg: 15, stallAoaDeg: SA, vsFpm: 0, bankDeg: 0, pullIn: 1, throttle: 0, iasKts: 89, warnKts: 58 };
+    expect(stallDrillState(st, s)).toBe('');
+    expect(stallDrillState(st, { ...s, iasKts: 55, throttle: 0.75 })).toBe('');
+    expect(st.phase).toBe('armed');
+    expect(stallDrillState(st, { ...s, iasKts: 55 })).toBe('stalled');
+  });
+
+  it('diving the height away (1.5x the POH figure or more) is no better than a B (physics panel)', () => {
+    const g = (lostFt) => gradeStallRecovery({ recoverS: 0.3, lostFt, peakBankDeg: 2, secondary: false, stalledS: 0.3, failed: false });
+    expect(['S', 'A']).not.toContain(g(STALL_DIVE_FT).grade);
+    expect(['S', 'A']).not.toContain(g(497).grade); // the panel's push to -25° on flightModel.js
+    expect(g(200).grade).toBe('S');
   });
 
   it('a zoom climb at idle is not a recovery: climbing away needs power (panel)', () => {
@@ -130,8 +155,8 @@ describe('stallDrillState (0087)', () => {
       expect(r.reason, why).toMatch(/Not recovered/);
     }
     const low = createStallDrill();
-    stallDrillState(low, { t: 0, dt: DT, altFt: 1500, aglFt: 1100, aoaDeg: 15, stallAoaDeg: SA, vsFpm: -500, bankDeg: 0 });
-    expect(stallDrillState(low, { t: 0.1, dt: DT, altFt: 1450, aglFt: 990, aoaDeg: 15, stallAoaDeg: SA, vsFpm: -500, bankDeg: 0 })).toBe('failed');
+    stallDrillState(low, { t: 0, dt: DT, altFt: 1500, aglFt: 1100, aoaDeg: 15, stallAoaDeg: SA, vsFpm: -500, bankDeg: 0, iasKts: 54, warnKts: 58, throttle: 0 });
+    expect(stallDrillState(low, { t: 0.1, dt: DT, altFt: 1450, aglFt: 990, aoaDeg: 15, stallAoaDeg: SA, vsFpm: -500, bankDeg: 0, iasKts: 54, warnKts: 58, throttle: 0 })).toBe('failed');
   });
 
   it('altitude lost is one input, not the only one: a slow, banked recovery that lost little is no A', () => {
@@ -211,7 +236,7 @@ describe('assist levels still stall in the drill, then recover (headless, 0087)'
       maxAoaOverStall = Math.max(maxAoaOverStall, (x.aoaDeg ?? 0) - sa);
     }, (x) => {
       stallDrillState(st, { t: x.t, dt: 1 / 120, altFt: x.pos.y * M_TO_FT, aglFt: x.pos.y * M_TO_FT, aoaDeg: x.aoaDeg, stallAoaDeg: sa, vsFpm: vsFpm(x),
-        bankDeg: attitude(x).bankRightDeg, pullIn: Math.max(0, -s.pitchIn), throttle: x.throttle });
+        bankDeg: attitude(x).bankRightDeg, pullIn: Math.max(0, -s.pitchIn), throttle: x.throttle, iasKts: x.iasKts, warnKts: stallWarningKts(c172, 0) });
       return st.phase === 'complete' || st.phase === 'failed';
     });
     return { st, maxAoaOverStall, result: gradeStallRecovery(stallResultInput(st)) };
