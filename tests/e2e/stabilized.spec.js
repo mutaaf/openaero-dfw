@@ -42,8 +42,14 @@ test('a fast, steep approach is called unstabilized at the gate', async ({ page 
   await page.keyboard.down('KeyW');
   await expect.poll(async () => (await snap(page)).pitchDeg, { timeout: 20_000 }).toBeLessThan(-6);
   await page.keyboard.up('KeyW');
-  await expect.poll(async () => (await snap(page)).stabilizedGate, { timeout: 90_000 }).not.toBeNull();
-  const s = await snap(page);
+  // Keep it there: a stable airplane (0090) lifts its nose back towards its trim when the stick
+  // is let go, so the pilot holds the dive with taps of W, as a player would, until the gate.
+  let s = await snap(page);
+  for (const until = Date.now() + 90_000; !s.stabilizedGate && Date.now() < until; s = await snap(page)) {
+    if (s.pitchDeg > -4) { await page.keyboard.down('KeyW'); await page.waitForTimeout(80); await page.keyboard.up('KeyW'); }
+    await page.waitForTimeout(100);
+  }
+  expect(s.stabilizedGate).not.toBeNull();
   expect(s.stabilizedGate.stable).toBe(false);
   expect(s.stabilizedGate.failing).toContain('FAST');
   expect(s.stabilizedGate.iasKt).toBeGreaterThan(136 + 30); // measured at the gate

@@ -1251,6 +1251,9 @@ async function fetchWeather() {
   }
   refreshWeather();
   refreshCrosswindMission();
+  // Before the first Fly, spawn again in the weather that just arrived: the boot spawn folded
+  // the scenario wind into its ground speed, and the new wind was a ~15 kt shear (0090).
+  if (!detailedModelsArmed) loadScenario(null, sim.loadedMission);
 }
 
 // Re-pick today's crosswind challenge from the live METARs. A flight already under way keeps
