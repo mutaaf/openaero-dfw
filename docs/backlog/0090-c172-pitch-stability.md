@@ -46,8 +46,8 @@ pitch authority over `spec.elevatorAlphaDeg` (Cmδe·δe / Cmα: Roskam's C172 �
 25.5° mean throw, 36.7°; JSBSim's generic 737 −1.2/−0.6 at 0.3 rad, 34.4°), so a neutral stick
 flies the trim and the stick moves α by the source's balance. The short period is as soft as
 the model's elevator (~0.8 rad/s at 50 KIAS, about a third of the 2.2 rad/s Roskam's Cmα and
-the C172's Iyy give): closing that needs a stronger elevator, and every pitch law retuned. Trim: spawns set it (finals, the drill and the level
-tours: the first step's α; takeoff: 1.2 Vr flaps 1; a new airframe: where it flies), and with
+the C172's Iyy give): closing that needs a stronger elevator, and every pitch law retuned. Trim: spawns set it (finals and the drill: their
+spawn speed's trim α; the level tours: the first step's α; takeoff: 1.2 Vr flaps 1; a new airframe: where it flies), and with
 no trim control yet a stick held off centre trims its pressure away over ~8 s, never closer
 than 4° to the stall (main.js); the assists, a pitch-holding autopilot
 and the harness pilots trim as they fly (`autoTrim`), and the F-16 (`pitchFbw`) self-trims

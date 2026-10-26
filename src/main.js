@@ -2120,6 +2120,7 @@ function loadScenario(key, final = null) {
     const pitch = (trimAoaDeg(sim.spec, vApp, sim.flapsIndex) - 3) * DEG_TO_RAD;
     sim.quat.setFromEuler(_euler.set(pitch, s.yawRad, 0, 'YXZ'));
     sim.throttle = trimThrottle(sim.spec, vApp, sim.flapsIndex, -3, true, airThr);
+    trimAlpha = trimAoaDeg(sim.spec, vApp, sim.flapsIndex);
     sim.gearDown = true;
     sim.onGround = false;
     sim.activeEnd = end;
@@ -2150,6 +2151,7 @@ function loadScenario(key, final = null) {
     sim.gearDown = !!sim.spec.fixedGear;
     sim.quat.setFromEuler(_euler.set(trimAoaDeg(sim.spec, vIas, 0) * DEG_TO_RAD, -mission.hdg * DEG_TO_RAD, 0, 'YXZ'));
     sim.throttle = trimThrottle(sim.spec, vIas, 0, 0, sim.gearDown, air);
+    trimAlpha = trimAoaDeg(sim.spec, vIas, 0);
     sim.onGround = false;
     sim.activeEnd = null;
   } else {
@@ -2166,7 +2168,8 @@ function loadScenario(key, final = null) {
     sim.activeEnd = null;
   }
   sim.engineN = sim.throttle; // engines start spooled to the spawn's power setting
-  // Finals and the drill spawn in trim, tours level: their first step's angle of attack is the trim (0090).
+  // Finals and the drill are trimmed for their speed (the wind can change the airspeed after the
+  // spawn); tours spawn level, so their first step's angle of attack is the trim (0090).
   sim.trimAlphaDeg = trimAlpha;
   sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
   // Airline practice on a final: autobrake 2 armed, reversers stowed (systems.js). The
