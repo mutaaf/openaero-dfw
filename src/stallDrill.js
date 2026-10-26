@@ -1,7 +1,7 @@
 // Stall recovery drill (ticket 0087): the Cessna at 4,500 ft over Lake Grapevine, power idle,
 // the nose held up until the wing stalls; then nose down, power in, wings level, climb away.
 // The FAA's Airplane Flying Handbook (FAA-H-8083-3C, ch. 5, stall recovery) is the procedure:
-// reduce the angle of attack first. The grade must not reward diving: altitude lost is one
+// reduce the angle of attack first, then roll the wings level, then power. The grade must not reward diving: altitude lost is one
 // input, not the only one (Transport Canada's stall advisory circular, hosted by the FAA:
 // height loss is secondary until the recovery is positive). Pure: no THREE, no DOM. Tested in
 // tests/unit/stallDrill.test.js and flown headless in tests/flight/c172.test.js.
@@ -19,7 +19,14 @@ export const STALL_LEVEL_DEG = 15;
 // window is a secondary stall (the pull-out was too hard).
 export const STALL_SECONDARY_S = 10;
 // More than this long past the stall angle (in total) is holding the stick back through it.
+// Kid's and Learner's protection lowers the nose within ~0.3 s whatever the stick does, so
+// back stick (pull ≥ STALL_PULL) in the first STALL_PULL_WINDOW_S after the stall counts too:
+// the assist recovering is not the player recovering.
 export const STALL_HELD_S = 3;
+export const STALL_PULL = 0.5;
+export const STALL_PULL_WINDOW_S = 5;
+// Climbing away needs power: a zoom at idle on the speed the dive built is not a recovery.
+export const STALL_MIN_THROTTLE = 0.8;
 // Not recovered: this much height lost, or this long since the stall, or this low.
 export const STALL_FAIL_LOST_FT = 1000;
 export const STALL_FAIL_S = 30;
@@ -37,7 +44,8 @@ export const createStallDrill = () => ({
 });
 
 // One frame. st is mutated (no allocation); s: { t (sim time, s), dt, altFt (any datum, the
-// same each frame), aglFt, aoaDeg, stallAoaDeg (for the flaps set), vsFpm, bankDeg }.
+// same each frame), aglFt, aoaDeg, stallAoaDeg (for the flaps set), vsFpm, bankDeg,
+// pullIn (the player's back stick, 0..1, before any assist), throttle (0..1) }.
 // Returns the transition this frame: 'stalled' | 'unstalled' | 'secondary' | 'complete' |
 // 'failed' | ''.
 export function stallDrillState(st, s) {
@@ -52,7 +60,7 @@ export function stallDrillState(st, s) {
   if (s.altFt < st.lowFt) st.lowFt = s.altFt;
   const bank = Math.abs(s.bankDeg);
   if (bank > st.peakBankDeg) st.peakBankDeg = bank;
-  if (stalled) st.stalledS += s.dt;
+  if (stalled || (s.pullIn >= STALL_PULL && s.t - st.stallT <= STALL_PULL_WINDOW_S)) st.stalledS += s.dt;
   if (st.stallFt - st.lowFt > STALL_FAIL_LOST_FT || s.t - st.stallT > STALL_FAIL_S || s.aglFt < STALL_FAIL_AGL_FT) {
     st.phase = 'failed';
     return 'failed';
@@ -69,7 +77,7 @@ export function stallDrillState(st, s) {
     return 'secondary';
   }
   if (s.aoaDeg < s.stallAoaDeg - STALL_WARN_MARGIN_DEG && s.vsFpm >= STALL_MIN_CLIMB_FPM && bank <= STALL_LEVEL_DEG
-    && s.t - st.unstallT >= STALL_SECONDARY_S) {
+    && s.throttle >= STALL_MIN_THROTTLE && s.t - st.unstallT >= STALL_SECONDARY_S) {
     st.phase = 'complete'; st.climbFpm = s.vsFpm;
     return 'complete';
   }
@@ -95,10 +103,12 @@ export const STALL_SECONDARY_CAP = 69; // the top of a C
 export const STALL_HELD_CAP = 54; // the top of a D
 export const STALL_SECONDARY_REASON = 'Secondary stall: ease out of the dive, don\'t yank. Capped at C.';
 export const STALL_HELD_REASON = 'Held the stick back through the stall: lower the nose first. Capped at D.';
-export const STALL_FAILED_REASON = 'Not recovered: nose down, full power, wings level.';
+export const STALL_PLACE = { name: 'Over Grapevine Lake · 4,500 ft' };
+export const STALL_KID_NOTE = 'Kid level: the plane lowered its nose and added power for you';
+export const STALL_FAILED_REASON = 'Not recovered: nose down, wings level, full power.';
 
 // The recovery's grade. t: { recoverS (stall to the wing flying again; null if it never did),
-// lostFt, peakBankDeg, secondary, stalledS, failed }.
+// lostFt, peakBankDeg, secondary, stalledS, failed, kid (Kid level: the assists flew it) }.
 export function gradeStallRecovery(t) {
   const factors = [
     // Prompt: the angle of attack comes down first (the Handbook's first step).
@@ -116,11 +126,12 @@ export function gradeStallRecovery(t) {
   if (t.failed) { score = Math.min(score, STALL_HELD_CAP); reason = STALL_FAILED_REASON; }
   else if (t.stalledS > STALL_HELD_S) { score = Math.min(score, STALL_HELD_CAP); reason = STALL_HELD_REASON; }
   else if (t.secondary) { score = Math.min(score, STALL_SECONDARY_CAP); reason = STALL_SECONDARY_REASON; }
-  return { kind: 'stall', grade: letterGrade(score), score, factors, reason, note: null };
+  return { kind: 'stall', title: t.failed ? 'Stall not recovered' : 'Stall recovered', grade: letterGrade(score), score, factors, reason,
+    note: t.kid && !t.failed ? STALL_KID_NOTE : null };
 }
 
 // The grade input from the drill's state at 'complete' or 'failed'.
-export const stallResultInput = (st) => ({
+export const stallResultInput = (st, kid = false) => ({ kid,
   recoverS: st.recoverS, lostFt: st.stallFt - st.lowFt, peakBankDeg: st.peakBankDeg,
   secondary: st.secondary, stalledS: st.stalledS, failed: st.phase === 'failed',
 });

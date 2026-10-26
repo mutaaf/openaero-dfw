@@ -151,7 +151,8 @@ src/goAround.js     go-around drill (0047, lazy chunk loaded with the mission): 
 src/stallDrill.js   stall recovery drill (0087, lazy chunk like goAround.js): the C172 at 4,500
                     ft over Grapevine Lake; pure state machine (armed → stalled → unstalled →
                     complete/failed), the grade (reaction, height vs POH 230 ft, bank, secondary
-                    stall; held stick capped D, secondary C) and drillAssist (Kid/Learner stall
+                    stall; held stick capped D, even when an assist unstalls it; secondary C; no
+                    recovery without power) and drillAssist (Kid/Learner stall
                     protection off until the stall); coach.js has its prompts
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn
@@ -296,8 +297,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-10-24 (0087): 200.87 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
-state machine is a lazy chunk). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+2026-10-26 (0087): 200.98 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
+state machine, grade and card text are a lazy chunk). 20 B of headroom: the next boot feature trims first. 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
 is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's

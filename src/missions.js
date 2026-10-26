@@ -24,7 +24,7 @@ export const MISSIONS = [
   { key: 'kftw_16_final', label: 'KFTW Meacham 16', blurb: "Meacham, Fort Worth's historic field, just north of downtown Fort Worth.", kind: 'final', airport: 'KFTW', rwy: '16', distNm: 4 },
   { key: 'kgky_34_final', label: 'KGKY Arlington 34', blurb: 'Arlington Municipal: a short 3 NM final, south of the stadiums.', kind: 'final', airport: 'KGKY', rwy: '34', distNm: 3 },
   // Stall recovery drill (0087, stallDrill.js): the Cessna, clean, at 90 KIAS and cruise power.
-  { key: 'c172_stall_recovery', label: 'Cessna Stall Recovery Drill', blurb: 'High over Grapevine Lake in the Cessna: power idle, hold the nose up until it stalls, then nose down, full power, wings level, climb away.', kind: 'drill', aircraft: 'c172', pos: [GRAPEVINE_LAKE.x, GRAPEVINE_LAKE.z], aglFt: 4500, kias: 90, hdg: 0, stallDrill: true },
+  { key: 'c172_stall_recovery', label: 'Cessna Stall Recovery Drill', blurb: 'High over Grapevine Lake in the Cessna: power idle, hold the nose up until it stalls, then nose down, wings level, full power, climb away.', kind: 'drill', aircraft: 'c172', pos: [GRAPEVINE_LAKE.x, GRAPEVINE_LAKE.z], aglFt: 4500, kias: 90, hdg: 0, stallDrill: true },
   { key: 'downtown_skyline', label: 'Downtown Dallas Skyline Tour', blurb: 'Fly past Bank of America Plaza and Reunion Tower over downtown Dallas.', kind: 'tour', pos: [DOWNTOWN_DALLAS.x, 520, DOWNTOWN_DALLAS.z + 3200], speedMps: 108, hdg: 0, throttle: 0.65 },
   { key: 'att_stadium', label: 'Arlington AT&T Stadium', blurb: 'Low over Arlington to AT&T Stadium and the ballpark next door.', kind: 'tour', pos: [ATT_STADIUM.x, 480, ATT_STADIUM.z + 2900], speedMps: 100, hdg: 0, throttle: 0.62 },
 ];

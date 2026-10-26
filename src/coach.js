@@ -100,8 +100,9 @@ export function stallTarget(s) {
   if (s.stall === 'stalled') return s.kid ? 'stKid' : 'stNose';
   if (s.stall !== 'unstalled') return null;
   if (s.kid) return 'stKid';
-  if (s.throttle < 0.9) return 'stPower';
+  // The Handbook's order: angle of attack down (done: unstalled), wings level, then power.
   if (Math.abs(s.bankDeg ?? 0) > 5) return 'stWings';
+  if (s.throttle < 0.9) return 'stPower';
   return 'stClimb';
 }
 

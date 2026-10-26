@@ -390,7 +390,7 @@ function stallDrill(recover) {
   const climb = speedHoldPilot(() => 74);
   const sa = stallAoaDeg(c172, 0);
   let noseDown = true, endBank = 0;
-  const s = { t: 0, dt: DT, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: sa, vsFpm: 0, bankDeg: 0 };
+  const s = { t: 0, dt: DT, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: sa, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0 };
   fly(b, c172, 90, (x, dt) => {
     const { pitchDeg, bankRightDeg } = attitude(x);
     if (st.phase === 'armed') entry(x, dt);
@@ -406,7 +406,8 @@ function stallDrill(recover) {
     }
     endBank = bankRightDeg;
   }, (x) => {
-    Object.assign(s, { t: x.t, altFt: x.pos.y * M_TO_FT, aglFt: x.pos.y * M_TO_FT, aoaDeg: x.aoaDeg, vsFpm: vsFpm(x), bankDeg: attitude(x).bankRightDeg });
+    Object.assign(s, { t: x.t, altFt: x.pos.y * M_TO_FT, aglFt: x.pos.y * M_TO_FT, aoaDeg: x.aoaDeg, vsFpm: vsFpm(x), bankDeg: attitude(x).bankRightDeg,
+      pullIn: Math.max(0, -x.elevInput), throttle: x.throttle });
     stallDrillState(st, s);
     return st.phase === 'complete' || st.phase === 'failed';
   });

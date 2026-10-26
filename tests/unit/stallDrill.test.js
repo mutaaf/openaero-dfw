@@ -14,13 +14,13 @@ import { M_TO_FT } from '../../src/constants.js';
 
 const SA = 14.1;
 const DT = 0.1;
-// Flies a trace of [aoaDeg, altFt, vsFpm, bankDeg] samples, DT apart, through the state
-// machine; returns every transition.
+// Flies a trace of [aoaDeg, altFt, vsFpm, bankDeg, pullIn, throttle] samples, DT apart,
+// through the state machine; returns every transition.
 function trace(st, samples, t0 = { t: 0 }) {
   const events = [];
-  for (const [aoaDeg, altFt, vsFpm = 0, bankDeg = 0] of samples) {
+  for (const [aoaDeg, altFt, vsFpm = 0, bankDeg = 0, pullIn = 0, throttle = 1] of samples) {
     t0.t += DT;
-    const e = stallDrillState(st, { t: t0.t, dt: DT, altFt, aglFt: altFt, aoaDeg, stallAoaDeg: SA, vsFpm, bankDeg });
+    const e = stallDrillState(st, { t: t0.t, dt: DT, altFt, aglFt: altFt, aoaDeg, stallAoaDeg: SA, vsFpm, bankDeg, pullIn, throttle });
     if (e) events.push(e);
   }
   return events;
@@ -62,6 +62,35 @@ describe('stallDrillState (0087)', () => {
     expect(r.grade).toBe('D');
     expect(r.score).toBeLessThanOrEqual(STALL_HELD_CAP);
     expect(r.reason).toMatch(/Held the stick back/);
+  });
+
+  it('back stick held after the stall counts as held even when an assist unstalls the wing at once (panel)', () => {
+    const st = createStallDrill(), clock = { t: 0 };
+    trace(st, [[14.5, 4500, -300, 0, 1]], clock);
+    // The protection has the wing flying in 0.1 s, but the stick stays full back.
+    expect(trace(st, [[10, 4480, -800, 0, 1]], clock)).toEqual(['unstalled']);
+    trace(st, hold(50, [8, 4460, 200, 0, 1]), clock);
+    trace(st, climbOut(Math.round(STALL_SECONDARY_S / DT) + 1, 4460), clock);
+    expect(st.phase).toBe('complete');
+    const r = gradeStallRecovery(stallResultInput(st));
+    expect(r.grade).toBe('D');
+    expect(r.reason).toMatch(/Held the stick back/);
+    // A gentle pull to climb away is not holding it back.
+    const ok = createStallDrill(), c2 = { t: 0 };
+    trace(ok, [[14.5, 4500, -300]], c2);
+    trace(ok, [[10, 4480, -800]], c2);
+    trace(ok, hold(50, [8, 4460, 200, 0, 0.3]), c2);
+    expect(ok.stalledS).toBeLessThan(0.5);
+  });
+
+  it('a zoom climb at idle is not a recovery: climbing away needs power (panel)', () => {
+    const st = createStallDrill(), clock = { t: 0 };
+    trace(st, [[14.5, 4500, -300]], clock);
+    trace(st, [[10, 4480, -800, 0, 0, 0]], clock);
+    const zoom = Array.from({ length: 150 }, (_, i) => [6, 4480 + i, 300, 0, 0, 0]);
+    expect(trace(st, zoom, clock)).toEqual([]);
+    expect(st.phase).toBe('unstalled');
+    expect(trace(st, [[6, 4640, 300, 0, 0, 1]], clock)).toEqual(['complete']);
   });
 
   it('a re-stall within 10 s is a secondary stall, capped at C', () => {
@@ -122,6 +151,8 @@ describe('stall drill coach prompts (0087)', () => {
     expect(coachTarget({ ...base, stall: 'armed', throttle: 0.6 })).toBe('stIdle');
     expect(coachTarget({ ...base, stall: 'armed' })).toBe('stSlow');
     expect(coachTarget({ ...base, stall: 'stalled' })).toBe('stNose');
+    // The Handbook's order once the wing flies: wings level, then power.
+    expect(coachTarget({ ...base, stall: 'unstalled', throttle: 0, bankDeg: -12 })).toBe('stWings');
     expect(coachTarget({ ...base, stall: 'unstalled', throttle: 0.5 })).toBe('stPower');
     expect(coachTarget({ ...base, stall: 'unstalled', throttle: 1, bankDeg: -12 })).toBe('stWings');
     expect(coachTarget({ ...base, stall: 'unstalled', throttle: 1, bankDeg: 2 })).toBe('stClimb');
@@ -156,7 +187,7 @@ describe('the stall drill mission (0087)', () => {
 // it the protection is back on, the nose drops, and with power (Kid's autothrottle) it climbs.
 describe('assist levels still stall in the drill, then recover (headless, 0087)', () => {
   const c172 = AIRCRAFT_DATABASE.c172;
-  function flyDrill(level, { pitchIn, throttleAfter }) {
+  function flyDrill(level, { pitchIn, throttleAfter, holdBack = false }) {
     const cfg = assistConfig(level);
     const ast = createAssistState();
     const st = createStallDrill();
@@ -169,7 +200,7 @@ describe('assist levels still stall in the drill, then recover (headless, 0087)'
       const { pitchDeg, bankRightDeg } = attitude(x);
       const da = drillAssist(st.phase);
       Object.assign(s, {
-        pitchIn: st.phase === 'armed' ? pitchIn : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+        pitchIn: st.phase === 'armed' || holdBack ? pitchIn : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
         aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: da.protect ? sa : 90, tailstrikeDeg: 15,
         onGround: false, wheelHeightM: x.pos.y, airspeedMps: (x.tasKts ?? 0) * 0.514444,
         guideBankDeg: 0, guideGammaDeg: da.kidClimb ? 5 : 0,
@@ -179,7 +210,8 @@ describe('assist levels still stall in the drill, then recover (headless, 0087)'
       x.throttle = level === 'kid' ? (da.kidThrottle ?? x.throttle) : st.phase === 'armed' ? 0 : throttleAfter;
       maxAoaOverStall = Math.max(maxAoaOverStall, (x.aoaDeg ?? 0) - sa);
     }, (x) => {
-      stallDrillState(st, { t: x.t, dt: 1 / 120, altFt: x.pos.y * M_TO_FT, aglFt: x.pos.y * M_TO_FT, aoaDeg: x.aoaDeg, stallAoaDeg: sa, vsFpm: vsFpm(x), bankDeg: attitude(x).bankRightDeg });
+      stallDrillState(st, { t: x.t, dt: 1 / 120, altFt: x.pos.y * M_TO_FT, aglFt: x.pos.y * M_TO_FT, aoaDeg: x.aoaDeg, stallAoaDeg: sa, vsFpm: vsFpm(x),
+        bankDeg: attitude(x).bankRightDeg, pullIn: Math.max(0, -s.pitchIn), throttle: x.throttle });
       return st.phase === 'complete' || st.phase === 'failed';
     });
     return { st, maxAoaOverStall, result: gradeStallRecovery(stallResultInput(st)) };
@@ -199,7 +231,22 @@ describe('assist levels still stall in the drill, then recover (headless, 0087)'
     expect(st.phase).toBe('complete');
   });
 
+  it('Learner holding the stick full back through it all: the protection recovers, the grade is a D (panel)', () => {
+    const { st, result } = flyDrill('learner', { pitchIn: -1, throttleAfter: 1, holdBack: true });
+    expect(st.stallT).not.toBeNull();
+    expect(result.grade).toBe('D');
+  });
+
   it('outside the drill the protection still holds (drillAssist after the drill is normal)', () => {
     for (const p of ['complete', 'failed', null, undefined]) expect(drillAssist(p)).toEqual({ protect: true, kidThrottle: null, kidClimb: false });
+  });
+});
+
+describe('the stall drill results card (0087 panel)', () => {
+  const base = { recoverS: 0.3, lostFt: 80, peakBankDeg: 3, secondary: false, stalledS: 0.3, failed: false };
+  it('titles the card and, at Kid level, says the airplane recovered for you', () => {
+    expect(gradeStallRecovery(base)).toMatchObject({ title: 'Stall recovered', note: null });
+    expect(gradeStallRecovery({ ...base, kid: true }).note).toMatch(/for you/);
+    expect(gradeStallRecovery({ ...base, kid: true, failed: true })).toMatchObject({ title: 'Stall not recovered', note: null });
   });
 });

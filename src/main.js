@@ -524,7 +524,11 @@ async function loadDem() {
 }
 
 function buildAircraft(type) {
-  if (aircraftRoot) scene.remove(aircraftRoot);
+  if (aircraftRoot) {
+    scene.remove(aircraftRoot);
+    // Free the primitive's own buffers (the glTF copies share the cached model's: keep those).
+    aircraftRoot.traverse((o) => { if (o.userData.own) { o.geometry.dispose(); o.material.dispose(); } });
+  }
   aircraftRoot = new THREE.Group();
   animRefs = { flame: null, parts: null, model: null };
 
@@ -757,6 +761,7 @@ function buildAircraft(type) {
     aircraftRoot.add(fGroup);
   }
 
+  aircraftRoot.traverse((o) => { if (o.isMesh) o.userData.own = true; });
   rigSurfaces(animRefs, aircraftRoot);
   scene.add(aircraftRoot);
   attachDetailedModel(type);
@@ -877,8 +882,11 @@ function startGoAroundDrill(mission) {
 // Slow the Cessna at idle until the wing stalls, then recover: graded on the results card
 // once it climbs away (or fails). stallDrill.js is a lazy chunk, loaded with the drill.
 let stallLib = null;
-const STALL_PLACE = { name: 'Over Grapevine Lake · 4,500 ft' };
-const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0 };
+let aircraftBeforeMission = null; // yours, while a mission flies its own airframe (the drill's)
+const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0 };
+let stallPullIn = 0; // the player's back stick this sub-step, before the assists
+let drillCoach = false; // the drill is always coached (its only instructions) until Skip
+const stallLive = () => sim.stallDrill && sim.stallDrill.phase !== 'complete' && sim.stallDrill.phase !== 'failed';
 function checkStallDrill(dt) {
   const st = sim.stallDrill;
   if (!st) return;
@@ -887,17 +895,19 @@ function checkStallDrill(dt) {
   _stIn.altFt = sim.pos.y * M_TO_FT; _stIn.aglFt = sim.aglFt;
   _stIn.aoaDeg = sim.aoaDeg; _stIn.stallAoaDeg = stallAoaDeg(sim.spec, sim.flapsIndex);
   _stIn.vsFpm = sim.vsiFpm; _stIn.bankDeg = -_euler.z * RAD_TO_DEG;
+  _stIn.pullIn = stallPullIn; _stIn.throttle = sim.throttle;
   const step = stallLib.stallDrillState(st, _stIn);
   if (step !== 'complete' && step !== 'failed') return;
-  const result = stallLib.gradeStallRecovery(stallLib.stallResultInput(st));
+  const result = stallLib.gradeStallRecovery(stallLib.stallResultInput(st, sim.assist === 'kid'));
   let best = { isNewBest: false, best: null };
   try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
   updateCoach(0); // the drill is over: clear its prompt before the card pauses the flight
-  showResults(result, best, STALL_PLACE, null);
+  showResults(result, best, stallLib.STALL_PLACE, null);
 }
 
 function startStallDrill(mission) {
   sim.stallDrill = null;
+  drillCoach = !!mission.stallDrill;
   if (!mission.stallDrill) return;
   const arm = (lib) => {
     stallLib = lib;
@@ -968,9 +978,7 @@ let resultsPaused = false; // the go-around's card pauses the flight in the air 
 function showResults(result, best, end, gate) {
   const card = document.getElementById('resultsCard');
   const goAround = result.kind === 'goAround';
-  const stall = result.kind === 'stall';
-  document.getElementById('txtResultTitle').textContent = goAround ? 'Go-around complete'
-    : stall ? (sim.stallDrill?.phase === 'failed' ? 'Stall not recovered' : 'Stall recovered') : 'Landing grade';
+  document.getElementById('txtResultTitle').textContent = result.title ?? (goAround ? 'Go-around complete' : 'Landing grade');
   document.getElementById('btnKeepRolling').textContent = sim.onGround ? 'KEEP ROLLING' : 'KEEP FLYING';
   if (!sim.onGround && !sim.paused) { resultsPaused = true; setPaused(true); }
   const gradeEl = document.getElementById('txtGrade');
@@ -1083,8 +1091,8 @@ function updateTutor(dt) {
 function updateCoach(dt) {
   let prompt = null;
   // Every final is coached (0073), and any approach the player takes over from the autopilot.
-  // ...and the stall drill (0087) until it is graded.
-  if (coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || sim.stallDrill)) {
+  // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
+  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && stallLive())) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1170,6 +1178,7 @@ document.getElementById('btnCoachSkip').addEventListener('click', () => {
     try { setTutorOn(window.localStorage, false); } catch { /* storage unavailable */ }
   } else {
     coachEnabled = false;
+    drillCoach = false;
     document.getElementById('chkCoach').checked = false;
   }
   updateCoach(0); // hide now, even while paused
@@ -1413,6 +1422,7 @@ function integrateSubStep(dt) {
     targetPitch = assist ? sim.mouseStick.y : sim.elevInput;
   }
 
+  stallPullIn = Math.max(0, -targetPitch); // elevator + = nose down
   if (assist) {
     applyAssists(assist, targetPitch, targetRoll, targetYaw, dt);
   } else {
@@ -2046,8 +2056,14 @@ function resetApFilters() {
 // `final` (?debug only, 0068): fly the default final to another runway end or distance.
 function loadScenario(key, final = null) {
   const mission = final ? { ...MISSIONS[0], ...final } : missionByKey(key, sim.dynamicMissions);
-  // A mission flown in one airframe (the stall drill's Cessna) brings it; others keep yours.
-  if (mission.aircraft && mission.aircraft !== sim.aircraftKey) setAircraft(mission.aircraft);
+  // A mission flown in one airframe (the stall drill's Cessna) brings it; the next mission
+  // without one gives yours back.
+  if (mission.aircraft) {
+    if (mission.aircraft !== sim.aircraftKey) { aircraftBeforeMission ??= sim.aircraftKey; setAircraft(mission.aircraft); }
+  } else if (aircraftBeforeMission) {
+    if (aircraftBeforeMission !== sim.aircraftKey) setAircraft(aircraftBeforeMission);
+    aircraftBeforeMission = null;
+  }
   sim.missionKey = mission.key;
   sim.loadedMission = mission;
   sim.brakesOn = false;
@@ -2446,7 +2462,12 @@ document.getElementById('missionList').addEventListener('click', (e) => {
 });
 
 // Aircraft Selector
-document.getElementById('selAircraft').addEventListener('change', e => setAircraft(e.target.value));
+document.getElementById('selAircraft').addEventListener('change', (e) => {
+  aircraftBeforeMission = null; // you picked this one
+  // The stall drill is the Cessna's (its POH figure, its best): another airframe ends it.
+  if (sim.stallDrill && e.target.value !== sim.loadedMission?.aircraft) { sim.stallDrill = null; updateCoach(0); }
+  setAircraft(e.target.value);
+});
 function setAircraft(key) {
   document.getElementById('selAircraft').value = key;
   sim.aircraftKey = key;
