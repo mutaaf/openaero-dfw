@@ -13,9 +13,10 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT } from '../../src/constants.js';
-import { stallAoaDeg } from '../../src/aero.js';
+import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
+import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
+import { DT, makeBody, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -373,4 +374,99 @@ describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim
     expect(r.finalAileron).toBeGreaterThan(0.05);
     expect(Math.abs(calm.finalAileron)).toBeLessThan(0.02);
   }, 20000);
+});
+
+// Ticket 0087: the stall recovery drill (src/stallDrill.js) flown headless on both models.
+// Entry: clean, idle, wings level, 1 kt/s deceleration from 80 KIAS at 4,500 ft until the
+// wing passes its stall angle. Recovery (FAA-H-8083-3C ch. 5): nose down until the angle of
+// attack is 4° below the stall, full power, wings level, then a Vy (74 KIAS) climb. Reference:
+// POH Fig. 5-3 note 1, "Altitude loss during a stall recovery may be as much as 230 feet".
+// The second card holds the stick full back at idle through the stall: never above a D.
+const STALL_ALT_M = 4500 * 0.3048;
+function stallDrill(recover) {
+  const b = makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 });
+  const st = createStallDrill();
+  const entry = speedHoldPilot((x) => Math.max(20, 80 - x.t));
+  const climb = speedHoldPilot(() => 74);
+  const sa = stallAoaDeg(c172, 0);
+  let noseDown = true, endBank = 0;
+  const s = { t: 0, dt: DT, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: sa, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0 };
+  fly(b, c172, 90, (x, dt) => {
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    if (st.phase === 'armed') entry(x, dt);
+    else if (recover) {
+      x.throttle = 1;
+      if (noseDown && x.aoaDeg > sa - 4) {
+        x.elevInput = elevatorForPitch(pitchDeg - 6, pitchDeg, x.angVel.x);
+        x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+      } else { noseDown = false; climb(x, dt); }
+    } else {
+      x.throttle = 0; x.elevInput = -1;
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+    }
+    endBank = bankRightDeg;
+  }, (x) => {
+    Object.assign(s, { t: x.t, altFt: x.pos.y * M_TO_FT, aglFt: x.pos.y * M_TO_FT, aoaDeg: x.aoaDeg, vsFpm: vsFpm(x), bankDeg: attitude(x).bankRightDeg,
+      pullIn: Math.max(0, -x.elevInput), throttle: x.throttle, iasKts: x.iasKts, warnKts: stallWarningKts(c172, 0) });
+    stallDrillState(st, s);
+    return st.phase === 'complete' || st.phase === 'failed';
+  });
+  // ...and on up at Vy for 10 s more: it ends level and climbing, not on the edge again.
+  if (recover && st.phase === 'complete') fly(b, c172, 10, (x, dt) => { climb(x, dt); endBank = attitude(x).bankRightDeg; });
+  return { st, result: gradeStallRecovery(stallResultInput(st)), vsFpm: vsFpm(b), bankDeg: endBank };
+}
+
+// KNOWN GAP (ticket 0090): flightModel.js has no static pitch stability. Its pitch rate is the
+// elevator against damping, so with the stick released at the stall the nose stays where it
+// was (10.5°) and the wing sinks deeper (α 26° after 7 s); JSBSim, flying our C172 with
+// Roskam's Cmα −0.89, drops the nose and flies again in ~1 s. A neutral stick also holds a
+// dive (a -22° dive held at 150 kt in the game), and an over-pull can lock at α 90°.
+const STALL_GAPS = { flightModel: new Set(['release']), jsbsim: new Set() };
+
+// Released at the stall: idle, stick neutral, wings level. Seconds until the wing flies again.
+function releasedAtStall() {
+  const b = makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 });
+  const entry = speedHoldPilot((x) => Math.max(20, 80 - x.t));
+  const sa = stallAoaDeg(c172, 0);
+  let stallT = null, flyingS = null;
+  fly(b, c172, 60, (x, dt) => {
+    if (stallT === null) { entry(x, dt); if (x.aoaDeg > sa) stallT = x.t; return; }
+    x.elevInput = 0;
+    x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+  }, (x) => {
+    if (stallT !== null && x.aoaDeg < sa - 3) flyingS = x.t - stallT;
+    return flyingS !== null || (stallT !== null && x.t - stallT > 10);
+  });
+  return flyingS;
+}
+
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S stall recovery drill (${model}, ticket 0087)`, () => {
+  beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
+  afterAll(() => useFdm(null));
+  const card = (id) => (STALL_GAPS[model].has(id) ? it.fails : it);
+
+  card('release')('released at the stall, the nose drops by itself and the wing flies again within 2 s (static stability, Roskam Cmα)', () => {
+    const s = releasedAtStall();
+    expect(s).not.toBeNull();
+    expect(s).toBeLessThanOrEqual(2);
+  });
+
+  it('nose down, full power, wings level: recovers level and climbing inside the POH\'s 230 ft, graded A or S', () => {
+    const { st, result, vsFpm: vs, bankDeg } = stallDrill(true);
+    console.log(`[c172 ${model}] stall recovery: lost ${(st.stallFt - st.lowFt).toFixed(0)} ft, flying again in ${st.recoverS?.toFixed(2)} s, `
+      + `${result.grade} ${result.score}, climbing ${vs.toFixed(0)} fpm`);
+    expect(st.phase).toBe('complete');
+    expect(st.stallFt - st.lowFt).toBeLessThanOrEqual(230);
+    expect(vs).toBeGreaterThan(300);
+    expect(Math.abs(bankDeg)).toBeLessThan(5);
+    expect(st.secondary).toBe(false);
+    expect(['S', 'A']).toContain(result.grade);
+  });
+
+  it('holding the stick full back through the stall never grades above D', () => {
+    const { st, result } = stallDrill(false);
+    console.log(`[c172 ${model}] stick held back: ${st.phase}, ${st.stalledS.toFixed(1)} s stalled, lost ${(st.stallFt - st.lowFt).toFixed(0)} ft, ${result.grade} ${result.score}`);
+    expect(['complete', 'failed']).toContain(st.phase);
+    expect(result.grade).toBe('D');
+  });
 });

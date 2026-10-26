@@ -2,6 +2,11 @@
 // tours spawn a few km south of their landmark (landmarks.js), heading straight at it. The
 // <select> and mission loader are built from this table.
 import { DOWNTOWN_DALLAS, ATT_STADIUM } from './landmarks.js';
+import { latLonToSimMeters } from './geo.js';
+
+// Drills away from the airports start over Grapevine Lake (32°58'N 97°04'W, Wikipedia), north
+// of DFW: a fixed point anyone can see from 4,500 ft.
+const GRAPEVINE_LAKE = latLonToSimMeters(32.967, -97.067);
 
 export const MISSIONS = [
   { key: 'kdfw_35c_final', label: 'KDFW RWY 35C (4 NM ILS Final)', blurb: '4 NM out, lined up on 35C. Follow the green velocity vector and the 4-light PAPI down.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4 },
@@ -18,6 +23,8 @@ export const MISSIONS = [
   { key: 'kafw_34l_final', label: 'KAFW Alliance 34L', blurb: 'Alliance, north of Fort Worth: long, wide and busy with cargo jets.', kind: 'final', airport: 'KAFW', rwy: '34L', distNm: 5 },
   { key: 'kftw_16_final', label: 'KFTW Meacham 16', blurb: "Meacham, Fort Worth's historic field, just north of downtown Fort Worth.", kind: 'final', airport: 'KFTW', rwy: '16', distNm: 4 },
   { key: 'kgky_34_final', label: 'KGKY Arlington 34', blurb: 'Arlington Municipal: a short 3 NM final, south of the stadiums.', kind: 'final', airport: 'KGKY', rwy: '34', distNm: 3 },
+  // Stall recovery drill (0087, stallDrill.js): the Cessna, clean, at 90 KIAS and cruise power.
+  { key: 'c172_stall_recovery', label: 'Cessna Stall Recovery Drill', blurb: 'High over Grapevine Lake in the Cessna: power idle, hold the nose up until it stalls, then nose down, wings level, full power, climb away.', kind: 'drill', aircraft: 'c172', pos: [GRAPEVINE_LAKE.x, GRAPEVINE_LAKE.z], aglFt: 4500, kias: 90, hdg: 0, stallDrill: true },
   { key: 'downtown_skyline', label: 'Downtown Dallas Skyline Tour', blurb: 'Fly past Bank of America Plaza and Reunion Tower over downtown Dallas.', kind: 'tour', pos: [DOWNTOWN_DALLAS.x, 520, DOWNTOWN_DALLAS.z + 3200], speedMps: 108, hdg: 0, throttle: 0.65 },
   { key: 'att_stadium', label: 'Arlington AT&T Stadium', blurb: 'Low over Arlington to AT&T Stadium and the ballpark next door.', kind: 'tour', pos: [ATT_STADIUM.x, 480, ATT_STADIUM.z + 2900], speedMps: 100, hdg: 0, throttle: 0.62 },
 ];
@@ -41,20 +48,22 @@ export function crosswindMission(pick) {
 
 // The start screen's mission picker (ticket 0029) is generated from MISSIONS: the recommended
 // first flight on top, then one group per airport in this order (an airport not listed here
-// gets its own group after them), then the tours. Every key appears once; empty groups drop.
+// gets its own group after them), then the drills flown away from an airport, then the tours. Every key appears once; empty groups drop.
 export const RECOMMENDED_KEY = 'kdfw_35c_final';
 const AIRPORT_ORDER = ['KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY'];
 
 export function groupMissions(missions) {
   const groups = [{ id: 'recommended', missions: [] }, ...AIRPORT_ORDER.map((id) => ({ id, missions: [] }))];
+  const drills = { id: 'drills', missions: [] };
   const tours = { id: 'tours', missions: [] };
   const byId = new Map(groups.map((g) => [g.id, g]));
   for (const m of missions) {
     if (m.key === RECOMMENDED_KEY) { byId.get('recommended').missions.push(m); continue; }
+    if (m.kind === 'drill' && !m.airport) { drills.missions.push(m); continue; }
     if (m.kind === 'tour' || !m.airport) { tours.missions.push(m); continue; }
     let g = byId.get(m.airport);
     if (!g) { g = { id: m.airport, missions: [] }; byId.set(m.airport, g); groups.push(g); }
     g.missions.push(m);
   }
-  return [...groups, tours].filter((g) => g.missions.length);
+  return [...groups, drills, tours].filter((g) => g.missions.length);
 }

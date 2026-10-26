@@ -15,7 +15,7 @@ test('one card per mission, grouped by airport, and a card loads its mission', a
   expect(keys.slice().sort()).toEqual(MISSIONS.map((m) => m.key).sort());
   expect(keys[0]).toBe('kdfw_35c_final');
   const heads = await page.locator('#missionList h2').allTextContents();
-  expect(heads.map((h) => h.split(' ')[0])).toEqual(['Recommended', 'KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY', 'Tours']);
+  expect(heads.map((h) => h.split(' ')[0])).toEqual(['Recommended', 'KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY', 'Drills', 'Tours']);
   // Every card says what it is.
   for (const m of MISSIONS) {
     const card = page.locator(`#missionList .btnMission[data-scenario="${m.key}"]`);
