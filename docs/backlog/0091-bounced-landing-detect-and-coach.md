@@ -1,12 +1,12 @@
 ---
 id: 0091
 title: A bounced landing is noticed, coached and graded
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-26
-pr:
+pr: 97
 ---
 
 ## Why
