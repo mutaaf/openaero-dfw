@@ -8,6 +8,7 @@ import {
   M_TO_FT, FT_TO_M, NM_TO_M, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
+import { magHeadingText } from './magvar.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
@@ -53,6 +54,8 @@ import {
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
+// Boot-budget trim (0078): one short name for the ~200 element lookups.
+const byId = (id) => document.getElementById(id);
 
 // --- Simulation State ---
 const sim = {
@@ -87,6 +90,7 @@ const sim = {
   apMaster: false, apHdgHold: false, apAltHold: false, apApproach: false,
   apPrevIasKts: null, apIasRate: 0, apGsIntegral: 0, apGsEndId: null, apAt: { trim: 0 }, // autothrottle / glidepath filter state
   targetHdgDeg: 360, targetAltFt: 1880,
+  hudHdg: '', // the HUD heading box's text (0078), for tests
 
   // Camera System
   cameraMode: 0,
@@ -158,10 +162,10 @@ const _v3 = new THREE.Vector3();
 const _q1 = new THREE.Quaternion();
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
-const simCanvas = document.getElementById('simCanvas');
-const hudCanvas = document.getElementById('hudCanvas');
+const simCanvas = byId('simCanvas');
+const hudCanvas = byId('hudCanvas');
 const hudCtx = hudCanvas.getContext('2d');
-const mapCanvas = document.getElementById('mapCanvas');
+const mapCanvas = byId('mapCanvas');
 const mapCtx = mapCanvas.getContext('2d');
 
 let renderer, scene, camera, ambientLight, sunLight;
@@ -221,8 +225,8 @@ const _sunVec = { x: 0, y: 0, z: 0 };
 const audio = createAudio(sim, updateAudioButton);
 
 function updateAudioButton() {
-  const txt = document.getElementById('txtAudioState');
-  const btn = document.getElementById('btnAudio');
+  const txt = byId('txtAudioState');
+  const btn = byId('btnAudio');
   if (sim.audioEnabled) {
     txt.textContent = 'ON';
     txt.className = 'text-emerald-400 font-bold';
@@ -493,8 +497,8 @@ function setPhotorealMode(on) {
   for (const m of runwayMeshes) m.visible = !on;
   for (const o of landmarks) o.visible = !on;
   photoreal?.setVisible(sat);
-  document.getElementById('creditsFree').classList.toggle('hidden', on);
-  document.getElementById('creditsGoogle').classList.toggle('hidden', !on);
+  byId('creditsFree').classList.toggle('hidden', on);
+  byId('creditsGoogle').classList.toggle('hidden', !on);
 }
 
 // Landmarks stand on the real ground; their own y is the height above it.
@@ -977,26 +981,26 @@ function checkTouchdown(dt) {
 const GRADE_COLOURS = { S: 'text-fuchsia-300', A: 'text-emerald-300', B: 'text-sky-300', C: 'text-amber-300', D: 'text-orange-400', CRASH: 'text-red-400' };
 let resultsPaused = false; // the go-around's card pauses the flight in the air (0047)
 function showResults(result, best, end, gate) {
-  const card = document.getElementById('resultsCard');
+  const card = byId('resultsCard');
   const goAround = result.kind === 'goAround';
-  document.getElementById('txtResultTitle').textContent = result.title ?? (goAround ? 'Go-around complete' : 'Landing grade');
-  document.getElementById('btnKeepRolling').textContent = sim.onGround ? 'KEEP ROLLING' : 'KEEP FLYING';
+  byId('txtResultTitle').textContent = result.title ?? (goAround ? 'Go-around complete' : 'Landing grade');
+  byId('btnKeepRolling').textContent = sim.onGround ? 'KEEP ROLLING' : 'KEEP FLYING';
   if (!sim.onGround && !sim.paused) { resultsPaused = true; setPaused(true); }
-  const gradeEl = document.getElementById('txtGrade');
+  const gradeEl = byId('txtGrade');
   gradeEl.textContent = result.grade;
   gradeEl.className = `${result.grade === 'CRASH' ? 'text-2xl' : 'text-5xl'} font-black w-20 text-center ${GRADE_COLOURS[result.grade]}`;
-  document.getElementById('txtScore').textContent = String(result.score);
-  document.getElementById('txtResultRunway').textContent = end.name;
-  const reason = document.getElementById('txtGradeReason');
+  byId('txtScore').textContent = String(result.score);
+  byId('txtResultRunway').textContent = end.name;
+  const reason = byId('txtGradeReason');
   reason.textContent = result.reason || '';
   reason.classList.toggle('hidden', !result.reason);
-  const bestEl = document.getElementById('txtBest');
+  const bestEl = byId('txtBest');
   if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
   else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';
   // Kid and Learner bests are their own (assists.js): say which level this grade is for.
   if (bestEl.textContent && sim.assist !== 'pilot') bestEl.textContent = `${sim.assist === 'kid' ? 'Kid' : 'Learner'} level · ${bestEl.textContent}`;
   // Not scored: the stabilized-gate verdict (null when the mission started below the gate).
-  const gateEl = document.getElementById('txtStabilized');
+  const gateEl = byId('txtStabilized');
   gateEl.classList.toggle('hidden', !gate && !result.note);
   if (gate) {
     gateEl.textContent = gate.stable ? `Stabilized at ${gate.gateHeight} ft ✓`
@@ -1008,7 +1012,7 @@ function showResults(result, best, end, gate) {
     gateEl.textContent = `${result.note} ✓`;
     gateEl.classList.add('text-emerald-300');
   }
-  const list = document.getElementById('resultsFactors');
+  const list = byId('resultsFactors');
   list.innerHTML = '';
   for (const f of result.factors) {
     const li = document.createElement('li');
@@ -1025,13 +1029,13 @@ function resumeFromResults() {
   if (resultsPaused && sim.paused) setPaused(false);
   resultsPaused = false;
 }
-document.getElementById('btnFlyAgain').addEventListener('click', () => {
-  document.getElementById('resultsCard').classList.add('hidden');
+byId('btnFlyAgain').addEventListener('click', () => {
+  byId('resultsCard').classList.add('hidden');
   resumeFromResults();
   loadScenario(sim.missionKey);
 });
-document.getElementById('btnKeepRolling').addEventListener('click', () => {
-  document.getElementById('resultsCard').classList.add('hidden');
+byId('btnKeepRolling').addEventListener('click', () => {
+  byId('resultsCard').classList.add('hidden');
   resumeFromResults();
 });
 
@@ -1133,19 +1137,19 @@ function updateCoach(dt) {
   const key = caption ? `ap:${caption}` : prompt;
   if (key === coachShown) return;
   coachShown = key;
-  document.getElementById('coach').classList.toggle('hidden', key === null);
-  document.getElementById('btnTakeover').classList.toggle('hidden', !caption);
+  byId('coach').classList.toggle('hidden', key === null);
+  byId('btnTakeover').classList.toggle('hidden', !caption);
   if (key === null) return;
-  document.getElementById('txtCoachLabel').textContent = caption ? 'Autopilot' : 'Coach';
-  const skip = document.getElementById('btnCoachSkip');
+  byId('txtCoachLabel').textContent = caption ? 'Autopilot' : 'Coach';
+  const skip = byId('btnCoachSkip');
   skip.textContent = caption ? 'Hide' : 'Skip';
   skip.setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
   if (caption) {
     tutorVals.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
-    tutorVals.hdgDeg = String(Math.round(sim.targetHdgDeg) % 360).padStart(3, '0');
+    tutorVals.hdgDeg = magHeadingText(sim.targetHdgDeg);
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
     const text = TUTOR_TEXT[caption](tutorVals);
-    document.getElementById('txtCoach').textContent = text;
+    byId('txtCoach').textContent = text;
     // The GPWS callouts own the last 100 ft; the tutor speaks above them.
     if (sim.aglFt > 100 || caption === 'rollout') audio.teach(text);
     return;
@@ -1155,7 +1159,7 @@ function updateCoach(dt) {
   coachVals.flapsDeg = prompt === 'gaFlaps' ? detents[Math.max(0, sim.goAround.callFlaps - 1)] : detents[2];
   coachVals.touch = touchOnly;
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
-  document.getElementById('txtCoach').textContent = text;
+  byId('txtCoach').textContent = text;
   // Spoken too when sound is on; the GPWS callouts own the last 100 ft.
   if (sim.aglFt > 100 || sim.onGround) audio.teach(text);
   if (!coachMarked) {
@@ -1166,27 +1170,27 @@ function updateCoach(dt) {
 
 // Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
 function applyCoachChoice() {
-  tutorEnabled = document.getElementById('chkTutor').checked;
+  tutorEnabled = byId('chkTutor').checked;
   try { setTutorOn(window.localStorage, tutorEnabled); } catch { /* storage unavailable */ }
-  coachEnabled = document.getElementById('chkCoach').checked;
+  coachEnabled = byId('chkCoach').checked;
   if (coachEnabled) resetCoach();
 }
 
-document.getElementById('btnCoachSkip').addEventListener('click', () => {
+byId('btnCoachSkip').addEventListener('click', () => {
   if (tutor.caption) {
     tutorEnabled = false;
-    document.getElementById('chkTutor').checked = false;
+    byId('chkTutor').checked = false;
     try { setTutorOn(window.localStorage, false); } catch { /* storage unavailable */ }
   } else {
     coachEnabled = false;
     drillCoach = false;
-    document.getElementById('chkCoach').checked = false;
+    byId('chkCoach').checked = false;
   }
   updateCoach(0); // hide now, even while paused
 });
 
 // "Your turn": the autopilot lets go; on a final the coach picks up from here.
-document.getElementById('btnTakeover').addEventListener('click', () => {
+byId('btnTakeover').addEventListener('click', () => {
   sim.apMaster = false;
   sim.apApproach = false;
   sim.apHdgHold = false;
@@ -1257,7 +1261,7 @@ function refreshCrosswindMission() {
   // Flying the challenge when it disappears: Fly again keeps the runway you were flying.
   const flying = sim.missionKey === CROSSWIND_KEY && sim.loadedMission ? [sim.loadedMission] : [];
   sim.dynamicMissions = m ? [m] : flying;
-  const sel = document.getElementById('selScenario');
+  const sel = byId('selScenario');
   let opt = sel.querySelector(`option[value="${CROSSWIND_KEY}"]`);
   if (m) {
     if (!opt) { opt = document.createElement('option'); opt.value = CROSSWIND_KEY; sel.prepend(opt); }
@@ -1265,8 +1269,8 @@ function refreshCrosswindMission() {
   } else if (opt && sim.missionKey !== CROSSWIND_KEY) {
     opt.remove();
   }
-  const btn = document.getElementById('btnCrosswindToday');
-  if (m) document.getElementById('txtCrosswindToday').textContent = m.label.replace("Today's crosswind: ", '');
+  const btn = byId('btnCrosswindToday');
+  if (m) byId('txtCrosswindToday').textContent = m.label.replace("Today's crosswind: ", '');
   if (!m) btn.classList.remove('active');
   btn.classList.toggle('hidden', !m);
   btn.classList.toggle('flex', !!m);
@@ -1315,22 +1319,22 @@ function syncWeatherUI(dt) {
   wxUiTimer = 1;
   const wx = currentWeather();
   if (wx !== sim.wx) refreshWeather();
-  const badge = document.getElementById('wxBadge');
+  const badge = byId('wxBadge');
   badge.textContent = wx.live ? 'LIVE METAR' : 'SCENARIO WX';
   badge.className = wx.live
     ? 'px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-400 text-emerald-300 font-bold text-[9px] shrink-0'
     : 'px-1.5 py-0.5 rounded bg-slate-900 border border-slate-500 text-slate-300 font-bold text-[9px] shrink-0';
   const age = wx.live && wx.obsTime ? ` · ${metarAgeMinutes(wx.obsTime, Date.now() / 1000)} min ago` : '';
   // Remarks (RMK …) are for forecasters; drop them so the age stays visible.
-  document.getElementById('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
-  document.getElementById('txtWindBadge').textContent = windText(wx);
+  byId('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
+  byId('txtWindBadge').textContent = windText(wx);
   const dfw = sim.wxByIcao.KDFW || scenarioWeather();
   const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
-  document.getElementById('txtFlow').textContent = flow === 'NORTH' ? 'NORTH (RWY 35/36)' : 'SOUTH (RWY 17/18)';
+  byId('txtFlow').textContent = flow === 'NORTH' ? 'NORTH (RWY 35/36)' : 'SOUTH (RWY 17/18)';
   // HUD wind box (0075): components against the active runway only low down, near it.
   const low = sim.activeEnd && nearRunwayForWind(sim.approach, sim.activeEnd.lengthM, sim.aglFt);
   windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind);
-  const rw = document.getElementById('txtRwyWind');
+  const rw = byId('txtRwyWind');
   if (sim.activeEnd && wx.windKts) {
     const c = runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT);
     const hw = Math.round(c.headwindKts), xw = Math.round(Math.abs(c.crosswindKts));
@@ -1410,11 +1414,11 @@ function integrateSubStep(dt) {
 
   if (keys['ShiftLeft'] || keys['ShiftRight']) {
     sim.throttle = Math.min(1.0, sim.throttle + dt * 0.4);
-    document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
+    byId('rngThrottle').value = Math.round(sim.throttle * 100);
   }
   if (keys['ControlLeft'] || keys['ControlRight']) {
     sim.throttle = Math.max(0.0, sim.throttle - dt * 0.4);
-    document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
+    byId('rngThrottle').value = Math.round(sim.throttle * 100);
   }
 
   const assist = sim.apMaster ? null : assistConfig(sim.assist);
@@ -1498,8 +1502,8 @@ function integrateSubStep(dt) {
   const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapsIndex), sim.onGround);
   const gpwsWarning = isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround);
   const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
-  document.getElementById('stallAlertBanner').classList.toggle('hidden', !stallWarning);
-  const banner = document.getElementById('masterAlertBanner');
+  byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
+  const banner = byId('masterAlertBanner');
   banner.classList.toggle('hidden', !gpwsWarning && !gearWarning);
   const bannerText = gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
   if (banner.textContent !== bannerText) banner.textContent = bannerText;
@@ -1525,7 +1529,7 @@ function updatePapi() {
   });
   papiLamps.geometry.attributes.color.needsUpdate = true;
 
-  const txt = document.getElementById('txtPapiStatus');
+  const txt = byId('txtPapiStatus');
   sim.papiWhite = null;
   if (!sim.activeEnd) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
   const ap = sim.approach;
@@ -1668,7 +1672,8 @@ function renderHud() {
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   const pitchRad = _euler.x;
   const rollRad = _euler.z;
-  const hdgDeg = Math.round((-_euler.y * RAD_TO_DEG + 360) % 360);
+  const hdgTrue = -_euler.y * RAD_TO_DEG;
+  const hdgDeg = Math.round((hdgTrue + 360) % 360);
 
   hudCtx.save();
   hudCtx.strokeStyle = '#38bdf8';
@@ -1755,7 +1760,8 @@ function renderHud() {
   hudCtx.fillStyle = '#e0f2fe';
   hudCtx.textAlign = 'center';
   hudCtx.font = 'bold 13px monospace';
-  hudCtx.fillText(`${String(hdgDeg).padStart(3, '0')}°`, cx, hdgTop + 16);
+  // Magnetic, like the runway numbers and a real compass (0078); the wind box stays true.
+  hudCtx.fillText(sim.hudHdg = `${magHeadingText(hdgTrue)}°M`, cx, hdgTop + 16);
   hudCtx.font = '12px monospace';
 
   drawWindBox(w, h, hdgDeg);
@@ -2087,7 +2093,7 @@ function loadScenario(key, final = null) {
   resetCoach();
   coachHandover = false;
   Object.assign(tutor, createTutor());
-  document.getElementById('resultsCard').classList.add('hidden');
+  byId('resultsCard').classList.add('hidden');
   resumeFromResults();
 
   if (mission.kind === 'final') {
@@ -2164,7 +2170,7 @@ function loadScenario(key, final = null) {
   }
   photoreal?.noteSessionReuse(); // a new mission keeps the same Google session (usage counter)
   if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
-  document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
+  byId('rngThrottle').value = Math.round(sim.throttle * 100);
   syncMissionPicker(mission);
 }
 
@@ -2197,9 +2203,9 @@ function applySun() {
     btn.classList.toggle('active', on);
     btn.setAttribute('aria-pressed', String(on));
   }
-  document.getElementById('txtSkyNow').textContent = skyCaption(mode);
-  document.getElementById('txtTimeBadge').textContent = mode;
-  document.getElementById('btnTimeOfDay').title = `Sun: ${mode} (${Math.round(sun.elevationDeg)}° up). Cycle Now / Dawn / Noon / Dusk / Night`;
+  byId('txtSkyNow').textContent = skyCaption(mode);
+  byId('txtTimeBadge').textContent = mode;
+  byId('btnTimeOfDay').title = `Sun: ${mode} (${Math.round(sun.elevationDeg)}° up). Cycle Now / Dawn / Noon / Dusk / Night`;
 }
 
 // One line under the When? picker: what the sky over Dallas is doing at that moment.
@@ -2222,8 +2228,8 @@ function setCleanView(clean, remember = true) {
   if (!clean) setHudMenu(false);
   if (remember) { try { saveCleanView(window.localStorage, clean); } catch { /* storage unavailable */ } }
 }
-document.getElementById('btnPanelsShow').addEventListener('click', () => setCleanView(false));
-document.getElementById('btnPanelsHide').addEventListener('click', () => setCleanView(true));
+byId('btnPanelsShow').addEventListener('click', () => setCleanView(false));
+byId('btnPanelsHide').addEventListener('click', () => setCleanView(true));
 
 function toggleTimeOfDay() {
   sim.timeOfDayMode = (sim.timeOfDayMode + 1) % TIME_MODES.length;
@@ -2242,62 +2248,61 @@ const flapText = () => {
 
 function syncUI() {
   const throttlePct = Math.round(sim.throttle * 100);
-  document.getElementById('txtThrottle').textContent = `${throttlePct}%`;
+  byId('txtThrottle').textContent = `${throttlePct}%`;
   // Autothrottle and gamepad move sim.throttle too: keep the slider honest, but never
   // fight a player who is dragging it (ticket 0017). Focus alone doesn't count: a range
   // input keeps focus after a click, and arrow keys must step from the current throttle.
-  const rng = rngThrottleEl || (rngThrottleEl = document.getElementById('rngThrottle'));
+  const rng = rngThrottleEl || (rngThrottleEl = byId('rngThrottle'));
   if (!draggingThrottle && Math.abs(Number(rng.value) - throttlePct) >= 1) rng.value = throttlePct;
-  document.getElementById('txtIasGs').textContent = `${Math.round(sim.iasKts)}/${sim.gsKts}K`;
-  document.getElementById('txtAltMsl').textContent = `${sim.mslFt} FT`;
-  document.getElementById('txtAltAgl').textContent = `${sim.aglFt} FT`;
-  document.getElementById('txtVsi').textContent = `${sim.vsiFpm} FPM`;
-  document.getElementById('txtGLoad').textContent = `${sim.gLoad.toFixed(2)}G`;
-  document.getElementById('txtAoaBadge').textContent = `${sim.aoaDeg.toFixed(1)}°`;
+  byId('txtIasGs').textContent = `${Math.round(sim.iasKts)}/${sim.gsKts}K`;
+  byId('txtAltMsl').textContent = `${sim.mslFt} FT`;
+  byId('txtAltAgl').textContent = `${sim.aglFt} FT`;
+  byId('txtVsi').textContent = `${sim.vsiFpm} FPM`;
+  byId('txtGLoad').textContent = `${sim.gLoad.toFixed(2)}G`;
+  byId('txtAoaBadge').textContent = `${sim.aoaDeg.toFixed(1)}°`;
 
   _euler.setFromQuaternion(sim.quat, 'YXZ');
-  const curHdg = Math.round((-_euler.y * RAD_TO_DEG + 360) % 360);
-  document.getElementById('txtRadarHdg').textContent = `${curHdg}°`;
+  byId('txtRadarHdg').textContent = `${magHeadingText(-_euler.y * RAD_TO_DEG)}°M`;
 
-  const nav1 = document.getElementById('txtNav1');
+  const nav1 = byId('txtNav1');
   if (sim.activeEnd) {
     const distNm = Math.max(0, sim.approach.distM) / NM_TO_M;
-    document.getElementById('txtNavDist').textContent = `DME ${distNm.toFixed(1)} NM`;
-    nav1.textContent = `NAV1: ${sim.activeEnd.name} ILS · ${String(Math.round(sim.activeEnd.hdgT)).padStart(3, '0')}°T`;
+    byId('txtNavDist').textContent = `DME ${distNm.toFixed(1)} NM`;
+    nav1.textContent = `NAV1: ${sim.activeEnd.name} ILS · RWY ${magHeadingText(sim.activeEnd.hdgT)}°M`;
   } else {
-    document.getElementById('txtNavDist').textContent = 'DME ---';
+    byId('txtNavDist').textContent = 'DME ---';
     nav1.textContent = 'NAV1: no runway ahead';
   }
-  document.getElementById('txtSurfaceState').textContent = sim.onGround ? 'TOUCHDOWN / GROUND' : 'AIRBORNE';
+  byId('txtSurfaceState').textContent = sim.onGround ? 'TOUCHDOWN / GROUND' : 'AIRBORNE';
 
-  document.getElementById('btnApMaster').classList.toggle('active', sim.apMaster);
-  document.getElementById('btnApHdg').classList.toggle('active', sim.apHdgHold);
-  document.getElementById('btnApAlt').classList.toggle('active', sim.apAltHold);
-  document.getElementById('btnApApr').classList.toggle('active', sim.apApproach);
+  byId('btnApMaster').classList.toggle('active', sim.apMaster);
+  byId('btnApHdg').classList.toggle('active', sim.apHdgHold);
+  byId('btnApAlt').classList.toggle('active', sim.apAltHold);
+  byId('btnApApr').classList.toggle('active', sim.apApproach);
 
   // Gear and flaps as they are, not as the levers are: amber while the hydraulics move them.
   const locked = gearLocked(sim), transit = gearInTransit(sim);
-  document.getElementById('btnGear').classList.toggle('active', locked);
-  document.getElementById('btnGear').classList.toggle('active-amber', transit);
-  document.getElementById('txtGear').textContent = locked ? 'DOWN 3 GRN' : transit ? (sim.gearDown ? 'TRANSIT ▼' : 'TRANSIT ▲') : 'UP';
+  byId('btnGear').classList.toggle('active', locked);
+  byId('btnGear').classList.toggle('active-amber', transit);
+  byId('txtGear').textContent = locked ? 'DOWN 3 GRN' : transit ? (sim.gearDown ? 'TRANSIT ▼' : 'TRANSIT ▲') : 'UP';
 
-  document.getElementById('txtFlaps').textContent = flapText();
-  document.getElementById('btnBrakes').classList.toggle('active-amber', sim.brakesOn);
-  document.getElementById('txtBrakes').textContent = sim.brakesOn ? 'SET' : sim.autobrakeActive ? 'AUTO' : 'OFF';
+  byId('txtFlaps').textContent = flapText();
+  byId('btnBrakes').classList.toggle('active-amber', sim.brakesOn);
+  byId('txtBrakes').textContent = sim.brakesOn ? 'SET' : sim.autobrakeActive ? 'AUTO' : 'OFF';
   const sys = systemsOf(sim.spec);
-  document.getElementById('btnAutobrake').disabled = !sys.autobrake;
-  document.getElementById('txtAutobrake').textContent = sys.autobrake ? AUTOBRAKE_LABELS[sim.autobrake] : 'N/A';
-  document.getElementById('btnAutobrake').classList.toggle('active-amber', sim.autobrakeActive);
-  document.getElementById('btnReverse').disabled = !sys.reverser;
-  document.getElementById('txtReverse').textContent = !sys.reverser ? 'N/A' : sim.reverserPos >= 1 ? 'REV' : sim.reverserPos > 0 ? 'UNLK' : 'STOW';
-  document.getElementById('btnReverse').classList.toggle('active-amber', sim.reverserPos > 0);
-  document.getElementById('txtHyd').textContent = sys.hydraulics ? `HYD ${sim.hydPsi} PSI` : 'HYD —';
+  byId('btnAutobrake').disabled = !sys.autobrake;
+  byId('txtAutobrake').textContent = sys.autobrake ? AUTOBRAKE_LABELS[sim.autobrake] : 'N/A';
+  byId('btnAutobrake').classList.toggle('active-amber', sim.autobrakeActive);
+  byId('btnReverse').disabled = !sys.reverser;
+  byId('txtReverse').textContent = !sys.reverser ? 'N/A' : sim.reverserPos >= 1 ? 'REV' : sim.reverserPos > 0 ? 'UNLK' : 'STOW';
+  byId('btnReverse').classList.toggle('active-amber', sim.reverserPos > 0);
+  byId('txtHyd').textContent = sys.hydraulics ? `HYD ${sim.hydPsi} PSI` : 'HYD —';
 
-  document.getElementById('meterElev').textContent = `${Math.round(sim.elevInput * 100)}%`;
-  document.getElementById('meterAil').textContent = `${Math.round(sim.aileronInput * 100)}%`;
-  document.getElementById('meterRud').textContent = `${Math.round(sim.rudderInput * 100)}%`;
+  byId('meterElev').textContent = `${Math.round(sim.elevInput * 100)}%`;
+  byId('meterAil').textContent = `${Math.round(sim.aileronInput * 100)}%`;
+  byId('meterRud').textContent = `${Math.round(sim.rudderInput * 100)}%`;
 
-  const knob = document.getElementById('virtualStickKnob');
+  const knob = byId('virtualStickKnob');
   if (knob) {
     const kx = sim.aileronInput * 36;
     const ky = sim.elevInput * 36;
@@ -2307,34 +2312,34 @@ function syncUI() {
   // Show the autopilot's hands: light the stick and throttle while it flies them.
   if (sim.apMaster !== apGlowShown) {
     apGlowShown = sim.apMaster;
-    for (const id of AP_GLOW_IDS) document.getElementById(id)?.classList.toggle('ap-flying', sim.apMaster);
+    for (const id of AP_GLOW_IDS) byId(id)?.classList.toggle('ap-flying', sim.apMaster);
   }
 
   // Phone layout (touch deck + telemetry strip)
-  const tKnob = document.getElementById('touchStickKnob');
+  const tKnob = byId('touchStickKnob');
   tKnob.style.transform = `translate(${sim.aileronInput * 44}px, ${sim.elevInput * 44}px)`;
   const thrPct = Math.round(sim.throttle * 100);
-  document.getElementById('txtTouchThr').textContent = `${thrPct}%`;
-  document.getElementById('touchThrottleFill').style.height = `${thrPct}%`;
-  document.getElementById('touchThrottleHandle').style.bottom = `${thrPct}%`;
-  document.getElementById('touchThrottle').setAttribute('aria-valuenow', String(thrPct));
-  document.getElementById('txtTouchGear').textContent = locked ? 'DN' : transit ? '···' : 'UP';
-  document.getElementById('touchGear').classList.toggle('active', locked);
-  document.getElementById('txtTouchFlaps').textContent = flapText();
-  document.getElementById('touchBrakes').classList.toggle('active-amber', sim.brakesOn);
+  byId('txtTouchThr').textContent = `${thrPct}%`;
+  byId('touchThrottleFill').style.height = `${thrPct}%`;
+  byId('touchThrottleHandle').style.bottom = `${thrPct}%`;
+  byId('touchThrottle').setAttribute('aria-valuenow', String(thrPct));
+  byId('txtTouchGear').textContent = locked ? 'DN' : transit ? '···' : 'UP';
+  byId('touchGear').classList.toggle('active', locked);
+  byId('txtTouchFlaps').textContent = flapText();
+  byId('touchBrakes').classList.toggle('active-amber', sim.brakesOn);
   // On the ground the ILS button is the reverse levers (airframes that have them).
   const revSlot = sim.onGround && !!sys.reverser;
   const ilsTxt = revSlot ? (sim.reverserPos > 0 ? 'REV ON' : 'REV') : 'ILS AUTO';
-  const ilsEl = document.getElementById('txtTouchIls');
+  const ilsEl = byId('txtTouchIls');
   if (ilsEl.textContent !== ilsTxt) ilsEl.textContent = ilsTxt;
-  document.getElementById('touchIls').classList.toggle('active-amber', revSlot ? sim.reverserPos > 0 : sim.apApproach);
-  document.getElementById('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
-  document.getElementById('txtPhoneAgl').textContent = `${sim.aglFt}`;
-  document.getElementById('txtPhoneVs').textContent = `${sim.vsiFpm}`;
-  document.getElementById('txtPhoneThr').textContent = `${throttlePct}%`;
-  document.getElementById('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;
-  const papi = document.getElementById('txtPapiStatus');
-  const phonePapi = document.getElementById('txtPhonePapi');
+  byId('touchIls').classList.toggle('active-amber', revSlot ? sim.reverserPos > 0 : sim.apApproach);
+  byId('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
+  byId('txtPhoneAgl').textContent = `${sim.aglFt}`;
+  byId('txtPhoneVs').textContent = `${sim.vsiFpm}`;
+  byId('txtPhoneThr').textContent = `${throttlePct}%`;
+  byId('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;
+  const papi = byId('txtPapiStatus');
+  const phonePapi = byId('txtPhonePapi');
   phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
   phonePapi.className = papi.className.replace('ml-1', '');
 }
@@ -2362,14 +2367,14 @@ window.addEventListener('resize', handleResize);
 
 // Modal Triggers. The modal is a dialog (ticket 0007): Tab stays inside it while it is open,
 // Escape closes it, and focus goes back to whatever opened it.
-const onboardingModal = document.getElementById('onboardingModal');
+const onboardingModal = byId('onboardingModal');
 let modalOpener = null;
 let cockpitEntered = false; // the start screen was dismissed once (ticket 0032)
 function openModal(opener) {
   modalOpener = opener;
   refreshMissionBests();
   onboardingModal.classList.remove('hidden');
-  document.getElementById('modalPanel').focus({ preventScroll: true });
+  byId('modalPanel').focus({ preventScroll: true });
 }
 // Focus goes back to the opener only when the modal was dismissed from the keyboard (Esc,
 // or ✕ activated with Enter/Space); after a mouse/touch close or ENTER COCKPIT nothing
@@ -2378,13 +2383,13 @@ function closeModal(restoreFocus = false) {
   cockpitEntered = true; // ENTER COCKPIT, ✕ or Esc: the flight is under way
   onboardingModal.classList.add('hidden');
   // On phones the Missions button lives in the folded menu: fall back to ☰ Menu.
-  const back = restoreFocus && [modalOpener, document.getElementById('btnMenu')].find((el) => el?.offsetParent);
+  const back = restoreFocus && [modalOpener, byId('btnMenu')].find((el) => el?.offsetParent);
   if (back) back.focus({ preventScroll: true });
   else document.activeElement?.blur();
   modalOpener = null;
 }
 const modalOpen = () => !onboardingModal.classList.contains('hidden');
-document.getElementById('btnCloseModal').addEventListener('click', (e) => {
+byId('btnCloseModal').addEventListener('click', (e) => {
   applyCoachChoice();
   closeModal(e.detail === 0);
 });
@@ -2403,31 +2408,31 @@ function loadJsbsimOnce() {
     .catch((e) => console.warn('[openaero] JSBSim unavailable, flying the built-in model:', e));
 }
 
-document.getElementById('btnStartFlight').addEventListener('click', () => {
+byId('btnStartFlight').addEventListener('click', () => {
   loadJsbsimOnce();
   if (!detailedModelsArmed) {
     detailedModelsArmed = true;
     attachDetailedModel(sim.aircraftKey);
   }
-  if (document.getElementById('chkAutoSound').checked) audio.init();
+  if (byId('chkAutoSound').checked) audio.init();
   applyCoachChoice();
   // The (billable) Google session starts only when someone actually flies, once per page.
   if (photorealAllowed(window.location) && !terrainOnly(window.location.search)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   closeModal();
 });
-document.getElementById('btnOpenMissions').addEventListener('click', (e) => {
+byId('btnOpenMissions').addEventListener('click', (e) => {
   setHudMenu(false);
   openModal(e.currentTarget);
 });
 document.addEventListener('keydown', (e) => {
   if (!modalOpen()) return;
-  if (e.key === 'Escape') { document.getElementById('btnCloseModal').click(); return; }
+  if (e.key === 'Escape') { byId('btnCloseModal').click(); return; }
   if (e.key !== 'Tab') return;
   const items = [...onboardingModal.querySelectorAll('button, input, select, a[href]')]
     .filter((el) => !el.disabled && el.offsetParent);
   if (!items.length) return;
   const first = items[0], last = items[items.length - 1];
-  const inside = onboardingModal.contains(document.activeElement) && document.activeElement !== document.getElementById('modalPanel');
+  const inside = onboardingModal.contains(document.activeElement) && document.activeElement !== byId('modalPanel');
   if (e.shiftKey && (!inside || document.activeElement === first)) { e.preventDefault(); last.focus(); }
   else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
 });
@@ -2435,39 +2440,39 @@ document.addEventListener('keydown', (e) => {
 // Phone top HUD (ticket 0021): ☰ Menu opens the folded bars as a sheet (CSS shows #hudMenu
 // always from lg up). Picking a mission, resetting or touching the view closes it.
 function setHudMenu(open) {
-  const menu = document.getElementById('hudMenu');
-  const btn = document.getElementById('btnMenu');
+  const menu = byId('hudMenu');
+  const btn = byId('btnMenu');
   // Focus inside a sheet that is about to vanish goes back to the button that opens it.
   if (!open && menu.contains(document.activeElement) && btn.offsetParent) btn.focus();
   menu.classList.toggle('open', open);
   btn.setAttribute('aria-expanded', String(open));
   document.body.classList.toggle('hud-menu-open', open);
 }
-document.getElementById('btnMenu').addEventListener('click', () => {
-  setHudMenu(!document.getElementById('hudMenu').classList.contains('open'));
+byId('btnMenu').addEventListener('click', () => {
+  setHudMenu(!byId('hudMenu').classList.contains('open'));
 });
 for (const id of ['simCanvas', 'touchStick', 'touchThrottle']) {
-  document.getElementById(id).addEventListener('pointerdown', () => setHudMenu(false));
+  byId(id).addEventListener('pointerdown', () => setHudMenu(false));
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setHudMenu(false); });
 
-document.getElementById('missionList').addEventListener('click', (e) => {
+byId('missionList').addEventListener('click', (e) => {
   const btn = e.target.closest('.btnMission');
   if (!btn) return;
   const scenario = btn.dataset.scenario;
-  document.getElementById('selScenario').value = scenario;
+  byId('selScenario').value = scenario;
   loadScenario(scenario);
 });
 
 // Aircraft Selector
-document.getElementById('selAircraft').addEventListener('change', (e) => {
+byId('selAircraft').addEventListener('change', (e) => {
   aircraftBeforeMission = null; // you picked this one
   // The stall drill is the Cessna's (its POH figure, its best): another airframe ends it.
   sim.stallDrill = null;
   setAircraft(e.target.value);
 });
 function setAircraft(key) {
-  document.getElementById('selAircraft').value = key;
+  byId('selAircraft').value = key;
   sim.aircraftKey = key;
   sim.spec = AIRCRAFT_DATABASE[sim.aircraftKey];
   if (sim.spec.fixedGear) sim.gearDown = true;
@@ -2475,70 +2480,70 @@ function setAircraft(key) {
   seedSystems(sim.spec, sim); // the new airframe's gear and flaps where its levers are
   sim.takeoffCalloutIdx = -1; // its own callouts (0035), from the top
   sim.takeoffCalls.length = 0;
-  document.getElementById('txtAircraftTitle').textContent = sim.spec.name;
+  byId('txtAircraftTitle').textContent = sim.spec.name;
   buildAircraft(sim.aircraftKey);
 }
 // ?fdm=jsbsim flies the Cessna, the airframe with a JSBSim model so far.
 if (jsbsimWanted) {
-  const sel = document.getElementById('selAircraft');
+  const sel = byId('selAircraft');
   sel.value = 'c172';
   sel.dispatchEvent(new Event('change'));
 }
 
-document.getElementById('selScenario').addEventListener('change', e => {
+byId('selScenario').addEventListener('change', e => {
   loadScenario(e.target.value);
 });
 
 // Camera, Satellite & Time Toggles
-document.getElementById('btnCamera').addEventListener('click', () => {
+byId('btnCamera').addEventListener('click', () => {
   sim.cameraMode = (sim.cameraMode + 1) % sim.cameraNames.length;
-  document.getElementById('txtCamMode').textContent = sim.cameraNames[sim.cameraMode];
+  byId('txtCamMode').textContent = sim.cameraNames[sim.cameraMode];
 });
 
-document.getElementById('btnSatLayer').addEventListener('click', () => {
+byId('btnSatLayer').addEventListener('click', () => {
   sim.satelliteEnabled = !sim.satelliteEnabled;
   if (terrainGroup) terrainGroup.visible = sim.satelliteEnabled;
   setPhotorealMode(photorealOn);
-  const txt = document.getElementById('txtSatState');
+  const txt = byId('txtSatState');
   txt.textContent = sim.satelliteEnabled ? 'Satellite' : 'Grid';
-  document.getElementById('btnSatLayer').classList.toggle('active-sky', sim.satelliteEnabled);
+  byId('btnSatLayer').classList.toggle('active-sky', sim.satelliteEnabled);
 });
 
-document.getElementById('btnMouseYoke').addEventListener('click', () => {
+byId('btnMouseYoke').addEventListener('click', () => {
   sim.mouseYoke = !sim.mouseYoke;
-  const txt = document.getElementById('txtMouseYokeState');
-  const crosshair = document.getElementById('mouseFlightCrosshair');
+  const txt = byId('txtMouseYokeState');
+  const crosshair = byId('mouseFlightCrosshair');
   if (sim.mouseYoke) {
     txt.textContent = 'ON';
     txt.className = 'text-emerald-400 font-bold';
-    document.getElementById('btnMouseYoke').classList.add('active');
+    byId('btnMouseYoke').classList.add('active');
     crosshair.classList.remove('hidden');
   } else {
     txt.textContent = 'OFF';
     txt.className = 'text-amber-400 font-bold';
-    document.getElementById('btnMouseYoke').classList.remove('active');
+    byId('btnMouseYoke').classList.remove('active');
     crosshair.classList.add('hidden');
     sim.aileronInput = 0;
     sim.elevInput = 0;
   }
 });
 
-document.getElementById('btnTimeOfDay').addEventListener('click', toggleTimeOfDay);
+byId('btnTimeOfDay').addEventListener('click', toggleTimeOfDay);
 
 function setPaused(paused) {
   if (!paused && gfx.lost) return; // nothing to fly by until the GPU is back (0034)
   gfx.hidPaused = false;
   sim.paused = paused;
   audio.pause(paused);
-  document.getElementById('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
+  byId('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
   // Pause/Resume lives in the folded menu on phones: say so on the button that's always shown.
-  const menuBtn = document.getElementById('btnMenu');
+  const menuBtn = byId('btnMenu');
   menuBtn.textContent = sim.paused ? '☰ PAUSED' : '☰ Menu';
   menuBtn.setAttribute('aria-label', sim.paused ? 'Menu, paused' : 'Menu');
   menuBtn.classList.toggle('text-red-400', sim.paused);
   menuBtn.classList.toggle('text-sky-300', !sim.paused);
 }
-document.getElementById('btnPause').addEventListener('click', () => {
+byId('btnPause').addEventListener('click', () => {
   resultsPaused = false; // the player's own pause or resume: KEEP FLYING must not undo it
   setPaused(!sim.paused);
   if (!sim.paused) setHudMenu(false); // on a phone, Resume puts the view back
@@ -2556,12 +2561,12 @@ document.addEventListener('visibilitychange', () => {
 // pressure). preventDefault() asks for it back; until then the sim is paused behind an
 // overlay. three.js re-uploads what it still holds on restore; the imagery cache is dropped
 // on loss and streams in again. The player resumes with a tap; no restore in 5 s offers Reload.
-const gfxLostEl = document.getElementById('gfxLost');
-const gfxPanel = document.getElementById('gfxLostPanel');
-const txtGfxLost = document.getElementById('txtGfxLost');
-const txtGfxLostTitle = document.getElementById('txtGfxLostTitle');
-const btnGfxResume = document.getElementById('btnGfxResume');
-const btnGfxReload = document.getElementById('btnGfxReload');
+const gfxLostEl = byId('gfxLost');
+const gfxPanel = byId('gfxLostPanel');
+const txtGfxLost = byId('txtGfxLost');
+const txtGfxLostTitle = byId('txtGfxLostTitle');
+const btnGfxResume = byId('btnGfxResume');
+const btnGfxReload = byId('btnGfxReload');
 simCanvas.addEventListener('webglcontextlost', (e) => {
   e.preventDefault();
   if (gfx.lost) return;
@@ -2615,25 +2620,25 @@ document.addEventListener('keydown', (e) => {
 }, true);
 btnGfxReload.addEventListener('click', () => window.location.reload());
 
-document.getElementById('btnReset').addEventListener('click', () => {
-  loadScenario(document.getElementById('selScenario').value);
+byId('btnReset').addEventListener('click', () => {
+  loadScenario(byId('selScenario').value);
   setHudMenu(false);
 });
 
 // Autopilot Buttons
-document.getElementById('btnApMaster').addEventListener('click', () => {
+byId('btnApMaster').addEventListener('click', () => {
   sim.apMaster = !sim.apMaster;
   if (sim.apMaster) { sim.apHdgHold = true; sim.apAltHold = true; resetApFilters(); }
 });
-document.getElementById('btnApHdg').addEventListener('click', () => { sim.apHdgHold = !sim.apHdgHold; });
-document.getElementById('btnApAlt').addEventListener('click', () => { sim.apAltHold = !sim.apAltHold; });
-document.getElementById('btnApApr').addEventListener('click', () => {
+byId('btnApHdg').addEventListener('click', () => { sim.apHdgHold = !sim.apHdgHold; });
+byId('btnApAlt').addEventListener('click', () => { sim.apAltHold = !sim.apAltHold; });
+byId('btnApApr').addEventListener('click', () => {
   sim.apApproach = !sim.apApproach;
   if (sim.apApproach) { sim.apMaster = true; resetApFilters(); }
 });
 
 // Controls Surfaces
-document.getElementById('btnGear').addEventListener('click', () => {
+byId('btnGear').addEventListener('click', () => {
   if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown;
 });
 // The flap lever cycles down a notch (wrapping to up); in the drill's missed approach (0047)
@@ -2642,43 +2647,43 @@ function moveFlapLever() {
   if (goAroundActive()) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1);
   else sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 }
-document.getElementById('btnFlaps').addEventListener('click', moveFlapLever);
-document.getElementById('btnBrakes').addEventListener('click', () => {
+byId('btnFlaps').addEventListener('click', moveFlapLever);
+byId('btnBrakes').addEventListener('click', () => {
   sim.brakesOn = !sim.brakesOn;
 });
 // Autobrake selector OFF → 1 → 2 → 3 → MAX (airframes that have one, systems.js).
-document.getElementById('btnAutobrake').addEventListener('click', () => {
+byId('btnAutobrake').addEventListener('click', () => {
   if (systemsOf(sim.spec).autobrake) sim.autobrake = (sim.autobrake + 1) % AUTOBRAKE_LABELS.length;
 });
 // Reverse levers: only on the ground, from idle. Deploying or stowing brings the power to
 // idle first, as the interlock does; then the throttle sets reverse thrust.
-document.getElementById('btnReverse').addEventListener('click', () => {
+byId('btnReverse').addEventListener('click', () => {
   if (!systemsOf(sim.spec).reverser || (!sim.onGround && !sim.reverseCmd)) return;
   sim.reverseCmd = !sim.reverseCmd;
   sim.throttle = 0;
 });
 
 // Throttle Buttons
-document.getElementById('rngThrottle').addEventListener('input', e => {
+byId('rngThrottle').addEventListener('input', e => {
   sim.throttle = Number(e.target.value) / 100;
 });
-document.getElementById('rngThrottle').addEventListener('pointerdown', () => { draggingThrottle = true; });
+byId('rngThrottle').addEventListener('pointerdown', () => { draggingThrottle = true; });
 window.addEventListener('pointerup', () => { draggingThrottle = false; });
 window.addEventListener('pointercancel', () => { draggingThrottle = false; });
-document.getElementById('btnIdle').addEventListener('click', () => {
-  sim.throttle = 0; document.getElementById('rngThrottle').value = 0;
+byId('btnIdle').addEventListener('click', () => {
+  sim.throttle = 0; byId('rngThrottle').value = 0;
 });
-document.getElementById('btnApp').addEventListener('click', () => {
-  sim.throttle = 0.44; document.getElementById('rngThrottle').value = 44;
+byId('btnApp').addEventListener('click', () => {
+  sim.throttle = 0.44; byId('rngThrottle').value = 44;
 });
-document.getElementById('btnClimb').addEventListener('click', () => {
-  sim.throttle = 0.75; document.getElementById('rngThrottle').value = 75;
+byId('btnClimb').addEventListener('click', () => {
+  sim.throttle = 0.75; byId('rngThrottle').value = 75;
 });
-document.getElementById('btnToga').addEventListener('click', () => {
-  sim.throttle = 1.0; document.getElementById('rngThrottle').value = 100;
+byId('btnToga').addEventListener('click', () => {
+  sim.throttle = 1.0; byId('rngThrottle').value = 100;
 });
 
-document.getElementById('btnCenterWings').addEventListener('click', () => {
+byId('btnCenterWings').addEventListener('click', () => {
   sim.elevInput = 0; sim.aileronInput = 0; sim.rudderInput = 0;
   sim.angVel.set(0, 0, 0);
 });
@@ -2707,16 +2712,16 @@ function bindStick(el) {
   el.addEventListener('pointerup', release);
   el.addEventListener('pointercancel', release);
 }
-bindStick(document.getElementById('virtualStickPad'));
-bindStick(document.getElementById('touchStick'));
+bindStick(byId('virtualStickPad'));
+bindStick(byId('touchStick'));
 
 // Phone throttle track: drag anywhere on it, top = TO/GA, bottom = idle.
 (function bindTouchThrottle() {
-  const el = document.getElementById('touchThrottle');
+  const el = byId('touchThrottle');
   let pointerId = null;
   const set = (e) => {
     sim.throttle = throttleFromPoint(e.clientY, el.getBoundingClientRect());
-    document.getElementById('rngThrottle').value = Math.round(sim.throttle * 100);
+    byId('rngThrottle').value = Math.round(sim.throttle * 100);
   };
   el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); set(e); e.preventDefault(); });
   el.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) set(e); });
@@ -2725,18 +2730,18 @@ bindStick(document.getElementById('touchStick'));
 })();
 
 // Phone system buttons reuse the desktop handlers.
-document.getElementById('touchGear').addEventListener('click', () => document.getElementById('btnGear').click());
-document.getElementById('touchFlaps').addEventListener('click', () => document.getElementById('btnFlaps').click());
-document.getElementById('touchBrakes').addEventListener('click', () => document.getElementById('btnBrakes').click());
-document.getElementById('touchIls').addEventListener('click', () => {
+byId('touchGear').addEventListener('click', () => byId('btnGear').click());
+byId('touchFlaps').addEventListener('click', () => byId('btnFlaps').click());
+byId('touchBrakes').addEventListener('click', () => byId('btnBrakes').click());
+byId('touchIls').addEventListener('click', () => {
   const rev = sim.onGround && systemsOf(sim.spec).reverser;
-  document.getElementById(rev ? 'btnReverse' : 'btnApApr').click();
+  byId(rev ? 'btnReverse' : 'btnApApr').click();
 });
 
 // Small status toast (gamepad connect/disconnect, etc.)
 let toastTimer = 0;
 function showToast(msg) {
-  const el = document.getElementById('toast');
+  const el = byId('toast');
   el.textContent = msg;
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
@@ -2752,12 +2757,12 @@ function updateGamepad() {
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
   for (const b of p.edges) {
-    if (b === BUTTON.A) document.getElementById('btnFlaps').click();
-    else if (b === BUTTON.B) document.getElementById('btnGear').click();
-    else if (b === BUTTON.X) document.getElementById('btnBrakes').click();
-    else if (b === BUTTON.Y) document.getElementById('btnCamera').click();
-    else if (b === BUTTON.START) document.getElementById('btnPause').click();
-    else if (b === BUTTON.DPAD_UP) document.getElementById('btnApApr').click();
+    if (b === BUTTON.A) byId('btnFlaps').click();
+    else if (b === BUTTON.B) byId('btnGear').click();
+    else if (b === BUTTON.X) byId('btnBrakes').click();
+    else if (b === BUTTON.Y) byId('btnCamera').click();
+    else if (b === BUTTON.START) byId('btnPause').click();
+    else if (b === BUTTON.DPAD_UP) byId('btnApApr').click();
   }
 }
 
@@ -2772,7 +2777,7 @@ simCanvas.addEventListener('mousedown', e => {
 
 window.addEventListener('mousemove', e => {
   if (sim.mouseYoke) {
-    const crosshair = document.getElementById('mouseFlightCrosshair');
+    const crosshair = byId('mouseFlightCrosshair');
     crosshair.style.left = `${e.clientX}px`;
     crosshair.style.top = `${e.clientY}px`;
 
@@ -2807,12 +2812,12 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
   else if (e.code === 'KeyF') { moveFlapLever(); }
   else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
-  else if (e.code === 'KeyK') { document.getElementById('btnAutobrake').click(); }
-  else if (e.code === 'KeyR') { document.getElementById('btnReverse').click(); }
-  else if (e.code === 'KeyC') { document.getElementById('btnCamera').click(); }
-  else if (e.code === 'KeyM') { document.getElementById('btnMouseYoke').click(); }
+  else if (e.code === 'KeyK') { byId('btnAutobrake').click(); }
+  else if (e.code === 'KeyR') { byId('btnReverse').click(); }
+  else if (e.code === 'KeyC') { byId('btnCamera').click(); }
+  else if (e.code === 'KeyM') { byId('btnMouseYoke').click(); }
   else if (e.code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }
-  else if (e.code === 'KeyZ') { document.getElementById('btnApMaster').click(); }
+  else if (e.code === 'KeyZ') { byId('btnApMaster').click(); }
   else if (e.code === 'Space') {
     sim.elevInput = 0; sim.aileronInput = 0; sim.rudderInput = 0;
     sim.angVel.set(0, 0, 0);
@@ -2820,7 +2825,7 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-document.getElementById('btnAudio').addEventListener('click', () => {
+byId('btnAudio').addEventListener('click', () => {
   if (!audio.started) audio.init();
   else {
     sim.audioEnabled = !sim.audioEnabled;
@@ -2829,7 +2834,7 @@ document.getElementById('btnAudio').addEventListener('click', () => {
 });
 
 const wakeLock = createWakeLock();
-const resultsCard = document.getElementById('resultsCard');
+const resultsCard = byId('resultsCard');
 let lastTime = performance.now();
 // Longest frame the sim catches up on (a hidden tab or a stall beyond this is skipped).
 const MAX_FRAME_S = 0.25;
@@ -2891,7 +2896,7 @@ let creditsTimer = 0;
 function updateDebugOverlay(dt) {
   if (photorealOn && (creditsTimer -= dt) <= 0) {
     creditsTimer = 1;
-    const txt = document.getElementById('txtGoogleData');
+    const txt = byId('txtGoogleData');
     if (txt.textContent !== photoreal.state.attributions) txt.textContent = photoreal.state.attributions;
   }
   if (!debugOverlay || (debugTimer -= dt) > 0) return;
@@ -2929,6 +2934,7 @@ window.openaeroDebug = () => {
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
     activeRunway: sim.activeEnd ? sim.activeEnd.id : null,
     runwayHdgT: sim.activeEnd ? sim.activeEnd.hdgT : null,
+    hudHeading: sim.hudHdg,
     runwayScreen: sim.activeEnd ? runwayScreen(sim.activeEnd) : null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
     pitchDeg: _euler.x * RAD_TO_DEG,
@@ -2989,7 +2995,7 @@ window.openaeroDebug = () => {
 };
 
 function populateMissionSelect() {
-  const sel = document.getElementById('selScenario');
+  const sel = byId('selScenario');
   sel.innerHTML = '';
   for (const m of MISSIONS) {
     const o = document.createElement('option');
@@ -3005,8 +3011,8 @@ function populateMissionSelect() {
 const PICKER_TITLES = { recommended: 'Recommended first flight', drills: 'Drills', tours: 'Tours' };
 const PICKER_COLOURS = { final: 'text-sky-300', takeoff: 'text-sky-300', drill: 'text-sky-300', tour: 'text-amber-300' };
 function buildMissionPicker() {
-  const list = document.getElementById('missionList');
-  const crosswindCard = document.getElementById('btnCrosswindToday');
+  const list = byId('missionList');
+  const crosswindCard = byId('btnCrosswindToday');
   list.replaceChildren();
   for (const g of groupMissions(MISSIONS)) {
     const section = document.createElement('section');
@@ -3083,7 +3089,7 @@ function syncMissionPicker(mission) {
   for (const btn of document.querySelectorAll('#missionList .btnMission')) {
     btn.classList.toggle('active', btn.dataset.scenario === mission.key);
   }
-  document.getElementById('txtPickedMission').textContent = mission.label;
+  byId('txtPickedMission').textContent = mission.label;
 }
 
 function boot() {
@@ -3092,9 +3098,9 @@ function boot() {
   refreshMissionBests();
   let seen = false;
   try { seen = coachSeen(window.localStorage); } catch { /* storage unavailable: coach on */ }
-  document.getElementById('chkCoach').checked = !seen;
+  byId('chkCoach').checked = !seen;
   try { tutorEnabled = tutorOn(window.localStorage); } catch { /* storage unavailable: tutor on */ }
-  document.getElementById('chkTutor').checked = tutorEnabled;
+  byId('chkTutor').checked = tutorEnabled;
   try { setAssist(loadAssist(window.localStorage), false); } catch { setAssist(DEFAULT_ASSIST, false); }
   try { setCleanView(loadCleanView(window.localStorage), false); } catch { setCleanView(true, false); }
   fetchWeather();
@@ -3112,7 +3118,7 @@ function boot() {
   const linked = missionFromLink(window.location.search);
   loadScenario(linked || 'kdfw_35c_final');
   if (linked) {
-    document.getElementById('selScenario').value = linked;
+    byId('selScenario').value = linked;
     try { history.replaceState(null, '', `${location.pathname}${stripDeepLink(location.search)}${location.hash}`); } catch { /* sandboxed */ }
   }
   handleResize();

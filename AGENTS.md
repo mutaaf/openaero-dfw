@@ -160,6 +160,8 @@ src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA.
                     conventions (pinned by tests):** aileron + = roll right, elevator + =
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,
                     angVel.y + = nose left, angVel.z + = roll left.
+src/magvar.js       magnetic variation (0078): WMM-2025 2.7° E over DFW (NCEI, cited); the HUD heading,
+                    HDG, NAV1 runway course and tutor read magnetic (°M), physics/geometry/wind stay true
 src/geo.js          Web Mercator tile math, lat/lon → sim metres, Esri tile URLs
 src/terrain.js      the one ground truth: baked DEM (public/terrain/dfw-dem-v1.bin, from
                     AWS Terrain Tiles via scripts/bake-terrain.mjs) + every runway
@@ -297,7 +299,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
+2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
+`document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 10 B of headroom: the next boot feature trims first. 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
