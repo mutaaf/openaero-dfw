@@ -48,6 +48,19 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   for (const id of ['#tipRow', '#btnFlyAgain', '#btnKeepRolling']) {
     await expect(page.locator(id)).toBeInViewport({ ratio: 1 });
   }
+  // With a stabilized-gate line too (an ordinary final has one), the buttons stay inside the
+  // card's own visible box, not scrolled under its edge (0061 panel: 844x390 clipped FLY AGAIN).
+  await page.evaluate(() => {
+    const g = document.getElementById('txtStabilized');
+    g.textContent = 'Stabilized at 500 ft ✓';
+    g.classList.remove('hidden');
+  });
+  const card = await page.locator('#resultsCard').boundingBox();
+  for (const id of ['#tipRow', '#btnFlyAgain', '#btnKeepRolling']) {
+    const b = await page.locator(id).boundingBox();
+    expect(b.y + b.height, id).toBeLessThanOrEqual(card.y + card.height);
+  }
+  expect(await page.locator('#resultsCard').evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('bounce-844.png') });
   expect(errors).toEqual([]);
 });
