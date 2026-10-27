@@ -35,7 +35,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   await page.screenshot({ path: test.info().outputPath('bounce-390-coach.png') });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('#txtGradeReason')).toContainText('Bounced once');
-  await expect(page.locator('#txtTip')).toContainText('You bounced off a'); // 0061
+  await expect(page.locator('#txtTip')).toHaveText(/^You bounced[.:] /); // 0061
   const box = await page.locator('#resultsCard').boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);

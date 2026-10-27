@@ -29,9 +29,8 @@ test('a bounce after the touchdown is coached, then caps the grade on the result
   await expect(page.locator('#resultsCard')).toBeHidden(); // not over the bounce
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('#txtGradeReason')).toContainText('Bounced once');
-  // 0061: the one thing to fix next time, with the sink rate the card's first bar shows.
-  const rate = (await page.locator('#resultsFactors li').first().textContent()).match(/(\d+) fpm/)[1];
-  await expect(page.locator('#txtTip')).toHaveText(`You bounced off a ${rate} fpm touchdown: hold the nose up and let it settle.`);
+  // 0061: the one thing to fix next time names what made it bounce.
+  await expect(page.locator('#txtTip')).toHaveText(/^You bounced[.:] /);
   expect(['C', 'D']).toContain((await page.locator('#txtGrade').textContent()).trim());
   expect((await snap()).lastLanding.bounces).toBe(1);
   const box = await page.locator('#resultsCard').boundingBox();

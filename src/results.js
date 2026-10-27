@@ -19,7 +19,7 @@ export function showResults(sim, result, best, end, gate) {
   reason.textContent = result.reason || '';
   reason.classList.toggle('hidden', !result.reason);
   // The one thing to fix next time (0061); none for an S or a drill's own card.
-  const tip = landingTip(result);
+  const tip = landingTip(result, { kid: sim.assist === 'kid', noEngine: !!sim.engineFailed });
   byId('txtTip').textContent = tip || '';
   byId('tipRow').classList.toggle('hidden', !tip);
   const bestEl = byId('txtBest');
