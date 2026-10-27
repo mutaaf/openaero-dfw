@@ -21,9 +21,14 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
     }
     window.openaeroDebugHop(3);
   });
-  const coach = page.locator('#coach');
-  await expect(page.locator('#txtCoach')).toHaveText(/bounce/i, { timeout: 5_000 });
-  const c = await coach.boundingBox();
+  // The prompt shows only while the wheels are up (well under a second on a 3 m/s hop): read
+  // its box in the same frame its text says bounce, or a slow runner sees it already gone.
+  const c = await (await page.waitForFunction(() => {
+    const el = document.getElementById('coach');
+    if (el.classList.contains('hidden') || !/bounce/i.test(document.getElementById('txtCoach').textContent)) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x, width: r.width };
+  }, null, { timeout: 5_000, polling: 'raf' })).jsonValue();
   expect(c.x).toBeGreaterThanOrEqual(0);
   expect(c.x + c.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('bounce-390-coach.png') });
