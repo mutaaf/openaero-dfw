@@ -2,7 +2,8 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0091 on a phone (390x844, touch): the bounce prompt and the results card with its
-// "Bounced once" line fit the screen without a scroll, upright and held sideways.
+// "Bounced once" line and the next-time tip (0061) fit the screen without a scroll, upright
+// and held sideways.
 test('phone: the bounce prompt and the capped results card fit 390x844', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = collectErrors(page);
@@ -34,6 +35,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   await page.screenshot({ path: test.info().outputPath('bounce-390-coach.png') });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('#txtGradeReason')).toContainText('Bounced once');
+  await expect(page.locator('#txtTip')).toHaveText(/^You bounced[.:] /); // 0061
   const box = await page.locator('#resultsCard').boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
@@ -43,9 +45,22 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   await page.screenshot({ path: test.info().outputPath('bounce-390.png') });
   // Held sideways (844x390): both buttons stay on screen with the bounce line showing.
   await page.setViewportSize({ width: 844, height: 390 });
-  for (const id of ['#btnFlyAgain', '#btnKeepRolling']) {
+  for (const id of ['#tipRow', '#btnFlyAgain', '#btnKeepRolling']) {
     await expect(page.locator(id)).toBeInViewport({ ratio: 1 });
   }
+  // With a stabilized-gate line too (an ordinary final has one), the buttons stay inside the
+  // card's own visible box, not scrolled under its edge (0061 panel: 844x390 clipped FLY AGAIN).
+  await page.evaluate(() => {
+    const g = document.getElementById('txtStabilized');
+    g.textContent = 'Stabilized at 500 ft ✓';
+    g.classList.remove('hidden');
+  });
+  const card = await page.locator('#resultsCard').boundingBox();
+  for (const id of ['#tipRow', '#btnFlyAgain', '#btnKeepRolling']) {
+    const b = await page.locator(id).boundingBox();
+    expect(b.y + b.height, id).toBeLessThanOrEqual(card.y + card.height);
+  }
+  expect(await page.locator('#resultsCard').evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(0);
   await page.screenshot({ path: test.info().outputPath('bounce-844.png') });
   expect(errors).toEqual([]);
 });

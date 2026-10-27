@@ -172,6 +172,10 @@ input[type=range] { accent-color: #38bdf8; }
     transform: none;
   }
   #masterAlertBanner, #stallAlertBanner { text-align: center; white-space: normal; }
+  /* Results card held sideways: wider, factor bars in two columns, so the grade, its reason,
+     the gate line and the next-time tip (0061) leave both buttons in view. */
+  #resultsCard { max-width: 36rem; }
+  #resultsFactors { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1rem; }
   #stallAlertBanner { z-index: 34; }
   #masterAlertBanner { z-index: 35; }
 }
