@@ -1,7 +1,7 @@
 ---
 id: 0094
 title: A pitch trim control in Pilot (keys, a touch button, gamepad), and the over-pull falling leaf
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: player-feel
