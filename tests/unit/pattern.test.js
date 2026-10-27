@@ -71,7 +71,9 @@ describe('patternLeg: downwind, base, final around Addison (either end, either t
       // Rolling out of the turn to final (30° to go): still turning final.
       expect(leg(end, -900, -60, h + 30, 300)).toMatchObject({ leg: 'final', turn: 'final' });
       // Upwind past the far end, high enough: turn crosswind (left: runway − 90), then downwind.
-      expect(leg(end, end.lengthM, 0, h, 600)).toMatchObject({ leg: 'upwind', turn: 'crosswind', targetHdgT: (h + 270) % 360 });
+      expect(leg(end, end.lengthM, 0, h, 800)).toMatchObject({ leg: 'upwind', turn: 'crosswind', targetHdgT: (h + 270) % 360 });
+      // ...within 300 ft of pattern altitude (AC 90-66C): not at 450 ft after a go-around.
+      expect(leg(end, end.lengthM, 0, h, 450)).toMatchObject({ leg: 'upwind', turn: null });
       expect(leg(end, end.lengthM + 300, -400, h - 90, 800)).toMatchObject({ leg: 'crosswind', turn: null });
       expect(leg(end, end.lengthM + 300, -C, h - 90, 900)).toMatchObject({ leg: 'crosswind', turn: 'downwind', targetHdgT: (h + 180) % 360 });
     });
@@ -99,8 +101,11 @@ describe('patternLeg: downwind, base, final around Addison (either end, either t
     expect(t(-C, -C, 340)).toBeCloseTo(PT_TPA_FT * 2 / 3, 0);
     expect(t(-C, -C, 250, 'base')).toBeCloseTo(PT_TPA_FT * 2 / 3, 0);
     expect(t(-C, -200, 250, 'base')).toBeLessThan(PT_TPA_FT * 2 / 3);
-    expect(t(-C, 0, 160, 'final')).toBeCloseTo(PT_TPA_FT / 3, 0);
-    expect(t(-1, 0, 160, 'final')).toBeLessThan(1);
+    // On final: the 3° path to the aim point, as the PAPI and the landing coach have it.
+    const path = (a) => (a + AIM_POINT_M) * Math.tan(3 * Math.PI / 180) * 3.28084;
+    expect(t(-C, 0, 160, 'final')).toBeCloseTo(path(C), 0);
+    expect(t(-1, 0, 160, 'final')).toBeCloseTo(path(1), 0);
+    expect(t(AIM_POINT_M + 10, 0, 160, 'final')).toBe(0);
   });
 
   it('cues the turns earlier with a lead time (the coach\'s debounce), pinned to coach.js', () => {
@@ -153,12 +158,18 @@ describe('patternTarget: what the coach says on each leg', () => {
     // Hands off down the downwind 3 NM past the threshold: too far out, turn now.
     expect(patternTarget(E16, pilot(-3 * 1852, -C, 340, 950))).toBe('ptFarL');
     expect(patternTarget(E16, pilot(E16.lengthM + 300, -400, 70, 800))).toBe('ptXw');
+    // Off the pattern's side: left traffic flown west of the runway, or over it the reciprocal way,
+    // or base flown on past the centreline: no turn cues that point away from it.
+    expect(patternTarget(E16, pilot(-C - 20, C, 340, 680))).toBe('ptSideL');
+    expect(patternTarget(E16, pilot(-50, 0, 340, 900))).toBe('ptSideL');
+    expect(patternTarget(E16, pilot(-C, 600, 250, 500))).toBe('ptSideL');
+    expect(patternLeg(E16, { ...at(E16, -C - 20, C), trackDeg: 340, aglFt: 680 }).turn).toBeNull();
     expect(patternTarget(E16, pilot(-900, 0, 160, 300, { kid: true }))).toBeNull();
   });
 
   it('every key has words, the coach shows them through s.ds, and left/right say so', () => {
     for (const k of ['ptDownwind', 'ptClimb', 'ptDescend', 'ptAbeam', 'ptBase', 'ptEarly', 'ptHigh', 'ptLow', 'ptSlow', 'ptUpwind', 'ptXw', 'ptKid',
-      'ptFarL', 'ptFarR', 'ptBackL', 'ptBackR',
+      'ptFarL', 'ptFarR', 'ptBackL', 'ptBackR', 'ptSideL', 'ptSideR',
       'ptTurnBaseL', 'ptTurnBaseR', 'ptTurnFinalL', 'ptTurnFinalR', 'ptTurnXwL', 'ptTurnXwR', 'ptTurnDwL', 'ptTurnDwR']) {
       expect(PT_TEXT[k], k).toBeTruthy();
       expect(coachText(k)).toBe(PT_TEXT[k]);
@@ -180,6 +191,21 @@ describe("main.js's calls (from the sim, no allocation)", () => {
   it('createPattern: Addison 16, left traffic', () => {
     expect(st.end.id).toBe('KADS_16');
     expect(st.traffic).toBe('left');
+    expect(st.aircraft).toBe('c172');
+  });
+
+  it("another airframe picked mid-mission (the aircraft selector) gets neither the Cessna's words nor its guide", () => {
+    expect(patternPrompt(st, sim(800, -C, 340, 1000, { aircraftKey: 'b738' }))).toBeNull();
+    const out = { guideBankDeg: 3, guideGammaDeg: -1 };
+    kidGuide(st, sim(800, -C + 200, 340, 800, { aircraftKey: 'b738', assist: 'kid' }), out);
+    expect(out).toEqual({ guideBankDeg: 3, guideGammaDeg: -1 });
+    expect(patternPrompt(st, sim(800, -C, 340, 1000, { aircraftKey: 'c172' }))).toBe('ptDownwind');
+  });
+
+  it('the side keys are built once: the same string object every frame', () => {
+    const a = patternTarget(E16, pilot(-C - 20, -C, 340, 680));
+    expect(a).toBe('ptTurnBaseL');
+    expect(Object.keys(PT_TEXT)).toContain(a);
   });
 
   it('patternPrompt reads the sim, and cues the base turn 1.5 s early', () => {

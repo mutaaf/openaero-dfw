@@ -97,7 +97,8 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
     const g = patternLeg(st.end, { x: x.pos.x, z: x.pos.z, trackDeg: (Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI + 360) % 360, aglFt: sim.aglFt });
     if (g.leg !== legs[legs.length - 1]) legs.push(g.leg);
     if (g.leg === 'downwind' && !g.abeam) rec.downwindAlt.push(sim.aglFt);
-    if (p === 'ptTurnBaseL' && rec.baseTurnAlongM === null) rec.baseTurnAlongM = g.along;
+    // Where Kid actually rolls into the base turn (bank past 10° after abeam), and the cross then.
+    if (g.leg === 'downwind' && g.abeam && bankRightDeg < -10 && rec.baseTurnAlongM === null) { rec.baseTurnAlongM = g.along; rec.baseTurnCrossM = g.cross; }
     if (g.leg === 'final' && rec.finalFt === null) rec.finalFt = { aglFt: sim.aglFt, alongM: g.along, crossM: g.cross };
     rec.maxBank = Math.max(rec.maxBank, Math.abs(bankRightDeg));
     rec.maxDistNm = Math.max(rec.maxDistNm, Math.hypot(x.pos.x - st.end.thrX, x.pos.z - st.end.thrZ) / 1852);
@@ -115,7 +116,7 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
 
 const XWIND = { fromDeg: 250, kts: 10 };
 describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spawn (flightModel, ticket 0048)', () => {
-  for (const [name, wind, landed] of [['calm', {}, true], ['12 kt headwind on final (160°)', { fromDeg: 160, kts: 12 }, true], ['10 kt crosswind from the right (250°)', XWIND, false]]) {
+  for (const [name, wind, landed] of [['calm', {}, true], ['12 kt headwind on final (160°)', { fromDeg: 160, kts: 12 }, true], ['10 kt tailwind on final, headwind on the downwind (340°)', { fromDeg: 340, kts: 10 }, true], ['10 kt crosswind from the right (250°)', XWIND, false]]) {
     it(`${name}: flies downwind at 1,000 ft, turns base and final where cued${landed ? ' and lands in the touchdown zone' : ', touches down past the threshold'}`, () => {
       const { td, prompts, legs, rec } = flyPattern(wind);
       const dw = rec.downwindAlt;
@@ -125,8 +126,11 @@ describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spaw
       // Downwind at pattern altitude (AC 90-66C), within the coach's ±150 ft.
       expect(Math.min(...dw)).toBeGreaterThan(PT_TPA_FT - 150);
       expect(Math.max(...dw)).toBeLessThan(PT_TPA_FT + 150);
-      // Base turned past abeam the threshold, and the final long enough to be stable (>= 0.3 NM).
-      expect(rec.baseTurnAlongM).toBeLessThan(0);
+      // Base rolled into with the threshold ~45° behind the wing (AFH): as far past abeam as the
+      // downwind is out (0.75 NM), give or take a second or two of the roll.
+      expect(-rec.baseTurnAlongM / Math.abs(rec.baseTurnCrossM)).toBeGreaterThan(0.9);
+      expect(-rec.baseTurnAlongM / Math.abs(rec.baseTurnCrossM)).toBeLessThan(1.15);
+      // The final long enough to be stable (>= 0.3 NM).
       expect(-rec.finalFt.alongM).toBeGreaterThan(0.3 * 1852);
       expect(rec.maxBank).toBeLessThan(31); // Kid's 30° cap
       expect(rec.maxDistNm).toBeLessThan(2.5);
