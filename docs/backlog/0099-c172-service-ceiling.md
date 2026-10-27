@@ -25,5 +25,9 @@ altitude) and close it without moving the passing cards.
 - [ ] `ceiling` removed from GAPS.flightModel; card passes within ±35%
 - [ ] 729 fpm and 315 fpm cards and the 8,000 ft cruise card still pass
 
+## Test plan
+The `ceiling` card in tests/flight/c172.test.js flips from `it.fails` to `it` (drop it from
+GAPS.flightModel); run `npm test -- tests/flight`.
+
 ## Out of scope
 Climb speed schedule (the card holds 74 KIAS).
