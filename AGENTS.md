@@ -170,6 +170,13 @@ src/deadStick.js    dead-stick challenge (0036, lazy chunk): the C172 3,500 ft A
                     floor, autothrottle or auto flaps). The touchdown is graded on Addison
                     wherever it is (made the runway 30%; missed = D with the distance and why:
                     short, long or beside); ?debug openaeroDebugDeadStick puts it on a final
+src/pattern.js      traffic pattern (0048, lazy chunk): the C172 on a left downwind for Addison 16 at
+                    1,000 ft AGL (AC 90-66C), 0.75 NM out. patternLeg names the leg around any runway
+                    end (upwind, crosswind, downwind, base, final; left or right traffic), the turn
+                    to start (base with the threshold 45° behind the wing, final a 20° turn's radius
+                    out) and the height (1,000 ft, then ~4.2° down from abeam the numbers). Its
+                    pt* words reach coach.js through s.ds (the landing coach takes the final);
+                    Kid's guide flies the legs, and past the threshold the 3° path to the aim point
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn.
                     A lazy chunk fetched right after boot (0091); its on/off flag and blank
@@ -324,7 +331,10 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-26 (0036): 200.95 kB (the dead-stick mission, engine-out flag and its effects, coach hook and HUD readouts, paid for by moving the go-around and stall drills' coach words into their lazy chunks through coach.js DRILL_TEXT, and the abeam spawn to a lat/lon). 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
+`loadDrill` for the drills' lazy chunks, `startDrills`, and the ?debug Google usage line and
+snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A lazy chunk that
+imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-26 (0036): 200.95 kB (the dead-stick mission, engine-out flag and its effects, coach hook and HUD readouts, paid for by moving the go-around and stall drills' coach words into their lazy chunks through coach.js DRILL_TEXT, and the abeam spawn to a lat/lon). 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
 is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's

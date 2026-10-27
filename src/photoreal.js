@@ -193,6 +193,21 @@ export function createPhotoreal({ scene, camera, renderer, base, storage, isMobi
     setVisible(v) { calib.visible = v && state.status !== 'unavailable'; },
     resize() { if (tiles) tiles.setResolutionFromRenderer(camera, renderer); },
     noteSessionReuse() { if (session?.current) session.getRoot(); },
+    // ?debug overlay (main.js): this page's and this browser's Google usage (the free tier holds).
+    debugLine() {
+      const st = state, s = session;
+      return `3D tiles: ${st.status}${st.reason ? ` (${st.reason})` : ''} · this page: ${s ? s.page.roots : 0} root, ${s ? s.page.reuses : 0} reuses`
+        + ` · this browser: ${s ? s.usage.roots : 0} roots, ${s ? s.usage.reuses : 0} reuses · tiles ${st.visibleTiles} · calib ${st.calibM.toFixed(1)} m`;
+    },
+    // window.openaeroDebug's photoreal part (main.js): the state, the session's usage, the bounds.
+    debugState() {
+      return {
+        ...state,
+        page: session ? { ...session.page } : null,
+        usage: session ? { ...session.usage } : null,
+        bounds: state.status === 'active' ? this.bounds() : null,
+      };
+    },
     // Debug: the drawn tiles' bounds in sim metres (e2e checks the ECEF → sim mapping).
     bounds() {
       if (!tiles) return null;

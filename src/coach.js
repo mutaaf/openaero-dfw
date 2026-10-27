@@ -49,7 +49,8 @@ export const COACH_PROMPTS = {
 // The drills' own prompts are ranked here and worded in their lazy chunks (no boot bytes),
 // which add their words to DRILL_TEXT when they load: the go-around's ga* (goAround.js
 // GA_TEXT; gaFlaps stays here, it has numbers), the stall drill's st* (stallDrill.js
-// STALL_TEXT) and the dead-stick's ds* (deadStick.js DS_TEXT, rank 1).
+// STALL_TEXT), the dead-stick's ds* (deadStick.js DS_TEXT, rank 1) and the traffic pattern's
+// pt* (pattern.js PT_TEXT, rank 1, through s.ds).
 export const DRILL_TEXT = {};
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
 const RANK = {
@@ -111,8 +112,8 @@ export function stallTarget(s) {
 //      optional: iasKts, targetKts (Vref + 5), locDots (+ = right of the centreline),
 //      gearLocked, flapsLanding, flareFt (default 50), idleFt (default 30), driftDeg,
 //      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
-//      drill's phase: stallTarget), ds (the dead-stick challenge's prompt key, its words in
-//      deadStick.js DS_TEXT; rank 1) }
+//      drill's phase: stallTarget), ds (the dead-stick challenge's or the traffic pattern's
+//      prompt key, its words in deadStick.js DS_TEXT or pattern.js PT_TEXT; rank 1) }
 export function coachTarget(s) {
   if (s.onGround || s.autopilot) return null;
   if (s.stall) return stallTarget(s);

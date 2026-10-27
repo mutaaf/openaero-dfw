@@ -869,20 +869,24 @@ function checkGoAround() {
   showResults(result, best, end, ga.gate);
 }
 
+// The drills' lazy chunks: `lib` if already here, else fetched with `load`; `arm` sets the drill
+// up only if its mission is still the one loaded (another may have been picked meanwhile).
+function loadDrill(mission, lib, load, arm) {
+  const go = (m) => { if (sim.loadedMission === mission) arm(m); };
+  if (lib) go(lib);
+  else load().then(go).catch((e) => console.warn('[openaero] no drill:', e));
+}
+
 function startGoAroundDrill(mission) {
   sim.goAround = null;
-  if (!mission.goAround) return;
-  const arm = (lib) => {
+  if (mission.goAround) loadDrill(mission, goAroundLib, () => import('./goAround.js'), (lib) => {
     goAroundLib = lib;
-    if (sim.loadedMission !== mission) return; // another mission was picked meanwhile
     sim.goAround = lib.createGoAround();
     sim.goAround.end = runwayEnd(mission.airport, mission.rwy);
     // Kid's autothrottle holds the drill's fast approach speed down to the gate (the hands-
     // off guide still flies the path), so the gate calls it and Kid sees the go-around.
     sim.goAround.holdKts = sim.spec.vrefKts + 5 + (mission.fastKts ?? 0);
-  };
-  if (goAroundLib) arm(goAroundLib);
-  else import('./goAround.js').then(arm).catch((e) => console.warn('[openaero] no go-around drill:', e));
+  });
 }
 
 // --- Stall recovery drill (ticket 0087, stallDrill.js) ------------------------------
@@ -917,28 +921,20 @@ function checkStallDrill(dt) {
 // The engine has failed (sim.engineFailed: no power whatever the throttle): glide to Addison.
 // The touchdown is graded on Addison's runway, made or missed; deadStick.js is a lazy chunk.
 let deadLib = null;
-function startDeadStick(mission) {
-  sim.deadStick = null;
-  sim.engineFailed = !!mission.deadStick;
-  if (!mission.deadStick) return;
-  const arm = (lib) => {
-    deadLib = lib;
-    if (sim.loadedMission === mission) sim.deadStick = lib.createDeadStick(sim.simTime);
-  };
-  if (deadLib) arm(deadLib);
-  else import('./deadStick.js').then(arm).catch((e) => console.warn('[openaero] no dead-stick challenge:', e));
-}
+// --- Traffic pattern (ticket 0048, pattern.js): sim.pattern = { end, traffic } on that mission
+let patLib = null;
 
-function startStallDrill(mission) {
+// The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
+// only instructions) until Skip; their state is null on every other mission.
+function startDrills(mission) {
   sim.stallDrill = null;
-  drillCoach = !!(mission.stallDrill || mission.deadStick);
-  if (!mission.stallDrill) return;
-  const arm = (lib) => {
-    stallLib = lib;
-    if (sim.loadedMission === mission) sim.stallDrill = lib.createStallDrill();
-  };
-  if (stallLib) arm(stallLib);
-  else import('./stallDrill.js').then(arm).catch((e) => console.warn('[openaero] no stall drill:', e));
+  sim.deadStick = null;
+  sim.pattern = null;
+  sim.engineFailed = !!mission.deadStick;
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern);
+  if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
+  if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
+  if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
 }
 
 // --- Landing grade ---------------------------------------------------------------
@@ -1132,7 +1128,7 @@ function updateCoach(dt) {
   // Every final is coached (0073), and any approach the player takes over from the autopilot.
   // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
   // ...and the dead-stick challenge (0036) to the stop.
-  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick))) {
+  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1156,7 +1152,7 @@ function updateCoach(dt) {
     }
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     coachInput.stall = sim.stallDrill?.phase ?? null;
-    coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : null;
+    coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim) : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
@@ -2070,6 +2066,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
   // Addison, not a glidepath it can't hold (deadStick.js kidGuide).
   if (sim.deadStick) deadLib.kidGuide(sim.deadStick, sim, _assistIn);
+  // The traffic pattern (0048): Kid's guide flies the legs and turns (pattern.js kidGuide).
+  else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   _assistIn.noFloor = sim.engineFailed;
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
   if (sim.onGround) {
@@ -2150,8 +2148,7 @@ function loadScenario(key, final = null) {
   sim.lastLanding = null;
   pendingLanding = null;
   startGoAroundDrill(mission);
-  startStallDrill(mission);
-  startDeadStick(mission);
+  startDrills(mission);
   resetCoach();
   coachHandover = false;
   Object.assign(tutor, createTutor());
@@ -2977,10 +2974,7 @@ function updateDebugOverlay(dt) {
   }
   if (!debugOverlay || (debugTimer -= dt) > 0) return;
   debugTimer = 1;
-  const st = photoreal.state, s = photoreal.session;
-  debugOverlay.textContent = `3D tiles: ${st.status}${st.reason ? ` (${st.reason})` : ''} · this page: ${s ? s.page.roots : 0} root, ${s ? s.page.reuses : 0} reuses`
-    + ` · this browser: ${s ? s.usage.roots : 0} roots, ${s ? s.usage.reuses : 0} reuses · tiles ${st.visibleTiles} · calib ${st.calibM.toFixed(1)} m`
-    + ` · px ${resScale.ratio}`;
+  debugOverlay.textContent = `${photoreal.debugLine()} · px ${resScale.ratio}`; // photoreal.js has its usage
 }
 
 // ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
@@ -3065,12 +3059,7 @@ window.openaeroDebug = () => {
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
       { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
-    photoreal: photoreal ? {
-      ...photoreal.state,
-      page: photoreal.session ? { ...photoreal.session.page } : null,
-      usage: photoreal.session ? { ...photoreal.session.usage } : null,
-      bounds: photoreal.state.status === 'active' ? photoreal.bounds() : null,
-    } : null,
+    photoreal: photoreal ? photoreal.debugState() : null, // photoreal.js (or its boot stand-in)
     render: renderer ? { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles } : null,
   };
 };
