@@ -1,12 +1,12 @@
 ---
 id: 0097
 title: Kid's hands-off final holds the centreline in a crosswind, not 55 m beside it
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-27
-pr:
+pr: 102
 ---
 
 ## Why
@@ -25,10 +25,10 @@ goes to zero with any crosswind. Keep the 45° capture check on heading. Boot bu
 headroom after 0048, so pay for it first.
 
 ## Acceptance criteria
-- [ ] tests/flight/pattern.test.js: the `it.fails` card "10 kt crosswind ... on the centreline"
+- [x] tests/flight/pattern.test.js: the `it.fails` card "10 kt crosswind ... on the centreline"
       passes and is promoted to `it`
-- [ ] A calm final and the 737 line-up (tests/unit/assists.test.js) are unchanged
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] A calm final and the 737 line-up (tests/unit/assists.test.js) are unchanged
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 Promote the known-gap card in tests/flight/pattern.test.js; add a unit case for the line-up

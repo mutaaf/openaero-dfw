@@ -220,6 +220,34 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
       expect(minX).toBeGreaterThan(-30); // overshoot
       expect(maxBank).toBeLessThan(25);
     });
+
+    // Ticket 0097: main.js flies the line-up on the ground track, so the crab a crosswind needs
+    // leaves no steady offset (on the nose heading it was drift / 0.15°/m: ~50 m at 10 kt).
+    it(`${name}: in a crosswind from the right, flown on the ground track, holds the centreline crabbed`, () => {
+      const xw = kts > 100 ? 15 : 10; // kt, from the east (runway north): ~6° and ~8.5° of crab
+      const b = makeBody(spec, { kts, altM: 400, flaps: 2, throttle: 0.3 });
+      b.apMaster = false;
+      b.windVec.set(-xw * 0.514444, 0, 0);
+      b.vel.add(b.windVec);
+      const st = createAssistState(), cfg = assistConfig('kid'), s = {}, out = {}, e = new Euler(0, 0, 0, 'YXZ');
+      let maxAbsX = 0, hdg = 0;
+      fly(b, spec, 90, (x, dt) => {
+        const { pitchDeg, bankRightDeg } = attitude(x);
+        e.setFromQuaternion(x.quat, 'YXZ');
+        hdg = -e.y * 180 / Math.PI;
+        const track = Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI;
+        Object.assign(s, {
+          pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+          aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, 2), tailstrikeDeg: 15,
+          onGround: false, wheelHeightM: 400, airspeedMps: 70, guideBankDeg: kidLocalizerBankDeg(0, track, x.pos.x), guideGammaDeg: 0,
+        });
+        shapeControls(cfg, st, s, dt, out);
+        x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
+        if (x.t > 45) maxAbsX = Math.max(maxAbsX, Math.abs(x.pos.x));
+      });
+      expect(maxAbsX).toBeLessThan(5); // settled on the centreline
+      expect(hdg).toBeGreaterThan(3); // crabbed into the wind (nose right)
+    });
   }
 });
 

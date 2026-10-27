@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import './styles.css';
 import {
-  M_TO_FT, FT_TO_M, NM_TO_M, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
+  M_TO_FT, FT_TO_M, NM_TO_M, KTS_TO_MPS, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 import { magHeadingText } from './magvar.js';
@@ -1340,7 +1340,7 @@ function updateWind(dt) {
   sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
   const h = Math.max(0, sim.pos.y - sim.groundY - sim.spec.gearHeight);
   const surface = Math.sqrt(Math.min(1, h / 30));
-  const w = windVector(wx.windDirDeg, sim.windNowKts * 0.514444 * surface);
+  const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surface);
   sim.windVec.set(w.x, 0, w.z);
 }
 
@@ -1493,7 +1493,7 @@ function integrateSubStep(dt) {
     const rollRateRight = -sim.angVel.z;
     const pitchRateUp = sim.angVel.x;
     const holdHeading = (hdgDeg) => {
-      const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg), sim.tasKts * 0.514444);
+      const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg), sim.tasKts * KTS_TO_MPS);
       sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight);
     };
     // Fly a flight-path angle: pitch = path + current angle of attack.
@@ -2046,7 +2046,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;
   _assistIn.wheelHeightM = wheelHeightM;
-  _assistIn.airspeedMps = sim.tasKts * 0.514444;
+  _assistIn.airspeedMps = sim.tasKts * KTS_TO_MPS;
   // A touchdown waiting to settle (0091) is a landing, not a touch-and-go: Kid holds the flare at
   // idle through a bounce instead of climbing away from it, so the bounce is graded.
   const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround && !pendingLanding, sim.aglFt);
@@ -2057,9 +2057,10 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500) {
-    const curHdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
-    if (Math.abs(headingError(sim.activeEnd.hdgT, curHdg)) < 45) {
-      _assistIn.guideBankDeg = kidLocalizerBankDeg(sim.activeEnd.hdgT, curHdg, ap.crossM);
+    // Captured on the nose, flown on the ground track: a crab holds the centreline (0097). The
+    // nose and track (±180°) wrap in headingError: both are within ~90° of the runway here.
+    if (Math.abs(headingError(sim.activeEnd.hdgT, -_euler.y * RAD_TO_DEG)) < 45) {
+      _assistIn.guideBankDeg = kidLocalizerBankDeg(sim.activeEnd.hdgT, Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG, ap.crossM);
       _assistIn.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
     }
   }
@@ -2105,7 +2106,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
 
 function autoThrottle(targetKts, gammaDeg, dt) {
   airAt(sim.pos.y + sim.mslOffsetM, sim.isaDevC, sim.altimInHg, _apAir);
-  const ff = trimThrottle(sim.spec, targetKts * 0.514444, sim.flapsIndex, gammaDeg, sim.gearDown, _apAir);
+  const ff = trimThrottle(sim.spec, targetKts * KTS_TO_MPS, sim.flapsIndex, gammaDeg, sim.gearDown, _apAir);
   return autothrottleCommand(ff, sim.apAt, sim.iasKts, targetKts, sim.apIasRate, dt);
 }
 
@@ -2158,7 +2159,7 @@ function loadScenario(key, final = null) {
   if (mission.kind === 'final') {
     const end = runwayEnd(mission.airport, mission.rwy);
     // The go-around drill (0047) starts fast and high on purpose.
-    const vApp = (sim.spec.vrefKts + 5 + (mission.fastKts ?? 0)) * 0.514444; // indicated
+    const vApp = (sim.spec.vrefKts + 5 + (mission.fastKts ?? 0)) * KTS_TO_MPS; // indicated
     const airThr = airAt(end.thrY + REF_ELEV_M, sim.isaDevC, sim.altimInHg);
     const vTas = tasFromIas(vApp, airThr.sigma);
     const highM = Math.tan((mission.highDots ?? 0) * GS_DOT_DEG * DEG_TO_RAD) * (mission.distNm * NM_TO_M + AIM_POINT_M);
@@ -2190,7 +2191,7 @@ function loadScenario(key, final = null) {
   } else if (mission.kind === 'drill') {
     // High over a fixed point, clean, in trim at its speed and level (0087).
     const [x, z] = mission.pos;
-    const vIas = mission.kias * 0.514444;
+    const vIas = mission.kias * KTS_TO_MPS;
     const y = ground.heightAt(x, z) + mission.aglFt * FT_TO_M;
     const air = airAt(y + REF_ELEV_M, sim.isaDevC, sim.altimInHg);
     const vTas = tasFromIas(vIas, air.sigma);
@@ -2202,7 +2203,7 @@ function loadScenario(key, final = null) {
     sim.quat.setFromEuler(_euler.set(trimAoaDeg(sim.spec, vIas, 0) * DEG_TO_RAD, -mission.hdg * DEG_TO_RAD, 0, 'YXZ'));
     // The dead-stick challenge: the engine has just quit, the trim already set for best glide.
     sim.throttle = mission.deadStick ? 0 : trimThrottle(sim.spec, vIas, 0, 0, sim.gearDown, air);
-    trimAlpha = trimAoaDeg(sim.spec, mission.deadStick ? sim.spec.vGlideKts * 0.514444 : vIas, 0);
+    trimAlpha = trimAoaDeg(sim.spec, mission.deadStick ? sim.spec.vGlideKts * KTS_TO_MPS : vIas, 0);
     sim.onGround = false;
     sim.activeEnd = null;
   } else {
