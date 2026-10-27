@@ -132,8 +132,9 @@ export function shapeControls(cfg, st, s, dt, out) {
 // centreline (crossM + = right of it). Softer than the autopilot's localizer (0.5°/m, full
 // heading gain), which S-turned a hand-flown airplane with no roll-rate feedback of its own;
 // tuned on the flight model (tests/unit/assists.test.js) for the 737 and the 172 (0.8 of the
-// heading bank since the sideslip side force, 0081: at 0.7 the 737 overshot 31 m; the
-// 0.15°/m intercept is kept, since a crosswind's steady offset goes as 1/that).
+// heading bank since the sideslip side force, 0081: at 0.7 the 737 overshot 31 m). curHdgDeg
+// is the ground track (0097; main.js, pattern.js, deadStick.js): fed the nose heading, a
+// crosswind's crab left a steady offset of drift / 0.15°/m, ~50 m at 10 kt in the Cessna.
 export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
   0.8 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.15, -20, 20), curHdgDeg));
 

@@ -61,9 +61,10 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
     const e = sim.activeEnd;
     const ap = e ? approachGeometry(e, x.pos) : null;
     const nose = (-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI + 360) % 360;
-    // main.js: the final's guide when lined up, else the pattern's (pattern.js kidGuide).
+    // main.js: the final's guide when lined up (captured on the nose, flown on the ground track,
+    // 0097), else the pattern's (pattern.js kidGuide).
     if (e && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(e.hdgT, nose)) < 45) {
-      s.guideBankDeg = kidLocalizerBankDeg(e.hdgT, nose, ap.crossM);
+      s.guideBankDeg = kidLocalizerBankDeg(e.hdgT, (Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI + 360) % 360, ap.crossM);
       s.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
     }
     kidGuide(st, sim, s);
@@ -116,8 +117,8 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
 
 const XWIND = { fromDeg: 250, kts: 10 };
 describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spawn (flightModel, ticket 0048)', () => {
-  for (const [name, wind, landed] of [['calm', {}, true], ['12 kt headwind on final (160°)', { fromDeg: 160, kts: 12 }, true], ['10 kt tailwind on final, headwind on the downwind (340°)', { fromDeg: 340, kts: 10 }, true], ['10 kt crosswind from the right (250°)', XWIND, false]]) {
-    it(`${name}: flies downwind at 1,000 ft, turns base and final where cued${landed ? ' and lands in the touchdown zone' : ', touches down past the threshold'}`, () => {
+  for (const [name, wind] of [['calm', {}], ['12 kt headwind on final (160°)', { fromDeg: 160, kts: 12 }], ['10 kt tailwind on final, headwind on the downwind (340°)', { fromDeg: 340, kts: 10 }], ['10 kt crosswind from the right (250°)', XWIND], ['10 kt crosswind from the left (070°)', { fromDeg: 70, kts: 10 }]]) {
+    it(`${name}: flies downwind at 1,000 ft, turns base and final where cued and lands in the touchdown zone on the centreline`, () => {
       const { td, prompts, legs, rec } = flyPattern(wind);
       const dw = rec.downwindAlt;
       console.log(`[c172 flightModel] pattern ${name}: legs ${legs.join(' > ')}; downwind ${Math.min(...dw).toFixed(0)}-${Math.max(...dw).toFixed(0)} ft; base turn ${(rec.baseTurnAlongM / 1852).toFixed(2)} NM before; final at ${rec.finalFt && (-rec.finalFt.alongM / 1852).toFixed(2)} NM, ${rec.finalFt?.aglFt.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, ${td && td.t.toFixed(0)} s; coach ${prompts.join(' > ')}`);
@@ -139,7 +140,7 @@ describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spaw
       expect(td).not.toBeNull();
       expect(td.pastThrM).toBeGreaterThan(0);
       expect(td.pastThrM).toBeLessThan(600);
-      if (landed) expect(Math.abs(td.crossM)).toBeLessThan(8);
+      expect(Math.abs(td.crossM)).toBeLessThan(8); // a crab flies the track, no steady offset (0097)
       expect(td.vsFpm).toBeGreaterThan(-400);
       // A Pilot along the same path: downwind, abeam, turn base, base, turn final, in that order.
       const order = ['ptDownwind', 'ptAbeam', 'ptTurnBaseL', 'ptBase', 'ptTurnFinalL'].map((k) => prompts.indexOf(k));
@@ -149,11 +150,4 @@ describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spaw
       expect(prompts).not.toContain('ptLow');
     });
   }
-
-  // KNOWN GAP (ticket 0097): Kid's final line-up (assists.js kidLocalizerBankDeg, main.js) steers
-  // the nose heading, so a crab leaves a steady offset (~50 m at 10 kt across): off the side.
-  it.fails('10 kt crosswind from the right: Kid touches down on the centreline (within 8 m)', () => {
-    const { td } = flyPattern(XWIND);
-    expect(Math.abs(td.crossM)).toBeLessThan(8);
-  });
 });

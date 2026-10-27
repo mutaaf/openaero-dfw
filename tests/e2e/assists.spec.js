@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, stubMetar, collectErrors, TEST_METAR } from './helpers.js';
 
 // Ticket 0042: assist levels Kid · Learner · Pilot over the same physics.
 test.beforeEach(async ({ page }) => { await stubTiles(page); });
@@ -203,4 +203,31 @@ test.describe('Kid on a phone', () => {
     expect(best.missions.kdfw_35c_final).toBeUndefined(); // Pilot's best is untouched
     expect(errors).toEqual([]);
   });
+});
+
+// Ticket 0097: Kid's hands-off line-up flies the ground track, so a crosswind's crab leaves no
+// steady offset (on the nose heading the 737 settled ~40 m downwind, off the side of 35C).
+test('Kid hands off in a 15 kt crosswind lands on the centreline, crabbed', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.unroute('**/openaero/api/metar*');
+  await stubMetar(page, [{ ...TEST_METAR, wdir: 270, wspd: 15, rawOb: 'METAR KDFW 161953Z 27015KT 10SM FEW250 24/10 A3002' }]);
+  const errors = collectErrors(page);
+  await page.goto(`${BASE}?debug`);
+  await page.locator('.btnAssist[data-assist="kid"]').click();
+  await page.locator('#btnStartFlight').click();
+  await expect(page.locator('#onboardingModal')).toBeHidden();
+  await page.evaluate(() => window.openaeroDebugFinal('KDFW', '35C', 2.5));
+  expect((await debug(page)).activeRunway).toBe('KDFW_35C');
+  // Hands off. On short final: crabbed into the wind (nose left of the runway), on the centreline.
+  await expect.poll(async () => (await debug(page)).distM, { timeout: 120_000, intervals: [500] }).toBeLessThan(600);
+  const short = await debug(page);
+  expect(short.crossM).toBeGreaterThan(-6);
+  expect(short.crossM).toBeLessThan(6);
+  expect(((short.headingDeg - short.runwayHdgT + 540) % 360) - 180).toBeLessThan(-2);
+  await expect.poll(async () => (await debug(page)).lastLanding, { timeout: 60_000, intervals: [250] }).not.toBeNull();
+  const td = (await debug(page)).lastLanding;
+  console.log(`[0097] short final ${short.crossM.toFixed(1)} m, nose ${(((short.headingDeg - short.runwayHdgT + 540) % 360) - 180).toFixed(1)}°; touchdown ${td.crossM.toFixed(1)} m off, ${td.pastThresholdM.toFixed(0)} m past, ${td.vsFpm.toFixed(0)} fpm, ${td.grade}`);
+  expect(Math.abs(td.crossM)).toBeLessThan(8);
+  expect(td.grade).not.toBe('CRASH');
+  expect(errors).toEqual([]);
 });
