@@ -68,7 +68,8 @@ export function updateDeparture(st, onGround, aglFt) {
 //      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), aoaDeg, betaDeg, dihedralAil,
 //      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
-//      localizer bank and glidepath angle on a final) }
+//      localizer bank and glidepath angle on a final), noFloor (no engine, 0036: the glide is
+//      steeper than the floor, and holding the floor would only slow it to a mush) }
 // Writes out.elev, out.ail, out.rud (surface commands, -1..1); returns out. No allocation.
 export function shapeControls(cfg, st, s, dt, out) {
   if (s.onGround) {
@@ -90,7 +91,7 @@ export function shapeControls(cfg, st, s, dt, out) {
   }
   st.pitchHoldDeg = clamp(st.pitchHoldDeg, cfg.pitchDownMaxDeg * CMD_SHARE, cfg.pitchUpMaxDeg * CMD_SHARE);
   // Kid ground floor: a dive held from higher up is shallowed out before the ground.
-  if (cfg.groundFloor && s.wheelHeightM < FLOOR_BELOW_M) {
+  if (cfg.groundFloor && !s.noFloor && s.wheelHeightM < FLOOR_BELOW_M) {
     st.pitchHoldDeg = Math.max(st.pitchHoldDeg, FLOOR_GAMMA_DEG + s.aoaDeg);
   }
   // Kid auto-flare: near the ground, never less nose-up than the flare's sink-rate profile.

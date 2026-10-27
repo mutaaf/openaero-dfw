@@ -109,7 +109,7 @@ export function createAudio(sim, onStateChange) {
       // An altitude callout cuts off a stale one, but never the gate's "unstabilized" call
       // (made the same frame, or just before when the terrain dips under the final).
       if (!say(calloutWord(i), { interrupt: audioCtx.currentTime - gateCallAt > 2.5 })) chirp(587.33, 0.18);
-      if (GPWS_ALT_THRESHOLDS[i] === 20 && sim.throttle > 0.05) say('retard', { interrupt: false });
+      if (GPWS_ALT_THRESHOLDS[i] === 20 && sim.throttle > 0.05 && !sim.engineFailed) say('retard', { interrupt: false });
     }
   }
 
@@ -126,8 +126,9 @@ export function createAudio(sim, onStateChange) {
     if (!audioCtx || !sim.audioEnabled || sim.paused) return;
     const now = audioCtx.currentTime;
     const basePitch = sim.aircraftKey === 'c172' ? 65 : 120;
-    engineOsc.frequency.setTargetAtTime(basePitch + sim.throttle * 240, now, 0.1);
-    engineGain.gain.setTargetAtTime(0.04 + sim.throttle * 0.08, now, 0.1);
+    const thr = sim.engineFailed ? 0 : sim.throttle; // a dead engine (0036) only windmills
+    engineOsc.frequency.setTargetAtTime(basePitch + thr * 240, now, 0.1);
+    engineGain.gain.setTargetAtTime(0.04 + thr * 0.08, now, 0.1);
     const speedRatio = Math.min(sim.iasKts / 260, 1.6);
     windGain.gain.setTargetAtTime(0.015 + speedRatio * 0.065, now, 0.1);
     const stalling = isStallWarning(sim.iasKts, stallWarningKts(sim.spec, sim.flapsIndex), sim.onGround);

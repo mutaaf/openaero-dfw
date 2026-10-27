@@ -44,22 +44,13 @@ export const COACH_PROMPTS = {
   bounceHigh: 'Big bounce: go around! Full power', // AFH: a severe bounce is not saved
   bounceKid: 'Bounced! Let go: the plane lands itself', // Kid: the autothrottle has the power
   // The go-around (0047, after the gate called it): power, pitch, flaps a notch, gear, climb.
-  gaPower: 'Go around! Full power',
-  gaPitch: 'Pitch up: stop the descent',
   gaFlaps: 'Flaps up one notch: press F',
-  gaGear: 'Positive rate: gear up (G)',
-  gaClimb: 'Climb straight ahead to 2,000 ft',
-  gaKid: 'Going around: the plane climbs for another try',
-  // The stall recovery drill (0087): slow it at idle until it stalls, then recover.
-  stIdle: 'Power to idle (throttle all the way back)',
-  stSlow: 'Ease back, more and more: hold height to a stall',
-  stNose: 'Stall! Nose down',
-  stPower: 'Power in: full throttle',
-  stWings: 'Wings level',
-  stClimb: 'Climb away',
-  stKidSlow: 'Let go: the plane slows down until it stalls',
-  stKid: 'Stall! The plane noses down and climbs away',
 };
+// The drills' own prompts are ranked here and worded in their lazy chunks (no boot bytes),
+// which add their words to DRILL_TEXT when they load: the go-around's ga* (goAround.js
+// GA_TEXT; gaFlaps stays here, it has numbers), the stall drill's st* (stallDrill.js
+// STALL_TEXT) and the dead-stick's ds* (deadStick.js DS_TEXT, rank 1).
+export const DRILL_TEXT = {};
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
 const RANK = {
   papi: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
@@ -87,7 +78,7 @@ export function coachText(key, v = {}) {
   if (key === 'gaFlaps' && typeof v.flapsDeg === 'number') return v.touch ? `Flaps up a notch: tap FLAPS to ${v.flapsDeg}°` : `Flaps up a notch: press F, to ${v.flapsDeg}°`;
   if (key === 'flaps' && v.flapsDeg) return v.touch ? `Landing flaps: tap FLAPS until ${v.flapsDeg}°` : `Landing flaps: press F until ${v.flapsDeg}°`;
   if (v.touch && TOUCH_WORDS[key]) return TOUCH_WORDS[key];
-  return COACH_PROMPTS[key];
+  return COACH_PROMPTS[key] ?? DRILL_TEXT[key];
 }
 
 // The missed approach, step by step (s.goAround, set by main.js after the gate called it):
@@ -120,10 +111,12 @@ export function stallTarget(s) {
 //      optional: iasKts, targetKts (Vref + 5), locDots (+ = right of the centreline),
 //      gearLocked, flapsLanding, flareFt (default 50), idleFt (default 30), driftDeg,
 //      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
-//      drill's phase: stallTarget) }
+//      drill's phase: stallTarget), ds (the dead-stick challenge's prompt key, its words in
+//      deadStick.js DS_TEXT; rank 1) }
 export function coachTarget(s) {
   if (s.onGround || s.autopilot) return null;
   if (s.stall) return stallTarget(s);
+  if (s.ds) return s.ds; // the dead-stick challenge's own prompt (deadStick.js), above the flare
   if (s.goAround) return goAroundTarget(s);
   if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : 'kid';
   if (s.aglFt < (s.idleFt ?? 30) && s.throttle > 0.05) return 'idle';
@@ -159,7 +152,7 @@ export const createCoach = () => ({ prompt: null, pending: null, pendingS: 0, fl
 // hold for COACH_MIN_HOLD_S.
 function settle(c, target, dt) {
   if (target === c.prompt) { c.pending = null; c.pendingS = 0; return; }
-  if (target === null || c.prompt === null || RANK[target] > RANK[c.prompt]) {
+  if (target === null || c.prompt === null || (RANK[target] ?? 1) > (RANK[c.prompt] ?? 1)) {
     c.prompt = target; c.pending = null; c.pendingS = 0;
     return;
   }
@@ -175,7 +168,7 @@ function settle(c, target, dt) {
 export function stepCoach(c, s, dt) {
   if (c.done) {
     if (s.bounces > 0 && !s.onGround) {
-      c.prompt = s.kid ? 'bounceKid' : s.bounces >= 2 ? 'bounceGa' : s.bounceHigh ? 'bounceHigh' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
+      c.prompt = s.kid ? 'bounceKid' : s.noPower ? 'dsBounce' : s.bounces >= 2 ? 'bounceGa' : s.bounceHigh ? 'bounceHigh' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
       return c;
     }
     // Back on the wheels: the bounce prompt clears, the rollout prompts follow after the hold.

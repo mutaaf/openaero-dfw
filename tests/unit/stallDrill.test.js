@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  STALL_KEY, createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput, drillAssist,
+  STALL_KEY, STALL_TEXT, createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput, drillAssist,
   STALL_SECONDARY_S, STALL_HELD_CAP, STALL_SECONDARY_CAP, STALL_DIVE_FT,
 } from '../../src/stallDrill.js';
 import { coachTarget, coachText, stallTarget } from '../../src/coach.js';
@@ -182,7 +182,12 @@ describe('stall drill coach prompts (0087)', () => {
     expect(coachTarget({ ...base, stall: 'unstalled', throttle: 1, bankDeg: -12 })).toBe('stWings');
     expect(coachTarget({ ...base, stall: 'unstalled', throttle: 1, bankDeg: 2 })).toBe('stClimb');
     expect(coachTarget({ ...base, stall: 'complete', throttle: 1 })).toBe(null);
-    expect(coachText('stNose')).toMatch(/Nose down/);
+    expect(STALL_TEXT.stNose).toMatch(/Nose down/);
+    // Worded in the drill's lazy chunk; every key stallTarget can pick has short words.
+    for (const k of ['stIdle', 'stSlow', 'stNose', 'stPower', 'stWings', 'stClimb', 'stKidSlow', 'stKid']) {
+      expect(coachText(k)).toBe(STALL_TEXT[k]); // added by the chunk when it loads
+      expect(STALL_TEXT[k].length).toBeLessThanOrEqual(48);
+    }
   });
   it('Kid hears what the airplane is doing for them', () => {
     expect(stallTarget({ ...base, kid: true, stall: 'armed' })).toBe('stKidSlow');

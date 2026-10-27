@@ -7,6 +7,10 @@ import { latLonToSimMeters } from './geo.js';
 // Drills away from the airports start over Grapevine Lake (32°58'N 97°04'W, Wikipedia), north
 // of DFW: a fixed point anyone can see from 4,500 ft.
 const GRAPEVINE_LAKE = latLonToSimMeters(32.967, -97.067);
+// The dead-stick challenge (0036) starts abeam the middle of Addison's runway, 2 NM east: a
+// left downwind for 16 (heading 340), the runway off the left wing (tests/unit/deadStick.test.js
+// checks it against the runway's surveyed ends).
+const ADS_ABEAM = latLonToSimMeters(32.97991, -96.79924);
 
 export const MISSIONS = [
   { key: 'kdfw_35c_final', label: 'KDFW RWY 35C (4 NM ILS Final)', blurb: '4 NM out, lined up on 35C. Follow the green velocity vector and the 4-light PAPI down.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4 },
@@ -20,6 +24,8 @@ export const MISSIONS = [
   { key: 'kdal_31r_final', label: 'KDAL Love Field 31R Final', blurb: "Into Love Field from the south-east, over the Dallas neighbourhoods near the field.", kind: 'final', airport: 'KDAL', rwy: '31R', distNm: 4 },
   { key: 'kdal_13l_final', label: 'KDAL Love Field 13L (Over Downtown)', blurb: 'Into Love Field from the north-west with the downtown skyline ahead.', kind: 'final', airport: 'KDAL', rwy: '13L', distNm: 5 },
   { key: 'kads_16_final', label: 'KADS Addison 16 (Short Field)', blurb: "A 3 NM final into Addison's strip, hemmed in by North Dallas office towers.", kind: 'final', airport: 'KADS', rwy: '16', distNm: 3 },
+  // Dead-stick challenge (0036, deadStick.js): the Cessna's engine has quit, 3,500 ft up.
+  { key: 'deadstick_kads_16', label: 'KADS Dead-Stick Challenge (Cessna)', blurb: 'Your engine stops over North Dallas, 2 NM from Addison: glide at 68 knots, turn back to the runway when the coach says, and land it.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_ABEAM.x, ADS_ABEAM.z], aglFt: 3500, kias: 75, hdg: 340, deadStick: true },
   { key: 'kafw_34l_final', label: 'KAFW Alliance 34L', blurb: 'Alliance, north of Fort Worth: long, wide and busy with cargo jets.', kind: 'final', airport: 'KAFW', rwy: '34L', distNm: 5 },
   { key: 'kftw_16_final', label: 'KFTW Meacham 16', blurb: "Meacham, Fort Worth's historic field, just north of downtown Fort Worth.", kind: 'final', airport: 'KFTW', rwy: '16', distNm: 4 },
   { key: 'kgky_34_final', label: 'KGKY Arlington 34', blurb: 'Arlington Municipal: a short 3 NM final, south of the stadiums.', kind: 'final', airport: 'KGKY', rwy: '34', distNm: 3 },

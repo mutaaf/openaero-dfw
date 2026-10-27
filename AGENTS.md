@@ -157,7 +157,19 @@ src/stallDrill.js   stall recovery drill (0087, lazy chunk like goAround.js): th
                     complete/failed), the grade (reaction, height vs POH 230 ft, bank, secondary
                     stall; held stick capped D, even when an assist unstalls it; secondary C; no
                     recovery without power; only a slow, idle stall counts) and drillAssist
-                    (Kid/Learner stall protection off until the stall); coach.js has its prompts
+                    (Kid/Learner stall protection off until the stall); coach.js picks its
+                    prompts, their words are STALL_TEXT here. Every drill chunk adds its words
+                    to coach.js DRILL_TEXT when it loads (0036: off the boot budget)
+src/deadStick.js    dead-stick challenge (0036, lazy chunk): the C172 3,500 ft AGL abeam
+                    Addison with sim.engineFailed (flightModel.js no power whatever the
+                    throttle, JSBSim fuel off; HUD "ENG OUT"/"THR OUT"; no autopilot, no
+                    stabilized gate, idle/retard/bounce-power calls or engine tone). Its coach
+                    (best glide 68 KIAS; glide on, "turn left now" for a 1 NM final, low/high
+                    against the glide ratio by flaps and wind, POH Fig. 3-1) feeds coach.js as
+                    s.ds; Kid's hands-off guide flies the same pattern at best glide (no dive
+                    floor, autothrottle or auto flaps). The touchdown is graded on Addison
+                    wherever it is (made the runway 30%; missed = D with the distance and why:
+                    short, long or beside); ?debug openaeroDebugDeadStick puts it on a final
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn.
                     A lazy chunk fetched right after boot (0091); its on/off flag and blank
@@ -312,7 +324,7 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-26 (0036): 200.95 kB (the dead-stick mission, engine-out flag and its effects, coach hook and HUD readouts, paid for by moving the go-around and stall drills' coach words into their lazy chunks through coach.js DRILL_TEXT, and the abeam spawn to a lat/lon). 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
 is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's

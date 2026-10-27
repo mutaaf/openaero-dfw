@@ -6,7 +6,8 @@
 // `sim`: pos, vel, quat, angVel (world frame, see autopilot.js for the sign conventions),
 // elevInput, aileronInput, rudderInput, throttle, flapsIndex, gearDown, brakesOn, apMaster,
 // windVec (air-mass velocity) and groundY (terrain height under the aircraft), trimAlphaDeg
-// (the angle of attack the elevator trim flies; autoTrim = it follows α); optional
+// (the angle of attack the elevator trim flies; autoTrim = it follows α), engineFailed (the
+// dead-stick drill, 0036: the engine makes no power whatever the throttle; the prop windmills); optional
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
 // writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY,
 // sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn),
@@ -81,7 +82,7 @@ export function stepFlightModel(body, spec, dt) {
 
   const liftForce = cl * qDyn * spec.wingAreaM2;
   const dragForce = cd * qDyn * spec.wingAreaM2;
-  body.engineN = spoolEngine(spec, body.engineN ?? body.throttle, body.throttle, dt);
+  body.engineN = spoolEngine(spec, body.engineN ?? body.throttle, body.engineFailed ? 0 : body.throttle, dt);
   const thrustForce = reversedThrust(spec, engineThrust(spec, body.engineN, airspeed, air, body.mach, qDyn), body.reverserPos);
 
   // Lift is perpendicular to the relative wind (in the plane of the body's lateral axis),

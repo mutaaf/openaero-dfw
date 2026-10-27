@@ -137,6 +137,9 @@ const sim = {
   goAround: null,
   // Stall recovery drill (0087, stallDrill.js): its state on that mission, else null
   stallDrill: null,
+  // Dead-stick challenge (0036, deadStick.js): its state on that mission, and the dead engine
+  deadStick: null,
+  engineFailed: false,
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
   stick: { x: 0, y: 0, active: false },
@@ -796,7 +799,7 @@ function attachDetailedModel(type) {
 // it for the next approach. Per frame it is scalars only; objects are made once, at the gate.
 function checkStabilizedGate() {
   const end = sim.activeEnd;
-  if (!end || sim.onGround) return;
+  if (!end || sim.onGround || sim.engineFailed) return; // no "go around" without an engine
   const gs = sim.gateState;
   const aaeFt = (sim.pos.y - end.thrY) * M_TO_FT;
   const gateFt = isImc(sim.wx) ? GATE_IMC_FT : GATE_VMC_FT;
@@ -910,9 +913,25 @@ function checkStallDrill(dt) {
   showResults(result, best, stallLib.STALL_PLACE, null);
 }
 
+// --- Dead-stick challenge (ticket 0036, deadStick.js) -------------------------------
+// The engine has failed (sim.engineFailed: no power whatever the throttle): glide to Addison.
+// The touchdown is graded on Addison's runway, made or missed; deadStick.js is a lazy chunk.
+let deadLib = null;
+function startDeadStick(mission) {
+  sim.deadStick = null;
+  sim.engineFailed = !!mission.deadStick;
+  if (!mission.deadStick) return;
+  const arm = (lib) => {
+    deadLib = lib;
+    if (sim.loadedMission === mission) sim.deadStick = lib.createDeadStick(sim.simTime);
+  };
+  if (deadLib) arm(deadLib);
+  else import('./deadStick.js').then(arm).catch((e) => console.warn('[openaero] no dead-stick challenge:', e));
+}
+
 function startStallDrill(mission) {
   sim.stallDrill = null;
-  drillCoach = !!mission.stallDrill;
+  drillCoach = !!(mission.stallDrill || mission.deadStick);
   if (!mission.stallDrill) return;
   const arm = (lib) => {
     stallLib = lib;
@@ -966,11 +985,13 @@ function checkTouchdown(dt) {
   if (!touchedDown) return;
   sim.landingGraded = true;
   sim.airborneTime = 0;
-  const end = sim.activeEnd || selectActiveRunway(RUNWAY_ENDS, sim.pos, 0, null);
+  _euler.setFromQuaternion(sim.quat, 'YXZ');
+  // The dead-stick challenge (0036) is graded on Addison wherever the wheels touch.
+  const end = sim.deadStick ? deadLib.landingEnd((-_euler.y * RAD_TO_DEG + 360) % 360)
+    : sim.activeEnd || selectActiveRunway(RUNWAY_ENDS, sim.pos, 0, null);
   if (!end) return;
   const g = approachGeometry(end, sim.pos);
   const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
-  _euler.setFromQuaternion(sim.quat, 'YXZ');
   let result = gradeLanding({
     vsFpm: sim.lastAirVsi,
     crossM: g.crossM,
@@ -986,6 +1007,7 @@ function checkTouchdown(dt) {
   });
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
+  if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos);
   if (kidSoftLanding(result)) return;
   const gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
   sim.lastLanding = {
@@ -1059,7 +1081,7 @@ const COACH_DONE_SHOW_S = 4;
 const coachInput = {
   aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false,
   iasKts: 0, targetKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0, goAround: false,
-  stall: null, bankDeg: 0, bounces: 0, bounceHigh: false,
+  stall: null, ds: null, noPower: false, bankDeg: 0, bounces: 0, bounceHigh: false,
   rollout: { gsKts: 0, canReverse: false, reverserPos: 0, braking: false },
 };
 const coachVals = { targetKts: 0, flapsDeg: 0 };
@@ -1109,11 +1131,13 @@ function updateCoach(dt) {
   let prompt = null;
   // Every final is coached (0073), and any approach the player takes over from the autopilot.
   // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
-  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && stallLive())) {
+  // ...and the dead-stick challenge (0036) to the stop.
+  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
-    coachInput.throttle = sim.throttle;
+    coachInput.throttle = sim.engineFailed ? 0 : sim.throttle; // no "idle" call with no engine
+    coachInput.noPower = sim.engineFailed; // a bounce is ridden out, not powered (0036)
     coachInput.onGround = sim.onGround;
     coachInput.autopilot = sim.apMaster || sim.apApproach;
     coachInput.kid = sim.assist === 'kid';
@@ -1132,6 +1156,7 @@ function updateCoach(dt) {
     }
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     coachInput.stall = sim.stallDrill?.phase ?? null;
+    coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
@@ -2042,6 +2067,10 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
       _assistIn.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
     }
   }
+  // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
+  // Addison, not a glidepath it can't hold (deadStick.js kidGuide).
+  if (sim.deadStick) deadLib.kidGuide(sim.deadStick, sim, _assistIn);
+  _assistIn.noFloor = sim.engineFailed;
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
   if (sim.onGround) {
     // The takeoff roll's stick, power and the stop are the player's, smoothed like Pilot's.
@@ -2053,6 +2082,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   sim.elevInput = _assistOut.elev;
   sim.aileronInput = _assistOut.ail;
   sim.rudderInput = _assistOut.rud;
+  // No engine (0036): no power to manage, and flaps are the pilot's call (the coach says when).
+  if (sim.engineFailed) return;
   if (cfg.autoConfig) {
     _assistCfg.gearDown = sim.gearDown; _assistCfg.flapsIndex = sim.flapsIndex;
     autoConfigure(spec, sim, _assistCfg);
@@ -2120,6 +2151,7 @@ function loadScenario(key, final = null) {
   pendingLanding = null;
   startGoAroundDrill(mission);
   startStallDrill(mission);
+  startDeadStick(mission);
   resetCoach();
   coachHandover = false;
   Object.assign(tutor, createTutor());
@@ -2171,8 +2203,9 @@ function loadScenario(key, final = null) {
     sim.flapsIndex = 0;
     sim.gearDown = !!sim.spec.fixedGear;
     sim.quat.setFromEuler(_euler.set(trimAoaDeg(sim.spec, vIas, 0) * DEG_TO_RAD, -mission.hdg * DEG_TO_RAD, 0, 'YXZ'));
-    sim.throttle = trimThrottle(sim.spec, vIas, 0, 0, sim.gearDown, air);
-    trimAlpha = trimAoaDeg(sim.spec, vIas, 0);
+    // The dead-stick challenge: the engine has just quit, the trim already set for best glide.
+    sim.throttle = mission.deadStick ? 0 : trimThrottle(sim.spec, vIas, 0, 0, sim.gearDown, air);
+    trimAlpha = trimAoaDeg(sim.spec, mission.deadStick ? sim.spec.vGlideKts * 0.514444 : vIas, 0);
     sim.onGround = false;
     sim.activeEnd = null;
   } else {
@@ -2285,7 +2318,7 @@ const flapText = () => {
 
 function syncUI() {
   const throttlePct = Math.round(sim.throttle * 100);
-  byId('txtThrottle').textContent = `${throttlePct}%`;
+  byId('txtThrottle').textContent = sim.engineFailed ? 'ENG OUT' : `${throttlePct}%`;
   // Autothrottle and gamepad move sim.throttle too: keep the slider honest, but never
   // fight a player who is dragging it (ticket 0017). Focus alone doesn't count: a range
   // input keeps focus after a click, and arrow keys must step from the current throttle.
@@ -2312,6 +2345,7 @@ function syncUI() {
   }
   byId('txtSurfaceState').textContent = sim.onGround ? 'TOUCHDOWN / GROUND' : 'AIRBORNE';
 
+  if (sim.engineFailed) sim.apMaster = sim.apApproach = false; // no engine, no autopilot (0036)
   byId('btnApMaster').classList.toggle('active', sim.apMaster);
   byId('btnApHdg').classList.toggle('active', sim.apHdgHold);
   byId('btnApAlt').classList.toggle('active', sim.apAltHold);
@@ -2356,7 +2390,7 @@ function syncUI() {
   const tKnob = byId('touchStickKnob');
   tKnob.style.transform = `translate(${sim.aileronInput * 44}px, ${sim.elevInput * 44}px)`;
   const thrPct = Math.round(sim.throttle * 100);
-  byId('txtTouchThr').textContent = `${thrPct}%`;
+  byId('txtTouchThr').textContent = sim.engineFailed ? 'OUT' : `${thrPct}%`; // THR OUT: the dead-stick (0036)
   byId('touchThrottleFill').style.height = `${thrPct}%`;
   byId('touchThrottleHandle').style.bottom = `${thrPct}%`;
   byId('touchThrottle').setAttribute('aria-valuenow', String(thrPct));
@@ -2505,7 +2539,10 @@ byId('missionList').addEventListener('click', (e) => {
 byId('selAircraft').addEventListener('change', (e) => {
   aircraftBeforeMission = null; // you picked this one
   // The stall drill is the Cessna's (its POH figure, its best): another airframe ends it.
+  // So does the dead-stick challenge (0036), and its failed engine with it.
   sim.stallDrill = null;
+  sim.deadStick = null;
+  sim.engineFailed = false;
   setAircraft(e.target.value);
 });
 function setAircraft(key) {
@@ -2951,6 +2988,8 @@ if (debugOverlay) window.openaeroDebugFinal = (airport, rwy, distNm) => runwayEn
   && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm });
 // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce.
 if (debugOverlay) window.openaeroDebugHop = (mps) => { sim.vel.y = mps; };
+// ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
+if (debugOverlay) window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
 // The active runway on screen (CSS px): its approach lights' outer end to the far end, as wide
 // as the runway. Read by tests/e2e/runwayVisibility.spec.js.
 function runwayScreen(e) {
@@ -3021,6 +3060,7 @@ window.openaeroDebug = () => {
     stabilizedGate: sim.gate,
     goAround: sim.goAround ? { phase: sim.goAround.phase, lowFt: sim.goAround.lowFt, minIasKts: sim.goAround.minIasKts, climbFpm: sim.goAround.climbFpm } : null,
     stallDrill: sim.stallDrill ? { ...sim.stallDrill } : null,
+    engineFailed: !!sim.engineFailed,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
       { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),

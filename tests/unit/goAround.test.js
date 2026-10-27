@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  GO_AROUND_KEY, createGoAround, goAroundState, gradeGoAround, capUnstableLanding, GA_CAP_SCORE,
+  GO_AROUND_KEY, GA_TEXT, createGoAround, goAroundState, gradeGoAround, capUnstableLanding, GA_CAP_SCORE,
 } from '../../src/goAround.js';
 import { gradeLanding } from '../../src/landing.js';
 import { coachTarget, coachText, goAroundTarget } from '../../src/coach.js';
@@ -177,6 +177,9 @@ describe('the go-around coach (0047)', () => {
     expect(coachTarget({ ...ga, kid: true })).toBe('gaKid');
   });
   it('names the button on a touch screen', () => {
+    for (const t of Object.values(GA_TEXT)) expect(t.length).toBeLessThanOrEqual(48); // goAround.js's words, added on load
+    expect(coachText('gaPower')).toBe(GA_TEXT.gaPower);
+    expect(coachText('gaGear')).toMatch(/gear up/i);
     expect(coachText('gaFlaps', { touch: true })).toMatch(/tap FLAPS/);
     expect(coachText('gaGear', { touch: true })).toMatch(/tap GEAR/);
     expect(coachText('gaFlaps')).toMatch(/press F/);
