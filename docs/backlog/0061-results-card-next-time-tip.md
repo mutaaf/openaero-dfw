@@ -1,12 +1,12 @@
 ---
 id: 0061
 title: Results card says the one thing to fix next time
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-10-20
-pr:
+pr: 100
 ---
 
 ## Why
