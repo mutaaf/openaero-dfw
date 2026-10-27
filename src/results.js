@@ -2,6 +2,7 @@
 // grade, score, personal best, the stabilized-gate verdict and one bar per factor. DOM only;
 // main.js pauses the flight first when the card comes up in the air (0047).
 import { GRADE_COLOURS } from './landing.js';
+import { landingTip } from './landingTip.js';
 
 const byId = (id) => document.getElementById(id);
 export function showResults(sim, result, best, end, gate) {
@@ -17,6 +18,10 @@ export function showResults(sim, result, best, end, gate) {
   const reason = byId('txtGradeReason');
   reason.textContent = result.reason || '';
   reason.classList.toggle('hidden', !result.reason);
+  // The one thing to fix next time (0061); none for an S or a drill's own card.
+  const tip = landingTip(result);
+  byId('txtTip').textContent = tip || '';
+  byId('tipRow').classList.toggle('hidden', !tip);
   const bestEl = byId('txtBest');
   if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
   else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';

@@ -2,7 +2,8 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0091 on a phone (390x844, touch): the bounce prompt and the results card with its
-// "Bounced once" line fit the screen without a scroll, upright and held sideways.
+// "Bounced once" line and the next-time tip (0061) fit the screen without a scroll, upright
+// and held sideways.
 test('phone: the bounce prompt and the capped results card fit 390x844', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = collectErrors(page);
@@ -34,6 +35,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   await page.screenshot({ path: test.info().outputPath('bounce-390-coach.png') });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('#txtGradeReason')).toContainText('Bounced once');
+  await expect(page.locator('#txtTip')).toContainText('You bounced off a'); // 0061
   const box = await page.locator('#resultsCard').boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
@@ -43,7 +45,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   await page.screenshot({ path: test.info().outputPath('bounce-390.png') });
   // Held sideways (844x390): both buttons stay on screen with the bounce line showing.
   await page.setViewportSize({ width: 844, height: 390 });
-  for (const id of ['#btnFlyAgain', '#btnKeepRolling']) {
+  for (const id of ['#tipRow', '#btnFlyAgain', '#btnKeepRolling']) {
     await expect(page.locator(id)).toBeInViewport({ ratio: 1 });
   }
   await page.screenshot({ path: test.info().outputPath('bounce-844.png') });
