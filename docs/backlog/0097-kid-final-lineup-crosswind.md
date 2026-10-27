@@ -21,7 +21,7 @@ misses the runway. Pilots fly the track, not the heading, onto the centreline (t
 ## What
 In main.js applyAssists, feed the hands-off line-up the ground track (from sim.vel) instead
 of the nose heading, or add a slow integral on the cross-track error, so the steady offset
-goes to zero with any crosswind. Keep the 45° capture check on heading. Boot budget: 11 B of
+goes to zero with any crosswind. Keep the 45° capture check on heading. Boot budget: 4 B of
 headroom after 0048, so pay for it first.
 
 ## Acceptance criteria

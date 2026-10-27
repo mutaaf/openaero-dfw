@@ -139,18 +139,33 @@ describe('patternTarget: what the coach says on each leg', () => {
     expect(patternTarget(E16, pilot(-C, -900, 250, 300))).toBe('ptLow');
     expect(patternTarget(E16, pilot(800, -C, 340, 1000, { iasKts: 55 }))).toBe('ptSlow');
     expect(patternTarget(E16, pilot(800, -C, 340, 1000, { kid: true }))).toBe('ptKid');
+    // Well below the descent: low, even where a turn cue would show.
+    expect(patternTarget(E16, pilot(-C - 20, -C, 340, 300))).toBe('ptLow');
+  });
+
+  it('off the circuit: an early base, a U-turn on the downwind, flying on far past the base turn, the crosswind leg', () => {
+    // Base turned abeam the runway's middle: no "turn final" into its side.
+    expect(patternTarget(E16, pilot(600, -900, 250, 1000))).toBe('ptEarly');
+    expect(patternTarget(E16, pilot(600, -100, 250, 1000))).toBe('ptEarly');
+    // Reversed on the downwind, before or after abeam: wrong way, turn back.
+    expect(patternTarget(E16, pilot(800, -C, 160, 1000))).toBe('ptBackL');
+    expect(patternTarget(E16, pilot(-500, -C, 160, 1000))).toBe('ptBackL');
+    // Hands off down the downwind 3 NM past the threshold: too far out, turn now.
+    expect(patternTarget(E16, pilot(-3 * 1852, -C, 340, 950))).toBe('ptFarL');
+    expect(patternTarget(E16, pilot(E16.lengthM + 300, -400, 70, 800))).toBe('ptXw');
     expect(patternTarget(E16, pilot(-900, 0, 160, 300, { kid: true }))).toBeNull();
   });
 
   it('every key has words, the coach shows them through s.ds, and left/right say so', () => {
-    for (const k of ['ptDownwind', 'ptClimb', 'ptDescend', 'ptAbeam', 'ptBase', 'ptHigh', 'ptLow', 'ptSlow', 'ptUpwind', 'ptKid',
+    for (const k of ['ptDownwind', 'ptClimb', 'ptDescend', 'ptAbeam', 'ptBase', 'ptEarly', 'ptHigh', 'ptLow', 'ptSlow', 'ptUpwind', 'ptXw', 'ptKid',
+      'ptFarL', 'ptFarR', 'ptBackL', 'ptBackR',
       'ptTurnBaseL', 'ptTurnBaseR', 'ptTurnFinalL', 'ptTurnFinalR', 'ptTurnXwL', 'ptTurnXwR', 'ptTurnDwL', 'ptTurnDwR']) {
       expect(PT_TEXT[k], k).toBeTruthy();
       expect(coachText(k)).toBe(PT_TEXT[k]);
     }
     expect(PT_TEXT.ptTurnBaseL).toMatch(/left/);
     expect(PT_TEXT.ptTurnBaseR).toMatch(/right/);
-    expect(PT_TEXT.ptDownwind).toMatch(/1,000 ft/);
+    expect(PT_TEXT.ptDownwind).toMatch(/1,000 ft above the field/);
     expect(coachTarget({ aglFt: 900, onGround: false, autopilot: false, ds: 'ptTurnBaseL' })).toBe('ptTurnBaseL');
   });
 });

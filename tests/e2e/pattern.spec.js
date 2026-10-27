@@ -22,7 +22,7 @@ test('the traffic pattern: in the picker under Addison, spawned on the downwind,
   expect(spawn.iasKts).toBeGreaterThan(80);
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText('Downwind: hold 1,000 ft, parallel to the runway', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Downwind: hold 1,000 ft above the field, parallel to the runway', { timeout: 10_000 });
   expect(await lowContrastLabels(page, '#coach')).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('pattern-1280-downwind.png') });
   expect(errors).toEqual([]);

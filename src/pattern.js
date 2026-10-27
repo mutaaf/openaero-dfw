@@ -29,21 +29,26 @@ const leadM = (gsMps) => (gsMps * gsMps) / (9.80665 * TURN_BANK_TAN);
 
 // Words with a side: {side} is the turn's direction (left traffic: left).
 const TURNS = {
-  ptTurnBase: 'Turn base: bank {side} now, the runway is 45° behind you',
+  ptTurnBase: 'Turn base: bank {side} now, the runway is behind your {side} shoulder',
   ptTurnFinal: 'Turn final: bank {side}, line up with the runway',
   ptTurnXw: 'Past the runway end: turn {side} onto crosswind',
   ptTurnDw: 'Turn {side} onto downwind, parallel to the runway',
+  ptFar: 'Too far out: turn {side} now, back toward the runway',
+  ptBack: 'Wrong way: turn {side} back onto the downwind',
 };
 export const PT_TEXT = {
-  ptDownwind: 'Downwind: hold 1,000 ft, parallel to the runway',
-  ptClimb: 'Low: climb back to 1,000 ft',
-  ptDescend: 'High: ease down to 1,000 ft',
-  ptAbeam: 'Abeam the numbers: power back, flaps 10, start down',
-  ptBase: 'Base: flaps 20, 70 knots, keep descending',
+  ptDownwind: 'Downwind: hold 1,000 ft above the field, parallel to the runway',
+  ptClimb: 'Low: climb back to 1,000 ft above the field',
+  ptDescend: 'High: ease down to 1,000 ft above the field',
+  // Flaps 10, then 20: one press of F (one tap of FLAPS) each.
+  ptAbeam: 'Abeam the numbers: throttle back a little, flaps to 10°, start down',
+  ptBase: 'Base: flaps to 20°, slow to 70 knots, keep descending',
+  ptEarly: 'Too early: turn back to the downwind and fly past the runway first',
   ptHigh: 'High: less power, steeper descent',
   ptLow: 'Low: add power, level off for a moment',
   ptSlow: 'Slow: lower the nose, add power',
   ptUpwind: 'Upwind: climb straight ahead to 1,000 ft',
+  ptXw: 'Crosswind: climb to 1,000 ft, the downwind turn is next',
   ptKid: 'Let go: the plane flies the pattern for you',
 };
 for (const [k, w] of Object.entries(TURNS)) {
@@ -81,8 +86,10 @@ export function patternLeg(end, s, traffic = 'left', out = _g) {
   const lead = leadM(gs) + early;
   const farEnd = end.lengthM - end.displacedM;
   out.along = along; out.cross = cross; out.turn = null; out.abeam = false;
-  if (Math.abs(rel) <= 45 && along < 0 || Math.abs(rel) <= 30 && along < farEnd && Math.abs(cross) < 150) {
-    // Before the threshold heading for it (rolling out of the turn to final), or over the runway.
+  if (Math.abs(rel) <= 45 && along < 0 && Math.abs(cross) < Math.max(300, -along / 2)
+    || Math.abs(rel) <= 30 && along < farEnd && Math.abs(cross) < 150) {
+    // Before the threshold heading for it (rolling out of the turn to final) inside a wide cone,
+    // or over the runway. Outside it (a U-turn on the downwind) it is an 'upwind' the wrong way.
     out.leg = 'final';
     if (Math.abs(rel) > 20) out.turn = 'final';
   } else if (Math.abs(rel) <= 45) {
@@ -96,7 +103,7 @@ export function patternLeg(end, s, traffic = 'left', out = _g) {
   } else if (rel * turn < 0) {
     // Flying toward the centreline from the pattern's side (left traffic: a heading of runway + 90°).
     out.leg = 'base';
-    if (side <= lead) out.turn = 'final';
+    if (side <= lead && along <= 0) out.turn = 'final';
   } else {
     out.leg = 'crosswind';
     if (side >= C_M - lead) out.turn = 'downwind';
@@ -123,11 +130,19 @@ export function patternTarget(end, s) {
   if (s.kid) return 'ptKid';
   if (s.iasKts < s.slowKts) return 'ptSlow';
   const lr = s.traffic === 'right' ? 'R' : 'L';
-  if (g.turn === 'base') return `ptTurnBase${lr}`;
+  const cross = Math.abs(g.cross);
+  // Base turned before passing the runway (abeam its middle, say): no final from there.
+  if (g.leg === 'base' && g.along > 0) return 'ptEarly';
+  // Well below the descent, a turn cue left showing (no one turned) must not hide it.
+  const climbing = g.leg === 'upwind' || g.leg === 'crosswind' || g.leg === 'downwind' && !g.abeam;
+  if (!climbing && s.aglFt < g.targetAglFt - 2 * PT_ALT_TOL_FT) return 'ptLow';
+  if (g.turn === 'base') return -g.along > 2 * cross + 2 * C_M ? `ptFar${lr}` : `ptTurnBase${lr}`;
   if (g.turn === 'final') return `ptTurnFinal${lr}`;
   if (g.turn === 'crosswind') return `ptTurnXw${lr}`;
   if (g.turn === 'downwind') return `ptTurnDw${lr}`;
-  if (g.leg === 'upwind' || g.leg === 'crosswind') return 'ptUpwind';
+  // Heading the landing way but out beside the field (a U-turn on the downwind): not an upwind.
+  if (g.leg === 'upwind') return cross > 300 ? `ptBack${lr}` : 'ptUpwind';
+  if (g.leg === 'crosswind') return 'ptXw';
   if (g.leg === 'downwind' && !g.abeam) {
     if (s.aglFt < PT_TPA_FT - PT_ALT_TOL_FT) return 'ptClimb';
     if (s.aglFt > PT_TPA_FT + PT_ALT_TOL_FT) return 'ptDescend';
