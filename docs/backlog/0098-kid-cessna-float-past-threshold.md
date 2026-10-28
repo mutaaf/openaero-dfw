@@ -1,12 +1,12 @@
 ---
 id: 0098
 title: Kid's Cessna lands on any final instead of floating the runway at 37 ft
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-27
-pr:
+pr: 106
 ---
 
 ## Why
