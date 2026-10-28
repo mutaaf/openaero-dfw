@@ -31,7 +31,9 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop', testIgnore: /mobile\.spec|phone-landscape\.spec|perf\.spec|devices\.spec/, use: DESKTOP },
-    { name: 'phone', testMatch: /mobile\.spec|phone-landscape\.spec/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 }, storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [PILOT] }] }, launchOptions: { args: GL_ARGS } } },
+    // Phone specs check layout and touch in CSS pixels, so they draw at 1x like the devices
+    // probe: the Pixel 7's 2.625 (2x after the resolution cap) made the project 6.6 min, 1x 5.1 (2026-10-27).
+    { name: 'phone', testMatch: /mobile\.spec|phone-landscape\.spec/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [PILOT] }] }, launchOptions: { args: GL_ARGS } } },
     // The frame-time probe runs alone, after everything else: sharing SwiftShader's CPU
     // with a parallel flight test swung the same build from 207 to 314 ms a frame.
     { name: 'perf', testMatch: /perf\.spec/, dependencies: ['desktop', 'phone'], use: { ...DESKTOP, deviceScaleFactor: 1 } },
