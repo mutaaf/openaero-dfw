@@ -1,6 +1,6 @@
 // A flat-sided prism from a convex 2D outline (the primitive 737's wing and fin): the outline
 // in the XY plane, extruded from z0 to z1. It stands in for three's ExtrudeGeometry, which
-// pulls earcut and every curve class into the boot chunk (ticket 0105, ~3 kB gz).
+// pulls earcut and every curve class into the boot chunk (ticket 0105: 8.6 kB gz of boot JS).
 import { BufferGeometry, Float32BufferAttribute } from 'three';
 
 // pts: [[x, y], ...] in order around a convex outline (either winding). Non-indexed, so each

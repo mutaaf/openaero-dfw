@@ -590,7 +590,7 @@ function buildAircraft(type) {
     plane.add(stripe);
 
     // Swept Main Wings with Airfoil Shape
-    // The outline and thickness of the old bevelled extrusion (0.35 + 2 x 0.08 m), flat-sided.
+    // The old extrusion's outline before its 8 cm bevel and its thickness (0.35 + 2 x 0.08 m), flat-sided.
     const wingLGeo = prismGeometry([[0, -3.2], [-17.5, 2.5], [-17.5, 4.0], [0, 1.2]], -0.08, 0.43);
     const wingLMesh = new THREE.Mesh(wingLGeo, fuselageWhite);
     wingLMesh.rotation.x = Math.PI / 2;
