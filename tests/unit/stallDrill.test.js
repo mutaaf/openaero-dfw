@@ -78,6 +78,14 @@ describe('stallDrillState (0087)', () => {
     const r = gradeStallRecovery(stallResultInput(st));
     expect(r.grade).toBe('D');
     expect(r.reason).toMatch(/Held the stick back/);
+    // Held exactly where Learner's protection holds it, 4° under the stall (assists.js
+    // aoaMarginDeg), with no overshoot: still held back (0102).
+    const at4 = createStallDrill(), c4 = { t: 0 };
+    trace(at4, [[14.5, 4500, -300, 0, 1]], c4);
+    trace(at4, [[SA - 4, 4480, -800, 0, 1]], c4);
+    trace(at4, hold(50, [SA - 4, 4460, 200, 0, 1]), c4);
+    trace(at4, climbOut(Math.round(STALL_SECONDARY_S / DT) + 1, 4460), c4);
+    expect(gradeStallRecovery(stallResultInput(at4)).grade).toBe('D');
     // A gentle pull to climb away is not holding it back.
     const ok = createStallDrill(), c2 = { t: 0 };
     trace(ok, [[14.5, 4500, -300]], c2);
