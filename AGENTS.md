@@ -263,7 +263,7 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
                     tyre friction per wheel at its axle, brakes on the mains only (0082)
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
-src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/√θ power lapse,
+src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
                     windmilling at idle), turbofan (Mach/density lapse, idle, spool lag)
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
@@ -339,7 +339,7 @@ snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A 
 imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's
 line-up on the ground track, paid for by main.js's seven `0.514444` literals becoming `KTS_TO_MPS`). 2026-10-28 (0098): 200.994 kB (Kid's final guide as assists.js
 kidFinalGuide with its past-the-threshold gate, +70 B, paid for by the ?debug snapshot's moving-parts poses moving into the lazy surfaces.js
-chunk (`partPoses`), its go-around a plain copy, one `if (debugOverlay)` for the ?debug hooks and a dead `_q1`); 6 B of headroom. Gzip
+chunk (`partPoses`), its go-around a plain copy, one `if (debugOverlay)` for the ?debug hooks and a dead `_q1`); 6 B of headroom. 2026-10-28 (0099): 200.982 kB (the piston lapse's friction term, paid for by folding engine.js's P0/T0 constants into the one line that used them); 18 B of headroom. Gzip
 eats repeated-literal trims (an `onClick` helper for ~35 click bindings and a `noseHdgDeg()` helper each
 measured 0 or worse): move code to a lazy chunk instead. 2026-10-26 (0036): 200.95 kB (the dead-stick mission, engine-out flag and its effects, coach hook and HUD readouts, paid for by moving the go-around and stall drills' coach words into their lazy chunks through coach.js DRILL_TEXT, and the abeam spawn to a lat/lon). 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
