@@ -104,9 +104,12 @@ export function settle(body, spec, seconds, pilot, f, settleS = 40) {
 // With `clearFt` the run goes on to clear an obstacle that high: the POH's 56 KIAS climb
 // (Fig. 5-5 "Speed at 50 Ft") until the wheels are `clearFt` above the runway. It also
 // reports what the pilot actually flew: IAS at rotation, peak pitch rate, worst heading.
-export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0) {
+// `windKts`: a wind straight down the runway (+ = headwind, − = tailwind), set where the
+// METAR's goes (body.windVec, the air mass's velocity).
+export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0, { windKts = 0 } = {}) {
   const b = makeBody(spec, { throttle: 1, flaps: 1 });
   b.isaDevC = isaDevC;
+  b.windVec.copy(runwayWind(windKts));
   let rollFt = null, liftoffKts = null, rotateKts = null, maxPitchRateDegS = 0, maxHeadingDevDeg = 0;
   const climb = speedHoldPilot(() => 56);
   fly(b, spec, 120, (x, dt) => {
@@ -204,6 +207,10 @@ export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, 
     bleedKtsS: (first.ias - last.ias) / (last.t - first.t), t: b.t,
   };
 }
+
+// Wind along the runway (ticket 0103). The runway runs north (−Z), so a headwind of `kts`
+// is an air mass moving south (+Z) and a tailwind (kts < 0) one moving north.
+export const runwayWind = (kts) => new Vector3(0, 0, kts * KTS_TO_MPS);
 
 // Crosswind (ticket 0069). The runway runs north along x = 0 (the body's spawn heading), so
 // a wind from the right (090°) is an air mass moving west at `xwKts`. Distances across it
@@ -340,11 +347,16 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
 // segment, and what the pilot flew: touchdown IAS and sink rate, time airborne again after
 // the first touch, when the nose wheel came down, and the highest pitch and the time with
 // the nose wheel off the runway after it settled (0.5 s after it touched).
-export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2, onStep = null } = {}) {
+export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2, windKts = 0, onStep = null } = {}) {
   const tan3 = Math.tan(3 * DEG_TO_RAD);
   const b = makeBody(spec, { kts, altM: 50 / M_TO_FT + spec.gearHeight, flaps, throttle: 0 });
   b.isaDevC = isaDevC;
   b.vel.y = b.vel.z * tan3;
+  // `windKts` as in shortFieldTakeoff: the body starts at `kts` through the air, so its
+  // ground velocity carries the wind (a 3° path through the air, shallower over the ground
+  // in a headwind).
+  b.windVec.copy(runwayWind(windKts));
+  b.vel.add(b.windVec);
   const approach = speedHoldPilot(() => kts);
   const aoaMax = stallAoaDeg(spec, flaps) - 1;
   const holdM = 1 / M_TO_FT;

@@ -1,13 +1,25 @@
 ---
 id: 0103
 title: C172 card: headwind and tailwind change the takeoff and landing roll like the POH notes say
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-10-28
-pr:
+pr: 113
 ---
+
+## Outcome (Builder, 2026-10-28)
+Both models give the FAA handbook's square law (FAA-H-8083-25C ch. 11, Fig. 11-19: a wind 10%
+of the lift-off speed takes ~19% off the roll, a tailwind adds ~21%) within a point. The POH
+notes are conservative planning corrections, not a prediction: by that law a 9 kt headwind
+saves ~30% of a 55 kt roll, and the models measure 71% (takeoff) and 69% (landing) of calm;
+a 6 kt tailwind adds 22-24% (POH plans +30%). So the ticket's two-sided POH bands (90 ±6,
+130 ±8) would have pinned the physics to a safety margin. Shipped instead: the handbook's own
+numbers as the physics cards (±4 points), and the POH notes as a one-sided card (the windy
+roll never longer than the note plans; the tailwind still costs at least 10%). Every card
+fails with the wind zeroed. Found on the way: the game's surface wind is zero on the runway
+(main.js fades it to nothing at the wheels), so in the game none of this happens yet (0106).
 
 ## Why
 Real weather is pillar 3, and the wind already pushes the airplane around, but no card checks
