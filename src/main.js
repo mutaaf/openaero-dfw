@@ -8,6 +8,7 @@ import {
   M_TO_FT, FT_TO_M, NM_TO_M, KTS_TO_MPS, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
+import { prismGeometry } from './prism.js';
 import { magHeadingText } from './magvar.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
@@ -589,15 +590,8 @@ function buildAircraft(type) {
     plane.add(stripe);
 
     // Swept Main Wings with Airfoil Shape
-    const wingShape = new THREE.Shape();
-    wingShape.moveTo(0, -3.2);
-    wingShape.lineTo(-17.5, 2.5);
-    wingShape.lineTo(-17.5, 4.0);
-    wingShape.lineTo(0, 1.2);
-    wingShape.closePath();
-
-    const extrudeSettings = { depth: 0.35, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.08, bevelThickness: 0.08 };
-    const wingLGeo = new THREE.ExtrudeGeometry(wingShape, extrudeSettings);
+    // The old extrusion's outline before its 8 cm bevel and its thickness (0.35 + 2 x 0.08 m), flat-sided.
+    const wingLGeo = prismGeometry([[0, -3.2], [-17.5, 2.5], [-17.5, 4.0], [0, 1.2]], -0.08, 0.43);
     const wingLMesh = new THREE.Mesh(wingLGeo, fuselageWhite);
     wingLMesh.rotation.x = Math.PI / 2;
     wingLMesh.position.set(0, -0.2, 0);
@@ -652,18 +646,12 @@ function buildAircraft(type) {
     });
 
     // Vertical Stabilizer / Tail Fin
-    const vStabShape = new THREE.Shape();
-    vStabShape.moveTo(0, 0);
-    vStabShape.lineTo(0, 6.8);
-    vStabShape.lineTo(2.8, 6.5);
-    vStabShape.lineTo(5.2, 0);
-    vStabShape.closePath();
-    const vStabGeo = new THREE.ExtrudeGeometry(vStabShape, { depth: 0.32, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05 });
+    const vStabGeo = prismGeometry([[0, 0], [0, 6.8], [2.8, 6.5], [5.2, 0]], -0.05, 0.37);
     const vStab = new THREE.Mesh(vStabGeo, airlineBlue);
     vStab.rotation.y = Math.PI / 2;
     vStab.position.set(0.16, 1.6, 11.5);
     plane.add(vStab);
-    // The rudder on the fin's trailing edge (z 11.5, the fin's extrusion spans x 0.16–0.48).
+    // The rudder on the fin's trailing edge (z 11.5, the fin's prism spans x 0.11–0.53).
     plane.add(hinged('ctl_rudder', 0.32, 4.4, 11.55, 0.26, 4.4, 1.1, { mat: airlineBlue }));
 
     // Horizontal Stabilizers, the elevator hinged on their trailing edge
