@@ -38,6 +38,11 @@ export const STALL_SECONDARY_S = 10;
 export const STALL_HELD_S = 3;
 export const STALL_PULL = 0.5;
 export const STALL_PULL_WINDOW_S = 5;
+// ...while the wing is within this much of its stall angle: Kid's and Learner's protection holds
+// α at the stall less 4° (assists.js aoaMarginDeg), so the gate sits a degree below that. At the
+// warning's 3° it caught the held stick only while the protection overshot (0102: a stiffer
+// pitch stops the overshoot, and a held stick graded B).
+export const STALL_HELD_MARGIN_DEG = 5;
 // A power-off stall is entered slowly at idle: a stall above the warning speed + this (a yank
 // at cruise, ~1.3 g at the C172's numbers) or with power on is not the drill's, and it stays armed.
 export const STALL_ENTRY_KTS = 4;
@@ -81,7 +86,7 @@ export function stallDrillState(st, s) {
   // Back stick counts while the wing is still near its stall angle (the assist holding it there),
   // not a firm pull-out once it flies.
   if (stalled || (s.pullIn >= STALL_PULL && s.t - st.stallT <= STALL_PULL_WINDOW_S
-    && s.aoaDeg >= s.stallAoaDeg - STALL_WARN_MARGIN_DEG)) st.stalledS += s.dt;
+    && s.aoaDeg >= s.stallAoaDeg - STALL_HELD_MARGIN_DEG)) st.stalledS += s.dt;
   if (st.stallFt - st.lowFt > STALL_FAIL_LOST_FT || s.t - st.stallT > STALL_FAIL_S || s.aglFt < STALL_FAIL_AGL_FT) {
     st.phase = 'failed';
     return 'failed';

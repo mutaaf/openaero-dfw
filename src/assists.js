@@ -26,7 +26,7 @@ export const DEFAULT_ASSIST = 'learner';
 
 export const ASSIST_CONFIG = {
   kid: {
-    bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 4,
+    bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 4, flareAoaMarginDeg: 3,
     autoThrottle: true, autoConfig: true, autoFlare: true, softLanding: true, groundFloor: true, handsOff: true,
   },
   learner: {
@@ -102,7 +102,10 @@ export function shapeControls(cfg, st, s, dt, out) {
   }
   // Angle-of-attack protection: the pitch that would put the wing at its limit on the
   // current flight path (pitch − α + α_max). Over the limit, the nose comes down.
-  const aoaMax = s.stallAoaDeg - cfg.aoaMarginDeg;
+  // Kid's auto-flare may use more of the wing (flareAoaMarginDeg, 0102): with a stiff nose the
+  // limit holds exactly, and 4° under the stall left no lift to stop a slow glide's sink.
+  const flaring = cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M;
+  const aoaMax = s.stallAoaDeg - (flaring ? cfg.flareAoaMarginDeg : cfg.aoaMarginDeg);
   // The loop overshoots α by ~1.5–2° as an idle airplane slows (headless runs), so the
   // margins are 4°: ~2° of real margin left at worst.
   const pitchAtAoaMax = s.pitchDeg - s.aoaDeg + aoaMax;

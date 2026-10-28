@@ -165,6 +165,12 @@ export const AIRCRAFT_DATABASE = {
     eyeOffset: new Vector3(0, 1.85, -1.3),
     chaseDist: 18,
     chaseHeight: 4.5,
+    // Pitch stiffness against damping (flightModel.js, 0102): the nose lags the flight path by
+    // pitchDamping / stiffness seconds of pitch rate, and that lag takes lift out of the
+    // phugoid's speed-height exchange. At 1.8 it was 1.35 s and the phugoid ran 1.9-2.2x
+    // Lanchester's period; 7.2 makes it 0.34 s (Roskam's C172, Cmq·c̄/2V / Cmα, is 0.22 s at
+    // 90 KIAS) and 1.3-1.4x. The trim α per stick is unchanged (elevatorAlphaDeg).
+    pitchAuthority: 7.2,
     pitchDamping: 3.8,
     // Elevator balance (flightModel.js, 0090): Roskam's Cmα −0.89 against Cmδe −1.28 per
     // radian, as in our JSBSim C172 (public/jsbsim/), at the TCDS's 25.5° mean elevator throw.

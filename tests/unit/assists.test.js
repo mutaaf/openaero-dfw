@@ -138,6 +138,22 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
     shapeControls(assistConfig('kid'), deep, { ...s, aoaDeg: 12, stallAoaDeg: 20, airspeedMps: 30 }, 1 / 120, {});
     expect(deep.pitchHoldDeg).toBeLessThanOrEqual(9);
   });
+
+  it('Kid flares to 3° under the stall angle; above the flare the protection keeps 4° (0102)', () => {
+    const s = {
+      pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: 5, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
+      aoaDeg: 10.5, betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 15, onGround: false, wheelHeightM: 4, airspeedMps: 29, guideBankDeg: 0, guideGammaDeg: 0,
+    };
+    const flare = {};
+    shapeControls(assistConfig('kid'), createAssistState(), s, 1 / 120, flare);
+    expect(flare.elev).toBeLessThan(0); // still nose up at 3.5° under the stall
+    const high = {};
+    shapeControls(assistConfig('kid'), createAssistState(), { ...s, wheelHeightM: 100 }, 1 / 120, high);
+    expect(high.elev).toBeGreaterThan(0); // the 4° margin lowers the nose
+    const over = {};
+    shapeControls(assistConfig('kid'), createAssistState(), { ...s, aoaDeg: 11.5 }, 1 / 120, over);
+    expect(over.elev).toBeGreaterThan(0); // past 3° under, even the flare lowers it
+  });
 });
 
 describe('Kid hands-off guidance', () => {

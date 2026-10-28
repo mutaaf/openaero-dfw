@@ -610,8 +610,9 @@ function phugoidPeriodS(kts) {
 
 describe('Cessna 172S phugoid period (flightModel, ticket 0102)', () => {
   const lanchester = (kts) => Math.PI * Math.SQRT2 * kts * KTS_TO_MPS / 9.80665;
-  // KNOWN GAP (0102): measured 33 s at 75 kt, 42 s at 90 kt, 56 s at 110 kt vs 17.5, 21 and 25.6 s.
-  for (const kts of [75, 90, 110]) it.fails(`KNOWN GAP (0102): at ${kts} KIAS the period is 1.0-1.6x Lanchester's pi*sqrt(2)*V/g`, () => {
+  // Closed by 0102: 33 / 42 / 56 s (1.9-2.2x) with the C172's soft pitch stiffness, 23 / 29 / 37 s
+  // (1.3-1.4x) with it four times stiffer (aircraft.js pitchAuthority).
+  for (const kts of [75, 90, 110]) it(`at ${kts} KIAS the period is 1.0-1.6x Lanchester's pi*sqrt(2)*V/g`, () => {
     const T = phugoidPeriodS(kts);
     const ref = lanchester(kts);
     console.log(`[c172 flightModel] phugoid at ${kts} kt: ${T?.toFixed(1)} s vs Lanchester ${ref.toFixed(1)} s (${(T / ref).toFixed(2)}x)`);
