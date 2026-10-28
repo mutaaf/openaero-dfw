@@ -515,6 +515,42 @@ describe('Cessna 172S hands off in trim (flightModel, ticket 0090)', () => {
   });
 });
 
+// Phugoid period (validator, ticket 0102). Lanchester's constant-energy approximation, T = pi*sqrt(2)*V/g
+// (Lanchester 1908; Etkin & Reid, Dynamics of Flight, the phugoid approximation), is the period of a
+// drag-free exchange of speed and height. Drag lengthens a real phugoid, but at a Cessna's L/D it only
+// stretches it by tens of percent, so a stick-fixed C172 sits between 1x and about 1.6x of it. Measured
+// on the 0090 upset (10 kt fast, stick neutral, trim and power left alone) as the mean spacing of the
+// airspeed's maxima. The reference is a bound from the approximation, not a C172 flight-test number
+// (the POH publishes none): the card pins the physics, not a handbook figure.
+function phugoidPeriodS(kts) {
+  const altM = 1500;
+  const throttle = trimThrottle(c172, kts * KTS_TO_MPS, 0, 0, true, airAt(altM));
+  const b = Object.assign(makeBody(c172, { kts, altM, throttle }), { autoTrim: false });
+  fly(b, c172, 1, (x) => { x.elevInput = 0; });
+  b.vel.multiplyScalar((kts + 10) / kts);
+  const ias = [];
+  for (let i = 0; i < 240; i++) {
+    fly(b, c172, 0.5, (x) => { x.elevInput = 0; x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z); });
+    ias.push(b.iasKts);
+  }
+  const peaks = [];
+  for (let i = 1; i < ias.length - 1; i++) if (ias[i] > ias[i - 1] && ias[i] >= ias[i + 1] && ias[i] > kts + 0.5) peaks.push(i * 0.5);
+  return peaks.length > 1 ? (peaks[peaks.length - 1] - peaks[0]) / (peaks.length - 1) : null;
+}
+
+describe('Cessna 172S phugoid period (flightModel, ticket 0102)', () => {
+  const lanchester = (kts) => Math.PI * Math.SQRT2 * kts * KTS_TO_MPS / 9.80665;
+  // KNOWN GAP (0102): measured 33 s at 75 kt, 42 s at 90 kt, 56 s at 110 kt vs 17.5, 21 and 25.6 s.
+  for (const kts of [75, 90, 110]) it.fails(`KNOWN GAP (0102): at ${kts} KIAS the period is 1.0-1.6x Lanchester's pi*sqrt(2)*V/g`, () => {
+    const T = phugoidPeriodS(kts);
+    const ref = lanchester(kts);
+    console.log(`[c172 flightModel] phugoid at ${kts} kt: ${T?.toFixed(1)} s vs Lanchester ${ref.toFixed(1)} s (${(T / ref).toFixed(2)}x)`);
+    expect(T).not.toBeNull();
+    expect(T).toBeGreaterThanOrEqual(ref);
+    expect(T).toBeLessThanOrEqual(1.6 * ref);
+  });
+});
+
 // Stick-fixed takeoff (0090), the trim set as main.js's takeoff spawn sets it (1.2 Vr, flaps
 // 1): full power and a neutral stick never rotate the Cessna by themselves before 1.4 Vr, and
 // with the stick held back the nose comes up near Vr as before.
