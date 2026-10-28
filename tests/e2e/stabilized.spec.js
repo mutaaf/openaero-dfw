@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { stubTiles, stubMetar, enterCockpit, lowContrastLabels, TEST_METAR } from './helpers.js';
+// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Stabilized-approach gate (ticket 0020): evaluated once at 500 ft above the runway in VMC
 // (1,000 ft in IMC), recorded on the landing and shown on the results card.

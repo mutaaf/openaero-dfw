@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
+// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Static pitch stability (ticket 0090), Pilot: in the Cessna drill, trimmed level at
 // 90 KIAS, push the nose down and let go. The nose comes back up by itself (before, a released

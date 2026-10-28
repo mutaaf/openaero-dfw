@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
+// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Stall recovery drill (ticket 0087): the Cessna at 4,500 ft over Grapevine Lake; power idle,
 // nose up until it stalls, then nose down, full power, and the card grades the recovery.
