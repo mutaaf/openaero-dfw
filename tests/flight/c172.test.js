@@ -202,6 +202,75 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
   });
 });
 
+// Wind down the runway (ticket 0103). The airplane lifts off and touches down at an airspeed,
+// so a headwind takes groundspeed off both ends of the roll and a tailwind adds it. The wind is
+// body.windVec, where main.js puts the METAR's. Two references:
+//  - FAA Pilot's Handbook (FAA-H-8083-25C) ch. 11, p. 11-14 and Fig. 11-19: "A headwind that is
+//    10 percent of the takeoff airspeed reduces the takeoff distance approximately 19 percent
+//    ... a tailwind that is 10 percent of the takeoff airspeed increases the takeoff distance
+//    approximately 21 percent", and "the effect of wind on landing distance is identical". The
+//    same page's "headwind speed is 50 percent of the takeoff speed ... approximately 25 percent
+//    of the zero wind takeoff distance" is the square law, (1 - 0.5)². That is the physics; the
+//    model must reproduce it (±4 points).
+//  - C172S POH Fig. 5-5 note 3 and Fig. 5-11 note 2: "Decrease distances 10% for each 9 knots
+//    headwind. For operation with tail winds up to 10 knots, increase distances by 10% for each
+//    2 knots." These are planning corrections, and by the handbook's square law they are
+//    conservative: a 9 kt headwind at a 55 kt lift-off saves ~30%, not 10%, and both models
+//    (flightModel.js and JSBSim's C172) agree within a point. So the POH card is one-sided: flown in the note's
+//    wind, the roll is never longer than the note plans for, and the tailwind still costs at
+//    least 10%. With the wind zeroed every card here fails (ratio 1).
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S headwind and tailwind roll (${model}, ticket 0103)`, () => {
+  beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
+  afterAll(() => useFdm(null));
+  const takeoff = (w) => shortFieldTakeoff(c172, 0, 0, { windKts: w });
+  const landing = (w) => shortFieldLanding(c172, { windKts: w });
+  const show = (what, calm, head, tail, hw, tw) => console.log(`[c172 ${model}] ${what} roll calm ${calm.toFixed(0)} ft, `
+    + `${hw.toFixed(1)} kt headwind ${head.toFixed(0)} ft (${((head / calm) * 100).toFixed(1)}%), `
+    + `${tw.toFixed(1)} kt tailwind ${tail.toFixed(0)} ft (${((tail / calm) * 100).toFixed(1)}%)`);
+
+  it('takeoff: a wind 10% of the lift-off speed takes 19% off the roll, a tailwind adds 21% (FAA-H-8083-25C Fig. 11-19, ±4 points)', () => {
+    const calm = takeoff(0);
+    const w = calm.liftoffKts * 0.1;
+    const head = takeoff(w), tail = takeoff(-w);
+    show('takeoff', calm.rollFt, head.rollFt, tail.rollFt, w, w);
+    // IAS is not groundspeed: it lifts off at the same airspeed whatever the wind.
+    expect(Math.abs(head.liftoffKts - calm.liftoffKts)).toBeLessThan(1);
+    expect(Math.abs(tail.liftoffKts - calm.liftoffKts)).toBeLessThan(1);
+    expect(Math.abs(head.rollFt / calm.rollFt - 0.81)).toBeLessThanOrEqual(0.04);
+    expect(Math.abs(tail.rollFt / calm.rollFt - 1.21)).toBeLessThanOrEqual(0.04);
+  });
+
+  it('landing: a wind 10% of the touchdown speed takes 19% off the roll, a tailwind adds 21% (FAA-H-8083-25C Fig. 11-19, ±4 points)', () => {
+    const calm = landing(0);
+    const w = calm.tdKts * 0.1;
+    const head = landing(w), tail = landing(-w);
+    show('landing', calm.rollFt, head.rollFt, tail.rollFt, w, w);
+    for (const r of [head, tail]) {
+      expect(r.stopped).toBe(true);
+      expect(r.bounceS).toBe(0);
+      expect(Math.abs(r.tdKts - calm.tdKts)).toBeLessThan(1);
+    }
+    expect(Math.abs(head.rollFt / calm.rollFt - 0.81)).toBeLessThanOrEqual(0.04);
+    expect(Math.abs(tail.rollFt / calm.rollFt - 1.21)).toBeLessThanOrEqual(0.04);
+  });
+
+  it('takeoff in a 9 kt headwind or a 6 kt tailwind never needs more roll than POH Fig. 5-5 note 3 plans (90% / 130%), and the tailwind costs at least 10%', () => {
+    const calm = takeoff(0).rollFt, head = takeoff(9).rollFt, tail = takeoff(-6).rollFt;
+    show('takeoff', calm, head, tail, 9, 6);
+    expect(head / calm).toBeLessThanOrEqual(0.90);
+    expect(tail / calm).toBeLessThanOrEqual(1.30);
+    expect(tail / calm).toBeGreaterThanOrEqual(1.10);
+  });
+
+  it('landing in a 9 kt headwind or a 6 kt tailwind never needs more roll than POH Fig. 5-11 note 2 plans (90% / 130%), and the tailwind costs at least 10%', () => {
+    const calm = landing(0).rollFt, head = landing(9).rollFt, tail = landing(-6).rollFt;
+    show('landing', calm, head, tail, 9, 6);
+    expect(head / calm).toBeLessThanOrEqual(0.90);
+    expect(tail / calm).toBeLessThanOrEqual(1.30);
+    expect(tail / calm).toBeGreaterThanOrEqual(1.10);
+  });
+});
+
 // FAA Airplane Flying Handbook (FAA-H-8083-3C) ch. 5 / Pilot's Handbook (FAA-H-8083-25B)
 // ch. 5: in a level coordinated turn rate = g·tan(bank)/V (= 1091·tan(bank)/V[kt] °/s) and
 // load factor = 1/cos(bank). The model must turn like that, whatever its own drag says.
