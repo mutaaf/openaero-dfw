@@ -1,12 +1,12 @@
 ---
 id: 0099
 title: The Cessna climbs 183 fpm at its 14,000 ft service ceiling (POH: 100 fpm)
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-10-27
-pr:
+pr: 111
 ---
 
 ## Why
@@ -22,8 +22,8 @@ Find why the climb decays too slowly above 10,000 ft (engine.js power lapse vs w
 altitude) and close it without moving the passing cards.
 
 ## Acceptance criteria
-- [ ] `ceiling` removed from GAPS.flightModel; card passes within ±35%
-- [ ] 729 fpm and 315 fpm cards and the 8,000 ft cruise card still pass
+- [x] `ceiling` removed from GAPS.flightModel; card passes within ±35%
+- [x] 729 fpm and 315 fpm cards and the 8,000 ft cruise card still pass
 
 ## Test plan
 The `ceiling` card in tests/flight/c172.test.js flips from `it.fails` to `it` (drop it from
@@ -31,3 +31,11 @@ GAPS.flightModel); run `npm test -- tests/flight`.
 
 ## Out of scope
 Climb speed schedule (the card holds 74 KIAS).
+
+## Shipped
+The power lapse was δ/√θ alone, which is SAE J1349's *indicated* power ratio; the engine's
+friction power does not shrink with altitude, so brake power falls faster. engine.js now takes
+Gagg-Ferrar's friction share (1/8.55 of sea-level indicated power, P/P0 = σ − (1 − σ)/7.55) off
+δ/√θ: 67% at 10,000 ft, 57% at 14,000. Measured (flightModel.js, 74 KIAS, ISA): sea level
+702 → 697 fpm, 10,000 ft 328 → 270 (POH 315, card ±15%), 14,000 ft 182 → 103 (POH 100),
+8,000 ft cruise 121.2 → 118.6 KTAS (POH 124). JSBSim, for comparison: 670 / 279 / 115.

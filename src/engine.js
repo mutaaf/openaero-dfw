@@ -4,9 +4,11 @@
 //   { type: 'piston-prop', thrustTableN: [[tasMps, N], …], windmillCd, spoolTau }
 //     Full-throttle sea-level thrust vs true airspeed (a fixed-pitch prop unloads and
 //     gains RPM as it speeds up, so the curve is flat, then falls), scaled by the
-//     normally-aspirated power correction δ/√θ (SAE J1349 / Lycoming: power ∝ pressure
-//     ratio over √temperature ratio, so a hot day costs a few %, altitude a lot). At idle
-//     the windmilling prop is drag.
+//     normally-aspirated power lapse: indicated power ∝ δ/√θ (SAE J1349 / Lycoming: pressure
+//     ratio over √temperature ratio) less the engine's friction power, which altitude does
+//     not shrink (Gagg & Ferrar: 1/7.55 of sea-level brake power), so a hot day costs a few %,
+//     altitude a lot: 67% at 10,000 ft, 57% at 14,000 (0099). At idle the windmilling prop
+//     is drag.
 //   { type: 'turbofan', staticThrustN, idleFraction, machLapse: [k1, k2], densityExp, spoolTau }
 //     T = T0·σ^densityExp·(1 − k1·M + k2·M²), idle a small fraction of it.
 // `n` is the engine's spooled power setting in [0, 1]; it follows the throttle with a
@@ -24,8 +26,9 @@ const lerpTable = (table, x) => {
   return table[table.length - 1][1];
 };
 
-const P0 = 101325, T0 = 288.15;
-export const pistonPowerLapse = (pressurePa, tempK) => (pressurePa / P0) / Math.sqrt(tempK / T0);
+// Friction is 1/8.55 of sea-level indicated power (Gagg-Ferrar's P/P0 = σ - (1 - σ)/7.55),
+// so brake power = (8.55·δ/√θ - 1) / 7.55, δ = p / 101325 Pa, θ = T / 288.15 K.
+export const pistonPowerLapse = (pressurePa, tempK) => (8.55 * pressurePa / 101325 / Math.sqrt(tempK / 288.15) - 1) / 7.55;
 
 // Thrust (N) at spool `n`, true airspeed (m/s), the air (atmosphere.js airAt: sigma,
 // pressurePa, tempK), Mach and dynamic pressure (Pa).

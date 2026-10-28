@@ -52,7 +52,7 @@ const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), 
 // touchdown) were within about 2% of flightModel.js, but every airborne spawn started its engine at
 // 2,283 rpm and ~135 hp whatever the throttle, so the first ~3 s were powered. Now ~751 ft.
 const GAPS = {
-  flightModel: new Set(['ceiling']),
+  flightModel: new Set(),
   jsbsim: new Set(['takeoff']),
 };
 
@@ -154,14 +154,14 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 
   // Thinner air for the wing (0038) and less power from the engine (0039, Gagg-Ferrar).
   // POH Fig. 5-6 at 10,000 ft: 360 fpm at −20 °C, 300 at 0 °C → 315 fpm at ISA (−4.8 °C).
+  // flightModel.js ~270 since 0099's friction lapse (JSBSim ~279): both sit near the low edge.
   it('climbs about 315 fpm at 10,000 ft, ISA (POH, ±15%)', () => {
     within(rocFpm(3048), 315, 0.15);
   });
 
-  // KNOWN GAP (validator, ticket 0099): the POH's Section 1 specifications give a service
-  // ceiling of 14,000 ft, the altitude where the climb falls to 100 fpm. Measured, flightModel.js
-  // still climbs ~183 fpm there (100 fpm only near 16,300 ft). JSBSim (Roskam data) meets it. Fails until
-  // the power lapse or the wing at altitude is closed up; then drop 'ceiling' from GAPS.
+  // The POH's Section 1 specifications give a service ceiling of 14,000 ft, the altitude where
+  // the climb falls to 100 fpm. flightModel.js climbed ~183 fpm there until 0099 took the
+  // engine's friction power out of the δ/√θ lapse (engine.js): ~103 fpm now, JSBSim ~115.
   card('ceiling')('climbs about 100 fpm at the 14,000 ft service ceiling, ISA (POH Section 1 specifications, ±35%)', () => {
     within(rocFpm(14000 / 3.28084), 100, 0.35);
   });

@@ -10,9 +10,14 @@ describe('piston prop', () => {
     expect(engineThrust(DB.c172, 1, 0, sl, 0, 0)).toBeCloseTo(2070, 0);
     expect(engineThrust(DB.c172, 1, 62, sl, 0.18, 2350)).toBeLessThan(engineThrust(DB.c172, 1, 0, sl, 0, 0));
   });
-  it('power lapse: ~71% at 10,000 ft ISA, a hot day costs only a few %', () => {
+  // Indicated power δ/√θ (SAE J1349) less a fixed friction power (Gagg-Ferrar's 1/7.55 of
+  // sea-level brake power): 0.713 indicated at 10,000 ft is 0.675 at the propeller (0099).
+  it('power lapse: ~67% at 10,000 ft ISA, ~57% at 14,000 ft, a hot day costs only a few %', () => {
     const a = airAt(3048);
-    expect(pistonPowerLapse(a.pressurePa, a.tempK)).toBeCloseTo(0.713, 2);
+    expect(pistonPowerLapse(a.pressurePa, a.tempK)).toBeCloseTo(0.675, 2);
+    const ceiling = airAt(14000 / 3.28084);
+    expect(pistonPowerLapse(ceiling.pressurePa, ceiling.tempK)).toBeCloseTo(0.567, 2);
+    expect(pistonPowerLapse(airAt(0).pressurePa, airAt(0).tempK)).toBeCloseTo(1, 6);
     const hot = airAt(0, 25);
     expect(pistonPowerLapse(hot.pressurePa, hot.tempK)).toBeGreaterThan(0.95);
   });
