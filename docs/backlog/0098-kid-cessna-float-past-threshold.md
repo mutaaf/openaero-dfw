@@ -1,12 +1,12 @@
 ---
 id: 0098
 title: Kid's Cessna lands on any final instead of floating the runway at 37 ft
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-27
-pr:
+pr: 106
 ---
 
 ## Why
@@ -22,6 +22,12 @@ every other final flown in the Cessna on Kid still floats.
 In main.js applyAssists, keep the final's guide to the aim point: `ap.distM > -AIM_POINT_M`
 (glidepathGammaDeg already flies the 3° path to it), so the auto-flare takes the airplane to
 the runway. Boot budget: pay for the bytes first.
+
+Shipped as assists.js kidFinalGuide: to the aim point was not enough (the 737 ballooned when the
+guide went level there), so past the threshold it flies the path on over the runway, but only a
+landing: under ~100 ft over the first third, never steeper than 2° (validation panel: a 737 let
+go at 60-100 ft was dived at the runway into a crash, and a go-around or takeoff climbing through
+1,000 ft over its runway was dived back at it), and not while a bounce settles.
 
 ## Acceptance criteria
 - [ ] Headless: Kid in the Cessna on kads_16_final, hands off, touches down in the touchdown

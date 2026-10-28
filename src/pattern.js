@@ -206,10 +206,9 @@ export function kidGuide(st, sim, out) {
   const g = patternLeg(st.end, s, st.traffic), e = st.end;
   if (g.leg === 'final' && !g.turn) {
     if (sim.activeEnd && g.along < 0) return out;
-    // Until the runway is picked, and past the threshold, where the game's guide stops (main.js:
-    // before the threshold only) and a level path held the Cessna in the auto-flare band at
-    // ~37 ft the length of the runway: the 3° path to its aim point, as the game's guide flies
-    // it (autopilot.js glidepathGammaDeg), then the auto-flare lands it.
+    // Until the runway is picked, and past the threshold: the 3° path to its aim point, as the
+    // game's guide flies it (assists.js kidFinalGuide, which since 0098 also goes on past the
+    // threshold), then the auto-flare lands it.
     out.guideBankDeg = kidLocalizerBankDeg(e.hdgT, s.trackDeg, g.cross);
     const aboveM = (s.aglFt - g.targetAglFt) / M_TO_FT;
     out.guideGammaDeg = Math.max(-6, Math.min(-0.5, -3 - aboveM * 0.12));
