@@ -20,7 +20,7 @@ import { makeBody, fly, attitude } from './harness.js';
 const _e = new Euler(0, 0, 0, 'YXZ');
 
 // Kid, hands off, from the mission's spawn to the touchdown. wind: { fromDeg, kts } (steady).
-function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}) {
+function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null) {
   const spec = AIRCRAFT_DATABASE[acKey];
   const m = missionByKey(missionKey);
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
@@ -29,8 +29,16 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}) {
   const b = makeBody(spec, { kts: spec.vrefKts + 5, altM: sp.pos.y, flaps: 2 });
   b.pos.set(sp.pos.x, sp.pos.y, sp.pos.z);
   b.vel.set(sp.vel.x, sp.vel.y, sp.vel.z);
-  b.quat.setFromEuler(_e.set((trimAoaDeg(spec, vApp, 2) - 3) * DEG_TO_RAD, sp.yawRad, 0));
-  b.throttle = b.engineN = trimThrottle(spec, vApp, 2, -3, true, airAt(sp.pos.y));
+  let gamma = -3;
+  // over: { pastM, ft } lets go level over the runway instead, pastM past the threshold, ft up.
+  if (over) {
+    const d = { x: Math.sin(end.hdgT * DEG_TO_RAD), z: -Math.cos(end.hdgT * DEG_TO_RAD) }, v = b.vel.length();
+    b.pos.set(end.thrX + d.x * over.pastM, spec.gearHeight + over.ft / M_TO_FT, end.thrZ + d.z * over.pastM);
+    b.vel.set(d.x * v, 0, d.z * v);
+    gamma = 0;
+  }
+  b.quat.setFromEuler(_e.set((trimAoaDeg(spec, vApp, 2) + gamma) * DEG_TO_RAD, sp.yawRad, 0));
+  b.throttle = b.engineN = trimThrottle(spec, vApp, 2, gamma, true, airAt(b.pos.y));
   b.apMaster = false;
   b.autoTrim = true; // Kid's assist trims (main.js: sim.autoTrim with an assist)
   const w = fromDeg * Math.PI / 180;
@@ -38,11 +46,12 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}) {
   b.vel.add(b.windVec);
   const cfg = assistConfig('kid'), ast = createAssistState();
   const s = {}, out = {}, conf = { gearDown: true, flapsIndex: 2 }, at = { trim: 0 };
-  let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null;
+  let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
   fly(b, spec, 240, (x, dt) => {
     const ap = approachGeometry(end, x.pos);
     const wheelM = x.pos.y - spec.gearHeight;
     if (thrFt === null && ap.distM <= 0) thrFt = wheelM * M_TO_FT;
+    minVs = Math.min(minVs, x.vel.y);
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
     const noseDeg = -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI;
@@ -74,7 +83,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}) {
     td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t };
     return true;
   });
-  return { td, thrFt };
+  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60 };
 }
 
 const log = (ac, key, name, { td, thrFt }) => console.log(`[${ac} kid final] ${key} ${name}: threshold ${thrFt?.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, ${td && td.t.toFixed(0)} s`);
@@ -96,6 +105,7 @@ describe('Kid hands off on a straight-in final in the Cessna lands in the touchd
       log('c172', key, name, r);
       expectLanded(r);
       expect(r.td.pastThrM).toBeLessThan(600); // landing.js touchdown zone (full marks)
+      expect(r.td.vsFpm).toBeGreaterThan(-240); // landing.js: rate scores 75+ under 240 fpm
     });
   }
 });
@@ -118,4 +128,26 @@ describe('Kid hands off on a straight-in final in the 737 (flightModel, ticket 0
     const r = flyKidFinal('b738', 'kdfw_35c_final');
     expect(r.td.pastThrM).toBeLessThan(600);
   });
+});
+
+// A kid who lets go over the runway (first-timer panel): past the threshold the guide flies only
+// a landing, low (under ~100 ft) over the first third and never steeper than 2° (at 3° the 737 still
+// sank ~1,000 fpm from 60-80 ft). It dived the
+// 737 at -6° from 60-100 ft into an 880-1,000 fpm "crash"; higher, it now holds level as before.
+describe('Kid let go over the runway (flightModel, ticket 0098 panel)', () => {
+  for (const [ac, ft] of [['b738', 60], ['b738', 80], ['b738', 95], ['c172', 60], ['c172', 95]]) {
+    it(`${ac} level at ${ft} ft, 200 m past 35C's threshold: no hard landing`, () => {
+      const r = flyKidFinal(ac, 'kdfw_35c_final', {}, { pastM: 200, ft });
+      log(ac, 'over 35C', `${ft} ft`, r);
+      if (r.td) expect(r.td.vsFpm).toBeGreaterThan(-600); // landing.js: past 600 fpm is a CRASH
+      expect(r.minVsFpm).toBeGreaterThan(-1000);
+    });
+  }
+  for (const ft of [300, 1000]) {
+    it(`b738 level at ${ft} ft over 35C (a go-around or a takeoff climbing away): not dived at the runway`, () => {
+      const r = flyKidFinal('b738', 'kdfw_35c_final', {}, { pastM: 500, ft });
+      expect(r.minVsFpm).toBeGreaterThan(-500);
+      if (r.td) expect(r.td.pastThrM).toBeGreaterThan(4084); // never touches down on what's left of 35C
+    });
+  }
 });

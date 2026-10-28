@@ -203,15 +203,19 @@ describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {
     return { x: end.thrX + d.x * alongM - d.z * crossM, y: end.thrY + upM, z: end.thrZ + d.z * alongM + d.x * crossM };
   };
   const out = (pos, noseDeg) => { const o = { guideBankDeg: 0, guideGammaDeg: 0 }; kidFinalGuide(end, approachGeometry(end, pos), noseDeg ?? end.hdgT, end.hdgT, o); return o; };
-  it('flies the 3° path on the final and on past the threshold, the aim point and down the runway', () => {
-    for (const along of [-3000, -100, 50, 305, 1000, end.lengthM - end.displacedM - 50]) {
+  it('flies the 3° path on the final and on past the threshold and the aim point, low over the first third', () => {
+    const third = (end.lengthM - end.displacedM) / 3;
+    for (const along of [-3000, -100, 50, 305, third - 20]) {
       expect(out(at(along, 0, 0.5 + Math.max(0, -along - 305) * 0.0524)).guideGammaDeg).toBeLessThan(-0.4);
     }
-    // 15 m up over the runway past the aim point: well above the path, so down (the auto-flare's floor holds the flare)
-    expect(out(at(600)).guideGammaDeg).toBeLessThanOrEqual(-3);
+    // 15 m up past the aim point is well above the path, but never steeper than 2° past the threshold
+    expect(out(at(600)).guideGammaDeg).toBe(-2);
   });
-  it('leaves level flight off the final: past the runway end, far out, wide or not lined up', () => {
-    for (const o of [out(at(end.lengthM + 100)), out(at(-25000)), out(at(-3000, 1600, 160)), out(at(-3000, 0, 160), end.hdgT + 60)]) {
+  it('leaves level flight off the final: past the first third, high over the runway, far out, wide or not lined up', () => {
+    const third = (end.lengthM - end.displacedM) / 3;
+    // A go-around or takeoff climbing through 1,000 ft over its runway is not dived back at it (panel).
+    for (const o of [out(at(third + 20, 0, 3)), out(at(end.lengthM + 100)), out(at(100, 0, 35)), out(at(1500, 0, 305)),
+      out(at(-25000)), out(at(-3000, 1600, 160)), out(at(-3000, 0, 160), end.hdgT + 60)]) {
       expect(o).toEqual({ guideBankDeg: 0, guideGammaDeg: 0 });
     }
   });

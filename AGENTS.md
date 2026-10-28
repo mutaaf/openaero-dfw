@@ -146,8 +146,8 @@ src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes 
                     input before stepFlightModel (physics untouched): bank/pitch/AoA
                     envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,
                     no-dive floor, auto-flare; kidFinalGuide is Kid's hands-off final (the
-                    3° path past the threshold and down the runway, 0098; flight cards in
-                    tests/flight/kidFinal.test.js); main.js adds Kid's autothrottle, gear/flaps
+                    3° path, past the threshold only low over the first third, ≤ 2°, 0098;
+                    flight cards in tests/flight/kidFinal.test.js); main.js adds Kid's autothrottle, gear/flaps
                     and soft landing. Pilot never calls in (pure, flown headless in tests).
                     A first visit (nothing stored) flies Learner; a stored level wins (0059)
 src/goAround.js     go-around drill (0047, lazy chunk loaded with the mission): pure state
@@ -337,9 +337,9 @@ moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the
 `loadDrill` for the drills' lazy chunks, `startDrills`, and the ?debug Google usage line and
 snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A lazy chunk that
 imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's
-line-up on the ground track, paid for by main.js's seven `0.514444` literals becoming `KTS_TO_MPS`). 2026-10-28 (0098): 200.982 kB (Kid's final guide as assists.js
-kidFinalGuide, +40 B, paid for by the ?debug snapshot's moving-parts poses moving into the lazy surfaces.js
-chunk (`partPoses`), one `if (debugOverlay)` for the ?debug hooks and a dead `_q1`); 18 B of headroom. Gzip
+line-up on the ground track, paid for by main.js's seven `0.514444` literals becoming `KTS_TO_MPS`). 2026-10-28 (0098): 200.994 kB (Kid's final guide as assists.js
+kidFinalGuide with its past-the-threshold gate, +70 B, paid for by the ?debug snapshot's moving-parts poses moving into the lazy surfaces.js
+chunk (`partPoses`), its go-around a plain copy, one `if (debugOverlay)` for the ?debug hooks and a dead `_q1`); 6 B of headroom. Gzip
 eats repeated-literal trims (an `onClick` helper for ~35 click bindings and a `noseHdgDeg()` helper each
 measured 0 or worse): move code to a lazy chunk instead. 2026-10-26 (0036): 200.95 kB (the dead-stick mission, engine-out flag and its effects, coach hook and HUD readouts, paid for by moving the go-around and stall drills' coach words into their lazy chunks through coach.js DRILL_TEXT, and the abeam spawn to a lat/lon). 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks

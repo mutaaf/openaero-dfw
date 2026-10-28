@@ -140,13 +140,18 @@ export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
 
 // Kid's hands-off final (main.js applyAssists): `ap` is airports.js approachGeometry for `end`.
 // Captured on the nose (within 45°), flown on the ground track so a crab holds the centreline
-// (0097), the 3° path to its aim point and on down the runway, under the auto-flare's floor, so
-// it lands (0098: stopped at the threshold, level flight floated the runway; stopped at the aim
-// point, the 737 ballooned). Leaves out.guide* alone (level flight) off the final.
+// (0097), the 3° path to its aim point and on over the runway, under the auto-flare's floor, so
+// it lands (0098: stopped at the threshold, level flight floated the runway). Past the threshold
+// only a landing: under ~100 ft over the first third of the runway, never steeper than 2° (an
+// airplane let go higher, later or climbing away is not dived at the runway). Leaves out.guide*
+// alone (level flight) off the final.
 export function kidFinalGuide(end, ap, noseDeg, trackDeg, out) {
-  if (ap.distM > -end.lengthM && ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(end.hdgT, noseDeg)) < 45) {
+  const past = ap.distM < 0;
+  if (past && (ap.heightAbovePathM + ap.pathHeightM > 30 || -ap.distM > (end.lengthM - end.displacedM) / 3)) return;
+  if (ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(end.hdgT, noseDeg)) < 45) {
     out.guideBankDeg = kidLocalizerBankDeg(end.hdgT, trackDeg, ap.crossM);
     out.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
+    if (past) out.guideGammaDeg = Math.max(out.guideGammaDeg, -2);
   }
 }
 

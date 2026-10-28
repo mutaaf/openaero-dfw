@@ -2055,7 +2055,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   const ap = sim.approach;
   if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
-  } else if (cfg.handsOff && sim.activeEnd) {
+  } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
     kidFinalGuide(sim.activeEnd, ap, -_euler.y * RAD_TO_DEG, Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG, _assistIn);
   }
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
@@ -3047,7 +3047,7 @@ window.openaeroDebug = () => {
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
-    goAround: sim.goAround ? { phase: sim.goAround.phase, lowFt: sim.goAround.lowFt, minIasKts: sim.goAround.minIasKts, climbFpm: sim.goAround.climbFpm } : null,
+    goAround: sim.goAround ? { ...sim.goAround } : null,
     stallDrill: sim.stallDrill ? { ...sim.stallDrill } : null,
     engineFailed: !!sim.engineFailed,
     takeoffCalls: [...sim.takeoffCalls],
