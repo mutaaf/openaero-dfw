@@ -212,9 +212,9 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 //    is the physics; the model must reproduce it (±4 points).
 //  - C172S POH Fig. 5-5 note 3 and Fig. 5-11 note 2: "Decrease distances 10% for each 9 knots
 //    headwind. For operation with tail winds up to 10 knots, increase distances by 10% for each
-//    2 knots." These are planning corrections, deliberately conservative: by the handbook's
-//    square law a 9 kt headwind at a 55 kt lift-off saves ~30%, not 10%, and both models (and
-//    JSBSim's C172 agrees within a point) do. So the POH card is one-sided: flown in the note's
+//    2 knots." These are planning corrections, and by the handbook's square law they are
+//    conservative: a 9 kt headwind at a 55 kt lift-off saves ~30%, not 10%, and both models
+//    (flightModel.js and JSBSim's C172) agree within a point. So the POH card is one-sided: flown in the note's
 //    wind, the roll is never longer than the note plans for, and the tailwind still costs at
 //    least 10%. With the wind zeroed every card here fails (ratio 1).
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S headwind and tailwind roll (${model}, ticket 0103)`, () => {

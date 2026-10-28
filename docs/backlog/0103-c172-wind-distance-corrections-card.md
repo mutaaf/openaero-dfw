@@ -12,7 +12,7 @@ pr: 113
 ## Outcome (Builder, 2026-10-28)
 Both models give the FAA handbook's square law (FAA-H-8083-25C ch. 11, Fig. 11-19: a wind 10%
 of the lift-off speed takes ~19% off the roll, a tailwind adds ~21%) within a point. The POH
-notes are conservative planning corrections, not a prediction: by that law a 9 kt headwind
+notes are planning corrections, and against that law they come out conservative: by it a 9 kt headwind
 saves ~30% of a 55 kt roll, and the models measure 71% (takeoff) and 69% (landing) of calm;
 a 6 kt tailwind adds 22-24% (POH plans +30%). So the ticket's two-sided POH bands (90 ±6,
 130 ±8) would have pinned the physics to a safety margin. Shipped instead: the handbook's own

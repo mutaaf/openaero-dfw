@@ -16,7 +16,7 @@ says (FAA-H-8083-25C ch. 11, Fig. 11-19: a wind 10% of the lift-off speed, -19%;
 scales the METAR wind by `sqrt(min(1, h / 30))`, where `h` is the wheels' height above the
 ground. With the wheels on the runway `h = 0`, so the wind is exactly zero: a 15 kt METAR
 headwind gives the calm roll, and the crosswind mission has no crosswind on the runway
-(only the crab carried down from the air). The METAR wind is measured 10 m (33 ft) above the
+(only the crab carried down from the air). Just after lift-off it is still small: at 1 m the factor is ~18%. The METAR wind is measured 10 m (33 ft) above the
 ground (WMO/ASOS anemometer height). A boundary-layer profile thins it near the ground, but
 not to nothing at the wing (~1-2 m up). The comment says the fade also keeps a parked
 aircraft from sliding sideways. That job belongs to tyre friction (gear.js, 0082), not to
