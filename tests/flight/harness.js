@@ -353,8 +353,8 @@ export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 
   b.isaDevC = isaDevC;
   b.vel.y = b.vel.z * tan3;
   // `windKts` as in shortFieldTakeoff: the body starts at `kts` through the air, so its
-  // ground velocity carries the wind (a 3° path through the air, shallower over the ground
-  // in a headwind).
+  // ground velocity carries the wind (a 3° path through the air; the same sink at a lower
+  // groundspeed is steeper over the ground in a headwind).
   b.windVec.copy(runwayWind(windKts));
   b.vel.add(b.windVec);
   const approach = speedHoldPilot(() => kts);

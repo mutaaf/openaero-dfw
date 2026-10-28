@@ -208,8 +208,10 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 //  - FAA Pilot's Handbook (FAA-H-8083-25C) ch. 11, p. 11-14 and Fig. 11-19: "A headwind that is
 //    10 percent of the takeoff airspeed reduces the takeoff distance approximately 19 percent
 //    ... a tailwind that is 10 percent of the takeoff airspeed increases the takeoff distance
-//    approximately 21 percent", and "the effect of wind on landing distance is identical". That
-//    is the physics; the model must reproduce it (±4 points).
+//    approximately 21 percent", and "the effect of wind on landing distance is identical". The
+//    same page's "headwind speed is 50 percent of the takeoff speed ... approximately 25 percent
+//    of the zero wind takeoff distance" is the square law, (1 - 0.5)². That is the physics; the
+//    model must reproduce it (±4 points).
 //  - C172S POH Fig. 5-5 note 3 and Fig. 5-11 note 2: "Decrease distances 10% for each 9 knots
 //    headwind. For operation with tail winds up to 10 knots, increase distances by 10% for each
 //    2 knots." These are planning corrections, and by the handbook's square law they are
