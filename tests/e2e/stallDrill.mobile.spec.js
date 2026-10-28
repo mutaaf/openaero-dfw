@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
+// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Ticket 0087 on a phone (390x844, touch), at Kid level: the stall protection is off until
 // the stall, so hands off at idle the Cessna slows and stalls by itself, then lowers its

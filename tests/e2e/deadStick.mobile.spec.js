@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
+// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Ticket 0036 on a phone (390x844, touch), Kid level: the dead-stick glide put on a 0.8 NM
 // final far too low to make it (the ?debug hook), hands off. Kid's guide holds best glide and

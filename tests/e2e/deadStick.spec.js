@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
+// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Dead-stick challenge (ticket 0036): the Cessna 3,500 ft over North Dallas, abeam Addison, its
 // engine dead. The throttle can't bring it back; the coach says pitch for 68 knots. The ?debug
