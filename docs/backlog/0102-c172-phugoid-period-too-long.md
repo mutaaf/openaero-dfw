@@ -22,6 +22,10 @@ same damping): τ = 0.34 s (Roskam's Cmq·c̄/2V / Cmα is 0.22 s at 90 KIAS) an
 the stick faster: 20% back stick reaches 63% of its α in 1.1 s at 70 kt (it never got there in
 4 s before). The stall drill's held-stick gate moved from 3° to 5° under the stall: Learner's
 protection holds 4° under, and only its old overshoot had reached the 3° gate.
+The soft nose had also cushioned Kid's flare (α rose as the sink built); held at 4° under the
+stall, Kid's dead-stick glide from 0.8 NM touched down at 633 fpm (a crash, which loops Kid back
+to the start). Kid's auto-flare now flies to 3° under (assists.js flareAoaMarginDeg): 566 fpm
+(it was 581 before this change).
 
 ## Why
 Validator flight card (tests/flight/c172.test.js, "phugoid period", `it.fails`). Lanchester's
