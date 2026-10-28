@@ -651,7 +651,7 @@ function buildAircraft(type) {
     vStab.rotation.y = Math.PI / 2;
     vStab.position.set(0.16, 1.6, 11.5);
     plane.add(vStab);
-    // The rudder on the fin's trailing edge (z 11.5, the fin's extrusion spans x 0.16–0.48).
+    // The rudder on the fin's trailing edge (z 11.5, the fin's prism spans x 0.11–0.53).
     plane.add(hinged('ctl_rudder', 0.32, 4.4, 11.55, 0.26, 4.4, 1.1, { mat: airlineBlue }));
 
     // Horizontal Stabilizers, the elevator hinged on their trailing edge
