@@ -154,14 +154,15 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 
   // Thinner air for the wing (0038) and less power from the engine (0039, Gagg-Ferrar).
   // POH Fig. 5-6 at 10,000 ft: 360 fpm at −20 °C, 300 at 0 °C → 315 fpm at ISA (−4.8 °C).
-  // flightModel.js ~270 since 0099's friction lapse (JSBSim ~279): both sit near the low edge.
+  // Both models climb ~279 here (−11%) since 0099's friction lapse: the POH's curve bends down
+  // above 10,000 ft more than any single power lapse does, so this card and the ceiling share it.
   it('climbs about 315 fpm at 10,000 ft, ISA (POH, ±15%)', () => {
     within(rocFpm(3048), 315, 0.15);
   });
 
   // The POH's Section 1 specifications give a service ceiling of 14,000 ft, the altitude where
   // the climb falls to 100 fpm. flightModel.js climbed ~183 fpm there until 0099 took the
-  // engine's friction power out of the δ/√θ lapse (engine.js): ~103 fpm now, JSBSim ~115.
+  // engine's friction power out of the δ/√θ lapse (engine.js): ~116 fpm now, JSBSim ~115.
   card('ceiling')('climbs about 100 fpm at the 14,000 ft service ceiling, ISA (POH Section 1 specifications, ±35%)', () => {
     within(rocFpm(14000 / 3.28084), 100, 0.35);
   });

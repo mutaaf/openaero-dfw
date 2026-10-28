@@ -34,8 +34,14 @@ Climb speed schedule (the card holds 74 KIAS).
 
 ## Shipped
 The power lapse was δ/√θ alone, which is SAE J1349's *indicated* power ratio; the engine's
-friction power does not shrink with altitude, so brake power falls faster. engine.js now takes
-Gagg-Ferrar's friction share (1/8.55 of sea-level indicated power, P/P0 = σ − (1 − σ)/7.55) off
-δ/√θ: 67% at 10,000 ft, 57% at 14,000. Measured (flightModel.js, 74 KIAS, ISA): sea level
-702 → 697 fpm, 10,000 ft 328 → 270 (POH 315, card ±15%), 14,000 ft 182 → 103 (POH 100),
-8,000 ft cruise 121.2 → 118.6 KTAS (POH 124). JSBSim, for comparison: 670 / 279 / 115.
+friction power does not shrink with the air, so brake power falls faster (J1349's own
+structure). engine.js now takes a friction power of a tenth of sea-level indicated power off
+δ/√θ: brake power = (10·δ/√θ − 1)/9, 68% at 10,000 ft and 58% at 14,000. J1349 assumes 15%
+and Gagg and Farrar's σ − (1 − σ)/7.55 implies ~12% (on σ, not δ/√θ), but both pushed the
+10,000 ft card to −14% or past its edge; a fixed-pitch prop's RPM, and so its friction, falls
+with altitude, and a tenth matches JSBSim's own IO-360 within 1% at both altitudes.
+Measured (flightModel.js, 74 KIAS, ISA): sea level 702 → 698 fpm, 10,000 ft 328 → 279 (POH 315,
+−11%, card ±15%), 14,000 ft 182 → 116 (POH 100, +16%, card ±35%), 8,000 ft cruise
+121.2 → 119.1 KTAS (POH 124). JSBSim: 671 / 279 / 115 / 118.2. The POH's curve bends down
+above 10,000 ft more than any single lapse does; that leftover shape is shared between the two
+cards rather than buried in one.

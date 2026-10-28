@@ -5,10 +5,9 @@
 //     Full-throttle sea-level thrust vs true airspeed (a fixed-pitch prop unloads and
 //     gains RPM as it speeds up, so the curve is flat, then falls), scaled by the
 //     normally-aspirated power lapse: indicated power ∝ δ/√θ (SAE J1349 / Lycoming: pressure
-//     ratio over √temperature ratio) less the engine's friction power, which altitude does
-//     not shrink (Gagg & Ferrar: 1/7.55 of sea-level brake power), so a hot day costs a few %,
-//     altitude a lot: 67% at 10,000 ft, 57% at 14,000 (0099). At idle the windmilling prop
-//     is drag.
+//     ratio over √temperature ratio) less a friction power that the thin air does not shrink
+//     (J1349's structure), so a hot day costs a few %, altitude a lot: 68% at 10,000 ft, 58%
+//     at 14,000 (0099). At idle the windmilling prop is drag.
 //   { type: 'turbofan', staticThrustN, idleFraction, machLapse: [k1, k2], densityExp, spoolTau }
 //     T = T0·σ^densityExp·(1 − k1·M + k2·M²), idle a small fraction of it.
 // `n` is the engine's spooled power setting in [0, 1]; it follows the throttle with a
@@ -26,9 +25,11 @@ const lerpTable = (table, x) => {
   return table[table.length - 1][1];
 };
 
-// Friction is 1/8.55 of sea-level indicated power (Gagg-Ferrar's P/P0 = σ - (1 - σ)/7.55),
-// so brake power = (8.55·δ/√θ - 1) / 7.55, δ = p / 101325 Pa, θ = T / 288.15 K.
-export const pistonPowerLapse = (pressurePa, tempK) => (8.55 * pressurePa / 101325 / Math.sqrt(tempK / 288.15) - 1) / 7.55;
+// Friction is a tenth of sea-level indicated power, so brake power = (10·δ/√θ - 1) / 9, with
+// δ = p / 101325 Pa, θ = T / 288.15 K. J1349 assumes 15% and Gagg and Farrar's σ - (1 - σ)/7.55
+// implies ~12%; a fixed-pitch prop's RPM (and so its friction) falls with altitude, and a
+// tenth climbs within 1% of JSBSim's own IO-360 (public/jsbsim/) at 10,000 and 14,000 ft.
+export const pistonPowerLapse = (pressurePa, tempK) => (10 * pressurePa / 101325 / Math.sqrt(tempK / 288.15) - 1) / 9;
 
 // Thrust (N) at spool `n`, true airspeed (m/s), the air (atmosphere.js airAt: sigma,
 // pressurePa, tempK), Mach and dynamic pressure (Pa).
