@@ -1,12 +1,12 @@
 ---
 id: 0105
 title: Boot JS has 6 bytes of headroom: move 2 kB of main.js into lazy chunks before the next feature needs it
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: tech-health
 created: 2026-10-28
-pr:
+pr: 112
 ---
 
 ## Why
@@ -27,11 +27,11 @@ visualiser output (`npx vite-bundle-visualizer` or rollup's `--stats`) to rank b
 not guesses. Update the AGENTS.md budget line with the new number.
 
 ## Acceptance criteria
-- [ ] `node scripts/check-budget.mjs` reports boot JS at or below 199.0 kB gz
-- [ ] No behaviour change: `npm run check` green, the same e2e specs pass untouched
-- [ ] Every name a moved piece used is still defined (lesson 2026-10-26: run `eslint --rule no-undef` over the files you split)
-- [ ] The lazy chunk is prefetched after boot where a dropped connection would otherwise lose a feature
-- [ ] The AGENTS.md budget line records the date, the number and what moved
+- [x] `node scripts/check-budget.mjs` reports boot JS at or below 199.0 kB gz
+- [x] No behaviour change: `npm run check` green, the same e2e specs pass untouched
+- [x] Every name a moved piece used is still defined (lesson 2026-10-26: run `eslint --rule no-undef` over the files you split)
+- [x] (n/a: nothing moved to a lazy chunk; the code left the bundle's boot path entirely) The lazy chunk is prefetched after boot where a dropped connection would otherwise lose a feature
+- [x] The AGENTS.md budget line records the date, the number and what moved
 
 ## Test plan
 `npm run check`; before/after output of `scripts/check-budget.mjs` pasted in the PR; the
