@@ -14,7 +14,7 @@
 // flight, or onto the localizer and glidepath when it is on a final), a no-dive floor
 // below ~500 ft and an auto-flare near the ground, and main.js adds the autothrottle, automatic
 // gear/flaps and a hard landing that resets instead of crashing (see ASSIST_CONFIG).
-import { aileronForBank, elevatorForPitch, flareSinkMps, bankCommandForHeading } from './autopilot.js';
+import { aileronForBank, elevatorForPitch, flareSinkMps, bankCommandForHeading, glidepathGammaDeg } from './autopilot.js';
 import { headingError, vrefFor } from './aero.js';
 
 export const ASSIST_KEY = 'openaero_assist_v1';
@@ -137,6 +137,23 @@ export function shapeControls(cfg, st, s, dt, out) {
 // crosswind's crab left a steady offset of drift / 0.15°/m, ~50 m at 10 kt in the Cessna.
 export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
   0.8 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.15, -20, 20), curHdgDeg));
+
+// Kid's hands-off final (main.js applyAssists): `ap` is airports.js approachGeometry for `end`.
+// Captured on the nose (within 45°), flown on the ground track so a crab holds the centreline
+// (0097), the 3° path to its aim point and on over the runway, under the auto-flare's floor, so
+// it lands (0098: stopped at the threshold, level flight floated the runway). Past the threshold
+// only a landing: under ~100 ft over the first third of the runway, never steeper than 2° (an
+// airplane let go higher, later or climbing away is not dived at the runway). Leaves out.guide*
+// alone (level flight) off the final.
+export function kidFinalGuide(end, ap, noseDeg, trackDeg, out) {
+  const past = ap.distM < 0;
+  if (past && (ap.heightAbovePathM + ap.pathHeightM > 30 || -ap.distM > (end.lengthM - end.displacedM) / 3)) return;
+  if (ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(end.hdgT, noseDeg)) < 45) {
+    out.guideBankDeg = kidLocalizerBankDeg(end.hdgT, trackDeg, ap.crossM);
+    out.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
+    if (past) out.guideGammaDeg = Math.max(out.guideGammaDeg, -2);
+  }
+}
 
 // Kid's automatic gear and flaps from height and vertical speed. Mutates and returns cfgOut
 // { gearDown, flapsIndex } (seeded with the current values). Hysteresis: down/out when

@@ -12,10 +12,10 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
-import { stallAoaDeg, headingError } from '../../src/aero.js';
-import { glidepathGammaDeg, autothrottleCommand } from '../../src/autopilot.js';
+import { stallAoaDeg } from '../../src/aero.js';
+import { autothrottleCommand } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, selectActiveRunway } from '../../src/airports.js';
-import { assistConfig, createAssistState, shapeControls, autoConfigure, kidTargetKts, kidLocalizerBankDeg } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
 import { missionByKey } from '../../src/missions.js';
 import { PATTERN_KEY, createPattern, kidGuide, patternPrompt, patternLeg, PT_TPA_FT } from '../../src/pattern.js';
 import { makeBody, fly, attitude } from './harness.js';
@@ -60,13 +60,9 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
     const e = sim.activeEnd;
     const ap = e ? approachGeometry(e, x.pos) : null;
-    const nose = (-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI + 360) % 360;
-    // main.js: the final's guide when lined up (captured on the nose, flown on the ground track,
-    // 0097), else the pattern's (pattern.js kidGuide).
-    if (e && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(e.hdgT, nose)) < 45) {
-      s.guideBankDeg = kidLocalizerBankDeg(e.hdgT, (Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI + 360) % 360, ap.crossM);
-      s.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
-    }
+    // main.js: the final's guide when lined up (assists.js kidFinalGuide), else the pattern's
+    // (pattern.js kidGuide).
+    if (e) kidFinalGuide(e, ap, -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s);
     kidGuide(st, sim, s);
     Object.assign(s, {
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,

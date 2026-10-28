@@ -3,11 +3,12 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import {
   ASSIST_KEY, ASSIST_CONFIG, DEFAULT_ASSIST, assistConfig, createAssistState, shapeControls,
-  autoConfigure, kidTargetKts, kidLocalizerBankDeg, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
 import { dihedralAileron } from '../../src/flightModel.js';
 import { Euler } from 'three';
+import { runwayEnd, approachGeometry } from '../../src/airports.js';
 
 const memStorage = (init = {}) => {
   const m = { ...init };
@@ -192,6 +193,36 @@ describe('Kid and Learner hold bank against a held rudder (dihedral, 0081)', () 
       });
     }
   }
+});
+
+describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {
+  const end = runwayEnd('KADS', '16');
+  // A point `alongM` past the threshold (negative: short of it), `crossM` right, `upM` above it.
+  const at = (alongM, crossM = 0, upM = 15) => {
+    const d = { x: Math.sin(end.hdgT * Math.PI / 180), z: -Math.cos(end.hdgT * Math.PI / 180) };
+    return { x: end.thrX + d.x * alongM - d.z * crossM, y: end.thrY + upM, z: end.thrZ + d.z * alongM + d.x * crossM };
+  };
+  const out = (pos, noseDeg) => { const o = { guideBankDeg: 0, guideGammaDeg: 0 }; kidFinalGuide(end, approachGeometry(end, pos), noseDeg ?? end.hdgT, end.hdgT, o); return o; };
+  it('flies the 3° path on the final and on past the threshold and the aim point, low over the first third', () => {
+    const third = (end.lengthM - end.displacedM) / 3;
+    for (const along of [-3000, -100, 50, 305, third - 20]) {
+      expect(out(at(along, 0, 0.5 + Math.max(0, -along - 305) * 0.0524)).guideGammaDeg).toBeLessThan(-0.4);
+    }
+    // 15 m up past the aim point is well above the path, but never steeper than 2° past the threshold
+    expect(out(at(600)).guideGammaDeg).toBe(-2);
+  });
+  it('leaves level flight off the final: past the first third, high over the runway, far out, wide or not lined up', () => {
+    const third = (end.lengthM - end.displacedM) / 3;
+    // A go-around or takeoff climbing through 1,000 ft over its runway is not dived back at it (panel).
+    for (const o of [out(at(third + 20, 0, 3)), out(at(end.lengthM + 100)), out(at(100, 0, 35)), out(at(1500, 0, 305)),
+      out(at(-25000)), out(at(-3000, 1600, 160)), out(at(-3000, 0, 160), end.hdgT + 60)]) {
+      expect(o).toEqual({ guideBankDeg: 0, guideGammaDeg: 0 });
+    }
+  });
+  it('steers back to the centreline past the threshold too', () => {
+    expect(out(at(200, 20)).guideBankDeg).toBeLessThan(0); // right of it: bank left
+    expect(out(at(200, -20)).guideBankDeg).toBeGreaterThan(0);
+  });
 });
 
 describe('Kid hands-off line-up (headless, runway heading north, x = cross-track)', () => {

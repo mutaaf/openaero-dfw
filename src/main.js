@@ -16,7 +16,7 @@ import {
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
-import { gradeLanding, loadBest, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S, GRADE_COLOURS } from './landing.js';
+import { gradeLanding, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S, GRADE_COLOURS } from './landing.js';
 import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
 import { createTutor, tutorOn, setTutorOn } from './tutorPrefs.js';
 import {
@@ -38,7 +38,7 @@ import {
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
-  autoConfigure, kidTargetKts, kidLocalizerBankDeg, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, kidTargetKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
@@ -162,7 +162,6 @@ const sim = {
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _v3 = new THREE.Vector3();
-const _q1 = new THREE.Quaternion();
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
 const simCanvas = byId('simCanvas');
@@ -1010,7 +1009,7 @@ function checkTouchdown(dt) {
     pastThresholdM: -g.distM, crossM: g.crossM, vsFpm: sim.lastAirVsi,
     pitchDeg: _euler.x * RAD_TO_DEG, bankRightDeg: -_euler.z * RAD_TO_DEG,
     grade: result.grade, score: result.score, runway: end.id, bounces: 0,
-    stabilized: gate ? gate.stable : null,
+    stabilized: gate?.stable ?? null,
   };
   // The crosswind challenge moves runway with the weather: its best is kept per runway end.
   // Kid and Learner keep their own bests (assists.js); Pilot keeps the mission's key.
@@ -1328,7 +1327,7 @@ function refreshWeather() {
   sim.altimInHg = sim.wx.altimInHg || 29.92;
   scene.fog.density = fogDensityForVisibility(sim.wx.visibilitySm);
   // METAR cloud bases are above the reporting field.
-  skyDome?.setClouds(sim.wx.cloudLayers, sim.activeEnd ? sim.activeEnd.thrY : 0);
+  skyDome?.setClouds(sim.wx.cloudLayers, sim.activeEnd?.thrY ?? 0);
   applySky();
 }
 
@@ -2050,19 +2049,14 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   // A touchdown waiting to settle (0091) is a landing, not a touch-and-go: Kid holds the flare at
   // idle through a bounce instead of climbing away from it, so the bounce is graded.
   const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround && !pendingLanding, sim.aglFt);
-  // Kid hands-off guide: level flight, or the localizer and glidepath on a final ahead.
+  // Kid hands-off guide: level flight, or the final (assists.js kidFinalGuide).
   _assistIn.guideBankDeg = 0;
   _assistIn.guideGammaDeg = 0;
   const ap = sim.approach;
   if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
-  } else if (cfg.handsOff && sim.activeEnd && ap.distM > 0 && ap.distM < 20000 && Math.abs(ap.crossM) < 1500) {
-    // Captured on the nose, flown on the ground track: a crab holds the centreline (0097). The
-    // nose and track (±180°) wrap in headingError: both are within ~90° of the runway here.
-    if (Math.abs(headingError(sim.activeEnd.hdgT, -_euler.y * RAD_TO_DEG)) < 45) {
-      _assistIn.guideBankDeg = kidLocalizerBankDeg(sim.activeEnd.hdgT, Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG, ap.crossM);
-      _assistIn.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
-    }
+  } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
+    kidFinalGuide(sim.activeEnd, ap, -_euler.y * RAD_TO_DEG, Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG, _assistIn);
   }
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
   // Addison, not a glidepath it can't hold (deadStick.js kidGuide).
@@ -2978,13 +2972,15 @@ function updateDebugOverlay(dt) {
   debugOverlay.textContent = `${photoreal.debugLine()} · px ${resScale.ratio}`; // photoreal.js has its usage
 }
 
-// ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
-if (debugOverlay) window.openaeroDebugFinal = (airport, rwy, distNm) => runwayEnd(airport, rwy)
-  && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm });
-// ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce.
-if (debugOverlay) window.openaeroDebugHop = (mps) => { sim.vel.y = mps; };
-// ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
-if (debugOverlay) window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
+if (debugOverlay) {
+  // ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
+  window.openaeroDebugFinal = (airport, rwy, distNm) => runwayEnd(airport, rwy)
+    && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm });
+  // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce.
+  window.openaeroDebugHop = (mps) => { sim.vel.y = mps; };
+  // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
+  window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
+}
 // The active runway on screen (CSS px): its approach lights' outer end to the far end, as wide
 // as the runway. Read by tests/e2e/runwayVisibility.spec.js.
 function runwayScreen(e) {
@@ -3007,8 +3003,8 @@ window.openaeroDebug = () => {
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
-    activeRunway: sim.activeEnd ? sim.activeEnd.id : null,
-    runwayHdgT: sim.activeEnd ? sim.activeEnd.hdgT : null,
+    activeRunway: sim.activeEnd?.id ?? null,
+    runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
     runwayScreen: sim.activeEnd ? runwayScreen(sim.activeEnd) : null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
@@ -3024,9 +3020,7 @@ window.openaeroDebug = () => {
     aircraftModel: animRefs.model?.name,
     brakesOn: sim.brakesOn,
     // Moving parts (0063): the rigged node names and each one's pose (deg) right now.
-    parts: animRefs.parts ? [...animRefs.parts.parts, ...animRefs.parts.gear].map((p) => ({
-      name: p.name, deg: 2 * Math.acos(Math.min(1, Math.abs(p.rest.dot(p.node.quaternion)))) * RAD_TO_DEG, visible: p.node.visible,
-    })) : [],
+    parts: animRefs.parts && surfaces ? surfaces.partPoses(animRefs.parts) : [], // rigged by the surfaces chunk
     gearDown: sim.gearDown,
     fdm: jsbsim && jsbsim.flies(sim.aircraftKey) ? 'jsbsim' : 'builtin',
     groundY: sim.groundY,
@@ -3053,7 +3047,7 @@ window.openaeroDebug = () => {
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
-    goAround: sim.goAround ? { phase: sim.goAround.phase, lowFt: sim.goAround.lowFt, minIasKts: sim.goAround.minIasKts, climbFpm: sim.goAround.climbFpm } : null,
+    goAround: sim.goAround ? { ...sim.goAround } : null,
     stallDrill: sim.stallDrill ? { ...sim.stallDrill } : null,
     engineFailed: !!sim.engineFailed,
     takeoffCalls: [...sim.takeoffCalls],
