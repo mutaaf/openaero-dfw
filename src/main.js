@@ -1432,7 +1432,7 @@ function integrateSubStep(dt) {
   const spec = sim.spec;
 
   // Pilot Input Controls: touch/drag stick > gamepad > keyboard (input.js)
-  const targets = combineTargets(pilotTargets(keys), sim.stick, sim.pad);
+  const targets = combineTargets(pilotTargets(keys), sim.stick, sim.pad, sim.onGround);
   sim.inputSource = targets.source;
   let targetPitch = targets.pitch, targetRoll = targets.roll;
   const targetYaw = targets.yaw;
@@ -2099,6 +2099,17 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   // The traffic pattern (0048): Kid's guide flies the legs and turns (pattern.js kidGuide).
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   _assistIn.noFloor = sim.engineFailed;
+  // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
+  const end = sim.activeEnd, noseDeg = -_euler.y * RAD_TO_DEG;
+  const onRunway = sim.onGround && end && Math.abs(ap.crossM) < end.widthM && Math.abs(headingError(end.hdgT, noseDeg)) < 30;
+  _assistIn.rwyHdgDeg = onRunway ? end.hdgT : null;
+  if (onRunway) {
+    const r = end.hdgT * DEG_TO_RAD; // right of the runway course (airports.js courseVector), no allocation
+    _assistIn.noseHdgDeg = noseDeg;
+    _assistIn.crossM = ap.crossM;
+    _assistIn.crossVelMps = sim.vel.x * Math.cos(r) + sim.vel.z * Math.sin(r);
+    _assistIn.yawRateRightDegS = -sim.angVel.y * RAD_TO_DEG;
+  }
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
   if (sim.onGround) {
     // The takeoff roll's stick, power and the stop are the player's, smoothed like Pilot's.

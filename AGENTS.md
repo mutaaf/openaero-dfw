@@ -148,7 +148,8 @@ src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes 
                     no-dive floor, auto-flare; kidFinalGuide is Kid's hands-off final (the
                     3° path, past the threshold only low over the first third, ≤ 2°, 0098;
                     flight cards in tests/flight/kidFinal.test.js); main.js adds Kid's autothrottle, gear/flaps
-                    and soft landing. Pilot never calls in (pure, flown headless in tests).
+                    and soft landing. On the runway Kid and Learner hold its centreline with the
+                    pedals (groundSteerRudder, 0110). Pilot never calls in (pure, flown headless in tests).
                     A first visit (nothing stored) flies Learner; a stored level wins (0059)
 src/goAround.js     go-around drill (0047, lazy chunk loaded with the mission): pure state
                     machine (unstabilized gate → positive rate through 500 ft = complete,
@@ -266,7 +267,9 @@ src/systems.js      aircraft systems (pure, run first in every flightModel sub-s
 src/gear.js         landing gear on oleo struts (0074): nose + mains at their real positions,
                     per-wheel loads and moments through spec.inertia, harder rebound damping,
                     pedal nose-wheel steering, the tail against the mains' moment with q;
-                    tyre friction per wheel at its axle, brakes on the mains only (0082)
+                    tyre friction per wheel at its axle, brakes on the mains only (0082); the loaded
+                    nose tyre holds its steered yaw rate against the fin and lets go as the nose lifts
+                    (noseWheelYawHold, 0110; cards in tests/flight/groundSteer.test.js)
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
@@ -275,7 +278,8 @@ src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),
                     warnings, heading math
-src/input.js        keyboard state → control targets, virtual stick mapping
+src/input.js        keyboard state → control targets, virtual stick mapping; on the ground the stick's
+                    sideways push steers the nose wheel (touch has no pedals, 0110)
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
 src/styles.css      Tailwind entry + ported custom HUD styles
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):

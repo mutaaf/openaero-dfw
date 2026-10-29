@@ -45,6 +45,16 @@ describe('combineTargets', () => {
   it('keyboard yaw still works while the touch stick is held', () => {
     expect(combineTargets({ pitch: 0, roll: 0, yaw: -1 }, { x: 0.2, y: 0.1, active: true }, null).yaw).toBe(-1);
   });
+  it('on the ground the stick sideways steers the nose wheel (touch has no pedals, 0110); never in the air', () => {
+    const none = { pitch: 0, roll: 0, yaw: 0 };
+    expect(combineTargets(none, { x: 0.6, y: 0, active: true }, null, true).yaw).toBe(0.6);
+    expect(combineTargets(none, { x: -1, y: 0, active: true }, null, true).yaw).toBe(-1);
+    expect(combineTargets(none, { x: 0.6, y: 0, active: true }, null, false).yaw).toBe(0);
+    // a thumb pulling back for the rotation, a little off centre, does not steer
+    expect(combineTargets(none, { x: 0.08, y: -1, active: true }, null, true).yaw).toBe(0);
+    // the keys or a gamepad's rudder win over the tiller
+    expect(combineTargets({ pitch: 0, roll: 0, yaw: -1 }, { x: 0.6, y: 0, active: true }, null, true).yaw).toBe(-1);
+  });
 });
 
 describe('throttleFromPoint', () => {

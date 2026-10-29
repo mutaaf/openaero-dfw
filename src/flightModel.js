@@ -21,7 +21,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, gearFriction, noseSteerYawRate, tailVsMainsAccel } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -209,7 +209,7 @@ export function stepFlightModel(body, spec, dt) {
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
     const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
-    if (steer !== null) body.angVel.y += (steer - body.angVel.y) * Math.min(1, dt * 6);
+    if (steer !== null) body.angVel.y += noseWheelYawHold(body, spec, steer - body.angVel.y, dt);
   }
 
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {

@@ -1,7 +1,7 @@
 ---
 id: 0110
 title: Keep it on the runway in a crosswind: a nose wheel that out-steers the fin, assists that hold the centreline, a touch rudder
-status: ready
+status: shipped
 priority: P1
 size: L
 lens: player-feel

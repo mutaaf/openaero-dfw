@@ -30,10 +30,14 @@ export function stickFromPoint(clientX, clientY, rect) {
 // Merge the input sources into one set of control targets. Priority: a held on-screen
 // stick (touch or mouse drag) > a deflected gamepad > keyboard. Rudder (yaw) comes from
 // the stick-less sources so keyboard Q/E or gamepad shoulders still work while the
-// touch stick is held. Returns the source name for the HUD and tests.
-export function combineTargets(kb, stick, pad) {
+// touch stick is held. On the ground (0110) the stick's sideways push also steers the nose wheel
+// (a tiller: touch has no pedals) unless another source is already on the rudder. Returns the
+// source name for the HUD and tests.
+export const TILLER_DEAD = 0.1;
+export function combineTargets(kb, stick, pad, onGround = false) {
   if (stick && stick.active) {
-    const yaw = pad && pad.active && pad.yaw ? pad.yaw : kb.yaw;
+    const yaw = (pad && pad.active && pad.yaw ? pad.yaw : kb.yaw)
+      || (onGround && Math.abs(stick.x) > TILLER_DEAD ? stick.x : 0);
     return { pitch: stick.y, roll: stick.x, yaw, source: 'stick' };
   }
   if (pad && pad.active) {

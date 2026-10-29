@@ -68,14 +68,20 @@ export function updateDeparture(st, onGround, aglFt) {
 //      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), aoaDeg, betaDeg, dihedralAil,
 //      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
-//      localizer bank and glidepath angle on a final), noFloor (no engine, 0036: the glide is
+//      localizer bank and glidepath angle on a final), rwyHdgDeg, noseHdgDeg, crossM, crossVelMps,
+//      yawRateRightDegS (on the runway: its true heading or null off it, the nose's, the offset
+//      and drift right of its centreline, the yaw rate; 0110), noFloor (no engine, 0036: the glide is
 //      steeper than the floor, and holding the floor would only slow it to a mush) }
 // Writes out.elev, out.ail, out.rud (surface commands, -1..1); returns out. No allocation.
 export function shapeControls(cfg, st, s, dt, out) {
   if (s.onGround) {
-    // On the runway the airplane is the pilot's (rotation, taxi): the envelope starts at lift-off.
+    // On the runway the stick is the pilot's (rotation, taxi): the envelope starts at lift-off.
+    // The pedals too, when they use them; when they don't, the nose wheel holds the centreline
+    // of the runway it is on (0110), never the sideslip's coordination (it would steer into the wind).
     st.pitchHoldDeg = null;
-    out.elev = s.pitchIn; out.ail = s.rollIn; out.rud = s.yawIn;
+    out.elev = s.pitchIn; out.ail = s.rollIn;
+    out.rud = Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null ? s.yawIn
+      : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.yawRateRightDegS);
     return out;
   }
   if (st.pitchHoldDeg === null) st.pitchHoldDeg = s.pitchDeg;
@@ -129,6 +135,15 @@ export function shapeControls(cfg, st, s, dt, out) {
   // a positive, from-the-right sideslip).
   out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn : clamp(s.betaDeg * COORD_GAIN, -1, 1);
   return out;
+}
+
+// Kid and Learner on the runway with the pedals free (0110): the rudder (and the nose wheel on
+// it) points the nose at most 3° off the runway heading back towards the centreline, by the
+// offset right of it (crossM, m) and the drift across it (crossVelMps), damped by the yaw rate
+// (°/s, + = right). The harness's crosswind pilot's gains (tests/flight), in metres.
+export function groundSteerRudder(rwyHdgDeg, noseHdgDeg, crossM, crossVelMps, yawRateRightDegS) {
+  const target = rwyHdgDeg - clamp(crossM * 0.5 + crossVelMps, -3, 3);
+  return clamp(headingError(target, noseHdgDeg) * 0.3 - yawRateRightDegS * 0.15, -1, 1);
 }
 
 // Kid hands-off line-up on a final: bank (deg, + = right) toward a 20°-max intercept of the
