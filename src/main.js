@@ -1131,8 +1131,8 @@ function updateCoach(dt) {
   // Every final is coached (0073), and any approach the player takes over from the autopilot.
   // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
-  // from the lift-off (its takeoff roll is the takeoff's, not a landing's rollout).
-  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.engineOut && (sim.engineFailed || !sim.onGround))))) {
+  // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
+  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1158,6 +1158,7 @@ function updateCoach(dt) {
     coachInput.stall = sim.stallDrill?.phase ?? null;
     coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
       : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : null;
+    coachInput.dsGround = sim.onGround && sim.engineOut ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.

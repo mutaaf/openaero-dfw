@@ -112,7 +112,8 @@ describe('Cessna 172S engine failure after takeoff at Addison (flightModel, tick
     expect(r.td).not.toBeNull();
     expect(r.td.result.grade).not.toBe('CRASH');
     expect(r.td.result.score).toBeGreaterThanOrEqual(55);
-    expect(r.prompts.slice(0, 2)).toEqual(['eoClimb', 'eoFail']);
+    expect(r.prompts[0]).toBe('eoRoll');
+    expect(r.prompts.find((p) => p.startsWith('eoFail'))).toBe('eoFail');
     expect(r.prompts).toContain('eoAhead');
     expect(r.prompts).not.toContain('eoCanTurn');
     expect(r.prompts).not.toContain('eoFailTurn');
@@ -133,7 +134,7 @@ describe('Cessna 172S engine failure after takeoff at Addison (flightModel, tick
     log('300 ft stretched turn', r);
     expect(r.st.stalled).toBe(true);
     expect(['D', 'CRASH']).toContain(r.td.result.grade);
-    expect(r.td.result.reason).toMatch(/^Stalled in the turn back.*The turn cost you \d+ ft\.$/);
+    expect(r.td.result.reason).toMatch(/^Stalled in the turn back from \d+ ft: it needed \d+\. Below that, land ahead\.$/);
   });
 
   it('700 ft, turned back: the turn reaches runway 34 and lands on it, and the coach allowed the turn', () => {
@@ -144,7 +145,8 @@ describe('Cessna 172S engine failure after takeoff at Addison (flightModel, tick
     expect(r.td.result.madeRunway).toBe(true);
     expect(r.td.result.grade).not.toBe('CRASH');
     expect(r.st.stalled).toBe(false);
-    expect(r.prompts.slice(0, 2)).toEqual(['eoClimb', 'eoFailTurn']);
+    expect(r.prompts[0]).toBe('eoRoll');
+    expect(r.prompts.find((p) => p.startsWith('eoFail'))).toBe('eoFailTurn');
     expect(r.prompts).toContain('eoTurning');
     expect(r.prompts).not.toContain('eoTooLow');
     expect(r.prompts).not.toContain('eoAhead');

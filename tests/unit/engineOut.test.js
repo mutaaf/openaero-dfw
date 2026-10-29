@@ -100,9 +100,15 @@ describe('the engine failure and the coach (ticket 0104)', () => {
 
   it('climbs coached, quits at its height, and says land ahead when the turn back cannot make it', () => {
     const st = armed(m300);
-    expect(engineOutTarget(st, step({ onGround: true }))).toBe(null);
+    expect(engineOutTarget(st, step({ onGround: true }))).toBe('eoRoll');
+    expect(coachText('eoRoll')).toBe('Full power, then at 55 knots pull back gently');
+    expect(coachTarget({ onGround: true, dsGround: 'eoRoll' })).toBe('eoRoll');
+    expect(coachTarget({ onGround: true })).toBe(null);
     expect(stepEngineOut(st, step({ aglFt: 200 }))).toBe(false);
     expect(engineOutTarget(st, step({ aglFt: 200 }))).toBe('eoClimb');
+    expect(engineOutTarget(st, step({ aglFt: 200, iasKts: 62 }))).toBe('eoClimbSlow');
+    expect(engineOutTarget(st, step({ aglFt: 200, iasKts: 90 }))).toBe('eoClimbFast');
+    expect(engineOutTarget(st, step({ aglFt: 200, kid: true }))).toBe('eoKidClimb');
     expect(stepEngineOut(st, step({ t: 10, aglFt: 300 }))).toBe(true);
     expect(st.failed).toBe(true);
     expect(st.turnbackFt).toBeGreaterThan(300);
@@ -117,6 +123,7 @@ describe('the engine failure and the coach (ticket 0104)', () => {
     expect(engineOutTarget(st, step({ t: 25, aglFt: 120, trackDeg: E34.hdgT, iasKts: 68 }))).toBe('eoLineUp');
     // Below the flare height the landing coach has it; through coach.js the drill's words win above it.
     expect(engineOutTarget(st, step({ t: 30, aglFt: 40, iasKts: 68 }))).toBe(null);
+    expect(engineOutTarget(st, step({ t: 40, onGround: true }))).toBe(null); // landed: the rollout's
     expect(coachTarget({ aglFt: 260, onGround: false, ds: 'eoAhead' })).toBe('eoAhead');
   });
 
@@ -125,11 +132,18 @@ describe('the engine failure and the coach (ticket 0104)', () => {
     stepEngineOut(st, step({ t: 0, aglFt: 700, ...past(1000) }));
     expect(st.canTurn).toBe(true);
     expect(engineOutTarget(st, step({ t: 1, aglFt: 700, ...past(1000) }))).toBe('eoFailTurn');
+    stepEngineOut(st, step({ t: 2, aglFt: 695, ...past(1050), trackDeg: E16.hdgT - 20, iasKts: 70 }));
+    expect(st.turnOk).toBe(true);
+    stepEngineOut(st, step({ t: 6, aglFt: 660, ...past(1100), trackDeg: E16.hdgT - 90, iasKts: 68 }));
     expect(engineOutTarget(st, step({ t: 6, aglFt: 660, ...past(1100), trackDeg: E16.hdgT - 90, iasKts: 68 }))).toBe('eoTurning');
     // Not turned and gone on too far: no longer.
     const late = armed({ engineOutFt: 700 });
     stepEngineOut(late, step({ t: 0, aglFt: 700, ...past(1000) }));
     expect(engineOutTarget(late, step({ t: 30, aglFt: 400, ...past(2000), iasKts: 68 }))).toBe('eoAhead');
+    // ...and a turn begun then is too low, though the failure's call was "you can".
+    stepEngineOut(late, step({ t: 31, aglFt: 395, ...past(2050), trackDeg: E16.hdgT - 20, iasKts: 68 }));
+    expect(late.turnOk).toBe(false);
+    expect(engineOutTarget(late, step({ t: 33, aglFt: 380, ...past(2080), trackDeg: E16.hdgT - 60, iasKts: 68 }))).toBe('eoTooLow');
   });
 
   it('Kid: its own words, and the guide glides ahead wings level', () => {
@@ -177,19 +191,25 @@ describe('engineOutResult (ticket 0104)', () => {
   });
   const failed = (over) => ({ ...createEngineOut({ engineOutFt: 300 }), failed: true, turnbackFt: 420, ...over });
 
+  it('a 54° turn to a field is landing ahead, and the card says how far it turned', () => {
+    const r = engineOutResult(soft(2300), failed({ startFt: 280, maxOffDeg: 54, turnOk: false }), E16, { ...past(400), y: 0 });
+    expect(r.factors[0]).toMatchObject({ value: 'landed ahead, turned 54°', score: 100 });
+  });
+
   it('landed ahead in a field, gently: survives, a B at best, the right call', () => {
     const pos = past(400);
     const r = engineOutResult(soft(2300), failed(), E16, { ...pos, y: 0 });
     expect(r.title).toBe('Engine failure after takeoff');
     expect(r.factors[0]).toMatchObject({ key: 'decision', value: 'landed ahead', score: 100 });
-    expect(r.factors[1].value).toMatch(/^missed by/);
+    expect(r.factors[1]).toMatchObject({ label: 'Landing spot', score: 100 });
+    expect(r.factors[1].value).toMatch(/^a field, [\d,.]+ (ft|NM) from the runway$/);
     expect(r.grade).toBe('B');
     expect(r.note).toBe('Landed ahead in a field: the right call this low');
     expect(r.reason).toBe(null);
   });
 
   it('turned back below the height it needed: a D at best, with the cost of the turn, even if it reached the runway', () => {
-    const st = failed({ turned: true, turnFromFt: 290, startFt: 290, costFt: 160 });
+    const st = failed({ turned: true, turnFromFt: 290, startFt: 290, costFt: 160, turnOk: false, turnNeedFt: 420 });
     const r = engineOutResult(soft(300), st, E34, { x: E34.thrX + Math.sin(E34.hdgT * Math.PI / 180) * 300, y: 0, z: E34.thrZ - Math.cos(E34.hdgT * Math.PI / 180) * 300 });
     expect(r.madeRunway).toBe(true);
     expect(r.grade).toBe('D');
@@ -197,17 +217,17 @@ describe('engineOutResult (ticket 0104)', () => {
   });
 
   it('turned back from high enough and made it: full marks possible', () => {
-    const st = failed({ turnbackFt: 650, turned: true, turnFromFt: 700, startFt: 700, costFt: 130 });
+    const st = failed({ turnbackFt: 650, turned: true, turnFromFt: 700, startFt: 700, costFt: 130, turnOk: true, turnNeedFt: 650 });
     const r = engineOutResult(soft(300), st, E34, { x: E34.thrX + Math.sin(E34.hdgT * Math.PI / 180) * 300, y: 0, z: E34.thrZ - Math.cos(E34.hdgT * Math.PI / 180) * 300 });
     expect(['S', 'A']).toContain(r.grade);
     expect(r.note).toBe('Turned back and made the runway');
   });
 
-  it('a crash stays a crash; stalled in the turn says what the turn cost', () => {
+  it('a crash stays a crash; stalled in a turn begun too low says what it needed', () => {
     const crash = { ...soft(300), grade: 'CRASH', score: 0, reason: 'Hard landing: the gear would not survive that.' };
-    const st = failed({ turned: true, turnFromFt: 290, startFt: 290, costFt: 250, stalled: true });
+    const st = failed({ startFt: 290, costFt: 250, stalled: true, turnOk: false, turnNeedFt: 420 });
     const r = engineOutResult(crash, st, E34, { ...past(-100), y: 0 });
     expect(r.grade).toBe('CRASH');
-    expect(r.reason).toBe('Stalled in the turn back. The turn cost you 250 ft.');
+    expect(r.reason).toBe('Stalled in the turn back from 290 ft: it needed 420. Below that, land ahead.');
   });
 });

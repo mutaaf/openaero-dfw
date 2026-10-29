@@ -20,13 +20,15 @@ test('engine failure at 300 ft: Kid takes off, the engine quits, it lands ahead 
   expect(spawn).toMatchObject({ mission: 'efato_kads_16_300', aircraft: 'c172', flapsIndex: 0, onGround: true, engineFailed: false });
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  // The takeoff is the player's at every level (power and rotation); then Kid's guide climbs.
+  // The takeoff is the player's at every level (power and rotation), and the coach says how;
+  // then Kid's guide climbs.
+  await expect(page.locator('#txtCoach')).toHaveText('Full power, then at 55 knots pull back gently', { timeout: 10_000 });
   await page.click('#btnToga');
   await expect.poll(async () => (await snap(page)).takeoffCalls, { timeout: 60_000 }).toEqual(['rotate']);
   await page.keyboard.down('ArrowUp');
   await expect.poll(async () => (await snap(page)).onGround, { timeout: 20_000 }).toBe(false);
   await page.keyboard.up('ArrowUp');
-  await expect(page.locator('#txtCoach')).toHaveText('Climb out at 74 knots, and be ready: the engine will quit', { timeout: 20_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Climbing! The engine will stop soon: stay calm', { timeout: 20_000 });
   await expect.poll(async () => (await snap(page)).engineFailed, { timeout: 120_000 }).toBe(true);
   const failed = await snap(page);
   expect(failed.aglFt).toBeGreaterThanOrEqual(290);

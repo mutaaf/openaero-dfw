@@ -74,10 +74,14 @@ export function turnbackHeightFt({ distBackM, ratio, tasMps, glideTasMps = tasMp
 export const distPastRunwayM = (x, z) => Math.max(0, (x - E34.thrX) * D16.x + (z - E34.thrZ) * D16.z);
 
 export const EO_TEXT = {
+  eoRoll: 'Full power, then at 55 knots pull back gently',
   eoClimb: 'Climb out at 74 knots, and be ready: the engine will quit',
+  eoClimbSlow: 'Lower the nose a little: climb at 74 knots',
+  eoClimbFast: 'Raise the nose a little: climb at 74 knots',
+  eoKidClimb: 'Climbing! The engine will stop soon: stay calm',
   eoFail: `Engine failure! Nose down, ${DS_GLIDE_KTS} knots, land ahead`,
   eoFailTurn: `Engine failure! Nose down, ${DS_GLIDE_KTS} knots: you can turn back`,
-  eoAhead: 'Too low to turn back: land ahead, small turns only',
+  eoAhead: 'Too low to turn back: land ahead, 30° turns at most',
   eoCanTurn: 'High enough to turn back: steep turn, nose down',
   eoTurning: `Keep turning: 45° bank, ${DS_GLIDE_KTS} knots, nose down`,
   eoTooLow: 'Too low for this turn: wings level, land ahead',
@@ -91,6 +95,7 @@ Object.assign(DRILL_TEXT, EO_TEXT);
 export const createEngineOut = (mission) => ({
   failFt: mission.engineOutFt, rolled: false, failed: false, t0: 0, turnbackFt: 0, canTurn: false,
   turned: false, turnFromFt: 0, startFt: null, back: false, costFt: 0, stalled: false,
+  turnOk: null, turnNeedFt: 0, maxOffDeg: 0,
 });
 
 // The live geometry for one step, into a reused object. s: { t, aglFt, x, z, trackDeg, iasKts,
@@ -119,7 +124,15 @@ export function stepEngineOut(st, s) {
     return true;
   }
   if (s.onGround) return false;
-  const off = Math.abs(geometry(s).offDeg);
+  const g = geometry(s), off = Math.abs(g.offDeg);
+  if (off > st.maxOffDeg) st.maxOffDeg = off;
+  // As the turn begins: could it be made? Begun while the failure's call shows, that call (the
+  // coach said turn now); later, from here (a whole turn from straight ahead, no margin).
+  if (st.turnOk === null && off > EO_TURN_FROM_DEG / 2) {
+    const early = s.t - st.t0 < DS_FAIL_S;
+    st.turnNeedFt = early ? st.turnbackFt : g.needFt;
+    st.turnOk = early ? st.canTurn : s.aglFt >= g.needFt;
+  }
   if (st.startFt === null && off > EO_TURN_FROM_DEG) st.startFt = s.aglFt;
   if (!st.turned && off > EO_TURNED_DEG) { st.turned = true; st.turnFromFt = st.startFt; }
   if (st.startFt !== null) {
@@ -130,21 +143,27 @@ export function stepEngineOut(st, s) {
   return false;
 }
 
-// The coach's prompt (null on the ground and below the flare height: coach.js has those).
+// The coach's prompt. On the takeoff roll (before any lift-off: main.js) how to take off; null
+// below the flare height after the failure (coach.js has the landing).
+export const EO_CLIMB_KTS = 74; // POH Vy
 export function engineOutTarget(st, s) {
-  if (s.onGround) return null;
-  if (!st.failed) return 'eoClimb';
-  if (s.t - st.t0 < DS_FAIL_S) return s.kid ? 'eoKidFail' : st.canTurn ? 'eoFailTurn' : 'eoFail';
+  if (s.onGround) return st.failed ? null : 'eoRoll';
+  if (!st.failed) {
+    if (s.kid) return 'eoKidClimb';
+    return s.iasKts < EO_CLIMB_KTS - 8 ? 'eoClimbSlow' : s.iasKts > EO_CLIMB_KTS + 10 ? 'eoClimbFast' : 'eoClimb';
+  }
+  const g = geometry(s), off = Math.abs(g.offDeg);
+  // Straight ahead: whether a turn from here still makes it, with the margin. In the turn:
+  // whether it could as it began (stepEngineOut's turnOk).
+  const can = s.aglFt >= g.needFt + EO_MARGIN_FT;
+  const turning = st.turnOk !== null;
+  if (s.t - st.t0 < DS_FAIL_S) return s.kid ? 'eoKidFail' : st.canTurn && (turning ? st.turnOk : can) ? 'eoFailTurn' : 'eoFail';
   if (s.aglFt < DS_FLARE_FT) return null;
   if (s.kid) return 'eoKid';
   if (s.iasKts < DS_SLOW_KTS) return 'eoSlow';
-  // Straight ahead: whether a turn from here still makes it. In the turn: whether it could
-  // from where the engine quit (from inside the turn, "a whole turn from here" is not the question).
-  const g = geometry(s), off = Math.abs(g.offDeg);
   if (off > 180 - EO_BACK_DEG) return 'eoLineUp';
-  if (st.canTurn && off > EO_TURN_FROM_DEG / 2) return 'eoTurning';
-  if (!st.canTurn && st.startFt !== null) return 'eoTooLow';
-  return s.aglFt >= g.needFt + EO_MARGIN_FT ? 'eoCanTurn' : 'eoAhead';
+  if (turning && off > EO_TURN_FROM_DEG / 2) return st.turnOk ? 'eoTurning' : 'eoTooLow';
+  return can ? 'eoCanTurn' : 'eoAhead';
 }
 
 // main.js's calls, with the input built from the sim here (reused; the chunk, not boot, pays).
@@ -157,7 +176,9 @@ function input(sim) {
   _in.stallAoaDeg = sim.spec.alphaStallDegByFlap?.[sim.flapsIndex] ?? sim.spec.alphaStallDeg;
   _in.headwindKts = -(sim.windVec.x * D16.x + sim.windVec.z * D16.z) / 0.514444; // the air's motion
   _in.kid = sim.assist === 'kid';
-  _in.bankMaxDeg = _in.kid ? 30 : EO_BANK_DEG; // assists.js: Kid's bank limit
+  // The bank full stick flies: assists.js bankMaxDeg (Kid 30°, Learner 45°) x its 0.85 command
+  // share; Pilot (no limit) the Handbook's 45°.
+  _in.bankMaxDeg = _in.kid ? 25.5 : sim.assist === 'learner' ? 38.25 : EO_BANK_DEG;
   _in.onGround = sim.onGround;
   return _in;
 }
@@ -189,19 +210,29 @@ export function turnbackBankDeg(x, z, trackDeg, bankDeg = EO_BANK_DEG, leadM = 4
 export function engineOutResult(landing, st, end, pos) {
   const miss = missM(end, pos);
   const made = miss <= 0;
-  const wrong = st.turned && st.turnFromFt < st.turnbackFt;
+  // Judged where the turn began (stepEngineOut turnOk / turnNeedFt), not only where it quit.
+  const wrong = st.turned && !st.turnOk;
+  const wrongTurn = st.turnOk === false && st.startFt !== null; // begun too low, round or not
+  const fromFt = Math.round(st.turnFromFt), needFt = Math.round(st.turnNeedFt);
+  const turnedDeg = Math.round(st.maxOffDeg);
   const decision = st.turned
-    ? { key: 'decision', label: 'Decision', value: `turned back from ${Math.round(st.turnFromFt)} ft (needs ${Math.round(st.turnbackFt)})`, score: wrong ? 0 : 100 }
-    : { key: 'decision', label: 'Decision', value: 'landed ahead', score: 100 };
+    ? { key: 'decision', label: 'Decision', value: `turned back from ${fromFt} ft (needs ${needFt})`, score: wrong ? 0 : 100 }
+    : { key: 'decision', label: 'Decision', value: turnedDeg > EO_TURN_FROM_DEG ? `landed ahead, turned ${turnedDeg}°` : 'landed ahead', score: 100 };
   const touchdown = made ? landing.factors : landing.factors.filter((f) => f.key === 'rate' || f.key === 'speed');
-  const factors = [decision,
-    { key: 'made', label: 'Runway', value: made ? 'made it' : `missed by ${missText(miss)}`, score: made ? 100 : 0 },
-    ...touchdown];
+  // Ahead, a field is the right place: not a miss.
+  const spot = made ? { key: 'made', label: 'Runway', value: 'made it', score: 100 }
+    : st.turned ? { key: 'made', label: 'Runway', value: `missed by ${missText(miss)}`, score: 0 }
+      : { key: 'made', label: 'Landing spot', value: `a field, ${missText(miss)} from the runway`, score: 100 };
+  const factors = [decision, spot, ...touchdown];
   const out = { ...landing, title: 'Engine failure after takeoff', factors, madeRunway: made, turnedBack: st.turned, costFt: Math.round(st.costFt) };
   const cost = `The turn cost you ${Math.round(st.costFt)} ft.`;
   if (landing.grade === 'CRASH') {
-    if (st.stalled) out.reason = st.startFt !== null ? `Stalled in the turn back. ${cost}` : `Stalled: lower the nose, ${DS_GLIDE_KTS} knots, even this close to the ground.`;
-    else if (wrong) out.reason = `${landing.reason ?? 'Crashed.'} Turned back from ${Math.round(st.turnFromFt)} ft: land ahead below ${Math.round(st.turnbackFt)} ft.`;
+    // The whole height went: "the turn cost you" says nothing. Say what it needed instead.
+    if (st.stalled) {
+      out.reason = st.startFt === null ? `Stalled: lower the nose, ${DS_GLIDE_KTS} knots, even this close to the ground.`
+        : wrongTurn ? `Stalled in the turn back from ${Math.round(st.startFt)} ft: it needed ${needFt}. Below that, land ahead.`
+          : `Stalled in the turn back: keep the nose down, ${DS_GLIDE_KTS} knots, all the way round.`;
+    } else if (wrong) out.reason = `${landing.reason ?? 'Crashed.'} Turned back from ${fromFt} ft: it needed ${needFt}. Below that, land ahead.`;
     return out;
   }
   const land = made ? landing.score
@@ -214,7 +245,7 @@ export function engineOutResult(landing, st, end, pos) {
     out.reason = st.startFt !== null ? `Stalled in the turn back: lower the nose. ${cost}` : `Stalled: lower the nose, ${DS_GLIDE_KTS} knots, even this close to the ground.`;
   } else if (wrong) {
     score = Math.min(score, WRONG_CAP);
-    out.reason = `Turned back from ${Math.round(st.turnFromFt)} ft, below the ${Math.round(st.turnbackFt)} ft it needs: land ahead. ${cost}`;
+    out.reason = `Turned back from ${fromFt} ft, below the ${needFt} ft it needs: land ahead. ${cost}`;
   } else if (!made) {
     score = Math.min(score, st.turned ? WRONG_CAP : FIELD_CAP);
     if (st.turned) out.reason = `Missed the runway by ${missText(miss)} (${missWay()}). ${cost}`;
