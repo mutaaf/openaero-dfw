@@ -3,24 +3,37 @@
 // lifts the weight at. The trim wheel moves that angle: keys, a touch rocker and the gamepad's
 // right stick all feed trimStep. Pure, unit-tested; flown headless by tests/flight/c172.test.js.
 import { liftCoefficient, stallAoaDeg } from './aero.js';
-import { DEG_TO_RAD, GRAVITY, RHO_SEA_LEVEL, MPS_TO_KTS } from './constants.js';
+import { trimAoaDeg } from './autopilot.js';
+import { DEG_TO_RAD, RAD_TO_DEG, GRAVITY, RHO_SEA_LEVEL, MPS_TO_KTS, KTS_TO_MPS } from './constants.js';
 
-// 1.5°/s of angle of attack: the Cessna retrims 90 → 70 KIAS (2.2° → 6.3°) in under 3 s of
-// rolling the wheel, and runs stop to stop in ~10 s.
-export const TRIM_RATE_DEG_S = 1.5;
-// Nose-down stop: the Cessna's hands-off speed there is ~155 KIAS (Vne 163).
-export const TRIM_MIN_DEG = -2;
-// Nose-up stop: 4° short of the stall, so a released stick still lowers the nose there (0090).
-export const trimMaxDeg = (spec, flapsIndex) => stallAoaDeg(spec, flapsIndex) - 4;
+// A game-feel rate, not a measured wheel: held, the trim moves the hands-off speed 9% a
+// second whatever the airframe (dα = 2·r·CL/CLα for dV/V = r), so the Cessna retrims
+// 90 → 70 KIAS in ~2.8 s and a 737 at 250 kt moves ~22 kt/s, not the 28+ a fixed α rate gave.
+export const TRIM_SPEED_RATE = 0.09;
+
+// The stops: nose down at the hands-off speed of Vne/Vmo (spec.vneKts) for the flaps set,
+// nose up 4° short of the stall, so a released stick still lowers the nose there (0090).
+export function trimLimits(spec, flapsIndex) {
+  return {
+    min: spec.vneKts ? trimAoaDeg(spec, spec.vneKts * KTS_TO_MPS, flapsIndex) : -2,
+    max: stallAoaDeg(spec, flapsIndex) - 4,
+  };
+}
+
+// `next` held inside the stops, except that a stop never pulls the trim the other way: flaps
+// move both stops, and a trim already past one only moves back towards it.
+export function clampTrim(next, alphaDeg, spec, flapsIndex) {
+  const { min, max } = trimLimits(spec, flapsIndex);
+  if (next > alphaDeg) return Math.min(next, Math.max(alphaDeg, max));
+  if (next < alphaDeg) return Math.max(next, Math.min(alphaDeg, min));
+  return alphaDeg;
+}
 
 // The trim after `dt` s of `dir` (+1 nose up, -1 nose down, or a fraction from an axis).
-// A stop never pulls the trim the other way: flaps lower the stall angle, and a trim past the
-// new stop only moves back towards it when trimmed that way.
 export function trimStep(alphaDeg, dir, dt, spec, flapsIndex) {
-  const next = alphaDeg + dir * TRIM_RATE_DEG_S * dt;
-  if (dir > 0) return Math.min(next, Math.max(alphaDeg, trimMaxDeg(spec, flapsIndex)));
-  if (dir < 0) return Math.max(next, Math.min(alphaDeg, TRIM_MIN_DEG));
-  return alphaDeg;
+  const cl = Math.max(0.1, liftCoefficient(spec, alphaDeg * DEG_TO_RAD, flapsIndex));
+  const rateDeg = (2 * TRIM_SPEED_RATE * cl / spec.clAlpha) * RAD_TO_DEG;
+  return clampTrim(alphaDeg + dir * rateDeg * dt, alphaDeg, spec, flapsIndex);
 }
 
 // The indicated airspeed (kt) a released stick flies at this trim: the 1 g speed at which the

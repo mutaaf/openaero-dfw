@@ -69,6 +69,7 @@ export const AIRCRAFT_DATABASE = {
     // σ^0.7 with altitude; idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s
     // from flight idle to 95%).
     engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.7, spoolTau: 1.2 },
+    vneKts: 340, // VMO (FAA TCDS A16WE, 737-800): the nose-down trim stop's hands-off speed (trim.js, 0094)
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
     vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
     // The model's Vr at flaps 10, 65 t, fitted to its own lift curve: the speed from which a
@@ -144,6 +145,7 @@ export const AIRCRAFT_DATABASE = {
     // 124 m/s: the 65→80 slope carried on to zero (a diving fixed-pitch prop unloads).
     // windmillCd: the idle prop's drag, from the POH's ~9:1 glide at 68 KIAS.
     engine: { type: 'piston-prop', thrustTableN: [[0, 2070], [20, 2100], [38, 2105], [50, 1960], [65, 1680], [80, 1250], [124, 0]], windmillCd: 0.0188, spoolTau: 0.3 },
+    vneKts: 163, // never exceed, KIAS (POH Section 2): the nose-down trim stop's hands-off speed (trim.js, 0094)
     vrefKts: 62,
     vrKts: 55,
     stallCleanKts: 48,

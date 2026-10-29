@@ -131,7 +131,7 @@
           <b>Right thumb</b>: the stick (drag up to raise the nose)<br>
           <b>Left thumb</b>: throttle (top = full power)<br>
           <b>Middle</b>: gear, flaps, brakes, and ILS AUTO lands it for you<br>
-          <b>Pilot</b>: hold NOSE DN / NOSE UP over the stick to trim; let go and it flies the amber TRIM speed<br>
+          <b>Pilot</b>: hold NOSE DN / NOSE UP over the throttle to trim; let go of the stick and it settles on the amber trim speed (T on the speed tape)<br>
           <b>Gamepad</b>: left stick flies, RT/LT throttle, A flaps, B gear, X brakes, right stick trims
         </div>
         <div class="hidden lg:grid grid-cols-2 gap-x-4 gap-y-1 pt-1 font-mono">
@@ -417,6 +417,15 @@
        style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
     <div class="flex items-end justify-between gap-2 px-3">
       <div class="pointer-events-auto flex flex-col items-center gap-1">
+        <!-- Pitch trim (0094): Pilot only (main.js shows it where the trim is the player's); hold to
+             roll the wheel. NOSE UP over NOSE DN, no wider than the throttle (the speed tape starts
+             just right of this column on a 568 px screen held sideways). -->
+        <div id="touchTrim" class="hidden">
+          <div id="touchTrimRow" class="flex flex-col-reverse gap-1.5 text-[11px] font-bold leading-tight" role="group" aria-label="Pitch trim">
+            <button id="touchTrimDn" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Trim nose down">NOSE<br>DN</button>
+            <button id="touchTrimUp" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Trim nose up">NOSE<br>UP</button>
+          </div>
+        </div>
         <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1.5">THR <b id="txtTouchThr" class="text-emerald-400">44%</b></span>
         <div id="touchThrottle" class="touch-control hud-glass relative w-16 h-44 rounded-2xl overflow-hidden" aria-label="Throttle" role="slider" aria-valuemin="0" aria-valuemax="100">
           <div id="touchThrottleFill" class="absolute inset-x-0 bottom-0 bg-emerald-500/30"></div>
@@ -430,26 +439,17 @@
         <!-- ILS AUTO in the air; on the ground, REV for airframes with thrust reversers (0074) -->
         <button id="touchIls" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px] text-amber-300"><span id="txtTouchIls">ILS AUTO</span></button>
       </div>
-      <div class="flex flex-col items-center gap-1.5">
-        <!-- Pitch trim (0094): Pilot only (the assists trim for you); hold to roll the wheel -->
-        <div id="touchTrim" class="hidden pointer-events-auto">
-          <div class="flex gap-1.5 text-[11px] font-bold" role="group" aria-label="Pitch trim">
-            <button id="touchTrimDn" class="touch-control hud-btn rounded-xl px-1 min-w-[66px] min-h-[44px]" aria-label="Trim nose down">NOSE DN</button>
-            <button id="touchTrimUp" class="touch-control hud-btn rounded-xl px-1 min-w-[66px] min-h-[44px]" aria-label="Trim nose up">NOSE UP</button>
-          </div>
-        </div>
       <div id="touchStick" class="touch-control hud-glass pointer-events-auto relative w-36 h-36 rounded-full flex items-center justify-center" aria-label="Flight stick">
         <div class="absolute inset-x-4 top-1/2 h-px bg-slate-600/60 pointer-events-none"></div>
         <div class="absolute inset-y-4 left-1/2 w-px bg-slate-600/60 pointer-events-none"></div>
         <div id="touchStickKnob" class="w-14 h-14 rounded-full bg-sky-400/90 border-2 border-white shadow-lg pointer-events-none"></div>
-      </div>
       </div>
     </div>
   </div>
 
   <!-- Clean view on a keyboard: the keys, one quiet line above the credits -->
   <div id="keyHints" class="hidden pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-5 z-20 gap-3 px-3 py-1.5 rounded-xl text-[11px] font-mono text-slate-200 key-hints">
-    <span><kbd>W</kbd><kbd>S</kbd> pitch</span><span><kbd>A</kbd><kbd>D</kbd> bank</span><span><kbd>Shift</kbd><kbd>Ctrl</kbd> power</span><span><kbd>[</kbd><kbd>]</kbd> trim</span>
+    <span><kbd>W</kbd><kbd>S</kbd> pitch</span><span><kbd>A</kbd><kbd>D</kbd> bank</span><span><kbd>Shift</kbd><kbd>Ctrl</kbd> power</span><span><kbd>[</kbd><kbd>]</kbd> trim (Pilot)</span>
     <span><kbd>G</kbd> gear</span><span><kbd>F</kbd> flaps</span><span><kbd>B</kbd> brakes</span><span><kbd>C</kbd> camera</span><span><kbd>H</kbd> panels</span>
   </div>
 

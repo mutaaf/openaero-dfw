@@ -19,14 +19,16 @@ export function shapeAxis(v, deadzone = DEADZONE, expo = EXPO) {
 const val = (b) => (b ? (typeof b.value === 'number' ? b.value : b.pressed ? 1 : 0) : 0);
 const down = (b) => !!(b && b.pressed);
 
-export function gamepadTargets(axes, buttons) {
+// `mapping`: the right stick's Y is axes[3] only on the 'standard' layout; elsewhere (a flight
+// stick's throttle slider, Firefox/Linux pads) it is something else, so it never trims.
+export function gamepadTargets(axes, buttons, mapping = 'standard') {
   const roll = shapeAxis(axes[0] || 0);
   const pitch = -shapeAxis(axes[1] || 0);
   const yaw = (down(buttons[5]) ? 1 : 0) - (down(buttons[4]) ? 1 : 0);
   const throttleRate = val(buttons[7]) - val(buttons[6]);
   const active = roll !== 0 || pitch !== 0 || yaw !== 0 || Math.abs(throttleRate) > 0.05;
   // Trim is not "flying the pad": a thumb on the trim leaves the keyboard's pitch in charge.
-  const trim = shapeAxis(axes[3] || 0);
+  const trim = mapping === 'standard' ? shapeAxis(axes[3] || 0) : 0;
   return { roll, pitch: pitch === 0 ? 0 : pitch, yaw, throttleRate: Math.abs(throttleRate) > 0.05 ? throttleRate : 0, active, trim: trim === 0 ? 0 : trim };
 }
 
@@ -48,7 +50,7 @@ export function pollGamepad() {
   const pads = navigator.getGamepads();
   for (const p of pads) {
     if (!p || !p.connected) continue;
-    const targets = gamepadTargets(p.axes, p.buttons);
+    const targets = gamepadTargets(p.axes, p.buttons, p.mapping);
     const edges = buttonEdges(prevPressed, p.buttons);
     prevPressed = Array.from(p.buttons, down);
     return { targets, edges, id: p.id };

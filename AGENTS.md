@@ -183,9 +183,10 @@ src/apTutor.js      autopilot "show and teach": what it is doing and why, per ph
                     state machine like coach.js); shown in the coach card, spoken, Your turn.
                     A lazy chunk fetched right after boot (0091); its on/off flag and blank
                     state are src/tutorPrefs.js, at boot
-src/trim.js         Pilot's pitch trim (0094): trimStep moves sim.trimAlphaDeg at 1.5°/s ([ ] /
-                    Numpad 7 1, the touch rocker over the stick, the gamepad's right stick), stops
-                    4° short of the stall and at -2°; trimSpeedKts is the HUD's amber TRIM speed
+src/trim.js         Pilot's pitch trim (0094): trimStep moves sim.trimAlphaDeg, 9%/s of hands-off
+                    speed ([ ] / Numpad 7 1, the touch rocker over the throttle, the gamepad's right
+                    stick), stops 4° short of the stall and at spec.vneKts; trimSpeedKts is the
+                    HUD's amber T speed. Not under autoTrim, the F-16's pitchFbw or JSBSim
 src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign
                     conventions (pinned by tests):** aileron + = roll right, elevator + =
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,

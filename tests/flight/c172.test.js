@@ -594,6 +594,10 @@ describe('Cessna 172S full back stick after the stall (both models, ticket 0094)
     }
     expect(Math.abs(fm.meanA - jsb.meanA)).toBeLessThan(3);
   }, 30000);
+  it.fails('KNOWN GAP (0109): flightModel.js settles at α ≤ 40° (a cited post-stall pitch break; measured 39.7-41.9°)', () => {
+    useFdm(null);
+    expect(fullBackAfterStall().maxA).toBeLessThanOrEqual(40);
+  });
 });
 
 // Hands off, trimmed (ticket 0090): bumped 10 kt fast and let go, a stable airplane trades the
