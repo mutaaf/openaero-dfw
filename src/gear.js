@@ -16,7 +16,7 @@
 // the CG sits spec.gearHeight above the ground (spawns and tests rely on it).
 // spec.inertia: { pitch, roll, yaw } kg·m² for the gear's moments.
 import { Vector3, Quaternion } from 'three';
-import { GRAVITY } from './constants.js';
+import { GRAVITY, MPS_TO_KTS } from './constants.js';
 import { brakeMu, ROLLING_MU } from './systems.js';
 
 const _r = new Vector3();
@@ -94,7 +94,7 @@ export function gearForces(body, spec, force, moment) {
 // groundspeed along it (m/s). Needs body.wheelLoads from gearForces this sub-step.
 export function gearFriction(body, spec, fwd, vAlong, force, moment) {
   const loads = body.wheelLoads;
-  const braked = brakeMu(spec, body.brakePress ?? 0);
+  const braked = brakeMu(spec, body.brakePress ?? 0, body.wetRunway, Math.abs(vAlong) * MPS_TO_KTS);
   if (Math.abs(vAlong) <= 0.3) {
     // Nearly stopped: static friction (no moment). The tyres hold whatever pushes along the
     // nose (the METAR wind on a parked airplane, idle thrust: 0106) up to their grip, the

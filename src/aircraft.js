@@ -50,12 +50,14 @@ export const AIRCRAFT_DATABASE = {
     // ~2 s sleeve travel are estimates for the CFM56-7 cascade reverser. Brakes on the
     // mains only (0082): μ 0.55 on their load keeps what 0.45 on every wheel gave, autobrake
     // MAX's 14 ft/s² with room to spare and full pedals a little harder (Boeing: maximum
-    // manual braking can exceed MAX).
+    // manual braking can exceed MAX). Wet runway (0108, 14 CFR 25.109(c)): main tyres at
+    // ~205 psi (H44.5x16.5-21, Boeing ACAP main-gear tyre pressure), fully modulating
+    // anti-skid (efficiency 0.80).
     systems: {
       hydraulics: { psi: 3000 },
       gear: { extendS: 10, retractS: 7 },
       flaps: { degPerS: 1.5, loadRelief: { fromIndex: 3, toIndex: 2, aboveKts: 162 } },
-      brakes: { tauS: 0.3, muMax: 0.55 },
+      brakes: { tauS: 0.3, muMax: 0.55, tirePsi: 205, antiSkid: 0.8 },
       autobrake: { decelFtS2: [0, 4, 5, 7.2, 14] },
       reverser: { deployS: 2, effectiveness: 0.35 },
     },
@@ -134,8 +136,14 @@ export const AIRCRAFT_DATABASE = {
     // Electric flaps, 0 → 30° in ~10 s (an estimate); toe brakes on the mains, no autobrake or
     // reverse. The small disc brakes are torque-limited below the tyres' grip: μ 0.39 at full
     // pedal is fitted to POH Fig. 5-11 (575 ft roll from a near-stall touchdown, 1335 ft from
-    // 50 ft; tests/flight/c172.test.js), not a measured brake torque (ticket 0082).
-    systems: { flaps: { degPerS: 3 }, brakes: { tauS: 0.3, muMax: 0.39 } },
+    // 50 ft; tests/flight/c172.test.js), not a measured brake torque (ticket 0082). Wet
+    // runway (0108): a Part 23 airplane, so 14 CFR 25.109(c) is borrowed, not required. Its
+    // 6.00-6 main tyres run 38 psi (POH Section 8), below the rule's table: its 50 psi row (an
+    // extrapolation on the conservative side). No anti-skid; 0.37 is an effective factor
+    // fitted to the UK CAA's light-aircraft planning factor (Safety Sense Leaflet 7: a wet
+    // paved runway adds 15% to the landing distance from 50 ft; tests/flight/wetRunway.test.js),
+    // between (c)(2)'s on-off 0.30 and quasi-modulating 0.50.
+    systems: { flaps: { degPerS: 3 }, brakes: { tauS: 0.3, muMax: 0.39, tirePsi: 38, antiSkid: 0.37 } },
     alphaStallDeg: 14.1,
     maxThrustN: 2100, // Lycoming IO-360-L2A, 180 hp, fixed-pitch prop (static)
     // Sea-level full-throttle thrust vs TAS (m/s). 0: 2070 N measured static thrust of a

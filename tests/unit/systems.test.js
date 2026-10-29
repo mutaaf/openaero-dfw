@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3 } from 'three';
-import { flapNotch, flapTargetDeg, stepSystems, gearLocked, gearInTransit, reversedThrust, brakeMu } from '../../src/systems.js';
+import { flapNotch, flapTargetDeg, stepSystems, gearLocked, gearInTransit, reversedThrust, brakeMu, wetRunwayMuMax } from '../../src/systems.js';
 import { flapDeltaCl, stallAoaDeg, dragCoefficient, GEAR_CD, GEAR_DOORS_CD, isGearWarning } from '../../src/aero.js';
 import { gradeLanding } from '../../src/landing.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
@@ -71,6 +71,31 @@ describe('systems (hydraulics, brakes, reversers)', () => {
   it('brake friction runs from rolling to the anti-skid limit', () => {
     expect(brakeMu(b738, 0)).toBeCloseTo(0.03);
     expect(brakeMu(b738, 1)).toBeCloseTo(0.55) // on the mains only (0082);
+  });
+  // 14 CFR 25.109(c)(1): the wet runway's maximum tyre-to-ground braking coefficient by
+  // groundspeed and tyre pressure (values computed from the regulation's cubics by hand),
+  // times (c)(2)'s anti-skid efficiency, never more than the dry brakes give (ticket 0108).
+  it('wet: the 14 CFR 25.109(c) braking coefficient by groundspeed and tyre pressure', () => {
+    expect(wetRunwayMuMax(50, 0)).toBeCloseTo(0.883, 3);
+    expect(wetRunwayMuMax(50, 60)).toBeCloseTo(0.475, 3);
+    expect(wetRunwayMuMax(200, 100)).toBeCloseTo(0.2529, 3);
+    expect(wetRunwayMuMax(300, 130)).toBeCloseTo(0.1761, 3);
+    expect(wetRunwayMuMax(205, 100)).toBeCloseTo(0.2516, 3); // linear between 200 and 300 psi
+    expect(wetRunwayMuMax(30, 60)).toBeCloseTo(0.475, 3); // below the table: its 50 psi row
+    expect(wetRunwayMuMax(200, -10)).toBeCloseTo(0.692, 3);
+  });
+  it('wet brakes: the 737 (205 psi, fully modulating anti-skid 0.80) loses most at speed', () => {
+    const at = (kts) => brakeMu(b738, 1, true, kts);
+    expect(at(130)).toBeCloseTo(0.03 + (0.8 * wetRunwayMuMax(205, 130) - 0.03), 3);
+    expect(at(130)).toBeLessThan(0.17);
+    expect(at(100)).toBeCloseTo(0.8 * 0.2516, 2);
+    expect(at(0)).toBeCloseTo(0.55, 3); // the dry limit caps it
+    expect(brakeMu(b738, 0, true, 100)).toBeCloseTo(0.03); // rolling resistance unchanged
+    expect(brakeMu(b738, 1, false, 130)).toBeCloseTo(0.55); // dry unchanged at any speed
+    // The wet runway caps the brakes; it doesn't scale the pedal: a light pedal below the grip
+    // brakes as on a dry runway.
+    expect(brakeMu(b738, 0.3, true, 100)).toBeCloseTo(brakeMu(b738, 0.3, false, 100), 6);
+    expect(brakeMu(b738, 0.6, true, 100)).toBeCloseTo(0.8 * 0.2516, 2);
   });
   it('GPWS "too low, gear" and a gear-up landing', () => {
     expect(isGearWarning(400, -700, false, false)).toBe(true);

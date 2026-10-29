@@ -31,6 +31,26 @@ describe('parseMetar', () => {
 });
 
 // Ticket 0106: the METAR's 10 m wind reaches the wing on the runway (log law, z0 = 0.03 m).
+// Ticket 0108: rain or drizzle falling at the field (the raw report's present-weather groups,
+// before RMK) wets the runway. Vicinity showers, a thunderstorm with no precipitation, and the
+// remarks' begin/end times (RAB15E30) do not.
+describe('wetRunway from the METAR', () => {
+  const raw = (wx) => parseMetar({ ...DFW, rawOb: `METAR KDFW 162053Z 18012KT 4SM ${wx} OVC015 18/16 A2992` }).wetRunway;
+  it('rain and drizzle at any intensity, alone or with a descriptor, wet the runway', () => {
+    for (const wx of ['RA', '-RA', '+RA', 'TSRA', '+TSRA', '-SHRA', 'DZ', '-DZ', 'FZRA', '-RASN', 'RA BR', 'BR -DZ']) expect(raw(wx), wx).toBe(true);
+  });
+  it('clear air, mist, vicinity showers, a dry thunderstorm, snow and the remarks do not', () => {
+    for (const wx of ['', 'BR', 'HZ', 'VCSH', 'VCTS', 'TS', '-SN', 'FG']) expect(raw(wx), wx).toBe(false);
+    expect(parseMetar({ ...DFW, rawOb: 'METAR KDFW 162053Z 18012KT 10SM FEW050 18/16 A2992 RMK AO2 RAB15E30 SLP132' }).wetRunway).toBe(false);
+    expect(parseMetar(DFW).wetRunway).toBe(false);
+    expect(parseMetar({ ...DFW, rawOb: 'METAR EGLL 291850Z 22012KT 9999 FEW030 12/08 Q1012 TEMPO 4000 RA' }).wetRunway).toBe(false);
+    expect(parseMetar({ ...DFW, rawOb: undefined }).wetRunway).toBe(false);
+  });
+  it('the offline scenario is dry (never invented)', () => {
+    expect(scenarioWeather().wetRunway).toBe(false);
+  });
+});
+
 describe('surfaceWindFactor', () => {
   it('is the reported wind at the 10 m anemometer and above', () => {
     expect(surfaceWindFactor(10)).toBeCloseTo(1, 9);
