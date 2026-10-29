@@ -26,7 +26,7 @@ describe('stickFromPoint', () => {
   });
 });
 
-import { combineTargets, throttleFromPoint } from '../../src/input.js';
+import { combineTargets, throttleFromPoint, tillerRudder } from '../../src/input.js';
 
 describe('combineTargets', () => {
   const kb = { pitch: 1, roll: -1, yaw: 0 };
@@ -45,16 +45,6 @@ describe('combineTargets', () => {
   it('keyboard yaw still works while the touch stick is held', () => {
     expect(combineTargets({ pitch: 0, roll: 0, yaw: -1 }, { x: 0.2, y: 0.1, active: true }, null).yaw).toBe(-1);
   });
-  it('on the ground the stick sideways steers the nose wheel (touch has no pedals, 0110); never in the air', () => {
-    const none = { pitch: 0, roll: 0, yaw: 0 };
-    expect(combineTargets(none, { x: 0.6, y: 0, active: true }, null, true).yaw).toBe(0.6);
-    expect(combineTargets(none, { x: -1, y: 0, active: true }, null, true).yaw).toBe(-1);
-    expect(combineTargets(none, { x: 0.6, y: 0, active: true }, null, false).yaw).toBe(0);
-    // a thumb pulling back for the rotation, a little off centre, does not steer
-    expect(combineTargets(none, { x: 0.08, y: -1, active: true }, null, true).yaw).toBe(0);
-    // the keys or a gamepad's rudder win over the tiller
-    expect(combineTargets({ pitch: 0, roll: 0, yaw: -1 }, { x: 0.6, y: 0, active: true }, null, true).yaw).toBe(-1);
-  });
 });
 
 describe('throttleFromPoint', () => {
@@ -67,5 +57,26 @@ describe('throttleFromPoint', () => {
   it('clamps outside the track', () => {
     expect(throttleFromPoint(0, rect)).toBe(1);
     expect(throttleFromPoint(999, rect)).toBe(0);
+  });
+});
+
+// Ticket 0110: Pilot's touch tiller on the runway.
+describe('tillerRudder', () => {
+  const wb = 1.651, steer = 10; // C172 (aircraft.js gear)
+  it('a thumb resting near the centre of the pad does not steer', () => {
+    expect(tillerRudder(0.2, 5, wb, steer)).toBe(0);
+    expect(tillerRudder(-0.25, 5, wb, steer)).toBe(-0);
+  });
+  it('full nose wheel at walking pace, either way', () => {
+    expect(tillerRudder(1, 1, wb, steer)).toBe(1);
+    expect(tillerRudder(-1, 1, wb, steer)).toBe(-1);
+  });
+  it('on the roll full stick turns no faster than 8°/s (v·tan δ / wheelbase)', () => {
+    for (const gs of [10, 25, 70]) {
+      const rud = tillerRudder(1, gs, wb, steer);
+      const rateDegS = gs * Math.tan(rud * steer * Math.PI / 180) / wb * 180 / Math.PI;
+      expect(rateDegS).toBeLessThanOrEqual(8.05);
+      expect(rateDegS).toBeGreaterThan(7);
+    }
   });
 });

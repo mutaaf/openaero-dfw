@@ -41,7 +41,7 @@ import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
   autoConfigure, kidTargetKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
 } from './assists.js';
-import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection } from './input.js';
+import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, tillerRudder } from './input.js';
 import { trimStep, trimSpeedKts, clampTrim } from './trim.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
@@ -1432,10 +1432,17 @@ function integrateSubStep(dt) {
   const spec = sim.spec;
 
   // Pilot Input Controls: touch/drag stick > gamepad > keyboard (input.js)
-  const targets = combineTargets(pilotTargets(keys), sim.stick, sim.pad, sim.onGround);
+  const targets = combineTargets(pilotTargets(keys), sim.stick, sim.pad);
   sim.inputSource = targets.source;
   let targetPitch = targets.pitch, targetRoll = targets.roll;
-  const targetYaw = targets.yaw;
+  let targetYaw = targets.yaw;
+  // Pilot on the runway with the touch/drag stick and no rudder keys: its sideways push is a
+  // nose-wheel tiller, not ailerons (0110; one axis can't do both: aileron into the wind steered
+  // the nose into it). Kid and Learner hold the centreline themselves.
+  if (sim.onGround && targets.source === 'stick' && !targetYaw && sim.assist === 'pilot' && !sim.apMaster && spec.gear) {
+    targetYaw = tillerRudder(targetRoll, Math.hypot(sim.vel.x, sim.vel.z), spec.gear.noseZ + spec.gear.mainZ, spec.gear.steerDeg ?? 7);
+    targetRoll = 0;
+  }
 
   if (sim.pad && sim.pad.throttleRate) {
     sim.throttle = THREE.MathUtils.clamp(sim.throttle + sim.pad.throttleRate * dt * 0.5, 0, 1);
@@ -2101,7 +2108,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.noFloor = sim.engineFailed;
   // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
   const end = sim.activeEnd, noseDeg = -_euler.y * RAD_TO_DEG;
-  const onRunway = sim.onGround && end && Math.abs(ap.crossM) < end.widthM && Math.abs(headingError(end.hdgT, noseDeg)) < 30;
+  const onRunway = sim.onGround && end && Math.abs(ap.crossM) < end.widthM / 2 + 3 && Math.abs(headingError(end.hdgT, noseDeg)) < 20;
   _assistIn.rwyHdgDeg = onRunway ? end.hdgT : null;
   if (onRunway) {
     const r = end.hdgT * DEG_TO_RAD; // right of the runway course (airports.js courseVector), no allocation
