@@ -9,10 +9,11 @@ created: 2026-10-28
 pr: 117
 ---
 
-> **Blocked by 0110** (2026-10-29): draft PR #117 implements this ticket and its cards pass, but
-> its validation panel showed that once the wind reaches the wheels, the airplane weathervanes
-> off the runway (Learner's ground rudder steers into the wind, and touch has no rudder). Land
-> 0110 first, then finish #117.
+> **Shipped in #117** (2026-10-29) on top of 0110 (#120): the log-law wind at the CG's height,
+> static tyre friction when nearly stopped, and a parked airplane on its brakes keeps its heading.
+> Cards: takeoff and landing roll in the game's wind (C172), parked in 25 kt (C172, 737, F-16;
+> JSBSim's C172 creeps ~1.4 m across on its own tyre model, bounded at 2 m). The wind is read at
+> the CG, not the C172's high wing (~2.7 m): 69% vs 77% of the METAR, the conservative side.
 
 ## Why
 0103's cards show both flight models shorten the roll in a headwind the way the FAA handbook

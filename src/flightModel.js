@@ -218,9 +218,10 @@ export function stepFlightModel(body, spec, dt) {
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
     const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
-    // Held still on its braked mains, the airplane keeps its heading: the wind can't weathervane
-    // it (0106). Rolling, the loaded nose tyre holds its steered rate up to its grip (0110).
-    if (steer !== null) body.angVel.y += held ? steer - body.angVel.y : noseWheelYawHold(body, spec, steer - body.angVel.y, dt);
+    // Held still on its braked mains, the airplane keeps its heading: locked tyres can't scrub
+    // round, so the wind can't weathervane it (0106). Otherwise the loaded nose tyre holds its
+    // steered rate up to its grip (0110).
+    if (steer !== null) body.angVel.y += held && (body.brakePress ?? 0) > 0.5 ? steer - body.angVel.y : noseWheelYawHold(body, spec, steer - body.angVel.y, dt);
   }
 
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {

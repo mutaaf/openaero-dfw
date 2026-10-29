@@ -291,6 +291,25 @@ describe('Cessna 172S takeoff in the METAR wind the game flies (ticket 0106)', (
     expect(head.rollFt / calm.rollFt).toBeGreaterThan(0.70);
     expect(tail.rollFt / calm.rollFt).toBeGreaterThan(1.08);
   });
+
+  // The landing roll the same way: the METAR wind is all there at 50 ft and ~70% on the runway.
+  it('a 10 kt METAR headwind shortens the landing roll by at least 15%; a 5 kt METAR tailwind lengthens it', () => {
+    const calm = shortFieldLanding(c172, { metarKts: 0 });
+    const head = shortFieldLanding(c172, { metarKts: 10 });
+    const tail = shortFieldLanding(c172, { metarKts: -5 });
+    console.log(`[c172 game wind] landing roll calm ${calm.rollFt.toFixed(0)} ft (${calm.tdKts.toFixed(1)} KIAS), 10 kt METAR headwind ${head.rollFt.toFixed(0)} ft `
+      + `(${((head.rollFt / calm.rollFt) * 100).toFixed(1)}%), 5 kt tailwind ${tail.rollFt.toFixed(0)} ft (${((tail.rollFt / calm.rollFt) * 100).toFixed(1)}%)`);
+    for (const r of [head, tail]) {
+      expect(r.stopped).toBe(true);
+      expect(r.bounceS).toBe(0);
+      // The wind thins through the flare, so it arrives a little slower in a headwind.
+      expect(Math.abs(r.tdKts - calm.tdKts)).toBeLessThan(2.5);
+    }
+    // ~7 kt at the wing on the runway, ~13% of the touchdown speed: the square law gives ~75%.
+    expect(head.rollFt / calm.rollFt).toBeLessThanOrEqual(0.85);
+    expect(head.rollFt / calm.rollFt).toBeGreaterThan(0.62);
+    expect(tail.rollFt / calm.rollFt).toBeGreaterThan(1.08);
+  });
 });
 
 // FAA Airplane Flying Handbook (FAA-H-8083-3C) ch. 5 / Pilot's Handbook (FAA-H-8083-25B)

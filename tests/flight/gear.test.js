@@ -4,12 +4,13 @@
 // level, the pedals steer the nose wheel, and the nose can't be lifted at taxi speed.
 // Ticket 0082: the tyres' friction acts at the axles, below the CG, so braking loads the nose
 // wheel; the brakes are on the mains only; the C172's mains sit at their POH weighing arm.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { Euler, Vector3 } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { gearConstants, gearForces, gearFriction } from '../../src/gear.js';
 import { DEG_TO_RAD, KTS_TO_MPS } from '../../src/constants.js';
-import { makeBody, fly, attitude } from './harness.js';
+import { makeBody, fly, attitude, useFdm } from './harness.js';
+import { nodeJsbsim } from './jsbsimNode.js';
 import { surfaceWindFactor } from '../../src/weather.js';
 
 const b738 = AIRCRAFT_DATABASE.b738, c172 = AIRCRAFT_DATABASE.c172, f16 = AIRCRAFT_DATABASE.f16;
@@ -195,4 +196,30 @@ describe('parked in a 25 kt METAR wind with the brakes set (ticket 0106)', () =>
       });
     }
   }
+});
+
+// The same with ?fdm=jsbsim (its own gear and tyres, public/jsbsim/ C172). It keeps its heading
+// and holds against a tailwind; across the tyres JSBSim's low-speed friction creeps ~5 cm/s
+// (1.4 m in 30 s of a 25 kt crosswind), printed and bounded here, not the 0.3 m above.
+describe('parked in a 25 kt METAR wind with the brakes set, JSBSim C172 (ticket 0106)', () => {
+  afterAll(() => useFdm(null));
+  it('holds its heading within 2°, a tailwind moves it less than 0.5 m and a crosswind less than 2 m', async () => {
+    useFdm(await nodeJsbsim());
+    for (const [what, wx, wz, maxM] of [['crosswind', -1, 0, 2], ['tailwind', 0, -1, 0.5]]) {
+      const b = parked(c172);
+      const x0 = b.pos.x, z0 = b.pos.z;
+      const e = new Euler().setFromQuaternion(b.quat, 'YXZ'), yaw0 = e.y;
+      fly(b, c172, 30, (x) => {
+        x.brakesOn = true;
+        x.throttle = 0;
+        const k = 25 * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY);
+        x.windVec.set(wx * k, 0, wz * k);
+      });
+      e.setFromQuaternion(b.quat, 'YXZ');
+      const moved = Math.hypot(b.pos.x - x0, b.pos.z - z0);
+      console.log(`[c172 jsbsim] parked in a 25 kt ${what}: moved ${moved.toFixed(2)} m, turned ${((e.y - yaw0) / DEG_TO_RAD).toFixed(1)}°`);
+      expect(moved).toBeLessThan(maxM);
+      expect(Math.abs(e.y - yaw0) / DEG_TO_RAD).toBeLessThan(2);
+    }
+  }, 30000);
 });
