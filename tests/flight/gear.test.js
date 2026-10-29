@@ -4,12 +4,14 @@
 // level, the pedals steer the nose wheel, and the nose can't be lifted at taxi speed.
 // Ticket 0082: the tyres' friction acts at the axles, below the CG, so braking loads the nose
 // wheel; the brakes are on the mains only; the C172's mains sit at their POH weighing arm.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { Euler, Vector3 } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { gearConstants, gearForces, gearFriction } from '../../src/gear.js';
 import { DEG_TO_RAD, KTS_TO_MPS } from '../../src/constants.js';
-import { makeBody, fly, attitude } from './harness.js';
+import { makeBody, fly, attitude, useFdm } from './harness.js';
+import { nodeJsbsim } from './jsbsimNode.js';
+import { surfaceWindFactor } from '../../src/weather.js';
 
 const b738 = AIRCRAFT_DATABASE.b738, c172 = AIRCRAFT_DATABASE.c172, f16 = AIRCRAFT_DATABASE.f16;
 const G = 9.80665;
@@ -167,4 +169,84 @@ describe('landing gear on struts', () => {
     expect(minPitch).toBeLessThan(-1); // the brakes do load the nose
     expect(minPitch).toBeGreaterThan(-5); // the floor is -6.9°
   });
+});
+
+// Ticket 0106: the METAR's wind now reaches the runway (the log law at the CG's height, not a
+// fade to zero on the wheels), so a parked airplane holds still on its tyres' friction (gear.js),
+// not on calm air. A 25 kt crosswind (and a 25 kt tailwind) for 30 s, brakes set, idle.
+describe('parked in a 25 kt METAR wind with the brakes set (ticket 0106)', () => {
+  for (const [name, spec] of [['C172', c172], ['737', b738], ['F-16', f16]]) {
+    for (const [what, wx, wz] of [['crosswind', -1, 0], ['tailwind', 0, -1]]) {
+      it(`${name}: a 25 kt ${what} moves it less than 0.3 m and turns it less than 2°`, () => {
+        const b = parked(spec);
+        const x0 = b.pos.x, z0 = b.pos.z;
+        const hdg0 = attitude(b);
+        const e = new Euler().setFromQuaternion(b.quat, 'YXZ'), yaw0 = e.y;
+        fly(b, spec, 30, (x) => {
+          x.brakesOn = true;
+          x.throttle = 0;
+          const k = 25 * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY);
+          x.windVec.set(wx * k, 0, wz * k);
+        });
+        e.setFromQuaternion(b.quat, 'YXZ');
+        expect(Math.hypot(b.pos.x - x0, b.pos.z - z0)).toBeLessThan(0.3);
+        expect(Math.abs(e.y - yaw0) / DEG_TO_RAD).toBeLessThan(2);
+        expect(Math.abs(attitude(b).bankRightDeg - hdg0.bankRightDeg)).toBeLessThan(2);
+        expect(b.wheelLoads.every((l) => l > 0)).toBe(true);
+      });
+    }
+  }
+});
+
+// Brakes off (every mission starts so): a stopped airplane's tyres still hold it in a crosswind.
+// Turning it about its CG scrubs every tyre sideways (gear.js wheelScrubYawHold); before, only the
+// nose wheel's steering hold resisted and a 737 pivoted 70° in 5 s in 25 kt. Gusting 25G35 too.
+// Across the wind only: at idle with the brakes off the C172's prop creeps it ahead (~1 cm/s).
+// Past ~35 kt gusts the 737 turns (11° in 60 s of 25G40): the model's yaw moments scale with
+// airspeed/120, not q, so they are too strong at a standstill (0110).
+describe('stopped with the brakes off in a 25 kt METAR crosswind (ticket 0106)', () => {
+  for (const [name, spec] of [['C172', c172], ['737', b738]]) {
+    it(`${name}: turns less than 2° and slides less than 0.3 m across in 60 s, steady or gusting to 35 kt`, () => {
+      for (const gust of [false, true]) {
+        const b = parked(spec);
+        const x0 = b.pos.x;
+        const e = new Euler().setFromQuaternion(b.quat, 'YXZ'), yaw0 = e.y;
+        fly(b, spec, 60, (x) => {
+          x.brakesOn = false;
+          x.throttle = 0;
+          const kts = gust ? 30 + 5 * Math.sin(x.t * 1.3) : 25;
+          x.windVec.set(-kts * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY), 0, 0);
+        });
+        e.setFromQuaternion(b.quat, 'YXZ');
+        expect(Math.abs(e.y - yaw0) / DEG_TO_RAD).toBeLessThan(2);
+        expect(Math.abs(b.pos.x - x0)).toBeLessThan(0.3);
+      }
+    });
+  }
+});
+
+// The same with ?fdm=jsbsim (its own gear and tyres, public/jsbsim/ C172). It keeps its heading
+// and holds against a tailwind; across the tyres JSBSim's low-speed friction creeps ~5 cm/s
+// (1.4 m in 30 s of a 25 kt crosswind), printed and bounded here, not the 0.3 m above.
+describe('parked in a 25 kt METAR wind with the brakes set, JSBSim C172 (ticket 0106)', () => {
+  afterAll(() => useFdm(null));
+  it('holds its heading within 2°, a tailwind moves it less than 0.5 m and a crosswind less than 2 m', async () => {
+    useFdm(await nodeJsbsim());
+    for (const [what, wx, wz, maxM] of [['crosswind', -1, 0, 2], ['tailwind', 0, -1, 0.5]]) {
+      const b = parked(c172);
+      const x0 = b.pos.x, z0 = b.pos.z;
+      const e = new Euler().setFromQuaternion(b.quat, 'YXZ'), yaw0 = e.y;
+      fly(b, c172, 30, (x) => {
+        x.brakesOn = true;
+        x.throttle = 0;
+        const k = 25 * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY);
+        x.windVec.set(wx * k, 0, wz * k);
+      });
+      e.setFromQuaternion(b.quat, 'YXZ');
+      const moved = Math.hypot(b.pos.x - x0, b.pos.z - z0);
+      console.log(`[c172 jsbsim] parked in a 25 kt ${what}: moved ${moved.toFixed(2)} m, turned ${((e.y - yaw0) / DEG_TO_RAD).toFixed(1)}°`);
+      expect(moved).toBeLessThan(maxM);
+      expect(Math.abs(e.y - yaw0) / DEG_TO_RAD).toBeLessThan(2);
+    }
+  }, 30000);
 });

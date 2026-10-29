@@ -8,7 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import { Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { assistConfig, createAssistState, shapeControls, slewRudder } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder, groundSteerRudder } from '../../src/assists.js';
+import { touchGroundRudder, tillerShare } from '../../src/input.js';
 import { aileronForBank } from '../../src/autopilot.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { surfaceWindFactor } from '../../src/weather.js';
@@ -121,6 +122,41 @@ function pedalsNeutralRoll(spec, metarKts) {
   }, (x) => x.iasKts >= spec.vrKts);
   return { maxHdgDeg, offM: b.pos.x, iasKts: b.iasKts };
 }
+
+// Pilot on a phone (0106): no pedals, the stick's sideways push is the tiller to 40 kt and the
+// centreline hold steers from there to Vr (main.js through input.js touchGroundRudder), the
+// ailerons get the rest of the stick. Thumb off the stick sideways, full power, rotate at Vr.
+function touchPilotTakeoff(spec, metarKts) {
+  const b = makeBody(spec, { throttle: 1, flaps: flaps(spec) });
+  let maxOffM = 0, liftoff = false;
+  fly(b, spec, 120, (x, dt) => {
+    gameCrosswind(x, metarKts);
+    if (!x.onGround) liftoff = true;
+    const gs = Math.hypot(x.vel.x, x.vel.z), g = spec.gear;
+    const steer = gs * Math.tan(g.steerDeg * DEG_TO_RAD) / (g.noseZ + g.mainZ) * RAD_TO_DEG;
+    const hold = groundSteerRudder(0, noseRightDeg(x), x.pos.x, x.vel.x, steer);
+    const yaw = x.onGround ? touchGroundRudder(0, gs, g.noseZ + g.mainZ, g.steerDeg, hold) : 0;
+    const k = Math.min(1, dt * 10);
+    x.rudderInput += (yaw - x.rudderInput) * k;
+    x.aileronInput += ((x.onGround ? 1 - tillerShare(gs) : 1) * aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z) / 0.6 - x.aileronInput) * k;
+    x.elevInput = !liftoff && x.iasKts >= spec.vrKts ? -1 : 0;
+    if (!liftoff) maxOffM = Math.max(maxOffM, Math.abs(x.pos.x));
+  }, (x) => (x.pos.y - x.groundY - spec.gearHeight) * M_TO_FT > 50 || Math.abs(x.pos.x) > 60);
+  return { maxOffM, liftoff };
+}
+
+describe('Pilot on a phone keeps the runway in a METAR crosswind (ticket 0106)', () => {
+  for (const [name, spec] of [['C172', c172], ['737', b738]]) {
+    for (const kts of [10, 15]) {
+      it(`${name}: a ${kts} kt crosswind takeoff roll stays within half a 150 ft runway's half-width, no pedals`, () => {
+        const r = touchPilotTakeoff(spec, kts);
+        console.log(`[0106 ${name} touch pilot] ${kts} kt crosswind takeoff: ${r.maxOffM.toFixed(1)} m off the centreline`);
+        expect(r.liftoff).toBe(true);
+        expect(r.maxOffM).toBeLessThan(11.4);
+      });
+    }
+  }
+});
 
 describe('on the runway in a crosswind (ticket 0110)', () => {
   for (const [name, spec] of [['C172', c172], ['737', b738]]) {

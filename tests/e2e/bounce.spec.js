@@ -14,16 +14,24 @@ test('a bounce after the touchdown is coached, then caps the grade on the result
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   await page.click('#btnApApr');
   const snap = () => page.evaluate(() => window.openaeroDebug());
-  await expect.poll(async () => (await snap()).lastLanding, { timeout: 120_000, intervals: [50] }).not.toBeNull();
-  // Hands on (the coach is quiet under the autopilot), then up: the wheels leave the runway
-  // for well over 0.3 s.
-  await page.evaluate(() => {
-    for (const id of ['btnApApr', 'btnApMaster']) {
-      const b = document.getElementById(id);
-      if (b.classList.contains('active')) b.click();
-    }
-    window.openaeroDebugHop(3);
-  });
+  // 0.4 s after the touchdown, hands on (the coach is quiet under the autopilot), then up: the
+  // wheels leave the runway for well over 0.3 s. Timed in the page: the card comes up 1 s after
+  // the wheels settle and pauses the rollout (0106), and a hop sent from the test under CI's load
+  // could arrive after it (at the touchdown itself it is a big bounce).
+  await page.evaluate(() => new Promise((done) => {
+    let t0 = null;
+    const hop = () => {
+      if (window.openaeroDebug().lastLanding) t0 ??= performance.now();
+      if (t0 === null || performance.now() - t0 < 400) { requestAnimationFrame(hop); return; }
+      for (const id of ['btnApApr', 'btnApMaster']) {
+        const b = document.getElementById(id);
+        if (b.classList.contains('active')) b.click();
+      }
+      window.openaeroDebugHop(3);
+      done();
+    };
+    hop();
+  }));
   await expect.poll(async () => (await snap()).onGround, { timeout: 5_000, intervals: [50] }).toBe(false);
   await expect(page.locator('#txtCoach')).toHaveText(/Bounced: hold the attitude/, { timeout: 5_000 }); // a slight bounce
   await expect(page.locator('#resultsCard')).toBeHidden(); // not over the bounce

@@ -21,7 +21,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, tailVsMainsAccel } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, wheelScrubYawHold, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -118,7 +118,7 @@ export function stepFlightModel(body, spec, dt) {
   const gh = struts
     ? body.groundY + spec.gearHeight + spec.gear.strokeM - gearConstants(spec).maxStroke
     : body.groundY + spec.gearHeight * (locked ? 1 : 0.35);
-  let normalForce = 0;
+  let normalForce = 0, held = false;
   if (struts) {
     // A wheel can reach the ground only when the CG is lower than the longest leg below it.
     if (body.pos.y <= body.groundY + spec.gearHeight + spec.gear.noseZ + 1) normalForce = gearForces(body, spec, totalForceWorld, _gearM);
@@ -157,8 +157,19 @@ export function stepFlightModel(body, spec, dt) {
       totalForceWorld.z += fwd.z * roll;
     }
     const sideMax = 0.8 * normalForce;
-    totalForceWorld.x += MathUtils.clamp(-vSideX * spec.massKg * 4, -sideMax, sideMax);
-    totalForceWorld.z += MathUtils.clamp(-vSideZ * spec.massKg * 4, -sideMax, sideMax);
+    let sideX = -vSideX * spec.massKg * 4, sideZ = -vSideZ * spec.massKg * 4;
+    // Nearly stopped on its wheels and not breaking away (what is left along the nose after the
+    // tyres' static grip is no more than their damping: power for the takeoff roll breaks it), the
+    // tyres also hold a steady push across them (a crosswind on a parked airplane, ticket 0106)
+    // instead of letting it creep sideways, and its heading (wheelScrubYawHold below).
+    const push = totalForceWorld.x * fwd.x + totalForceWorld.z * fwd.z;
+    held = struts && Math.abs(vAlong) <= 0.3 && Math.hypot(vSideX, vSideZ) <= 0.3 && Math.abs(push) <= spec.massKg * 0.6;
+    if (held) {
+      sideX -= totalForceWorld.x - fwd.x * push;
+      sideZ -= totalForceWorld.z - fwd.z * push;
+    }
+    totalForceWorld.x += MathUtils.clamp(sideX, -sideMax, sideMax);
+    totalForceWorld.z += MathUtils.clamp(sideZ, -sideMax, sideMax);
     body.vAlongMps = vAlong;
   } else {
     body.onGround = false;
@@ -209,7 +220,9 @@ export function stepFlightModel(body, spec, dt) {
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
     const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
-    if (steer !== null) body.angVel.y += noseWheelYawHold(body, spec, steer - body.angVel.y, dt);
+    // Nearly stopped, turning it scrubs every tyre: the wind can't weathervane a parked airplane
+    // past the tyres' grip (0106). Rolling, the loaded nose tyre holds its steered rate (0110).
+    if (steer !== null) body.angVel.y += (held ? wheelScrubYawHold : noseWheelYawHold)(body, spec, steer - body.angVel.y, dt);
   }
 
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {

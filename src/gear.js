@@ -94,16 +94,21 @@ export function gearForces(body, spec, force, moment) {
 // groundspeed along it (m/s). Needs body.wheelLoads from gearForces this sub-step.
 export function gearFriction(body, spec, fwd, vAlong, force, moment) {
   const loads = body.wheelLoads;
+  const braked = brakeMu(spec, body.brakePress ?? 0);
   if (Math.abs(vAlong) <= 0.3) {
-    // Nearly stopped: hold it (a damper, no moment), as flightModel.js does without struts.
-    const f = -vAlong * spec.massKg * 2;
+    // Nearly stopped: static friction (no moment). The tyres hold whatever pushes along the
+    // nose (the METAR wind on a parked airplane, idle thrust: 0106) up to their grip, the
+    // brakes' on the mains and rolling resistance on the nose, and damp the speed left. A
+    // damper alone let any steady push creep it (a 737 at idle on its brakes, ~7 cm/s).
+    const grip = ROLLING_MU * Math.max(0, loads[0]) + braked * (Math.max(0, loads[1]) + Math.max(0, loads[2]));
+    const push = force.x * fwd.x + force.z * fwd.z;
+    const f = Math.max(-grip, Math.min(grip, -push - vAlong * spec.massKg * 2));
     force.x += fwd.x * f;
     force.z += fwd.z * f;
     return;
   }
   const c = gearConstants(spec);
   _qi.copy(body.quat).invert();
-  const braked = brakeMu(spec, body.brakePress ?? 0);
   const s = -Math.sign(vAlong);
   for (let i = 0; i < 3; i++) {
     if (!(loads[i] > 0)) continue;
@@ -140,6 +145,18 @@ export function noseWheelYawHold(body, spec, errRate, dt) {
   const cap = (NOSE_SIDE_MU * load * c.wheelbase / spec.inertia.yaw) * dt;
   const d = errRate * Math.min(1, dt * NOSE_HOLD_PER_S * Math.min(1, share));
   return Math.max(-cap, Math.min(cap, d));
+}
+
+// Nearly stopped (0106), brakes set or not: turning the airframe about its CG scrubs every tyre
+// sideways, so the yaw is static friction. The yaw-rate change (rad/s) towards `errRate` this
+// sub-step, up to what the tyres' side grip (SCRUB_MU · load at each wheel's arm) can do through
+// spec.inertia.yaw: a parked airplane holds its heading against the wind, never more than that.
+export const SCRUB_MU = 0.8;
+export function wheelScrubYawHold(body, spec, errRate, dt) {
+  const g = spec.gear, l = body.wheelLoads;
+  const arm = Math.max(0, l[0]) * g.noseZ + (Math.max(0, l[1]) + Math.max(0, l[2])) * g.mainZ;
+  const cap = (SCRUB_MU * arm / spec.inertia.yaw) * dt;
+  return Math.max(-cap, Math.min(cap, errRate));
 }
 
 // The tail against the mains (rad/s², body x: + = nose up). The flight model's elevator is a
