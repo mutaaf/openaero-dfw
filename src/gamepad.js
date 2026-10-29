@@ -2,7 +2,7 @@
 // thin browser wrapper called once per frame from main.js.
 //
 // Mapping: left stick = roll/pitch (stick back = nose up), LB/RB = rudder,
-// RT/LT = throttle up/down, A = flaps, B = gear, X = brakes, Y = camera,
+// RT/LT = throttle up/down, right stick forward/back = pitch trim nose down/up (0094), A = flaps, B = gear, X = brakes, Y = camera,
 // Start = pause, D-pad up = ILS autoland.
 
 export const DEADZONE = 0.12;
@@ -25,7 +25,9 @@ export function gamepadTargets(axes, buttons) {
   const yaw = (down(buttons[5]) ? 1 : 0) - (down(buttons[4]) ? 1 : 0);
   const throttleRate = val(buttons[7]) - val(buttons[6]);
   const active = roll !== 0 || pitch !== 0 || yaw !== 0 || Math.abs(throttleRate) > 0.05;
-  return { roll, pitch: pitch === 0 ? 0 : pitch, yaw, throttleRate: Math.abs(throttleRate) > 0.05 ? throttleRate : 0, active };
+  // Trim is not "flying the pad": a thumb on the trim leaves the keyboard's pitch in charge.
+  const trim = shapeAxis(axes[3] || 0);
+  return { roll, pitch: pitch === 0 ? 0 : pitch, yaw, throttleRate: Math.abs(throttleRate) > 0.05 ? throttleRate : 0, active, trim: trim === 0 ? 0 : trim };
 }
 
 // Indices of buttons that went from released to pressed since `prev` (array of booleans).

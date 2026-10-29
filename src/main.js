@@ -41,7 +41,8 @@ import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
   autoConfigure, kidTargetKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
 } from './assists.js';
-import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint } from './input.js';
+import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection } from './input.js';
+import { trimStep, trimSpeedKts } from './trim.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
@@ -144,6 +145,7 @@ const sim = {
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
   stick: { x: 0, y: 0, active: false },
+  touchTrim: 0, // the touch trim rocker held: +1 nose up, -1 nose down (0094)
   mouseStick: { x: 0, y: 0 }, // direct mouse yoke position (M), read by the assists
 
   // Assist level (assists.js, ticket 0042): 'kid' | 'learner' | 'pilot' (raw)
@@ -1457,9 +1459,13 @@ function integrateSubStep(dt) {
   // The assists and a pitch-holding autopilot trim as they fly; Pilot's trim stays where the
   // spawn (or the autopilot it took over from) set it, so a released stick flies that trim (0090).
   sim.autoTrim = sim.assist !== 'pilot' || (sim.apMaster && (sim.apApproach || sim.apAltHold));
-  // No trim control yet: a stick held off centre trims its pressure away over ~8 s, as a pilot
-  // would, but never closer than 4° to the stall, so letting go there still lowers the nose.
-  if (!sim.autoTrim && sim.trimAlphaDeg != null && Math.abs(sim.elevInput) > 0.05) {
+  // Pilot's trim (0094): [ ] or Numpad 7/1, the touch rocker, the gamepad's right stick.
+  const trimDir = THREE.MathUtils.clamp(trimDirection(keys) + sim.touchTrim + (sim.pad?.trim ?? 0), -1, 1);
+  if (!sim.autoTrim && sim.trimAlphaDeg != null && trimDir) {
+    sim.trimAlphaDeg = trimStep(sim.trimAlphaDeg, trimDir, dt, sim.spec, sim.flapsIndex);
+  } else if (!sim.autoTrim && sim.trimAlphaDeg != null && Math.abs(sim.elevInput) > 0.05) {
+    // Untrimmed, a stick held off centre trims its pressure away over ~8 s, as a pilot would,
+    // but never closer than 4° to the stall, so letting go there still lowers the nose.
     sim.trimAlphaDeg = Math.min(stallAoaDeg(sim.spec, sim.flapsIndex) - 4, sim.trimAlphaDeg + (sim.aoaDeg - sim.trimAlphaDeg) * dt / 8);
   }
   if (assist) {
@@ -1783,6 +1789,7 @@ function renderHud() {
   drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20);
   drawTape(cx + 130, cy, 1, sim.mslFt, 0.2, 100, 500);
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
+  if (!sim.autoTrim && sim.trimAlphaDeg != null) drawTrimBug(cx - 131, cy);
   if (sim.activeEnd && !sim.onGround && sim.aglFt < 60) drawFlareCue(cx, cy);
 
   // Heading
@@ -1851,6 +1858,27 @@ function drawSpeedBug(x, y) {
   hudCtx.font = 'bold 11px monospace';
   hudCtx.textAlign = 'right';
   hudCtx.fillText(`SPD ${Math.round(target)}`, x, y + 106);
+  hudCtx.textAlign = 'left';
+}
+
+// Trim (0094, Pilot): an amber bug on the speed tape at the speed a released stick flies, and
+// its number under the target speed's; it parks at the tape's end when off scale.
+let trimText = '', trimTextKts = NaN;
+function drawTrimBug(x, y) {
+  const kts = trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex);
+  const r = kts === null ? 999 : Math.round(kts);
+  if (r !== trimTextKts) { trimTextKts = r; trimText = kts === null ? 'TRIM ▼' : `TRIM ${r}`; }
+  const by = y - THREE.MathUtils.clamp(((kts ?? 999) - sim.iasKts) * 2, -88, 88);
+  hudCtx.strokeStyle = '#fbbf24';
+  hudCtx.lineWidth = 2;
+  hudCtx.beginPath();
+  hudCtx.moveTo(x + 11, by); hudCtx.lineTo(x + 19, by - 5); hudCtx.lineTo(x + 19, by + 5); hudCtx.closePath();
+  hudCtx.stroke();
+  hudCtx.lineWidth = 1.5;
+  hudCtx.fillStyle = '#fcd34d';
+  hudCtx.font = 'bold 11px monospace';
+  hudCtx.textAlign = 'right';
+  hudCtx.fillText(trimText, x, y + 120);
   hudCtx.textAlign = 'left';
 }
 
@@ -2785,6 +2813,16 @@ bindStick(byId('touchStick'));
   el.addEventListener('pointercancel', (e) => { if (e.pointerId === pointerId) pointerId = null; });
 })();
 
+// Touch trim rocker (0094, Pilot): trims while a thumb holds a button, like the wheel.
+for (const [id, dir] of [['touchTrimDn', -1], ['touchTrimUp', 1]]) {
+  const el = byId(id);
+  let pointerId = null;
+  el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); sim.touchTrim = dir; e.preventDefault(); });
+  const release = (e) => { if (e.pointerId === pointerId) { pointerId = null; sim.touchTrim = 0; } };
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+}
+
 // Phone system buttons reuse the desktop handlers.
 byId('touchGear').addEventListener('click', () => byId('btnGear').click());
 byId('touchFlaps').addEventListener('click', () => byId('btnFlaps').click());
@@ -2804,7 +2842,7 @@ function showToast(msg) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
 }
 const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
-window.addEventListener('gamepadconnected', (e) => showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear`));
+window.addEventListener('gamepadconnected', (e) => showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trim`));
 window.addEventListener('gamepaddisconnected', () => { sim.pad = null; showToast('🎮 Controller disconnected'); });
 
 // Per-frame gamepad poll: continuous axes into sim.pad, edge-triggered buttons into actions.
@@ -2987,6 +3025,8 @@ window.openaeroDebug = () => {
   return {
     mission: sim.missionKey,
     assist: sim.assist,
+    trimAlphaDeg: sim.trimAlphaDeg,
+    trimKts: sim.trimAlphaDeg == null ? null : trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex),
     inputSource: sim.inputSource,
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
@@ -3127,6 +3167,8 @@ function setAssist(level, remember = true) {
     btn.setAttribute('aria-pressed', String(on));
   }
   document.body.classList.toggle('assist-kid', level === 'kid');
+  byId('touchTrim').classList.toggle('hidden', level !== 'pilot'); // the assists trim for you
+  sim.touchTrim = 0;
   resetAssistState(assistState);
   if (remember) { try { saveAssist(window.localStorage, level); } catch { /* storage unavailable */ } }
   refreshMissionBests();

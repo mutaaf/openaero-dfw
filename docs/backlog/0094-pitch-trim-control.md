@@ -1,13 +1,30 @@
 ---
 id: 0094
 title: A pitch trim control in Pilot (keys, a touch button, gamepad), and the over-pull falling leaf
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-26
 pr:
 ---
+
+## Outcome (Builder, 2026-10-29)
+Trim shipped for Pilot: `[` / `]` (and Numpad 7 / 1), a NOSE DN / NOSE UP rocker over the
+touch stick (Pilot only; hold it like the wheel), the gamepad's right stick (forward = nose
+down). It moves `sim.trimAlphaDeg` at 1.5°/s (`src/trim.js`, 90 → 70 KIAS in 2.8 s), stopping
+4° short of the stall and at -2° (~155 KIAS). An amber bug on the speed tape and "TRIM nn"
+under it show the speed a released stick flies. Flight cards: trimmed 90 → 70 and 70 → 90,
+hands off for 3 min, within 0.5 kt. The hold-to-trim stand-in stays for players who never
+touch the trim (it only runs while no trim input is held).
+
+Falling leaf: since 0102's stiffer pitch it no longer cycles. With the stick held full back
+both models settle at α ~40-42° (flightModel 40.6°, JSBSim 41.6°, within 2.5° of each other
+over 10 s), so criterion 2 (≤ 40°) is **not met**. JSBSim here flies our own C172 on the same
+Roskam linear Cmα/Cmδe (full stick = 36.7° of α past the trim), so it is not an independent
+check of the depth. A shallower settle needs a cited post-stall pitching moment, not a guess:
+ticket 0109. The card that shipped pins no falling leaf (α swing < 5°, < 45°) and the two
+models agreeing within 3°.
 
 ## Why
 Found shipping 0090 (first-timer panel). Pilot is now stable in pitch about a trim angle of

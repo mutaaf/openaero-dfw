@@ -12,6 +12,12 @@ export function pilotTargets(k) {
   return { pitch, roll, yaw };
 }
 
+// Pitch trim keys (ticket 0094): + = nose up. [ and ] sit in W/S order (nose down, nose up);
+// Numpad 7 / 1 are the common desktop-sim keys.
+export function trimDirection(k) {
+  return (k.BracketRight || k.Numpad1 ? 1 : 0) - (k.BracketLeft || k.Numpad7 ? 1 : 0);
+}
+
 // Normalised stick position (-1..1 on each axis) from a point inside a rect.
 export function stickFromPoint(clientX, clientY, rect) {
   const c = (v) => Math.max(-1, Math.min(1, v));

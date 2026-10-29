@@ -47,3 +47,55 @@ test('phone, Pilot, touch: push the stick, lift the thumb, and the nose comes ba
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: stick.y + stick.height * 0.85, id: 1 }] });
   }, () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }));
 });
+
+// Pitch trim (0094): Pilot's touch rocker over the stick trims while held, in reach of the
+// thumb (nothing over it) and clear of the stick; Kid has no rocker (its assists trim).
+test('phone, Pilot, touch: holding NOSE UP trims the hands-off speed down, NOSE DN back up', async ({ page }) => {
+  const errors = collectErrors(page);
+  await stubTiles(page);
+  await page.goto(`${BASE}?mission=c172_stall_recovery`);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  await page.locator('#btnStartFlight').click();
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
+  const snap = () => page.evaluate(() => window.openaeroDebug());
+  const s0 = await snap();
+  expect(s0.trimKts).toBeGreaterThan(80);
+  const cdp = await page.context().newCDPSession(page);
+  for (const id of ['#touchTrimUp', '#touchTrimDn']) {
+    const b = await page.locator(id).boundingBox();
+    expect(b.width).toBeGreaterThanOrEqual(44);
+    expect(b.height).toBeGreaterThanOrEqual(44);
+    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [b.x + b.width / 2, b.y + b.height / 2]);
+    expect(hit).toBe(id.slice(1));
+  }
+  const stick = await page.locator('#touchStick').boundingBox();
+  const up = await page.locator('#touchTrimUp').boundingBox();
+  expect(up.y + up.height).toBeLessThanOrEqual(stick.y);
+  const hold = async (id) => {
+    const b = await page.locator(id).boundingBox();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 2 }] });
+  };
+  const lift = () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await hold('#touchTrimUp');
+  await expect.poll(async () => (await snap()).trimKts, { timeout: 10_000 }).toBeLessThan(s0.trimKts - 8);
+  await lift();
+  const s1 = await snap();
+  await hold('#touchTrimDn');
+  await expect.poll(async () => (await snap()).trimKts, { timeout: 10_000 }).toBeGreaterThan(s1.trimKts + 8);
+  await lift();
+  const s2 = await snap();
+  await page.waitForTimeout(500);
+  expect((await snap()).trimAlphaDeg).toBeCloseTo(s2.trimAlphaDeg, 1);
+  expect(errors).toEqual([]);
+});
+
+test('phone, Kid: no trim rocker (the assists trim)', async ({ page }) => {
+  await stubTiles(page);
+  await page.goto(BASE);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  await page.locator('#assistPicker .btnAssist[data-assist="kid"]').click();
+  await page.locator('#btnStartFlight').click();
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
+  await expect(page.locator('#touchStick')).toBeVisible();
+  await expect(page.locator('#touchTrim')).toBeHidden();
+});
