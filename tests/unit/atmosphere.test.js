@@ -74,8 +74,10 @@ describe('density altitude', () => {
   it('agrees with the density the physics flies: ISA at the DA has airAt()\'s density', () => {
     // The rule of thumb is the pilot's number; the airplane feels airAt(). Over Texas
     // weather they agree within 300 ft: the 118.8 ft/°C rule reads high (pessimistic) on a hot
-    // day, +173 ft at 38 °C and +260 ft at 43 °C, and within ~65 ft in the cold.
+    // day, +173 ft at 38 °C and +260 ft at 43 °C, and up to ~100 ft low in the cold (the
+    // line rounds to 100 ft for this reason).
     for (const [tempC, altim] of [[38, 29.80], [43, 29.70], [25, 30.02], [0, 30.40], [-10, 30.60]]) {
+      // (KDAL, 476 ft, at 0 °C reads −96 ft; same bound.)
       const elevM = 607 * FT_TO_M;
       const { rho } = airAt(elevM, isaDeviationC(tempC, elevM), altim);
       // Invert ISA density for the altitude with this rho (troposphere).
