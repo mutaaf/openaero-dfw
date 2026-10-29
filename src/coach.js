@@ -18,7 +18,7 @@ export const BOUNCE_HIGH_FT = 5;
 
 export const COACH_PROMPTS = {
   papi: 'Keep two white, two red on the PAPI',
-  wet: 'Wet runway: expect a longer roll, brake early', // a METAR with rain (0108)
+  wet: 'Wet runway: brake early, longer roll', // a METAR with rain (0108)
   high: "You're high: ease the nose down",
   low: "You're low: raise the nose, add power",
   sink: 'Sinking fast: raise the nose, add power',
