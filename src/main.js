@@ -31,7 +31,7 @@ import {
 import { createTerrainLod } from './terrainLod.js';
 import { createLazyPhotoreal, photorealAllowed } from './photorealLazy.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './terrain.js';
-import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
+import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './atmosphere.js';
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
@@ -1362,6 +1362,29 @@ function refreshWeather() {
   // METAR cloud bases are above the reporting field.
   skyDome?.setClouds(sim.wx.cloudLayers, sim.activeEnd?.thrY ?? 0);
   applySky();
+  syncDensityAltitude();
+}
+
+// Density altitude at the mission's runway (0111): the start screen's line, and the takeoff
+// briefing when Fly is pressed. Labelled live or scenario like the ribbon.
+const THIN_AIR = 'Thin air: expect a longer takeoff roll and a weaker climb.';
+function densityAltitudeText() {
+  const wx = currentWeather();
+  const end = sim.activeEnd;
+  const elevFt = end ? end.elevFt : REF_ELEV_M / FT_TO_M;
+  const da = densityAltitudeFt(elevFt, wx.altimInHg, wx.tempC);
+  const where = end ? `${end.airport} ${end.ident}` : 'KDFW';
+  return {
+    text: `Density altitude ${where}: ${(Math.round(da / 10) * 10).toLocaleString('en-US')} ft (${wx.live ? 'live METAR' : 'scenario'}${typeof wx.tempC === 'number' ? `, ${wx.tempC} °C` : ''}).`,
+    thin: thinAir(da, elevFt),
+  };
+}
+function syncDensityAltitude() {
+  const { text, thin } = densityAltitudeText();
+  byId('txtDaValue').textContent = text;
+  const hint = byId('txtThinAir');
+  hint.textContent = thin ? THIN_AIR : '';
+  hint.classList.toggle('hidden', !thin);
 }
 
 // Wind at the aircraft: steady + smoothed gusts, the METAR's 10 m wind thinned by the log law
@@ -2595,6 +2618,10 @@ byId('btnStartFlight').addEventListener('click', () => {
   }
   if (byId('chkAutoSound').checked) audio.init();
   applyCoachChoice();
+  if (sim.loadedMission?.kind === 'takeoff') {
+    const { text, thin } = densityAltitudeText();
+    showToast(thin ? `${text} ${THIN_AIR}` : text);
+  }
   // The (billable) Google session starts only when someone actually flies, once per page.
   if (photorealAllowed(window.location) && !terrainOnly(window.location.search)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   closeModal();
@@ -3293,6 +3320,7 @@ function syncMissionPicker(mission) {
     btn.classList.toggle('active', btn.dataset.scenario === mission.key);
   }
   byId('txtPickedMission').textContent = mission.label;
+  syncDensityAltitude();
 }
 
 function boot() {

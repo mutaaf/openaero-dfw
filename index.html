@@ -148,6 +148,8 @@
       <!-- Mission picker (ticket 0029): generated from src/missions.js by buildMissionPicker() -->
       <div class="flex flex-col gap-1.5">
       <div class="step-title"><span class="step-n">3</span>Where to?</div>
+      <!-- Density altitude from the mission field's METAR (ticket 0111, atmosphere.js) -->
+      <p id="txtDensityAlt" class="text-[11px] text-slate-300 min-h-[1rem]"><span id="txtDaValue"></span> <span id="txtThinAir" class="hidden text-amber-300"></span></p>
       <div id="missionList" class="flex flex-col gap-3 text-xs">
         <button id="btnCrosswindToday" data-scenario="crosswind_today" class="btnMission hud-btn hidden p-3 min-h-[44px] rounded-xl text-left flex-col gap-1 border-amber-400/50">
           <div class="flex items-center justify-between gap-2 font-bold text-amber-300">
