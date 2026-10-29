@@ -24,7 +24,8 @@ describe('coachTarget', () => {
     expect(coachText('wet')).toMatch(/longer roll/i);
     expect(coachTarget({ ...onPath, wet: true, aglFt: 450 })).toBe('papi');
     expect(coachTarget({ ...onPath, wet: true, papiWhite: 4 })).toBe('high');
-    expect(coachTarget({ ...onPath, wet: true, kid: true })).toBe('kid');
+    expect(coachTarget({ ...onPath, wet: true, kid: true })).toBe('kidWet'); // Kid hears it too
+    expect(coachText('kidWet')).toMatch(/wet runway.*BRAKES/i);
     expect(coachTarget({ ...onPath, wet: false })).toBe('papi');
   });
   it('3 or 4 white is high: nose down', () => {

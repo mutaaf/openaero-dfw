@@ -33,7 +33,7 @@ are unchanged.
   field length is only a loose sanity ceiling)
 - [x] Dry cards unchanged (no existing flight card regresses)
 - [x] The HUD/coach says "wet" only with a wet METAR; offline fallback is dry and says nothing
-- [x] No boot-budget increase beyond headroom (194.35 → 195.00 kB of 201)
+- [x] No boot-budget increase beyond headroom (194.35 → 195.06 kB of 201)
 
 ## Shipped notes
 The wet friction is 14 CFR 25.109(c)(1)'s wet tyre-to-ground braking coefficient (a cubic in
@@ -44,7 +44,9 @@ distance. A thunderstorm with no precipitation (`TS`) is not wet: only RA/DZ fal
 field is. The wet runway's side grip and rolling resistance are unchanged; JSBSim
 (`?fdm=jsbsim`) does not read the flag yet. The wet friction also applies to a rejected
 takeoff (a 737 stop from 140 kt: 1,922 ft dry, 4,100 ft wet), as 25.109(c), the accelerate-stop
-rule, intends.
+rule, intends. The 737's autobrake 1-3 still hold their decelerations wet (about +1% of
+distance: more of the remaining grip); only maximum manual braking and autobrake MAX lose.
+Kid hears its own wet call ("let go, then hold BRAKES to stop").
 
 ## Test plan
 `tests/unit/weather.test.js` parsing; `tests/flight/` wet vs dry landing roll cards; one e2e

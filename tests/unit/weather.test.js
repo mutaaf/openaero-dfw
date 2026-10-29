@@ -43,6 +43,7 @@ describe('wetRunway from the METAR', () => {
     for (const wx of ['', 'BR', 'HZ', 'VCSH', 'VCTS', 'TS', '-SN', 'FG']) expect(raw(wx), wx).toBe(false);
     expect(parseMetar({ ...DFW, rawOb: 'METAR KDFW 162053Z 18012KT 10SM FEW050 18/16 A2992 RMK AO2 RAB15E30 SLP132' }).wetRunway).toBe(false);
     expect(parseMetar(DFW).wetRunway).toBe(false);
+    expect(parseMetar({ ...DFW, rawOb: 'METAR EGLL 291850Z 22012KT 9999 FEW030 12/08 Q1012 TEMPO 4000 RA' }).wetRunway).toBe(false);
     expect(parseMetar({ ...DFW, rawOb: undefined }).wetRunway).toBe(false);
   });
   it('the offline scenario is dry (never invented)', () => {

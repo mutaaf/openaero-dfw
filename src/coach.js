@@ -27,6 +27,7 @@ export const COACH_PROMPTS = {
   done: 'Touchdown! Hold the brakes to stop',
   // Kid level (assists.js flies the power and the flare): one prompt, nothing to contradict it
   kid: 'Let go of the stick: the plane lands itself',
+  kidWet: 'Wet runway: let go, then hold BRAKES to stop', // Kid on a wet METAR (0108)
   gear: 'Gear down! (G) You are about to land',
   flaps: 'Landing flaps: press F until 30°',
   slow: 'Slow: add power, nose a touch down',
@@ -123,7 +124,7 @@ export function coachTarget(s) {
   if (s.stall) return stallTarget(s);
   if (s.ds) return s.ds; // the dead-stick challenge's own prompt (deadStick.js), above the flare
   if (s.goAround) return goAroundTarget(s);
-  if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : 'kid';
+  if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : s.wet ? 'kidWet' : 'kid';
   if (s.aglFt < (s.idleFt ?? 30) && s.throttle > 0.05) return 'idle';
   if (s.aglFt < (s.flareFt ?? 50)) return Math.abs(s.driftDeg ?? 0) > 4 ? 'decrab' : 'flare';
   if (s.papiWhite === null || s.papiWhite === undefined) return null;

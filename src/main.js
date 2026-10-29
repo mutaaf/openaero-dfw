@@ -1386,7 +1386,7 @@ function syncWeatherUI(dt) {
     const hw = Math.round(c.headwindKts), xw = Math.round(Math.abs(c.crosswindKts));
     rw.textContent = `${sim.activeEnd.ident}: ${Math.abs(hw)} ${hw >= 0 ? 'HW' : 'TW'} · ${xw} XW${xw ? (c.crosswindKts > 0 ? ' R' : ' L') : ''}${wx.wetRunway ? ' · WET' : ''}`;
   } else {
-    rw.textContent = '';
+    rw.textContent = sim.activeEnd && wx.wetRunway ? `${sim.activeEnd.ident}: WET` : '';
   }
 }
 
