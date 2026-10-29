@@ -25,7 +25,7 @@ import {
   flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
 } from './autopilot.js';
 import {
-  parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents,
+  parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents, surfaceWindFactor,
   fogDensityForVisibility, metarAgeMinutes, flowForWind, pickCrosswindRunway,
 } from './weather.js';
 import { createTerrainLod } from './terrainLod.js';
@@ -1322,15 +1322,14 @@ function refreshWeather() {
   applySky();
 }
 
-// Wind at the aircraft: steady + smoothed gusts, fading to zero in the last ~30 m above
-// the ground (surface friction), which also keeps a parked aircraft from sliding sideways.
+// Wind at the aircraft: steady + smoothed gusts, the METAR's 10 m wind thinned by the log law
+// below 10 m at the CG's height (weather.js, 0106): on the runway the wing still feels ~70%
+// of it. A parked aircraft holds still on its tyres (gear.js), not on calm air.
 function updateWind(dt) {
   sim.simTime += dt;
   const wx = sim.wx;
   sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
-  const h = Math.max(0, sim.pos.y - sim.groundY - sim.spec.gearHeight);
-  const surface = Math.sqrt(Math.min(1, h / 30));
-  const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surface);
+  const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY));
   sim.windVec.set(w.x, 0, w.z);
 }
 

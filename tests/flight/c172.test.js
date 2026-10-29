@@ -272,6 +272,27 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S headwind an
   });
 });
 
+// The game's wind on the runway (ticket 0106). main.js used to fade the METAR's wind to zero
+// on the wheels, so the 0103 cards' headwind never reached the player's takeoff roll. Now it is
+// the METAR's 10 m wind thinned by the log law to the CG's height (weather.js
+// surfaceWindFactor, ~70% at the C172's 1.65 m): a 10 kt METAR headwind is ~7 kt at the wing,
+// ~13% of the 51 kt lift-off, so the handbook's square law (FAA-H-8083-25C Fig. 11-19) puts the
+// roll near (1 - 0.13)^2 = 76% of calm. With the old fade the ratio is 1.
+describe('Cessna 172S takeoff in the METAR wind the game flies (ticket 0106)', () => {
+  it('a 10 kt METAR headwind shortens the takeoff roll by at least 20%; a 5 kt METAR tailwind lengthens it', () => {
+    const calm = shortFieldTakeoff(c172, 0, 0, { metarKts: 0 });
+    const head = shortFieldTakeoff(c172, 0, 0, { metarKts: 10 });
+    const tail = shortFieldTakeoff(c172, 0, 0, { metarKts: -5 });
+    console.log(`[c172 game wind] takeoff roll calm ${calm.rollFt.toFixed(0)} ft, 10 kt METAR headwind ${head.rollFt.toFixed(0)} ft `
+      + `(${((head.rollFt / calm.rollFt) * 100).toFixed(1)}%), 5 kt tailwind ${tail.rollFt.toFixed(0)} ft (${((tail.rollFt / calm.rollFt) * 100).toFixed(1)}%)`);
+    expect(Math.abs(head.liftoffKts - calm.liftoffKts)).toBeLessThan(1);
+    expect(head.rollFt / calm.rollFt).toBeLessThanOrEqual(0.80);
+    // Not the whole 10 kt either: the wing is below the anemometer (the full 10 kt is ~67%).
+    expect(head.rollFt / calm.rollFt).toBeGreaterThan(0.70);
+    expect(tail.rollFt / calm.rollFt).toBeGreaterThan(1.08);
+  });
+});
+
 // FAA Airplane Flying Handbook (FAA-H-8083-3C) ch. 5 / Pilot's Handbook (FAA-H-8083-25B)
 // ch. 5: in a level coordinated turn rate = g·tan(bank)/V (= 1091·tan(bank)/V[kt] °/s) and
 // load factor = 1/cos(bank). The model must turn like that, whatever its own drag says.

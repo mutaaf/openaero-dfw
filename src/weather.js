@@ -72,6 +72,18 @@ export function windVector(fromDeg, speedMps) {
   return { x: -Math.sin(r) * speedMps, z: Math.cos(r) * speedMps };
 }
 
+// The wind near the ground (ticket 0106). A METAR's wind is measured 10 m (33 ft) above the
+// runway (the ASOS/AWOS anemometer); below that the surface boundary layer thins it by the log
+// law, ln(z/z0) / ln(10/z0), with z0 = 0.03 m: Davenport's "open" class (flat, grass, few
+// obstacles: an airfield), WMO-No. 8 Annex 5.B. Read at the wing (the CG's height), never
+// below z = 1 m (60%): a parked or rolling aircraft feels most of the wind. Above 10 m the
+// sim flies the reported wind (no profile aloft). Parked aircraft stay put on tyre friction.
+const SURFACE_Z0_M = 0.03;
+export function surfaceWindFactor(heightM) {
+  if (!(heightM < 10)) return 1;
+  return Math.log(Math.max(1, heightM) / SURFACE_Z0_M) / Math.log(10 / SURFACE_Z0_M);
+}
+
 // Smooth, deterministic gusting between the steady wind and the gust value.
 export function gustFactor(t, steadyKts, gustKts) {
   if (!gustKts || gustKts <= steadyKts) return steadyKts;

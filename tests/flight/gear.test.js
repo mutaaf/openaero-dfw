@@ -10,6 +10,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { gearConstants, gearForces, gearFriction } from '../../src/gear.js';
 import { DEG_TO_RAD, KTS_TO_MPS } from '../../src/constants.js';
 import { makeBody, fly, attitude } from './harness.js';
+import { surfaceWindFactor } from '../../src/weather.js';
 
 const b738 = AIRCRAFT_DATABASE.b738, c172 = AIRCRAFT_DATABASE.c172, f16 = AIRCRAFT_DATABASE.f16;
 const G = 9.80665;
@@ -164,4 +165,31 @@ describe('landing gear on struts', () => {
     expect(minPitch).toBeLessThan(-1); // the brakes do load the nose
     expect(minPitch).toBeGreaterThan(-5); // the floor is -6.9°
   });
+});
+
+// Ticket 0106: the METAR's wind now reaches the runway (the log law at the CG's height, not a
+// fade to zero on the wheels), so a parked airplane holds still on its tyres' friction (gear.js),
+// not on calm air. A 25 kt crosswind (and a 25 kt tailwind) for 30 s, brakes set, idle.
+describe('parked in a 25 kt METAR wind with the brakes set (ticket 0106)', () => {
+  for (const [name, spec] of [['C172', c172], ['737', b738], ['F-16', f16]]) {
+    for (const [what, wx, wz] of [['crosswind', -1, 0], ['tailwind', 0, -1]]) {
+      it(`${name}: a 25 kt ${what} moves it less than 0.3 m and turns it less than 2°`, () => {
+        const b = parked(spec);
+        const x0 = b.pos.x, z0 = b.pos.z;
+        const hdg0 = attitude(b);
+        const e = new Euler().setFromQuaternion(b.quat, 'YXZ'), yaw0 = e.y;
+        fly(b, spec, 30, (x) => {
+          x.brakesOn = true;
+          x.throttle = 0;
+          const k = 25 * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY);
+          x.windVec.set(wx * k, 0, wz * k);
+        });
+        e.setFromQuaternion(b.quat, 'YXZ');
+        expect(Math.hypot(b.pos.x - x0, b.pos.z - z0)).toBeLessThan(0.3);
+        expect(Math.abs(e.y - yaw0) / DEG_TO_RAD).toBeLessThan(2);
+        expect(Math.abs(attitude(b).bankRightDeg - hdg0.bankRightDeg)).toBeLessThan(2);
+        expect(b.wheelLoads.every((l) => l > 0)).toBe(true);
+      });
+    }
+  }
 });

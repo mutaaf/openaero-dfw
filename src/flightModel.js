@@ -118,7 +118,7 @@ export function stepFlightModel(body, spec, dt) {
   const gh = struts
     ? body.groundY + spec.gearHeight + spec.gear.strokeM - gearConstants(spec).maxStroke
     : body.groundY + spec.gearHeight * (locked ? 1 : 0.35);
-  let normalForce = 0;
+  let normalForce = 0, held = false;
   if (struts) {
     // A wheel can reach the ground only when the CG is lower than the longest leg below it.
     if (body.pos.y <= body.groundY + spec.gearHeight + spec.gear.noseZ + 1) normalForce = gearForces(body, spec, totalForceWorld, _gearM);
@@ -157,8 +157,17 @@ export function stepFlightModel(body, spec, dt) {
       totalForceWorld.z += fwd.z * roll;
     }
     const sideMax = 0.8 * normalForce;
-    totalForceWorld.x += MathUtils.clamp(-vSideX * spec.massKg * 4, -sideMax, sideMax);
-    totalForceWorld.z += MathUtils.clamp(-vSideZ * spec.massKg * 4, -sideMax, sideMax);
+    let sideX = -vSideX * spec.massKg * 4, sideZ = -vSideZ * spec.massKg * 4;
+    // Nearly stopped on its wheels, the tyres also hold a steady push across them (a crosswind
+    // on a parked airplane, ticket 0106) instead of letting it creep sideways.
+    held = struts && Math.abs(vAlong) <= 0.3 && Math.hypot(vSideX, vSideZ) <= 0.3;
+    if (held) {
+      const push = totalForceWorld.x * fwd.x + totalForceWorld.z * fwd.z;
+      sideX -= totalForceWorld.x - fwd.x * push;
+      sideZ -= totalForceWorld.z - fwd.z * push;
+    }
+    totalForceWorld.x += MathUtils.clamp(sideX, -sideMax, sideMax);
+    totalForceWorld.z += MathUtils.clamp(sideZ, -sideMax, sideMax);
     body.vAlongMps = vAlong;
   } else {
     body.onGround = false;
@@ -209,7 +218,8 @@ export function stepFlightModel(body, spec, dt) {
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
     const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
-    if (steer !== null) body.angVel.y += (steer - body.angVel.y) * Math.min(1, dt * 6);
+    // Held still, the loaded nose wheel keeps the heading: the wind can't weathervane a parked airplane.
+    if (steer !== null) body.angVel.y += (steer - body.angVel.y) * (held ? 1 : Math.min(1, dt * 6));
   }
 
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseMetar, windVector, gustFactor, runwayWindComponents, fogDensityForVisibility,
-  scenarioWeather, metarAgeMinutes, flowForWind, pickCrosswindRunway, cloudLayers,
+  scenarioWeather, metarAgeMinutes, flowForWind, pickCrosswindRunway, cloudLayers, surfaceWindFactor,
 } from '../../src/weather.js';
 import { RUNWAY_ENDS } from '../../src/airports.js';
 import { crosswindMission, missionByKey } from '../../src/missions.js';
@@ -27,6 +27,29 @@ describe('parseMetar', () => {
     expect(parseMetar({ ...DFW, wdir: 0, wspd: 0, wgst: null }).windKts).toBe(0);
     expect(parseMetar({ ...DFW, visib: '1/4' }).visibilitySm).toBeCloseTo(0.25);
     expect(parseMetar({ ...DFW, clouds: [] }).ceilingFt).toBeNull();
+  });
+});
+
+// Ticket 0106: the METAR's 10 m wind reaches the wing on the runway (log law, z0 = 0.03 m).
+describe('surfaceWindFactor', () => {
+  it('is the reported wind at the 10 m anemometer and above', () => {
+    expect(surfaceWindFactor(10)).toBeCloseTo(1, 9);
+    expect(surfaceWindFactor(300)).toBe(1);
+  });
+  it('more than half the wind at 2 m, and a floor at 1 m: never zero on the runway', () => {
+    expect(surfaceWindFactor(2)).toBeGreaterThan(0.5);
+    expect(surfaceWindFactor(2)).toBeCloseTo(Math.log(2 / 0.03) / Math.log(10 / 0.03), 9);
+    expect(surfaceWindFactor(0)).toBeCloseTo(surfaceWindFactor(1), 9);
+    expect(surfaceWindFactor(0)).toBeGreaterThan(0.55);
+  });
+  it('rises monotonically from the ground to 10 m', () => {
+    let last = 0;
+    for (let z = 0; z <= 12; z += 0.25) {
+      const f = surfaceWindFactor(z);
+      expect(f).toBeGreaterThanOrEqual(last);
+      expect(f).toBeLessThanOrEqual(1);
+      last = f;
+    }
   });
 });
 

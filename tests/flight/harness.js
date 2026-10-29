@@ -7,6 +7,7 @@ import { trimAoaDeg, elevatorForPitch, aileronForBank, flareSinkMps } from '../.
 import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT } from '../../src/constants.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
+import { surfaceWindFactor } from '../../src/weather.js';
 
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
@@ -105,14 +106,19 @@ export function settle(body, spec, seconds, pilot, f, settleS = 40) {
 // (Fig. 5-5 "Speed at 50 Ft") until the wheels are `clearFt` above the runway. It also
 // reports what the pilot actually flew: IAS at rotation, peak pitch rate, worst heading.
 // `windKts`: a wind straight down the runway (+ = headwind, − = tailwind), set where the
-// METAR's goes (body.windVec, the air mass's velocity).
-export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0, { windKts = 0 } = {}) {
+// METAR's goes (body.windVec, the air mass's velocity). `metarKts`: the game's wind instead, a
+// METAR's 10 m wind down the runway thinned to the CG's height as main.js does (ticket 0106).
+export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0, { windKts = 0, metarKts = null } = {}) {
   const b = makeBody(spec, { throttle: 1, flaps: 1 });
   b.isaDevC = isaDevC;
   b.windVec.copy(runwayWind(windKts));
+  const gameWind = (x) => {
+    if (metarKts !== null) x.windVec.set(0, 0, metarKts * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY));
+  };
   let rollFt = null, liftoffKts = null, rotateKts = null, maxPitchRateDegS = 0, maxHeadingDevDeg = 0;
   const climb = speedHoldPilot(() => 56);
   fly(b, spec, 120, (x, dt) => {
+    gameWind(x);
     _e.setFromQuaternion(x.quat, 'YXZ');
     const yawLeftDeg = _e.y * RAD_TO_DEG;
     maxHeadingDevDeg = Math.max(maxHeadingDevDeg, Math.abs(yawLeftDeg));

@@ -266,7 +266,8 @@ src/systems.js      aircraft systems (pure, run first in every flightModel sub-s
 src/gear.js         landing gear on oleo struts (0074): nose + mains at their real positions,
                     per-wheel loads and moments through spec.inertia, harder rebound damping,
                     pedal nose-wheel steering, the tail against the mains' moment with q;
-                    tyre friction per wheel at its axle, brakes on the mains only (0082)
+                    tyre friction per wheel at its axle, brakes on the mains only (0082); nearly
+                    stopped, static friction holds a parked airplane against wind and idle thrust (0106)
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
@@ -275,6 +276,9 @@ src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),
                     warnings, heading math
+src/weather.js      METAR parsing, wind vector, gusts, runway components, fog; surfaceWindFactor
+                    (0106): the METAR's 10 m wind by the log law (z0 0.03 m) at the CG's height,
+                    ~70% on the runway, which main.js updateWind applies
 src/input.js        keyboard state → control targets, virtual stick mapping
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
 src/styles.css      Tailwind entry + ported custom HUD styles
