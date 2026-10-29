@@ -1,13 +1,15 @@
 ---
 id: 0110
 title: Keep it on the runway in a crosswind: a nose wheel that out-steers the fin, assists that hold the centreline, a touch rudder
-status: ready
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-10-29
-pr:
+pr: 120
 ---
+
+> **Shipped in #120** (2026-10-29) without step 4: 0106's wind is wired in by #117, whose e2e (airports.spec, bounce.spec with the wind) re-checks the last criterion. The cards here fly 0106's `surfaceWindFactor` headless. Touch steering is a tiller for Pilot below 40 kt; above that the stick is the ailerons again.
 
 ## Why
 0106 (draft PR #117) lets the METAR wind reach the runway. Its validation panel found that

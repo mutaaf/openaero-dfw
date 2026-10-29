@@ -47,3 +47,16 @@ export function throttleFromPoint(clientY, rect) {
   const t = 1 - (clientY - rect.top) / rect.height;
   return Math.max(0, Math.min(1, t));
 }
+
+// Touch has no pedals (0110): Pilot taxiing steers the nose wheel with the stick's sideways push, a
+// tiller (main.js, below 40 kt; Kid and Learner hold the centreline themselves). Past a quarter of the
+// pad (a resting thumb is not a steer), and scaled so full stick turns the airplane at most
+// TILLER_MAX_DEG_S at any groundspeed (gsMps): full nose wheel at taxi speeds, a touch of it on the
+// roll. wheelbaseM and steerDeg are the airframe's (gear.js). Returns the rudder (-1..1, + = right).
+export const TILLER_DEAD = 0.25;
+export const TILLER_MAX_DEG_S = 8;
+export function tillerRudder(x, gsMps, wheelbaseM, steerDeg) {
+  const s = Math.sign(x) * Math.max(0, Math.abs(x) - TILLER_DEAD) / (1 - TILLER_DEAD);
+  const full = (TILLER_MAX_DEG_S * Math.PI / 180) * wheelbaseM / (Math.max(0.5, gsMps) * Math.tan(steerDeg * Math.PI / 180));
+  return Math.max(-1, Math.min(1, s * Math.min(1, full)));
+}
