@@ -54,10 +54,20 @@ describe('rejected takeoff drill (ticket 0107)', () => {
     expect(stepRto(st, at({ t: 26 }))).toBe(''); // over: no second end
   });
 
-  it('reverse counts as idle (the levers come back to deploy it)', () => {
+  it('idle is the thrust levers closed: sleeves moving with the levers up don\'t count', () => {
     const st = fired();
     stepRto(st, at({ t: 10.8, gsKts: 100, throttle: 0.6, reverserPos: 0.3 }));
-    expect(st.idleS).toBeCloseTo(0.8, 5);
+    expect(st.idleS).toBe(null);
+    stepRto(st, at({ t: 11.1, gsKts: 100, throttle: 0, reverserPos: 0.5 }));
+    expect(st.idleS).toBeCloseTo(1.1, 5);
+  });
+
+  it('a drill that arms well past its speed (a late chunk) never fires', () => {
+    const st = createRto(() => 0); // 75 kt
+    expect(stepRto(st, at({ iasKts: 120, gsKts: 120 }))).toBe('');
+    expect(st.phase).toBe('late');
+    expect(stepRto(st, at({ t: 1, iasKts: 121, gsKts: 121 }))).toBe('');
+    expect(rtoDone(st)).toBe(false);
   });
 
   it('ends at once on an overrun, off the side, or a lift-off', () => {
@@ -66,6 +76,8 @@ describe('rejected takeoff drill (ticket 0107)', () => {
     expect(stepRto(fired(), at({ t: 30, gsKts: 40, crossM: -25 }))).toBe('');
     expect(stepRto(fired(), at({ t: 30, iasKts: 140, onGround: false, wheelFt: 5 }))).toBe('');
     expect(stepRto(fired(), at({ t: 30, iasKts: 140, onGround: false, wheelFt: 20 }))).toBe('rotated');
+    // Airborne past the end, however low: a takeoff, not a roll off the end.
+    expect(stepRto(fired(), at({ t: 30, iasKts: 140, onGround: false, wheelFt: 5, leftM: -10 }))).toBe('rotated');
   });
 
   it('the coach: roll words, then idle, brakes, reverse, straight; Kid lets the plane do it', () => {

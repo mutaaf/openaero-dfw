@@ -10,9 +10,10 @@
 //    V1 is the speed of the first action (recognition happens between the failure and V1), so
 //    the levers close at V1. (A further second at full thrust past V1 needs ~5,370 ft: why V1
 //    is a decision already made.)
-//  - The drill (rto.js): the fire comes at 75-110 kt on DFW 35C (13,401 ft). The worst case,
-//    110 kt, with a 1 s reaction stops with most of the runway left and grades A or better;
-//    the autobrake MAX stop Kid gets is the reference stop the grade measures against; and a
+//  - The drill (rto.js): the fire comes at 75-110 kt on DFW 35C (13,400 ft). The worst case,
+//    110 kt, with a 1 s reaction stops with most of the runway left and grades A or better,
+//    reverse or not; a 1 s autobrake MAX stop is the reference stop the grade measures against
+//    (Kid's, idled by the game at the fire, is ~15% shorter); and a
 //    pilot who does nothing never stops on the runway.
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
@@ -70,9 +71,12 @@ describe('737-800 rejected takeoff (ticket 0107)', () => {
     console.log(`[b738 rto] V1 ${V1_KTS} kt at ${(r.fail.distM * M_TO_FT).toFixed(0)} ft, stop ${r.stopFt.toFixed(0)} ft, accelerate-stop ${asdFt.toFixed(0)} ft (field length ${ACAP_FIELD_FT}), mean ${decelG.toFixed(2)} g from the failure`);
     expect(r.end).toBe('stopped');
     expect(asdFt).toBeLessThanOrEqual(ACAP_FIELD_FT);
+    // A balanced field: the stop is close to the field length, not far inside it (brakes too good).
+    expect(asdFt).toBeGreaterThanOrEqual(0.85 * ACAP_FIELD_FT);
   });
 
-  it('the drill\'s worst case: fire at 110 kt, idle and full brakes in 1 s, stops on 35C with over half of it left and grades A or better', () => {
+  it('the drill\'s worst case: fire at 110 kt, idle, full brakes and reverse in 1 s, stops on 35C with over half of it left and grades A or better (without reverse too)', () => {
+    expect(['S', 'A']).toContain(gradeRto(roll({ failKts: 110 }).st).grade);
     const r = roll({ failKts: 110, reverse: true });
     const g = gradeRto(r.st);
     console.log(`[b738 rto 110] stop ${r.stopFt.toFixed(0)} ft (reference ${(rtoRefStopM(r.st.failGsKts) * M_TO_FT).toFixed(0)}), ${(r.st.leftM * M_TO_FT).toFixed(0)} ft left, ${g.grade} ${g.score}`);
@@ -82,7 +86,7 @@ describe('737-800 rejected takeoff (ticket 0107)', () => {
     expect(['S', 'A']).toContain(g.grade);
   });
 
-  it('Kid\'s autobrake MAX stop (idle, no pedals) is the reference stop the grade measures (within 10%)', () => {
+  it('a 1 s autobrake MAX stop (idle, no pedals) is the reference stop the grade measures (within 10%)', () => {
     const r = roll({ failKts: 100, brakes: false, autobrake: true });
     const ref = rtoRefStopM(r.st.failGsKts) * M_TO_FT;
     console.log(`[b738 rto autobrake] stop ${r.stopFt.toFixed(0)} ft, reference ${ref.toFixed(0)} ft`);

@@ -19,13 +19,13 @@ export const RTO_MIN_KTS = 75;
 export const RTO_MAX_KTS = 110;
 // The reference stop: a 1 s reaction at the failure's speed, ~1.5 s more while the engines spool
 // down and the brakes and ground spoilers build, then the 737's autobrake MAX deceleration
-// (aircraft.js b738 systems.autobrake, 14 ft/s²): what Kid's autobrake MAX stop measures in
-// tests/flight/rto.test.js (within 10%). Within 10% of it scores full marks; manual maximum
-// braking with reverse does better.
+// (aircraft.js b738 systems.autobrake, 14 ft/s²): what a 1 s autobrake MAX stop measures in
+// tests/flight/rto.test.js (within 10%). At it, full marks; manual maximum braking with
+// reverse does better.
 export const RTO_REACT_S = 1;
 export const RTO_SPOOL_S = 1.5;
 export const RTO_REF_DECEL_MPS2 = 14 * 0.3048;
-// Off the runway: the wheels past the edge (the mains are 2.9 m either side of the centreline).
+// Ran off the runway: both mains past the edge (they are 2.9 m either side of the centreline).
 const OFF_MARGIN_M = 3;
 // Lifted off: the wheels this high (a rotation, not a bump).
 const ROTATED_FT = 15;
@@ -51,7 +51,7 @@ export const createRto = (rnd = Math.random) => ({
   t0: 0, failGsKts: 0, failLeftM: 0, idleS: null, brakeS: null, maxCrossM: 0, stopM: 0, leftM: 0,
 });
 
-export const rtoDone = (st) => st.phase !== 'armed' && st.phase !== 'fire';
+export const rtoDone = (st) => st.phase !== 'armed' && st.phase !== 'fire' && st.phase !== 'late';
 
 // The reference stop distance (m) from a groundspeed (kt).
 export function rtoRefStopM(gsKts) {
@@ -65,16 +65,18 @@ export function rtoRefStopM(gsKts) {
 export function stepRto(st, s) {
   if (st.phase === 'armed') {
     if (!s.onGround || s.iasKts < st.failKts) return '';
+    // A chunk that loads well past the speed (or past V1) never fires late: no drill this roll.
+    if (s.iasKts > st.failKts + 5) { st.phase = 'late'; return ''; }
     st.phase = 'fire'; st.t0 = s.t; st.failGsKts = s.gsKts; st.failLeftM = s.leftM;
     return 'fire';
   }
   if (st.phase !== 'fire') return '';
-  if (st.idleS === null && (s.throttle < 0.05 || s.reverserPos > 0)) st.idleS = s.t - st.t0;
+  if (st.idleS === null && s.throttle < 0.05) st.idleS = s.t - st.t0; // the reverse levers come from idle (main.js)
   if (st.brakeS === null && s.braking) st.brakeS = s.t - st.t0;
   const cross = Math.abs(s.crossM);
   if (cross > st.maxCrossM) st.maxCrossM = cross;
   st.stopM = Math.max(0, st.failLeftM - s.leftM); st.leftM = s.leftM;
-  if (!s.onGround && s.wheelFt > ROTATED_FT) st.phase = 'rotated';
+  if (!s.onGround && (s.wheelFt > ROTATED_FT || s.leftM < 0)) st.phase = 'rotated'; // in the air past the end: a takeoff
   else if (s.leftM < 0) st.phase = 'overrun';
   else if (cross > s.halfWidthM + OFF_MARGIN_M) st.phase = 'off';
   else if (s.onGround && s.gsKts < STOPPED_KTS) st.phase = 'stopped';
@@ -108,7 +110,7 @@ export function gradeRto(st, kid = false) {
     { key: 'reaction', label: 'Fire to thrust idle', value: kid ? 'the plane did it' : st.idleS === null ? 'never' : `${st.idleS.toFixed(1)} s`,
       score: kid ? 100 : st.idleS === null ? 0 : curve(st.idleS, [[1, 100], [2, 80], [3, 50], [5, 0]]) },
     { key: 'stop', label: 'Stopped in', value: stopped ? `${ft(st.stopM)} ft, ${ft(st.leftM)} ft of runway left` : 'did not stop',
-      score: stopped ? curve(st.stopM / ref, [[1.1, 100], [1.4, 70], [2, 0]]) : 0 },
+      score: stopped ? curve(st.stopM / ref, [[1, 100], [1.4, 70], [2, 0]]) : 0 },
     { key: 'centreline', label: 'Off the centreline', value: `${st.maxCrossM.toFixed(1)} m at most`,
       score: curve(st.maxCrossM, [[3, 100], [8, 70], [15, 30], [22, 0]]) },
   ];

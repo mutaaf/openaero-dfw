@@ -1,6 +1,6 @@
 ---
 id: 0107
-title: Rejected takeoff drill: an engine fire at 70 knots, stop the 737 on the runway
+title: Rejected takeoff drill: an engine fire before V1, stop the 737 on the runway
 status: shipped
 priority: P2
 size: M
@@ -44,11 +44,11 @@ starts, the warning appears, a held-brake pilot gets a graded card.
 
 ## As built
 - `src/rto.js` (lazy chunk): `createRto` draws the fire speed (75-110 kt, below V1 = Vr - 3 =
-  132 kt); `stepRto` fires once on the runway at that speed, times the reaction to idle (reverse
-  counts) and the brakes, tracks the centreline, and ends at the stop, an overrun, off the side
-  (wheels past the edge) or a lift-off (wheels > 15 ft). `gradeRto`: reaction 40%, stop 40%
-  (against a reference: 2.5 s at the failure speed, then autobrake MAX's 14 ft/s², which Kid's
-  autobrake stop matches within 10% in the flight card), centreline 20%; overrun, off or took off
+  132 kt); `stepRto` fires once on the runway at that speed, times the reaction to idle (the levers
+  closed) and the brakes, tracks the centreline, and ends at the stop, an overrun, off the side
+  (both mains past the edge) or a takeoff (wheels > 15 ft, or airborne past the end). `gradeRto`: reaction 40%, stop 40%
+  (against a reference: 2.5 s at the failure speed, then autobrake MAX's 14 ft/s², which a 1 s
+  autobrake MAX stop matches within 10% in the flight card), centreline 20%; overrun, off or took off
   capped at D with the reason. Coach words and ranks join coach.js `DRILL_TEXT`/`RANK` from the
   chunk; each step of the reject (idle, brakes, reverse, straight) replaces the last at once.
 - The fire is a warning, not a lost engine: the engine keeps its thrust until the levers close,
