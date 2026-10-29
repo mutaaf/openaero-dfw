@@ -23,7 +23,7 @@ test('phone, Kid: full power, the fire warning, the plane stops itself, the card
   const thr = await page.locator('#touchThrottle').boundingBox();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: thr.x + thr.width / 2, y: thr.y + 4, id: 1 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect(page.locator('#txtCoach')).toHaveText('Engine fire! The plane stops itself: keep it straight', { timeout: 90_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Fire! Let go: the plane stops itself', { timeout: 90_000 });
   const coach = await page.locator('#coach').boundingBox();
   expect(coach.x + coach.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('rto-390-fire.png') });

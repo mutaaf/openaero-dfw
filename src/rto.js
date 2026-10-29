@@ -6,7 +6,7 @@
 // (the model has one thrust lever for both engines, so there is no asymmetric thrust to fly).
 // Pure: no THREE, no DOM. Tested in tests/unit/rto.test.js and flown headless in
 // tests/flight/rto.test.js.
-import { approachGeometry, runwayEnd } from './airports.js';
+import { runwayEnd } from './airports.js';
 import { curve, letterGrade } from './landing.js';
 import { M_TO_FT } from './constants.js';
 import { DRILL_TEXT, RANK } from './coach.js';
@@ -34,12 +34,12 @@ const FAIL_CAP = 54; // the top of a D
 
 export const RTO_TEXT = {
   rtoRoll: 'Full power (TO/GA), keep straight: stop if a warning comes',
-  rtoKidRoll: 'Full power (TO/GA), then let go: it keeps straight',
+  rtoKidRoll: 'Full power (TO/GA), then let go',
   rtoIdle: 'ENGINE FIRE! Reject: thrust to idle now',
   rtoBrake: 'Full brakes: B, or tap BRAKES',
   rtoReverse: 'Reverse thrust: R, or tap REV',
   rtoStraight: 'Hold the brakes, keep it on the centreline',
-  rtoKid: 'Engine fire! The plane stops itself: keep it straight',
+  rtoKid: 'Fire! Let go: the plane stops itself',
 };
 Object.assign(DRILL_TEXT, RTO_TEXT);
 // Each step of the reject replaces the last at once (a higher rank interrupts; coach.js).
@@ -52,6 +52,7 @@ export const createRto = (rnd = Math.random) => ({
 });
 
 export const rtoDone = (st) => st.phase !== 'armed' && st.phase !== 'fire' && st.phase !== 'late';
+const live = (st) => st.phase === 'armed' || st.phase === 'fire';
 
 // The reference stop distance (m) from a groundspeed (kt).
 export function rtoRefStopM(gsKts) {
@@ -125,17 +126,19 @@ export function gradeRto(st, kid = false) {
 }
 
 // main.js's calls, with the input built from the sim here (reused; the chunk, not boot, pays).
+// 35C's course and its right, for the runway ahead and the centreline without allocating.
+const DX = Math.sin(RTO_END.hdgT * Math.PI / 180), DZ = -Math.cos(RTO_END.hdgT * Math.PI / 180);
 const _in = { t: 0, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, throttle: 0, reverserPos: 0, braking: false, leftM: 0, crossM: 0, halfWidthM: 0, canReverse: false, kid: false };
 function input(sim) {
-  const g = approachGeometry(RTO_END, sim.pos);
   _in.t = sim.simTime; _in.onGround = sim.onGround;
   _in.wheelFt = sim.onGround ? 0 : (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
   _in.iasKts = sim.iasKts; _in.gsKts = sim.gsKts; _in.throttle = sim.throttle;
   _in.reverserPos = sim.reverserPos ?? 0; _in.braking = !!(sim.brakesOn || sim.autobrakeActive);
-  _in.leftM = RTO_END.lengthM - RTO_END.displacedM + g.distM; // distM: + before the threshold
-  _in.crossM = g.crossM; _in.halfWidthM = RTO_END.widthM / 2;
+  const rx = sim.pos.x - RTO_END.thrX, rz = sim.pos.z - RTO_END.thrZ;
+  _in.leftM = RTO_END.lengthM - RTO_END.displacedM - (rx * DX + rz * DZ); // past the threshold, less
+  _in.crossM = rx * -DZ + rz * DX; // + right (airports.js approachGeometry) _in.halfWidthM = RTO_END.widthM / 2;
   _in.canReverse = !!sim.spec.systems?.reverser; _in.kid = sim.assist === 'kid';
   return _in;
 }
 export const rtoStep = (st, sim) => stepRto(st, input(sim));
-export const rtoPrompt = (st, sim) => rtoTarget(st, input(sim));
+export const rtoPrompt = (st, sim) => (live(st) ? rtoTarget(st, input(sim)) : null);

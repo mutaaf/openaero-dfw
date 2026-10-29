@@ -6,6 +6,8 @@ import { coachText, createCoach, stepCoach } from '../../src/coach.js';
 import { MISSIONS, missionByKey, groupMissions } from '../../src/missions.js';
 import { missionFromLink } from '../../src/deeplink.js';
 import { M_TO_FT } from '../../src/constants.js';
+import { approachGeometry, takeoffSpawn } from '../../src/airports.js';
+import { RTO_END, rtoStep } from '../../src/rto.js';
 
 // A roll step: on the runway, 3,000 m ahead, on the centreline, full thrust, no brakes.
 const at = (o) => ({ t: 0, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, throttle: 1, reverserPos: 0, braking: false, leftM: 3000, crossM: 0, halfWidthM: 22.9, ...o });
@@ -149,5 +151,23 @@ describe('rejected takeoff drill (ticket 0107)', () => {
     const g = gradeRto(fired({ phase: 'stopped', idleS: 0, stopM: rtoRefStopM(100), leftM: 2000, maxCrossM: 1 }), true);
     expect(g.factors[0]).toMatchObject({ value: 'the plane did it', score: 100 });
     expect(g.note).toMatch(/Kid level/);
+  });
+
+  it('the game\'s input: runway left and the centreline from the sim, as airports.js approachGeometry has them', () => {
+    const sp = takeoffSpawn(RTO_END);
+    for (const [along, right] of [[0, 0], [1500, 7], [3000, -12]]) {
+      const pos = { x: sp.pos.x + Math.sin(RTO_END.hdgT * Math.PI / 180) * along + Math.cos(RTO_END.hdgT * Math.PI / 180) * right,
+        y: 0, z: sp.pos.z - Math.cos(RTO_END.hdgT * Math.PI / 180) * along + Math.sin(RTO_END.hdgT * Math.PI / 180) * right };
+      const g = approachGeometry(RTO_END, pos);
+      const st = createRto(() => 0);
+      const sim = { simTime: 1, onGround: true, pos, groundY: 0, spec: { gearHeight: 3.4, systems: {} }, iasKts: 80, gsKts: 80, throttle: 1, assist: 'pilot' };
+      expect(rtoStep(st, sim)).toBe('fire');
+      expect(st.failLeftM).toBeCloseTo(RTO_END.lengthM + g.distM, 6);
+      sim.simTime = 2;
+      rtoStep(st, sim);
+      expect(st.maxCrossM).toBeCloseTo(Math.abs(g.crossM), 6);
+      expect(Math.abs(g.crossM)).toBeCloseTo(Math.abs(right), 6);
+    }
+    expect(RTO_END.displacedM).toBe(0);
   });
 });

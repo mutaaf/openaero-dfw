@@ -923,7 +923,7 @@ let eoLib = null;
 // V1 on the roll, graded when the 737 stops (or overruns, runs off, or takes off).
 let rtoLib = null;
 function checkRto() {
-  const ev = sim.rto && rtoLib.rtoStep(sim.rto, sim);
+  const ev = sim.rto && !rtoLib.rtoDone(sim.rto) && rtoLib.rtoStep(sim.rto, sim);
   if (!ev) return;
   if (ev === 'fire') {
     // Kid: the plane rejects for you (thrust idle, autobrake MAX as the RTO setting does).
@@ -1602,9 +1602,9 @@ function integrateSubStep(dt) {
   const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
   const banner = byId('masterAlertBanner');
-  // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (2 s at
-  // least): a phone held sideways shows alerts in the coach's slot, and the coach has the rest.
-  const rto = sim.rto, fire = rto?.phase === 'fire' && (rto.idleS === null || sim.simTime - rto.t0 < 2);
+  // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (Kid's plane
+  // idles at once: 2 s): a phone held sideways shows alerts in the coach's slot, and the coach has the rest.
+  const rto = sim.rto, fire = rto?.phase === 'fire' && (rto.idleS === null || (sim.assist === 'kid' && sim.simTime - rto.t0 < 2));
   banner.classList.toggle('hidden', !gpwsWarning && !gearWarning && !fire);
   const bannerText = fire ? 'ENGINE FIRE — IDLE, BRAKES' : gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
   if (banner.textContent !== bannerText) banner.textContent = bannerText;
