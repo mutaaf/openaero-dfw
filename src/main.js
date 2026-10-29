@@ -143,6 +143,7 @@ const sim = {
   // Dead-stick challenge (0036, deadStick.js): its state on that mission, and the dead engine
   deadStick: null,
   engineOut: null, // engine failure after takeoff (0104, engineOut.js)
+  rto: null, // rejected takeoff drill (0107, rto.js)
   engineFailed: false,
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
@@ -918,6 +919,26 @@ let patLib = null;
 // --- Engine failure after takeoff (ticket 0104, engineOut.js): sim.engineOut on those missions;
 // the engine quits at the mission's height (engineOutStep), then the dead-stick's rules apply.
 let eoLib = null;
+// --- Rejected takeoff (ticket 0107, rto.js): sim.rto on that mission; an engine fire warning below
+// V1 on the roll, graded when the 737 stops (or overruns, runs off, or takes off).
+let rtoLib = null;
+function checkRto() {
+  const ev = sim.rto && !rtoLib.rtoDone(sim.rto) && rtoLib.rtoStep(sim.rto, sim);
+  if (!ev) return;
+  // Kid: the plane rejects for you, and keeps rejecting (thrust idle, autobrake MAX as the RTO
+  // setting does), whatever the throttle is pushed to.
+  if (sim.rto.phase === 'fire' && sim.assist === 'kid') {
+    sim.throttle = 0; sim.reverseCmd = false;
+    if (!sim.autobrakeActive) sim.autobrake = 4;
+  }
+  if (ev === 'fire') return;
+  byId('masterAlertBanner').classList.add('hidden'); // the card pauses the flight: no warning frozen under it
+  const result = rtoLib.gradeRto(sim.rto, sim.assist === 'kid');
+  let best = { isNewBest: false, best: null };
+  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
+  updateCoach(0);
+  showResults(result, best, rtoLib.RTO_END, null);
+}
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
 // only instructions) until Skip; their state is null on every other mission.
@@ -926,12 +947,14 @@ function startDrills(mission) {
   sim.deadStick = null;
   sim.pattern = null;
   sim.engineOut = null;
+  sim.rto = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto);
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
   if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
   if (mission.engineOutFt) loadDrill(mission, eoLib, () => import('./engineOut.js'), (lib) => { eoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.engineOut = lib.createEngineOut(mission); });
+  if (mission.rto) loadDrill(mission, rtoLib, () => import('./rto.js'), (lib) => { rtoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.rto = lib.createRto(); });
 }
 
 // --- Landing grade ---------------------------------------------------------------
@@ -980,6 +1003,7 @@ function checkTouchdown(dt) {
   sim.airborneTime = 0;
   // The engine-failure takeoffs (0104) grade only a landing after the failure: no best without it.
   if (sim.loadedMission?.engineOutFt && !sim.engineOut?.failed) return;
+  if (sim.loadedMission?.rto) return; // the rejected takeoff (0107) is graded at its stop
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   // The dead-stick challenge (0036) is graded on Addison wherever the wheels touch.
   const glideLib = sim.deadStick ? deadLib : sim.engineOut?.failed ? eoLib : null; // 0036, 0104
@@ -1132,7 +1156,7 @@ function updateCoach(dt) {
   // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
-  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1158,8 +1182,8 @@ function updateCoach(dt) {
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     coachInput.stall = sim.stallDrill?.phase ?? null;
     coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
-      : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : null;
-    coachInput.dsGround = sim.onGround && sim.engineOut ? coachInput.ds : null;
+      : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim) : null;
+    coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto) ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
@@ -1427,6 +1451,7 @@ function step6DofPhysics(dt) {
   checkGoAround();
   checkStallDrill(dt);
   if (sim.engineOut && eoLib.engineOutStep(sim.engineOut, sim)) sim.engineFailed = true;
+  checkRto();
   checkTouchdown(dt);
   checkTakeoffCallouts();
 }
@@ -1579,8 +1604,11 @@ function integrateSubStep(dt) {
   const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
   const banner = byId('masterAlertBanner');
-  banner.classList.toggle('hidden', !gpwsWarning && !gearWarning);
-  const bannerText = gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
+  // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (Kid's plane
+  // idles at once: 2 s): a phone held sideways shows alerts in the coach's slot, and the coach has the rest.
+  const rto = sim.rto, kid = sim.assist === 'kid', fire = rto?.phase === 'fire' && (kid ? sim.simTime - rto.t0 < 2 : rto.idleS === null);
+  banner.classList.toggle('hidden', !gpwsWarning && !gearWarning && !fire);
+  const bannerText = fire ? (kid ? 'ENGINE FIRE' : 'ENGINE FIRE — IDLE, BRAKES') : gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
   if (banner.textContent !== bannerText) banner.textContent = bannerText;
   // Spoken once per descent below 500 ft (GPWS mode 4A).
   if (gearWarning && !sim.gearWarned) { sim.gearWarned = true; audio.callout('too low, gear'); }
@@ -2623,6 +2651,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.stallDrill = null;
   sim.deadStick = null;
   sim.engineOut = null;
+  sim.rto = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
 });
@@ -2977,6 +3006,8 @@ window.addEventListener('wheel', e => {
 // Keyboard Listeners
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
+  // Ctrl winds the power back: Ctrl+R (reverse) and Ctrl+B (brakes) must not reload or bookmark (0107).
+  if (e.ctrlKey && (e.code === 'KeyR' || e.code === 'KeyB') && !modalOpen()) e.preventDefault();
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
   if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
@@ -3156,6 +3187,7 @@ window.openaeroDebug = () => {
     goAround: sim.goAround ? { ...sim.goAround } : null,
     stallDrill: sim.stallDrill ? { ...sim.stallDrill } : null,
     engineFailed: !!sim.engineFailed,
+    rto: sim.rto ? { ...sim.rto } : null,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
       { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),

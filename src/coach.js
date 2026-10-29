@@ -55,7 +55,7 @@ export const COACH_PROMPTS = {
 // pt* (pattern.js PT_TEXT, rank 1, through s.ds).
 export const DRILL_TEXT = {};
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
-const RANK = {
+export const RANK = {
   papi: 1, wet: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
   slow: 2, flaps: 2, sink: 2, gear: 3, flare: 3, decrab: 3, idle: 4,
   done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6, bounce: 5, bounceGa: 5, bounceHigh: 5, bounceKid: 5,

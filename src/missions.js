@@ -22,6 +22,8 @@ export const MISSIONS = [
   { key: 'kdfw_takeoff', label: 'KDFW RWY 35C (Takeoff Roll)', blurb: 'Hold the brakes, set takeoff power, release and rotate at Vr: the callouts say when.', kind: 'takeoff', airport: 'KDFW', rwy: '35C' },
   // Go-around drill (0047): spawned 20 kt fast and one glideslope dot high on purpose.
   { key: 'go_around_drill', label: 'KDFW 35C Go-Around Drill', blurb: 'Fast and high on purpose: go around when the 500 ft gate calls it (or sooner). Full power, climb, flaps and gear up. Fix it instead and you land.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4, fastKts: 20, highDots: 1, goAround: true },
+  // Rejected takeoff drill (0107, rto.js): the 737's engine fire warning comes below V1 on the roll.
+  { key: 'kdfw_35c_rto', label: 'KDFW 35C Rejected Takeoff (737)', blurb: 'Full power down 35C: an engine fire warning comes before V1. Reject: thrust idle, full brakes, reverse, and stop on the runway.', kind: 'takeoff', airport: 'KDFW', rwy: '35C', aircraft: 'b738', rto: true },
   { key: 'kdfw_17c_final', label: 'KDFW RWY 17C (South Flow 4 NM)', blurb: 'South flow: the centre runway flown from the north, the way DFW lands in a south wind.', kind: 'final', airport: 'KDFW', rwy: '17C', distNm: 4 },
   { key: 'kdfw_36l_final', label: 'KDFW RWY 36L (West Side 6 NM)', blurb: 'A longer 6 NM final from the south to the west-side runway.', kind: 'final', airport: 'KDFW', rwy: '36L', distNm: 6 },
   { key: 'kdfw_13r_final', label: 'KDFW RWY 13R (Diagonal 5 NM)', blurb: "One of DFW's two diagonal runways, on the west side: a course off the north-south grid.", kind: 'final', airport: 'KDFW', rwy: '13R', distNm: 5 },
