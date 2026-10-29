@@ -1,12 +1,12 @@
 ---
 id: 0111
 title: Density altitude on the HUD and the briefing, from today's METAR
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-29
-pr:
+pr: 126
 ---
 
 ## Why

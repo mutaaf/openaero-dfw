@@ -31,7 +31,7 @@ import {
 import { createTerrainLod } from './terrainLod.js';
 import { createLazyPhotoreal, photorealAllowed } from './photorealLazy.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './terrain.js';
-import { airAt, isaDeviationC, tasFromIas } from './atmosphere.js';
+import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './atmosphere.js';
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
@@ -1362,6 +1362,43 @@ function refreshWeather() {
   // METAR cloud bases are above the reporting field.
   skyDome?.setClouds(sim.wx.cloudLayers, sim.activeEnd?.thrY ?? 0);
   applySky();
+  syncDensityAltitude();
+}
+
+// Density altitude at the mission's runway (0111): the start screen's line, and the takeoff
+// briefing when Fly is pressed. Labelled live or scenario like the ribbon, with the station
+// whose report it is when that isn't the mission's field. Rounded to 100 ft: the pilot's rule
+// reads up to ~200 ft off the density the physics flies (tests/unit/atmosphere.test.js).
+const THIN_AIR = {
+  takeoff: 'Thin air: expect a longer takeoff roll and a weaker climb.',
+  final: 'Thin air: a faster touchdown over the ground and a longer rollout.',
+  other: 'Thin air: less power and lift than on a cool day.',
+};
+function densityAltitudeText() {
+  const wx = currentWeather();
+  const end = sim.activeEnd;
+  const elevFt = end ? end.elevFt : REF_ELEV_M / FT_TO_M;
+  const da = densityAltitudeFt(elevFt, wx.altimInHg, wx.tempC);
+  const src = !wx.live ? 'scenario' : wx.icao === end?.airport ? 'live METAR' : `live ${wx.icao} METAR`;
+  return {
+    where: end ? `${end.airport} ${end.ident}` : 'DFW area',
+    ft: `${(Math.round(da / 100) * 100).toLocaleString('en-US')} ft`,
+    src: `${src}${typeof wx.tempC === 'number' ? `, ${wx.tempC} °C` : ''}`,
+    thin: thinAir(da, elevFt),
+  };
+}
+let daShown = '';
+function syncDensityAltitude() {
+  const d = densityAltitudeText();
+  const kind = sim.loadedMission?.kind;
+  const hint = d.thin ? THIN_AIR[kind] || THIN_AIR.other : '';
+  const text = `Density altitude ${d.where}: ${d.ft} (${d.src}).`;
+  if (text + hint === daShown) return;
+  daShown = text + hint;
+  byId('txtDaValue').textContent = text;
+  const el = byId('txtThinAir');
+  el.textContent = hint;
+  el.classList.toggle('hidden', !hint);
 }
 
 // Wind at the aircraft: steady + smoothed gusts, the METAR's 10 m wind thinned by the log law
@@ -2595,12 +2632,17 @@ byId('btnStartFlight').addEventListener('click', () => {
   }
   if (byId('chkAutoSound').checked) audio.init();
   applyCoachChoice();
+  if (sim.loadedMission?.kind === 'takeoff') {
+    const d = densityAltitudeText();
+    showToast(`DA ${d.ft} at ${d.where}${d.thin ? ': thin air, longer roll, weaker climb' : ` (${d.src})`}`, 6000);
+  }
   // The (billable) Google session starts only when someone actually flies, once per page.
   if (photorealAllowed(window.location) && !terrainOnly(window.location.search)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   closeModal();
 });
 byId('btnOpenMissions').addEventListener('click', (e) => {
   setHudMenu(false);
+  syncDensityAltitude(); // the active runway may have changed since the pick
   openModal(e.currentTarget);
 });
 document.addEventListener('keydown', (e) => {
@@ -2939,12 +2981,12 @@ byId('touchIls').addEventListener('click', () => {
 
 // Small status toast (gamepad connect/disconnect, etc.)
 let toastTimer = 0;
-function showToast(msg) {
+function showToast(msg, ms = 3500) {
   const el = byId('toast');
   el.textContent = msg;
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), ms);
 }
 const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
 window.addEventListener('gamepadconnected', (e) => showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`));
@@ -3293,6 +3335,7 @@ function syncMissionPicker(mission) {
     btn.classList.toggle('active', btn.dataset.scenario === mission.key);
   }
   byId('txtPickedMission').textContent = mission.label;
+  syncDensityAltitude();
 }
 
 function boot() {

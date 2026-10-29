@@ -46,3 +46,15 @@ export const isaDeviationC = (tempC, stationElevM) =>
 export const iasFromTas = (tas, sigma) => tas * Math.sqrt(sigma);
 export const tasFromIas = (ias, sigma) => ias / Math.sqrt(sigma);
 export { MPS_PER_KT };
+
+// Density altitude (ticket 0111): the pilot's rule, FAA-H-8083-25 ch. 11 "Performance".
+// Pressure altitude = field elevation + (29.92 − altimeter) × 1,000 ft; density altitude adds
+// 118.8 ft per °C the outside air is above standard at that pressure altitude (15 °C less
+// 1.98 °C per 1,000 ft). The physics never uses this: airAt() computes the density itself.
+export function densityAltitudeFt(fieldElevFt, altimInHg = 29.92, tempC = null) {
+  const pa = fieldElevFt + (29.92 - (altimInHg || 29.92)) * 1000;
+  return typeof tempC === 'number' ? pa + 118.8 * (tempC - (15 - 0.00198 * pa)) : pa;
+}
+
+// The thin-air hint: density altitude 1,500 ft or more above the field.
+export const thinAir = (daFt, fieldElevFt) => daFt - fieldElevFt >= 1500;
