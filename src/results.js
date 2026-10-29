@@ -1,6 +1,6 @@
 // The results card (lazy chunk, loaded by main.js at the touchdown or a drill's end): the
 // grade, score, personal best, the stabilized-gate verdict and one bar per factor. DOM only;
-// main.js pauses the flight first when the card comes up in the air (0047).
+// main.js pauses the flight first (in the air, 0047; on the rollout, 0106).
 import { GRADE_COLOURS } from './landing.js';
 import { landingTip } from './landingTip.js';
 

@@ -198,6 +198,33 @@ describe('parked in a 25 kt METAR wind with the brakes set (ticket 0106)', () =>
   }
 });
 
+// Brakes off (every mission starts so): a stopped airplane's tyres still hold it in a crosswind.
+// Turning it about its CG scrubs every tyre sideways (gear.js wheelScrubYawHold); before, only the
+// nose wheel's steering hold resisted and a 737 pivoted 70° in 5 s in 25 kt. Gusting 25G35 too.
+// Across the wind only: at idle with the brakes off the C172's prop creeps it ahead (~1 cm/s).
+// Past ~35 kt gusts the 737 turns (11° in 60 s of 25G40): the model's yaw moments scale with
+// airspeed/120, not q, so they are too strong at a standstill (0110).
+describe('stopped with the brakes off in a 25 kt METAR crosswind (ticket 0106)', () => {
+  for (const [name, spec] of [['C172', c172], ['737', b738]]) {
+    it(`${name}: turns less than 2° and slides less than 0.3 m across in 60 s, steady or gusting to 35 kt`, () => {
+      for (const gust of [false, true]) {
+        const b = parked(spec);
+        const x0 = b.pos.x;
+        const e = new Euler().setFromQuaternion(b.quat, 'YXZ'), yaw0 = e.y;
+        fly(b, spec, 60, (x) => {
+          x.brakesOn = false;
+          x.throttle = 0;
+          const kts = gust ? 30 + 5 * Math.sin(x.t * 1.3) : 25;
+          x.windVec.set(-kts * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY), 0, 0);
+        });
+        e.setFromQuaternion(b.quat, 'YXZ');
+        expect(Math.abs(e.y - yaw0) / DEG_TO_RAD).toBeLessThan(2);
+        expect(Math.abs(b.pos.x - x0)).toBeLessThan(0.3);
+      }
+    });
+  }
+});
+
 // The same with ?fdm=jsbsim (its own gear and tyres, public/jsbsim/ C172). It keeps its heading
 // and holds against a tailwind; across the tyres JSBSim's low-speed friction creeps ~5 cm/s
 // (1.4 m in 30 s of a 25 kt crosswind), printed and bounded here, not the 0.3 m above.

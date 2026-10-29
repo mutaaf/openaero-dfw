@@ -138,7 +138,8 @@ src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/
                     after a contact; the card waits for 1 s on the wheels; 1 bounce caps C, 2+ D,
                     a re-contact past 600 fpm or 10° bank is a CRASH; wheels past 50 ft drop the
                     landing as a go-around; Kid holds the flare through a bounce)
-src/results.js      the results card (lazy chunk, prefetched after boot, retried at the card)
+src/results.js      the results card (lazy chunk, prefetched after boot, retried at the card); the
+                    flight pauses behind it, in the air and on the rollout (0106)
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
@@ -270,7 +271,8 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
                     tyre friction per wheel at its axle, brakes on the mains only (0082); the loaded
                     nose tyre holds its steered yaw rate against the fin and lets go as the nose lifts
                     (noseWheelYawHold, 0110; cards in tests/flight/groundSteer.test.js); nearly
-                    stopped, static friction holds a parked airplane against wind and idle thrust (0106)
+                    stopped and not breaking away, static friction holds a parked airplane against wind and
+                    idle thrust, and its heading up to the tyres' scrub moment (wheelScrubYawHold, 0106)
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
@@ -283,7 +285,9 @@ src/weather.js      METAR parsing, wind vector, gusts, runway components, fog; s
                     (0106): the METAR's 10 m wind by the log law (z0 0.03 m) at the CG's height,
                     ~70% on the runway, which main.js updateWind applies
 src/input.js        keyboard state → control targets, virtual stick mapping; tillerRudder: Pilot taxiing
-                    (< 40 kt) steers the nose wheel with the stick's sideways push (touch has no pedals, 0110)
+                    (< 40 kt) steers the nose wheel with the stick's sideways push (touch has no pedals, 0110);
+                    touchGroundRudder: otherwise (thumb not steering, or above 40 kt) Pilot on touch gets
+                    groundSteerRudder's centreline hold on the runway (0106)
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
 src/styles.css      Tailwind entry + ported custom HUD styles
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):

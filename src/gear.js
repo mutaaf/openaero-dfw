@@ -147,6 +147,18 @@ export function noseWheelYawHold(body, spec, errRate, dt) {
   return Math.max(-cap, Math.min(cap, d));
 }
 
+// Nearly stopped (0106), brakes set or not: turning the airframe about its CG scrubs every tyre
+// sideways, so the yaw is static friction. The yaw-rate change (rad/s) towards `errRate` this
+// sub-step, up to what the tyres' side grip (SCRUB_MU · load at each wheel's arm) can do through
+// spec.inertia.yaw: a parked airplane holds its heading against the wind, never more than that.
+export const SCRUB_MU = 0.8;
+export function wheelScrubYawHold(body, spec, errRate, dt) {
+  const g = spec.gear, l = body.wheelLoads;
+  const arm = Math.max(0, l[0]) * g.noseZ + (Math.max(0, l[1]) + Math.max(0, l[2])) * g.mainZ;
+  const cap = (SCRUB_MU * arm / spec.inertia.yaw) * dt;
+  return Math.max(-cap, Math.min(cap, errRate));
+}
+
 // The tail against the mains (rad/s², body x: + = nose up). The flight model's elevator is a
 // pitch-rate command tuned in the air, where most of a real tail's power goes into balancing
 // the static stability (flightModel.js models it softly about the trim α, 0090). On the ground that power works against

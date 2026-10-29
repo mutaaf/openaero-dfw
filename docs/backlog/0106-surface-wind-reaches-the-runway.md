@@ -10,7 +10,9 @@ pr: 117
 ---
 
 > **Shipped in #117** (2026-10-29) on top of 0110 (#120): the log-law wind at the CG's height,
-> static tyre friction when nearly stopped, and a parked airplane on its brakes keeps its heading.
+> static tyre friction when nearly stopped, and a stopped airplane keeps its heading up to its tyres'
+> scrub moment, brakes set or not. The panel added: Pilot on touch gets the centreline hold on the
+> runway (no pedals: a phone 737 ran off from 40 kt in 10 kt), and the results card pauses the rollout.
 > Cards: takeoff and landing roll in the game's wind (C172), parked in 25 kt (C172, 737, F-16;
 > JSBSim's C172 creeps ~1.4 m across on its own tyre model, bounded at 2 m). The wind is read at
 > the CG, not the C172's high wing (~2.7 m): 69% vs 77% of the METAR, the conservative side.

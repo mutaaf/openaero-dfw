@@ -80,3 +80,19 @@ describe('tillerRudder', () => {
     }
   });
 });
+
+// 0106: Pilot on touch has no pedals; from 40 kt to Vr the centreline hold steers the roll.
+import { touchGroundRudder, tillerShare } from '../../src/input.js';
+describe('touchGroundRudder', () => {
+  const kt = 0.514444, wb = 15.6, steer = 7;
+  it('is the tiller to 20 kt, the hold from 40 kt, a blend between; the hold whenever the thumb is not steering', () => {
+    expect(tillerShare(10 * kt)).toBe(1);
+    expect(tillerShare(30 * kt)).toBeCloseTo(0.5, 6);
+    expect(tillerShare(60 * kt)).toBe(0);
+    expect(touchGroundRudder(1, 10 * kt, wb, steer, -0.4)).toBe(tillerRudder(1, 10 * kt, wb, steer));
+    expect(touchGroundRudder(1, 80 * kt, wb, steer, -0.4)).toBe(-0.4);
+    expect(touchGroundRudder(0.625, 30 * kt, wb, steer, -0.4)).toBeCloseTo(0.5 * tillerRudder(0.625, 30 * kt, wb, steer) - 0.2, 6);
+    expect(touchGroundRudder(0, 5 * kt, wb, steer, -0.4)).toBe(-0.4);
+    expect(touchGroundRudder(0.2, 30 * kt, wb, steer, -0.4)).toBe(-0.4);
+  });
+});

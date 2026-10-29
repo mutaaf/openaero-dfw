@@ -40,8 +40,9 @@ import {
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls, slewRudder,
   autoConfigure, kidTargetKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
+  groundSteerRudder,
 } from './assists.js';
-import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, tillerRudder } from './input.js';
+import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare } from './input.js';
 import { trimStep, trimSpeedKts, clampTrim } from './trim.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
@@ -1027,7 +1028,7 @@ function finishLanding(result, end, gate, bestKey) {
   showResults(result, best, end, gate);
 }
 
-let resultsPaused = false; // the go-around's card pauses the flight in the air (0047)
+let resultsPaused = false; // the card pauses the flight, in the air (0047) and on the rollout (0106)
 // The results card is a lazy chunk (results.js), fetched after boot (a dropped connection
 // mid-flight still gets its card) and retried if that fetch failed.
 let resultsChunk = null;
@@ -1036,7 +1037,9 @@ function showResults(result, best, end, gate) {
   const flight = sim.loadedMission;
   loadResults().then((m) => {
     if (sim.loadedMission !== flight) return; // restarted meanwhile: not this flight's card
-    if (!sim.onGround && !sim.paused) { resultsPaused = true; setPaused(true); }
+    // On the rollout too: the card covers the runway, and the METAR crosswind would roll the
+    // airplane on unwatched into the grass behind it (0106). KEEP ROLLING resumes it.
+    if (!sim.paused) { resultsPaused = true; setPaused(true); }
     m.showResults(sim, result, best, end, gate);
   }).catch(() => showToast(`${result.title ?? 'Landing'}: ${result.grade} · ${result.score}`));
 }
@@ -1438,12 +1441,17 @@ function integrateSubStep(dt) {
   // Pilot taxiing with the touch/drag stick and no rudder keys: its sideways push is a nose-wheel
   // tiller, not ailerons (0110; one axis can't do both: aileron into the wind steered the nose into
   // it). Handed back to the ailerons from 20 to 40 kt, so the roll, a touchdown and a bounce keep
-  // them. Kid and Learner hold the centreline themselves.
-  if (sim.onGround && targets.source === 'stick' && !targetYaw && sim.assist === 'pilot' && !sim.apMaster && spec.gear) {
+  // them. Kid and Learner hold the centreline themselves. With no pedals to reach, Pilot on touch
+  // (the stick, or a touch-only screen with the thumb off it) gets their centreline hold on the
+  // runway whenever the tiller isn't steering (0106: the METAR's crosswind on the roll ran a phone
+  // 737 off the side from 40 kt to Vr, and a rollout into the grass).
+  if (sim.onGround && (targets.source === 'stick' || (touchOnly && targets.source === 'keyboard')) && !targetYaw && sim.assist === 'pilot' && !sim.apMaster && spec.gear) {
     const gs = Math.hypot(sim.vel.x, sim.vel.z);
-    const w = THREE.MathUtils.clamp((40 - gs / KTS_TO_MPS) / 20, 0, 1);
-    targetYaw = w * tillerRudder(targetRoll, gs, spec.gear.noseZ + spec.gear.mainZ, spec.gear.steerDeg ?? 7);
-    targetRoll *= 1 - w;
+    _euler.setFromQuaternion(sim.quat, 'YXZ');
+    runwayUnderWheels(gs, -_euler.y * RAD_TO_DEG);
+    const a = _assistIn, hold = a.rwyHdgDeg == null ? 0 : groundSteerRudder(a.rwyHdgDeg, a.noseHdgDeg, a.crossM, a.crossVelMps, a.steerRateDegS);
+    targetYaw = touchGroundRudder(targetRoll, gs, spec.gear.noseZ + spec.gear.mainZ, spec.gear.steerDeg ?? 7, hold);
+    targetRoll *= 1 - tillerShare(gs);
   }
 
   if (sim.pad && sim.pad.throttleRate) {
@@ -2070,6 +2078,21 @@ const _assistIn = {};
 const _assistOut = { elev: 0, ail: 0, rud: 0 };
 const _assistCfg = { gearDown: true, flapsIndex: 0 };
 const NO_AOA_LIMIT_DEG = 90;
+// The runway under the wheels, for groundSteerRudder (0110): _assistIn.rwyHdgDeg is its true heading
+// when lined up on it (null off it), with the nose's heading, the offset and drift right of its
+// centreline and full pedal's nose-wheel yaw rate at this groundspeed (gear.js noseSteerYawRate).
+function runwayUnderWheels(gsMps, noseDeg) {
+  const end = sim.activeEnd, ap = sim.approach, g = sim.spec.gear;
+  const onRunway = sim.onGround && end && Math.abs(ap.crossM) < end.widthM / 2 + 3 && Math.abs(headingError(end.hdgT, noseDeg)) < 20;
+  _assistIn.rwyHdgDeg = onRunway ? end.hdgT : null;
+  if (!onRunway) return;
+  const r = end.hdgT * DEG_TO_RAD; // right of the runway course (airports.js courseVector), no allocation
+  _assistIn.noseHdgDeg = noseDeg;
+  _assistIn.crossM = ap.crossM;
+  _assistIn.crossVelMps = sim.vel.x * Math.cos(r) + sim.vel.z * Math.sin(r);
+  _assistIn.steerRateDegS = g ? gsMps * Math.tan((g.steerDeg ?? 7) * DEG_TO_RAD) / (g.noseZ + g.mainZ) * RAD_TO_DEG : 0;
+}
+
 function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   const spec = sim.spec;
   _euler.setFromQuaternion(sim.quat, 'YXZ');
@@ -2109,17 +2132,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   _assistIn.noFloor = sim.engineFailed;
   // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
-  const end = sim.activeEnd, noseDeg = -_euler.y * RAD_TO_DEG;
-  const onRunway = sim.onGround && end && Math.abs(ap.crossM) < end.widthM / 2 + 3 && Math.abs(headingError(end.hdgT, noseDeg)) < 20;
-  _assistIn.rwyHdgDeg = onRunway ? end.hdgT : null;
-  if (onRunway) {
-    const r = end.hdgT * DEG_TO_RAD; // right of the runway course (airports.js courseVector), no allocation
-    _assistIn.noseHdgDeg = noseDeg;
-    _assistIn.crossM = ap.crossM;
-    _assistIn.crossVelMps = sim.vel.x * Math.cos(r) + sim.vel.z * Math.sin(r);
-    const g = spec.gear; // full pedal's nose-wheel yaw rate at this groundspeed (gear.js noseSteerYawRate)
-    _assistIn.steerRateDegS = g ? gsMps * Math.tan((g.steerDeg ?? 7) * DEG_TO_RAD) / (g.noseZ + g.mainZ) * RAD_TO_DEG : 0;
-  }
+  runwayUnderWheels(gsMps, -_euler.y * RAD_TO_DEG);
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
   if (sim.onGround) {
     // The takeoff roll's stick, power and the stop are the player's, smoothed like Pilot's.

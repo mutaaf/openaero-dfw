@@ -21,7 +21,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, tailVsMainsAccel } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, wheelScrubYawHold, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -158,11 +158,13 @@ export function stepFlightModel(body, spec, dt) {
     }
     const sideMax = 0.8 * normalForce;
     let sideX = -vSideX * spec.massKg * 4, sideZ = -vSideZ * spec.massKg * 4;
-    // Nearly stopped on its wheels, the tyres also hold a steady push across them (a crosswind
-    // on a parked airplane, ticket 0106) instead of letting it creep sideways.
-    held = struts && Math.abs(vAlong) <= 0.3 && Math.hypot(vSideX, vSideZ) <= 0.3;
+    // Nearly stopped on its wheels and not breaking away (what is left along the nose after the
+    // tyres' static grip is no more than their damping: power for the takeoff roll breaks it), the
+    // tyres also hold a steady push across them (a crosswind on a parked airplane, ticket 0106)
+    // instead of letting it creep sideways, and its heading (wheelScrubYawHold below).
+    const push = totalForceWorld.x * fwd.x + totalForceWorld.z * fwd.z;
+    held = struts && Math.abs(vAlong) <= 0.3 && Math.hypot(vSideX, vSideZ) <= 0.3 && Math.abs(push) <= spec.massKg * 0.6;
     if (held) {
-      const push = totalForceWorld.x * fwd.x + totalForceWorld.z * fwd.z;
       sideX -= totalForceWorld.x - fwd.x * push;
       sideZ -= totalForceWorld.z - fwd.z * push;
     }
@@ -218,10 +220,9 @@ export function stepFlightModel(body, spec, dt) {
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
     const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
-    // Held still on its braked mains, the airplane keeps its heading: locked tyres can't scrub
-    // round, so the wind can't weathervane it (0106). Otherwise the loaded nose tyre holds its
-    // steered rate up to its grip (0110).
-    if (steer !== null) body.angVel.y += held && (body.brakePress ?? 0) > 0.5 ? steer - body.angVel.y : noseWheelYawHold(body, spec, steer - body.angVel.y, dt);
+    // Nearly stopped, turning it scrubs every tyre: the wind can't weathervane a parked airplane
+    // past the tyres' grip (0106). Rolling, the loaded nose tyre holds its steered rate (0110).
+    if (steer !== null) body.angVel.y += (held ? wheelScrubYawHold : noseWheelYawHold)(body, spec, steer - body.angVel.y, dt);
   }
 
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {
