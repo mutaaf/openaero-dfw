@@ -161,6 +161,17 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     within(rocFpm(3048), 315, 0.15);
   });
 
+  // POH Fig. 5-7 (time, fuel and distance to climb, 2550 lb, flaps up, full throttle, standard
+  // temperature): 600 fpm at 4,000 ft and 410 fpm at 8,000 ft, between the sea-level and
+  // 10,000 ft cards above, so the lapse is checked in the middle of the curve too.
+  it('climbs about 600 fpm at 4,000 ft, ISA (POH Fig. 5-7, ±15%)', () => {
+    within(rocFpm(4000 / 3.28084), 600, 0.15);
+  });
+
+  it('climbs about 410 fpm at 8,000 ft, ISA (POH Fig. 5-7, ±15%)', () => {
+    within(rocFpm(8000 / 3.28084), 410, 0.15);
+  });
+
   // The POH's Section 1 specifications give a service ceiling of 14,000 ft, the altitude where
   // the climb falls to 100 fpm. flightModel.js climbed ~183 fpm there until 0099 took the
   // engine's friction power out of the δ/√θ lapse (engine.js): ~116 fpm now, JSBSim ~115.
