@@ -9,6 +9,11 @@ created: 2026-10-28
 pr: 117
 ---
 
+> **Blocked by 0110** (2026-10-29): draft PR #117 implements this ticket and its cards pass, but
+> its validation panel showed that once the wind reaches the wheels, the airplane weathervanes
+> off the runway (Learner's ground rudder steers into the wind, and touch has no rudder). Land
+> 0110 first, then finish #117.
+
 ## Why
 0103's cards show both flight models shorten the roll in a headwind the way the FAA handbook
 says (FAA-H-8083-25C ch. 11, Fig. 11-19: a wind 10% of the lift-off speed, -19%; a tailwind,

@@ -3,7 +3,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import {
   ASSIST_KEY, ASSIST_CONFIG, DEFAULT_ASSIST, assistConfig, createAssistState, shapeControls,
-  autoConfigure, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, groundSteerRudder, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
 import { dihedralAileron } from '../../src/flightModel.js';
@@ -407,5 +407,36 @@ describe('assist level storage and per-level bests', () => {
     expect(assistBestKey('kdfw_35c_final', 'kid')).toBe('kdfw_35c_final@kid');
     expect(assistBestKey('kdfw_35c_final', 'learner')).toBe('kdfw_35c_final@learner');
     expect(assistBestKey('kdfw_35c_final', 'bogus')).toBe('kdfw_35c_final');
+  });
+});
+
+// Ticket 0110: on the runway, Kid and Learner hold the centreline with the pedals, never the
+// sideslip's coordination rudder (it steered the nose wheel into the wind).
+describe('on the runway (groundSteerRudder, 0110)', () => {
+  const ground = {
+    pitchIn: 0, rollIn: 0, yawIn: 0, onGround: true, betaDeg: 20,
+    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, steerRateDegS: 20,
+  };
+  it('lined up on the centreline: no rudder, whatever the sideslip', () => {
+    for (const level of ['kid', 'learner']) {
+      expect(shapeControls(assistConfig(level), createAssistState(), ground, 1 / 120, {}).rud).toBeCloseTo(0, 9);
+    }
+  });
+  it('steers back towards the runway heading and the centreline', () => {
+    expect(groundSteerRudder(350, 345, 0, 0, 20)).toBeGreaterThan(0); // nose left of the runway: right rudder
+    expect(groundSteerRudder(10, 355, 0, 0, 20)).toBeGreaterThan(0); // across north
+    expect(groundSteerRudder(350, 350, 10, 0, 20)).toBeLessThan(0); // right of the centreline: nose left
+    expect(groundSteerRudder(350, 350, 0, 2, 20)).toBeLessThan(0); // drifting right: nose left
+  });
+  it('asks for at most 4°/s of turn: a little pedal at landing speed, full at a walk', () => {
+    expect(groundSteerRudder(350, 320, 0, 0, 200)).toBeCloseTo(0.02, 9); // 30° off at speed: 4°/s of 200
+    expect(groundSteerRudder(350, 320, 0, 0, 2)).toBe(1);
+    expect(groundSteerRudder(350, 350, 100, 0, 200)).toBeCloseTo(-0.0075, 9); // never more than 3° off: 1.5°/s
+  });
+  it("the player's pedals win; off a runway the rudder is theirs (0 if they leave it)", () => {
+    const cfg = assistConfig('learner');
+    expect(shapeControls(cfg, createAssistState(), { ...ground, crossM: 10, yawIn: 0.7 }, 1 / 120, {}).rud).toBe(0.7);
+    expect(shapeControls(cfg, createAssistState(), { ...ground, crossM: 10, rwyHdgDeg: null }, 1 / 120, {}).rud).toBe(0);
+    expect(shapeControls(cfg, createAssistState(), { ...ground, crossM: 10 }, 1 / 120, {}).rud).toBeLessThan(0);
   });
 });

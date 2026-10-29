@@ -72,10 +72,13 @@ describe('landing gear on struts', () => {
     b.brakesOn = false;
     b.vel.set(0, 0, -10 * KTS_TO_MPS);
     b.throttle = 0.05;
-    let rate = 0;
-    fly(b, b738, 4, (x) => { x.rudderInput = 1; rate = -x.angVel.y; }); // + = yaw right
-    const expected = 10 * KTS_TO_MPS * Math.tan(7 * DEG_TO_RAD) / gearConstants(b738).wheelbase;
-    expect(Math.abs(rate - expected) / expected).toBeLessThan(0.25);
+    let rate = 0, along = 0;
+    fly(b, b738, 4, (x) => { x.rudderInput = 1; rate = -x.angVel.y; along = x.vAlongMps; }); // + = yaw right
+    // At the speed it is rolling (it slows from 10 kt at idle as the brakes release): the loaded
+    // nose wheel holds its steered rate (0110), where the old soft blend lagged it by ~25%.
+    const expected = along * Math.tan(7 * DEG_TO_RAD) / gearConstants(b738).wheelbase;
+    expect(along).toBeGreaterThan(5 * KTS_TO_MPS);
+    expect(Math.abs(rate - expected) / expected).toBeLessThan(0.05);
   });
 
   it('737: full back stick at 60 kt does not lift the nose wheel', () => {

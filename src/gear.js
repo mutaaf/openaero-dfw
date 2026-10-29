@@ -131,6 +131,22 @@ export function noseSteerYawRate(body, spec, alongMps) {
   return alongMps * Math.tan(delta) / c.wheelbase;
 }
 
+// The loaded nose tyre holding the yaw rate the pedals steer (ticket 0110): the change in yaw
+// rate (rad/s) it makes this sub-step towards `errRate` (steered rate − current). Its pull
+// follows the nose wheel's load (NOSE_HOLD_PER_S at the static share, letting go as the elevator
+// or the lift unloads it at rotation), never more than its side grip can turn the airframe
+// (NOSE_SIDE_MU · load about the mains, through spec.inertia.yaw).
+export const NOSE_HOLD_PER_S = 30;
+export const NOSE_SIDE_MU = 0.5;
+export function noseWheelYawHold(body, spec, errRate, dt) {
+  const c = gearConstants(spec);
+  const load = Math.max(0, body.wheelLoads[0]);
+  const share = load / (c.noseShare * spec.massKg * GRAVITY);
+  const cap = (NOSE_SIDE_MU * load * c.wheelbase / spec.inertia.yaw) * dt;
+  const d = errRate * Math.min(1, dt * NOSE_HOLD_PER_S * Math.min(1, share));
+  return Math.max(-cap, Math.min(cap, d));
+}
+
 // The tail against the mains (rad/s², body x: + = nose up). The flight model's elevator is a
 // pitch-rate command tuned in the air, where most of a real tail's power goes into balancing
 // the static stability (flightModel.js models it softly about the trim α, 0090). On the ground that power works against

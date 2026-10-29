@@ -21,7 +21,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, gearFriction, noseSteerYawRate, tailVsMainsAccel } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -218,8 +218,9 @@ export function stepFlightModel(body, spec, dt) {
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
     const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
-    // Held still, the loaded nose wheel keeps the heading: the wind can't weathervane a parked airplane.
-    if (steer !== null) body.angVel.y += (steer - body.angVel.y) * (held ? 1 : Math.min(1, dt * 6));
+    // Held still on its braked mains, the airplane keeps its heading: the wind can't weathervane
+    // it (0106). Rolling, the loaded nose tyre holds its steered rate up to its grip (0110).
+    if (steer !== null) body.angVel.y += held ? steer - body.angVel.y : noseWheelYawHold(body, spec, steer - body.angVel.y, dt);
   }
 
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {
