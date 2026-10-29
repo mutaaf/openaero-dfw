@@ -1,12 +1,12 @@
 ---
 id: 0104
 title: Engine failure after takeoff: the "impossible turn" mission, and why you land ahead
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: content
 created: 2026-10-28
-pr:
+pr: 123
 ---
 
 ## Why
@@ -44,6 +44,27 @@ ahead (the existing off-airport touchdown grader), turnback made, or a stall in 
 Unit test for the turnback-height function; flight cards in `tests/flight/` as above (the
 fail-then-turn case is the one that must fail without the new coach/grader); one e2e that
 starts the 300 ft mission, lets Kid fly it, and sees a graded results card.
+
+## As built
+`src/engineOut.js` (lazy chunk, like deadStick.js, whose glide numbers, Addison ends and miss
+grader it reuses). Two Cessna takeoffs from all of Addison 16 (flaps 0, the POH's normal
+takeoff; the displaced 979 ft is usable for it): `efato_kads_16_300` and
+`efato_kads_16_700`. **700 ft, not 900**: flown headless in calm air, this climb (~9% over the
+ground) is shallower than the glide back (~11%), so the turnback window closes at both ends;
+it opens at ~425 ft and closes at ~925 ft (900 made the runway by ~5 m, 950 missed), and 700 is
+in its middle. The coach's turnback height `turnbackHeightFt` is computed live: the reaction
+second, a turn of 180° plus twice the cut back from two turn radii beside the runway (well over
+180° close in), the turn's sink at 1 + k(n² − 1) times the glide's (k = 0.35, measured on
+flightModel.js: 1.3x at 45°), the glide back downwind (a takeoff headwind helps twice), less
+the climb's spare speed ((v² − vg²)/2g). A flight card fails the engine every 50 ft from 300 to
+1,100 ft and turns back: the airplane makes the runway exactly where the coach says it can,
+except within 25 ft of the line. The coach says "you can turn back" or "land ahead" at the
+failure from the height there, then "keep turning" or "too low for this turn". Graded:
+decision 30%, landing 70%; landed ahead in a field is a B at best ("the right call"); turned
+back below the height it needed, or a stall above 50 ft, is a D at best with what the turn
+cost; a crash stays a crash. Kid's guide glides ahead wings level; the takeoff (power and
+rotation) is the player's at every level, as on every takeoff. Flown on flightModel.js only
+(JSBSim is not carded here). `?airport=KADS` still deep-links the final, not the drill.
 
 ## Out of scope
 Twin-engine failures (V1 cut), engine-fire checklists, new scenery, the 737.

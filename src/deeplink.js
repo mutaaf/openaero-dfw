@@ -14,9 +14,10 @@ export function missionFromLink(search) {
   if (key && MISSIONS.some((m) => m.key === key)) return key;
   const icao = (p.get('airport') || '').trim().toUpperCase();
   if (!Object.prototype.hasOwnProperty.call(AIRPORT_NAMES, icao)) return null;
-  // "Fly from" an airport: its takeoff if it has one, else its first approach.
+  // "Fly from" an airport: its takeoff if it has one (not a drill's: the engine-failure takeoffs,
+  // 0104), else its first approach.
   const here = MISSIONS.filter((m) => m.airport === icao);
-  const pick = here.find((m) => m.kind === 'takeoff') || here[0];
+  const pick = here.find((m) => m.kind === 'takeoff' && !m.engineOutFt) || here[0];
   return pick ? pick.key : null;
 }
 

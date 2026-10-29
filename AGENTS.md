@@ -181,6 +181,13 @@ src/pattern.js      traffic pattern (0048, lazy chunk): the C172 on a left downw
                     out) and the height (1,000 ft, then ~4.2° down from abeam the numbers). Its
                     pt* words reach coach.js through s.ds (the landing coach takes the final);
                     Kid's guide flies the legs, and past the threshold the 3° path to the aim point
+src/engineOut.js    engine failure after takeoff (0104, lazy chunk): the C172 on all of Addison 16,
+                    the engine quits at the mission's engineOutFt (300 or 700 ft). turnbackHeightFt
+                    (reaction, a turn of 180° + twice the cut back from 2R beside, sink 1 + k(n²−1),
+                    the glide back downwind, less the climb's spare speed) decides "you can turn
+                    back" / "land ahead"; flight cards fly the window (tests/flight/engineOut.test.js).
+                    Graded on Addison (deadStick.js's miss grader): ahead in a field ≤ B, a turn back
+                    below the height or a stall ≤ D with what the turn cost; Kid glides ahead
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn.
                     A lazy chunk fetched right after boot (0091); its on/off flag and blank
