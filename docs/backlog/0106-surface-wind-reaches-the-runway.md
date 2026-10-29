@@ -1,7 +1,7 @@
 ---
 id: 0106
 title: The METAR wind reaches the runway: a headwind shortens the game's takeoff and landing roll
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity
