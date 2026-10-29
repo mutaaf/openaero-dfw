@@ -1,5 +1,5 @@
 // Engine failure after takeoff (ticket 0104): the Cessna 172S takes off from Addison 16 the way
-// the mission spawns it (flaps 10, full power, rotate at Vr, climb at Vy 74 KIAS), and the
+// the mission spawns it (flaps 0, full power, rotate at Vr, climb at Vy 74 KIAS), and the
 // engine quits at the mission's height. Then it is flown two ways: land ahead (68 KIAS, wings
 // level, the flare) or turn back (react for a second, then a 45° teardrop back to 34 at 68
 // KIAS). FAA-H-8083-3C ch. 18: below a safe height, land ahead; the FAA Safety Team handout:
@@ -7,24 +7,28 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
+import { M_TO_FT, DEG_TO_RAD, KTS_TO_MPS } from '../../src/constants.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, takeoffSpawn } from '../../src/airports.js';
 import { gradeLanding } from '../../src/landing.js';
 import { missionByKey } from '../../src/missions.js';
-import { createEngineOut, stepEngineOut, engineOutTarget, engineOutResult, turnbackBankDeg, landingEnd, EO_REACT_S } from '../../src/engineOut.js';
-import { makeBody, fly, speedHoldPilot, attitude } from './harness.js';
+import { createEngineOut, stepEngineOut, engineOutTarget, engineOutResult, turnbackBankDeg, landingEnd, EO_REACT_S, EO_INDUCED } from '../../src/engineOut.js';
+import { makeBody, fly, speedHoldPilot, attitude, settle } from './harness.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const E16 = runwayEnd('KADS', '16');
+const E34 = runwayEnd('KADS', '34');
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
 
 // mode: 'ahead', 'turnback' or 'stretch' (turning back with the nose held up). Returns the result card, the coach's prompts, the failure point
 // and the touchdown.
-export function flyEngineOut(key, mode) {
+// headwindKts: a steady wind straight down 16 (+ head), the air mass's velocity (body.windVec).
+export function flyEngineOut(key, mode, { headwindKts = 0 } = {}) {
   const m = typeof key === 'string' ? missionByKey(key) : key;
   const b = makeBody(c172, { throttle: 1, flaps: m.flaps });
+  const d16 = { x: Math.sin(E16.hdgT * DEG_TO_RAD), z: -Math.cos(E16.hdgT * DEG_TO_RAD) };
+  b.windVec.set(-d16.x * headwindKts * KTS_TO_MPS, 0, -d16.z * headwindKts * KTS_TO_MPS);
   const s0 = takeoffSpawn(E16, 30 - E16.displacedM); // main.js: a fullLength takeoff
   const yaw = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), s0.yawRad);
   b.quat.premultiply(yaw);
@@ -41,7 +45,7 @@ export function flyEngineOut(key, mode) {
     const s = {
       t: x.t, aglFt: x.pos.y * M_TO_FT, x: x.pos.x, z: x.pos.z, trackDeg: x.onGround ? E16.hdgT : track,
       iasKts: x.iasKts ?? 0, tasKts: x.tasKts ?? 0, aoaDeg: x.aoaDeg ?? 0, stallAoaDeg: stallAoaDeg(c172, x.flapsIndex),
-      flaps: x.flapsIndex, headwindKts: 0, bankMaxDeg: 45, kid: false, onGround: x.onGround,
+      flaps: x.flapsIndex, headwindKts, bankMaxDeg: 45, kid: false, onGround: x.onGround,
     };
     if (stepEngineOut(st, s)) { x.engineFailed = true; failT = x.t; fail = { x: x.pos.x, z: x.pos.z, aglFt: s.aglFt, turnbackFt: st.turnbackFt }; }
     rec(engineOutTarget(st, s));
@@ -62,6 +66,9 @@ export function flyEngineOut(key, mode) {
       let bank = 0;
       if (mode !== 'ahead') {
         bank = turnbackBankDeg(x.pos.x, x.pos.z, track);
+        // Lined up on 34 and high over a 9:1 glide to 300 m past its threshold: full flaps.
+        const g = approachGeometry(E34, x.pos);
+        if (Math.abs(wrap180(track - E34.hdgT)) < 20 && x.pos.y * M_TO_FT - (g.distM + 300) * M_TO_FT / 9 > 100) x.flapsIndex = 3;
       }
       x.aileronInput = aileronForBank(bank, bankRightDeg, -x.angVel.z);
       return;
@@ -144,22 +151,45 @@ describe('Cessna 172S engine failure after takeoff at Addison (flightModel, tick
   });
 
   // The coach's turnback height (engineOut.js turnbackHeightFt: glide ratio, the turn's sink and
-  // radius, the glide back, the climb's spare speed) against the airplane: failed every 50 ft
-  // from 300 to 1,100 ft and turned back, it makes the runway exactly where the coach says it
-  // can, except within 25 ft of the line. In still air the window closes at both ends: too low
-  // for the turn, then (the climb gradient, ~9%, is shallower than the glide back, ~11%) too
-  // far from the runway.
-  it('the turn back makes the runway where the coach says it can (300 to 1,100 ft; a window, both ends)', () => {
+  // radius, the glide back, the climb's spare speed, the wind) against the airplane: failed every
+  // 50 ft from 300 to 1,100 ft and turned back, in calm air and a 10 kt headwind. Wherever the
+  // coach says "you can turn back" (the need plus EO_MARGIN_FT), it makes the runway; wherever
+  // the need is above the height, it does not. In still air the window closes at both ends: too
+  // low for the turn, then (the climb, ~9% over the ground, is shallower than the glide back,
+  // ~11%) too far from the runway. A headwind steepens the climb over the ground and stretches
+  // the glide back: the window stays open.
+  for (const headwindKts of [0, 10]) it(`the turn back makes the runway where the coach says it can, and not where it needs more height (300 to 1,100 ft, ${headwindKts} kt headwind)`, () => {
     const base = missionByKey('efato_kads_16_300');
     const rows = [];
     for (let ft = 300; ft <= 1100; ft += 50) {
-      const r = flyEngineOut({ ...base, engineOutFt: ft }, 'turnback');
-      rows.push({ ft, needFt: r.fail.turnbackFt, made: !!r.td?.result.madeRunway && r.td.result.grade !== 'CRASH' });
+      const r = flyEngineOut({ ...base, engineOutFt: ft }, 'turnback', { headwindKts });
+      rows.push({ ft, needFt: Math.round(r.fail.turnbackFt), can: r.st.canTurn, made: !!r.td?.result.madeRunway && r.td.result.grade !== 'CRASH' });
     }
-    console.log(`[engineOut] turnback window: ${rows.map((w) => `${w.ft}:${w.made ? 'made' : 'no'}/${w.needFt.toFixed(0)}`).join(' ')}`);
-    for (const w of rows) if (Math.abs(w.needFt - w.ft) > 25) expect({ ft: w.ft, made: w.made }).toEqual({ ft: w.ft, made: w.needFt < w.ft });
-    expect(rows.some((w) => w.made)).toBe(true);
+    console.log(`[engineOut] turnback window, ${headwindKts} kt: ${rows.map((w) => `${w.ft}:${w.made ? 'made' : 'no'}/${w.needFt}${w.can ? '+' : ''}`).join(' ')}`);
+    for (const w of rows) {
+      if (w.can) expect(w).toMatchObject({ made: true });
+      if (w.needFt > w.ft) expect(w).toMatchObject({ made: false });
+    }
+    expect(rows.filter((w) => w.can).length).toBeGreaterThanOrEqual(5);
     expect(rows[0].made).toBe(false);
-    expect(rows[rows.length - 1].made).toBe(false);
+    if (!headwindKts) expect(rows[rows.length - 1].made).toBe(false);
+  });
+
+  // The turn's sink (EO_INDUCED): gliding at 68 KIAS, engine out, a steady 45° bank sinks
+  // 1 + k(n² - 1) = 1.35 times the wings-level glide (k = 0.35; a parabolic polar's 0.5 would be 1.5).
+  it('a 45° gliding turn at 68 KIAS sinks 1.35x the straight glide (±0.05): the coach\'s k', () => {
+    const sink = (bankDeg) => {
+      const b = Object.assign(makeBody(c172, { kts: 68, altM: 1500 }), { engineFailed: true });
+      const hold = speedHoldPilot(() => 68);
+      const pilot = (x, dt) => {
+        hold(x, dt);
+        x.aileronInput = aileronForBank(bankDeg, attitude(x).bankRightDeg, -x.angVel.z);
+        x.rudderInput = Math.max(-1, Math.min(1, (x.betaDeg ?? 0) * 0.1));
+      };
+      return -settle(b, c172, 10, pilot, (x) => x.vel.y, 30);
+    };
+    const ratio = sink(45) / sink(0);
+    console.log(`[engineOut] 45° gliding turn: ${ratio.toFixed(3)}x the straight sink (k = ${(ratio - 1).toFixed(3)})`);
+    expect(Math.abs(ratio - (1 + EO_INDUCED))).toBeLessThanOrEqual(0.05);
   });
 });

@@ -34,11 +34,11 @@ ahead (the existing off-airport touchdown grader), turnback made, or a stall in 
 (capped D with "the turn cost you X ft"). Kid's guide lands ahead.
 
 ## Acceptance criteria
-- [ ] Two missions (300 ft and 900 ft failure) appear in the picker under Addison with a blurb that states the lesson
-- [ ] Engine is failed in the physics (`sim.engineFailed`), HUD says "ENG OUT", no autopilot
-- [ ] A flight card flies each mission headless: the 300 ft case landing ahead survives, the same case with a turnback stalls or lands short; the 900 ft case turnback reaches the runway
-- [ ] The coach's turnback height is computed from glide ratio and wind, and a unit test pins it
-- [ ] Works at 390x844 touch and 1280x720; boot JS budget held (new code is lazy)
+- [x] Two missions (300 ft and 700 ft failure; the ticket asked for 900 ft, see As built) appear in the picker under Addison with a blurb that states the lesson
+- [x] Engine is failed in the physics (`sim.engineFailed`), HUD says "ENG OUT", no autopilot
+- [x] A flight card flies each mission headless: the 300 ft case landing ahead survives, the same case with a turnback stalls or lands short; the 700 ft case turnback reaches the runway (as built)
+- [x] The coach's turnback height is computed from glide ratio and wind, and a unit test pins it
+- [x] Works at 390x844 touch and 1280x720; boot JS budget held (new code is lazy)
 
 ## Test plan
 Unit test for the turnback-height function; flight cards in `tests/flight/` as above (the
@@ -55,10 +55,10 @@ it opens at ~425 ft and closes at ~925 ft (900 made the runway by ~5 m, 950 miss
 in its middle. The coach's turnback height `turnbackHeightFt` is computed live: the reaction
 second, a turn of 180° plus twice the cut back from two turn radii beside the runway (well over
 180° close in), the turn's sink at 1 + k(n² − 1) times the glide's (k = 0.35, measured on
-flightModel.js: 1.3x at 45°), the glide back downwind (a takeoff headwind helps twice), less
+flightModel.js: 1.34x at 45° and 68 KIAS, a card), the glide back downwind (a takeoff headwind helps twice), less
 the climb's spare speed ((v² − vg²)/2g). A flight card fails the engine every 50 ft from 300 to
 1,100 ft and turns back: the airplane makes the runway exactly where the coach says it can,
-except within 25 ft of the line. The coach says "you can turn back" or "land ahead" at the
+except within 25 ft of the line. The panel then flew it in wind: the coach now says "you can turn back" only with 25 ft to spare (`EO_MARGIN_FT`), and the sweep card runs in calm air and in a 10 kt headwind: wherever the coach says it can, the turn back makes the runway; wherever the need is above the height, it does not (the test pilot steers to a point down the runway and sets full flaps when high on final). A turn counts as "turned back" past 120° off 16 (a turn to a field is still landing ahead). The coach says "you can turn back" or "land ahead" at the
 failure from the height there, then "keep turning" or "too low for this turn". Graded:
 decision 30%, landing 70%; landed ahead in a field is a B at best ("the right call"); turned
 back below the height it needed, or a stall above 50 ft, is a D at best with what the turn

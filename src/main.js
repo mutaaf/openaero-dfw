@@ -931,7 +931,7 @@ function startDrills(mission) {
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
   if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
-  if (mission.engineOutFt) loadDrill(mission, eoLib, () => import('./engineOut.js'), (lib) => { eoLib = lib; sim.engineOut = lib.createEngineOut(mission); });
+  if (mission.engineOutFt) loadDrill(mission, eoLib, () => import('./engineOut.js'), (lib) => { eoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.engineOut = lib.createEngineOut(mission); });
 }
 
 // --- Landing grade ---------------------------------------------------------------
@@ -978,6 +978,8 @@ function checkTouchdown(dt) {
   if (!touchedDown) return;
   sim.landingGraded = true;
   sim.airborneTime = 0;
+  // The engine-failure takeoffs (0104) grade only a landing after the failure: no best without it.
+  if (sim.loadedMission?.engineOutFt && !sim.engineOut?.failed) return;
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   // The dead-stick challenge (0036) is graded on Addison wherever the wheels touch.
   const glideLib = sim.deadStick ? deadLib : sim.engineOut?.failed ? eoLib : null; // 0036, 0104
@@ -2482,7 +2484,7 @@ function syncUI() {
   byId('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
   byId('txtPhoneAgl').textContent = `${sim.aglFt}`;
   byId('txtPhoneVs').textContent = `${sim.vsiFpm}`;
-  byId('txtPhoneThr').textContent = `${throttlePct}%`;
+  byId('txtPhoneThr').textContent = sim.engineFailed ? 'OUT' : `${throttlePct}%`;
   byId('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;
   const papi = byId('txtPapiStatus');
   const phonePapi = byId('txtPhonePapi');

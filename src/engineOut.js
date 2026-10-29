@@ -23,12 +23,15 @@ const G = 9.81;
 export const EO_BANK_DEG = 45;
 // Before the first input: the moment it takes to see the engine has quit.
 export const EO_REACT_S = 1;
+// The coach says "you can turn back" only with this much height to spare over the need (a turn
+// that makes it by a few feet is not a plan).
+export const EO_MARGIN_FT = 25;
 // Turned back: the track more than this far off the runway's heading ("land ahead" allows
-// small turns, up to EO_TURN_FROM_DEG either side, to pick a field). Back: within this of the
-// reciprocal.
+// small turns to pick a field; the coach calls past EO_TURN_FROM_DEG a turn). Back: within this
+// of the reciprocal.
 // The turn's cost is the height lost from the track first EO_TURN_FROM_DEG off the runway's
 // heading to the track within EO_BACK_DEG of the reciprocal (or the touchdown).
-export const EO_TURNED_DEG = 60;
+export const EO_TURNED_DEG = 120; // a 60-90° turn to a field is still landing ahead
 export const EO_TURN_FROM_DEG = 30;
 export const EO_BACK_DEG = 30;
 // Landed ahead off the runway: survived, but a field is not a runway. The best is a B.
@@ -46,8 +49,8 @@ const deg = (rad) => rad * 180 / Math.PI;
 // the height the climb's extra speed buys on the way down to best glide ((v² - vg²) / 2g).
 // The turn (see above): at constant airspeed a bank's load factor n raises the induced drag by n², so the
 // sink grows by 1 + k(n² - 1), k the induced share of the drag at best glide (0.5 for a
-// parabolic polar; the C172's flightModel.js sinks 1.3x at 45° and 64 KIAS, k = EO_INDUCED,
-// pinned by tests/flight/engineOut.test.js). The glide back is downwind: a headwind on the
+// parabolic polar; the C172's flightModel.js sinks ~1.36x at 45° and 68 KIAS, k = EO_INDUCED,
+// a card in tests/flight/engineOut.test.js). The glide back is downwind: a headwind on the
 // takeoff stretches it over the ground, and drifts the turn back towards the runway.
 //   distBackM: how far past the far threshold (0 still over the runway); ratio: the glide ratio
 //   through the air; tasMps: now; glideTasMps: best glide's; bankDeg; headwindMps: the wind
@@ -86,31 +89,33 @@ export const EO_TEXT = {
 Object.assign(DRILL_TEXT, EO_TEXT);
 
 export const createEngineOut = (mission) => ({
-  failFt: mission.engineOutFt, failed: false, t0: 0, turnbackFt: 0, canTurn: false,
+  failFt: mission.engineOutFt, rolled: false, failed: false, t0: 0, turnbackFt: 0, canTurn: false,
   turned: false, turnFromFt: 0, startFt: null, back: false, costFt: 0, stalled: false,
 });
 
 // The live geometry for one step, into a reused object. s: { t, aglFt, x, z, trackDeg, iasKts,
 // tasKts, aoaDeg, stallAoaDeg, flaps, headwindKts, bankMaxDeg, kid, onGround }.
 const _g = { offDeg: 0, needFt: 0 };
+const _tb = { distBackM: 0, ratio: 9, tasMps: 0, glideTasMps: 0, bankDeg: EO_BANK_DEG, headwindMps: 0 };
 function geometry(s) {
   _g.offDeg = wrap180(s.trackDeg - E16.hdgT);
   const tas = Math.max(25, s.tasKts * 0.514444);
-  _g.needFt = turnbackHeightFt({
-    distBackM: distPastRunwayM(s.x, s.z), ratio: DS_RATIO_BY_FLAPS[s.flaps ?? 0], tasMps: tas,
-    glideTasMps: s.iasKts > 20 ? tas * DS_GLIDE_KTS / s.iasKts : tas, bankDeg: Math.min(EO_BANK_DEG, s.bankMaxDeg ?? EO_BANK_DEG),
-    headwindMps: (s.headwindKts ?? 0) * 0.514444,
-  });
+  _tb.distBackM = distPastRunwayM(s.x, s.z); _tb.ratio = DS_RATIO_BY_FLAPS[s.flaps ?? 0]; _tb.tasMps = tas;
+  _tb.glideTasMps = s.iasKts > 20 ? tas * DS_GLIDE_KTS / s.iasKts : tas;
+  _tb.bankDeg = Math.min(EO_BANK_DEG, s.bankMaxDeg ?? EO_BANK_DEG);
+  _tb.headwindMps = (s.headwindKts ?? 0) * 0.514444;
+  _g.needFt = turnbackHeightFt(_tb);
   return _g;
 }
 
 // One step: fails the engine at its height (returns true that step), then watches the turn.
 export function stepEngineOut(st, s) {
   if (!st.failed) {
-    if (s.onGround || s.aglFt < st.failFt) return false;
+    if (s.onGround) st.rolled = true; // a chunk that loads in the air never fails the engine there
+    if (!st.rolled || s.onGround || s.aglFt < st.failFt) return false;
     st.failed = true; st.t0 = s.t;
     st.turnbackFt = geometry(s).needFt;
-    st.canTurn = s.aglFt >= st.turnbackFt;
+    st.canTurn = s.aglFt >= st.turnbackFt + EO_MARGIN_FT;
     return true;
   }
   if (s.onGround) return false;
@@ -139,7 +144,7 @@ export function engineOutTarget(st, s) {
   if (off > 180 - EO_BACK_DEG) return 'eoLineUp';
   if (st.canTurn && off > EO_TURN_FROM_DEG / 2) return 'eoTurning';
   if (!st.canTurn && st.startFt !== null) return 'eoTooLow';
-  return s.aglFt >= g.needFt ? 'eoCanTurn' : 'eoAhead';
+  return s.aglFt >= g.needFt + EO_MARGIN_FT ? 'eoCanTurn' : 'eoAhead';
 }
 
 // main.js's calls, with the input built from the sim here (reused; the chunk, not boot, pays).
@@ -167,11 +172,11 @@ export function kidGuide(sim, out) {
 }
 
 // The turn back for a pilot that makes it (the flight cards): the bank (+ right) that flies
-// to a point `leadM` ahead along 34's centreline, turning left from behind it (16's traffic is a
+// to a point `leadM` ahead along 34's centreline (on the runway, if high: not past 600 m from its end), turning left from behind it (16's traffic is a
 // left pattern), at most bankDeg. trackDeg: the ground track.
 export function turnbackBankDeg(x, z, trackDeg, bankDeg = EO_BANK_DEG, leadM = 400) {
   const along = (x - E34.thrX) * -D16.x + (z - E34.thrZ) * -D16.z; // − before 34's threshold
-  const aim = Math.min(along + leadM, 600);
+  const aim = Math.min(along + leadM, E34.lengthM - 600); // down the runway, a stop's room left
   const ax = E34.thrX - D16.x * aim, az = E34.thrZ - D16.z * aim;
   let err = wrap180(deg(Math.atan2(ax - x, -(az - z))) - trackDeg);
   if (err > 150) err -= 360;

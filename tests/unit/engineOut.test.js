@@ -86,11 +86,20 @@ describe('turnbackHeightFt (ticket 0104)', () => {
 // One step's input, the sim's numbers as engineOut.js's input() builds them.
 const step = (over) => ({ t: 0, aglFt: 0, ...past(0), trackDeg: E16.hdgT, iasKts: 74, tasKts: 76, aoaDeg: 5, stallAoaDeg: 14.1, flaps: 0, headwindKts: 0, bankMaxDeg: 45, kid: false, onGround: false, ...over });
 
+// The drill as main.js starts it: created on the runway, so the first step rolls.
+const armed = (m) => { const st = createEngineOut(m); stepEngineOut(st, step({ onGround: true })); return st; };
+
 describe('the engine failure and the coach (ticket 0104)', () => {
   const m300 = missionByKey('efato_kads_16_300');
 
-  it('climbs coached, quits at its height, and says land ahead when the turn back cannot make it', () => {
+  it('a drill that starts in the air (its chunk arrived late) never fails the engine there', () => {
     const st = createEngineOut(m300);
+    expect(stepEngineOut(st, step({ aglFt: 1500 }))).toBe(false);
+    expect(st.failed).toBe(false);
+  });
+
+  it('climbs coached, quits at its height, and says land ahead when the turn back cannot make it', () => {
+    const st = armed(m300);
     expect(engineOutTarget(st, step({ onGround: true }))).toBe(null);
     expect(stepEngineOut(st, step({ aglFt: 200 }))).toBe(false);
     expect(engineOutTarget(st, step({ aglFt: 200 }))).toBe('eoClimb');
@@ -112,19 +121,19 @@ describe('the engine failure and the coach (ticket 0104)', () => {
   });
 
   it('high and close enough: "you can turn back" from the failure, then keep turning', () => {
-    const st = createEngineOut({ engineOutFt: 700 });
+    const st = armed({ engineOutFt: 700 });
     stepEngineOut(st, step({ t: 0, aglFt: 700, ...past(1000) }));
     expect(st.canTurn).toBe(true);
     expect(engineOutTarget(st, step({ t: 1, aglFt: 700, ...past(1000) }))).toBe('eoFailTurn');
     expect(engineOutTarget(st, step({ t: 6, aglFt: 660, ...past(1100), trackDeg: E16.hdgT - 90, iasKts: 68 }))).toBe('eoTurning');
     // Not turned and gone on too far: no longer.
-    const late = createEngineOut({ engineOutFt: 700 });
+    const late = armed({ engineOutFt: 700 });
     stepEngineOut(late, step({ t: 0, aglFt: 700, ...past(1000) }));
     expect(engineOutTarget(late, step({ t: 30, aglFt: 400, ...past(2000), iasKts: 68 }))).toBe('eoAhead');
   });
 
   it('Kid: its own words, and the guide glides ahead wings level', () => {
-    const st = createEngineOut(m300);
+    const st = armed(m300);
     stepEngineOut(st, step({ aglFt: 300, kid: true }));
     expect(engineOutTarget(st, step({ t: 1, aglFt: 300, kid: true }))).toBe('eoKidFail');
     expect(engineOutTarget(st, step({ t: 9, aglFt: 200, kid: true }))).toBe('eoKid');
@@ -134,17 +143,24 @@ describe('the engine failure and the coach (ticket 0104)', () => {
   });
 
   it('records the turn: where it started, the height it cost, and a stall in it (not in the flare)', () => {
-    const st = createEngineOut(m300);
+    const st = armed(m300);
     stepEngineOut(st, step({ t: 0, aglFt: 300 }));
     stepEngineOut(st, step({ t: 2, aglFt: 290, trackDeg: E16.hdgT - 35 }));
     stepEngineOut(st, step({ t: 5, aglFt: 240, trackDeg: E16.hdgT - 90, aoaDeg: 15 }));
     stepEngineOut(st, step({ t: 9, aglFt: 150, trackDeg: E34.hdgT + 10 }));
     stepEngineOut(st, step({ t: 15, aglFt: 60, trackDeg: E34.hdgT }));
     expect(st).toMatchObject({ turned: true, turnFromFt: 290, back: true, costFt: 140, stalled: true });
-    const flare = createEngineOut(m300);
+    const flare = armed(m300);
     stepEngineOut(flare, step({ t: 0, aglFt: 300 }));
     stepEngineOut(flare, step({ t: 30, aglFt: 5, aoaDeg: 16 }));
     expect(flare.stalled).toBe(false);
+  });
+
+  it('a 90° turn to a field is still landing ahead (turned back is past 120°)', () => {
+    const st = armed(m300);
+    stepEngineOut(st, step({ t: 0, aglFt: 300 }));
+    stepEngineOut(st, step({ t: 5, aglFt: 220, trackDeg: E16.hdgT + 90 }));
+    expect(st.turned).toBe(false);
   });
 
   it('the turn-back steering turns left from behind the runway, toward 34\'s centreline', () => {
