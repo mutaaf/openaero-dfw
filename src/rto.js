@@ -33,26 +33,27 @@ const STOPPED_KTS = 1;
 const FAIL_CAP = 54; // the top of a D
 
 export const RTO_TEXT = {
-  rtoRoll: 'Full power (TO/GA), keep straight: stop if a warning comes',
-  rtoKidRoll: 'Full power (TO/GA), then let go',
+  rtoRoll: 'Full power (throttle to the top), stop if a warning comes',
+  rtoKidRoll: 'Push the throttle to the top, then let go',
   rtoIdle: 'ENGINE FIRE! Reject: thrust to idle now',
   rtoBrake: 'Full brakes: B, or tap BRAKES',
-  rtoReverse: 'Reverse thrust: R, or tap REV',
+  rtoReverse: 'Reverse: R, or tap REV, then add power',
+  rtoStow: 'Reverse to idle by 60 knots, hold the brakes',
   rtoStraight: 'Hold the brakes, keep it on the centreline',
   rtoKid: 'Fire! Let go: the plane stops itself',
 };
 Object.assign(DRILL_TEXT, RTO_TEXT);
 // Each step of the reject replaces the last at once (a higher rank interrupts; coach.js).
-Object.assign(RANK, { rtoRoll: 1, rtoKidRoll: 1, rtoIdle: 4, rtoKid: 4, rtoBrake: 5, rtoReverse: 6, rtoStraight: 7 });
+Object.assign(RANK, { rtoRoll: 1, rtoKidRoll: 1, rtoIdle: 4, rtoKid: 4, rtoBrake: 5, rtoReverse: 6, rtoStraight: 7, rtoStow: 8 });
 
 // rnd: a 0..1 draw for the fire's speed (Math.random in the game; a test passes its own).
 export const createRto = (rnd = Math.random) => ({
   phase: 'armed', failKts: Math.round(RTO_MIN_KTS + rnd() * (RTO_MAX_KTS - RTO_MIN_KTS)),
-  t0: 0, failGsKts: 0, failLeftM: 0, idleS: null, brakeS: null, maxCrossM: 0, stopM: 0, leftM: 0,
+  t0: 0, fireThrottle: 1, failGsKts: 0, failLeftM: 0, idleS: null, brakeS: null, maxCrossM: 0, stopM: 0, leftM: 0,
 });
 
 export const rtoDone = (st) => st.phase !== 'armed' && st.phase !== 'fire' && st.phase !== 'late';
-const live = (st) => st.phase === 'armed' || st.phase === 'fire';
+export const rtoLive = (st) => st.phase === 'armed' || st.phase === 'fire';
 
 // The reference stop distance (m) from a groundspeed (kt).
 export function rtoRefStopM(gsKts) {
@@ -68,11 +69,13 @@ export function stepRto(st, s) {
     if (!s.onGround || s.iasKts < st.failKts) return '';
     // A chunk that loads well past the speed (or past V1) never fires late: no drill this roll.
     if (s.iasKts > st.failKts + 5) { st.phase = 'late'; return ''; }
-    st.phase = 'fire'; st.t0 = s.t; st.failGsKts = s.gsKts; st.failLeftM = s.leftM;
+    st.phase = 'fire'; st.t0 = s.t; st.fireThrottle = s.throttle; st.failGsKts = s.gsKts; st.failLeftM = s.leftM;
     return 'fire';
   }
   if (st.phase !== 'fire') return '';
-  if (st.idleS === null && s.throttle < 0.05) st.idleS = s.t - st.t0; // the reverse levers come from idle (main.js)
+  // The reaction: the levers coming back (a key winds them down at 40%/s: its first tenth
+  // counts), or at idle (the reverse levers come from idle, main.js).
+  if (st.idleS === null && (s.throttle < 0.05 || s.throttle < st.fireThrottle - 0.1)) st.idleS = s.t - st.t0;
   if (st.brakeS === null && s.braking) st.brakeS = s.t - st.t0;
   const cross = Math.abs(s.crossM);
   if (cross > st.maxCrossM) st.maxCrossM = cross;
@@ -92,6 +95,7 @@ export function rtoTarget(st, s) {
   if (s.throttle > 0.05 && !(s.reverserPos > 0)) return 'rtoIdle';
   if (!s.braking) return 'rtoBrake';
   if (s.canReverse && !(s.reverserPos > 0) && s.gsKts > 60) return 'rtoReverse';
+  if (s.reverserPos > 0 && s.throttle > 0.05 && s.gsKts < 60) return 'rtoStow';
   return 'rtoStraight';
 }
 
@@ -99,7 +103,14 @@ const ft = (m) => Math.round(m * M_TO_FT).toLocaleString('en-US');
 const REASONS = {
   rotated: 'Took off after the fire warning: below V1, reject. Idle, full brakes.',
   overrun: 'Still rolling at the end of the runway: thrust idle and full brakes at once.',
-  off: 'Ran off the side of the runway: keep it on the centreline with the rudder.',
+  off: 'Ran off the side of the runway: steer it back to the centreline as it slows.',
+  // Off the end or the side with the levers never closed, or never braked: that was the fault.
+  noIdle: 'Never closed the thrust after the fire: idle, then full brakes, at once.',
+  noBrake: 'Never braked after the fire: full brakes as soon as the thrust is idle.',
+  // Stopped, but slowly: the weakest part.
+  reaction: 'Close the thrust levers the moment the warning comes.',
+  stop: 'Idle, full brakes and reverse together: each second at 100 kt is 170 ft.',
+  centreline: 'Keep it on the centreline as it slows.',
 };
 const WEIGHTS = { reaction: 0.4, stop: 0.4, centreline: 0.2 };
 
@@ -108,7 +119,7 @@ export function gradeRto(st, kid = false) {
   const ref = rtoRefStopM(st.failGsKts);
   const stopped = st.phase === 'stopped';
   const factors = [
-    { key: 'reaction', label: 'Fire to thrust idle', value: kid ? 'the plane did it' : st.idleS === null ? 'never' : `${st.idleS.toFixed(1)} s`,
+    { key: 'reaction', label: 'Fire to thrust back', value: kid ? 'the plane did it' : st.idleS === null ? 'never' : `${st.idleS.toFixed(1)} s`,
       score: kid ? 100 : st.idleS === null ? 0 : curve(st.idleS, [[1, 100], [2, 80], [3, 50], [5, 0]]) },
     { key: 'stop', label: 'Stopped in', value: stopped ? `${ft(st.stopM)} ft, ${ft(st.leftM)} ft of runway left` : 'did not stop',
       score: stopped ? curve(st.stopM / ref, [[1, 100], [1.4, 70], [2, 0]]) : 0 },
@@ -117,8 +128,11 @@ export function gradeRto(st, kid = false) {
   ];
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
-  const reason = REASONS[st.phase] ?? null;
-  if (reason) score = Math.min(score, FAIL_CAP);
+  let reason = REASONS[st.phase] ?? null;
+  if (reason) {
+    score = Math.min(score, FAIL_CAP);
+    if (st.phase !== 'rotated' && !kid) reason = st.idleS === null ? REASONS.noIdle : st.brakeS === null ? REASONS.noBrake : reason;
+  } else if (score < 70) reason = REASONS[factors.reduce((a, f) => (f.score < a.score ? f : a)).key];
   return {
     kind: 'rto', title: stopped ? 'Rejected takeoff' : 'Rejected takeoff failed', grade: letterGrade(score), score, factors, reason,
     note: stopped ? (kid ? 'Kid level: the plane closed the thrust and braked for you' : `Fire at ${st.failKts} kt, stopped on the runway`) : null,
@@ -136,9 +150,10 @@ function input(sim) {
   _in.reverserPos = sim.reverserPos ?? 0; _in.braking = !!(sim.brakesOn || sim.autobrakeActive);
   const rx = sim.pos.x - RTO_END.thrX, rz = sim.pos.z - RTO_END.thrZ;
   _in.leftM = RTO_END.lengthM - RTO_END.displacedM - (rx * DX + rz * DZ); // past the threshold, less
-  _in.crossM = rx * -DZ + rz * DX; // + right (airports.js approachGeometry) _in.halfWidthM = RTO_END.widthM / 2;
+  _in.crossM = rx * -DZ + rz * DX; // + right (airports.js approachGeometry)
+  _in.halfWidthM = RTO_END.widthM / 2;
   _in.canReverse = !!sim.spec.systems?.reverser; _in.kid = sim.assist === 'kid';
   return _in;
 }
 export const rtoStep = (st, sim) => stepRto(st, input(sim));
-export const rtoPrompt = (st, sim) => (live(st) ? rtoTarget(st, input(sim)) : null);
+export const rtoPrompt = (st, sim) => (rtoLive(st) ? rtoTarget(st, input(sim)) : null);

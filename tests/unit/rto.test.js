@@ -56,11 +56,13 @@ describe('rejected takeoff drill (ticket 0107)', () => {
     expect(stepRto(st, at({ t: 26 }))).toBe(''); // over: no second end
   });
 
-  it('idle is the thrust levers closed: sleeves moving with the levers up don\'t count', () => {
+  it('the reaction is the levers coming back (a key winding them down counts from its first tenth); sleeves alone don\'t count', () => {
     const st = fired();
-    stepRto(st, at({ t: 10.8, gsKts: 100, throttle: 0.6, reverserPos: 0.3 }));
+    stepRto(st, at({ t: 10.5, gsKts: 100, throttle: 1, reverserPos: 0.3 }));
     expect(st.idleS).toBe(null);
-    stepRto(st, at({ t: 11.1, gsKts: 100, throttle: 0, reverserPos: 0.5 }));
+    stepRto(st, at({ t: 10.9, gsKts: 100, throttle: 0.95 }));
+    expect(st.idleS).toBe(null);
+    stepRto(st, at({ t: 11.1, gsKts: 100, throttle: 0.88 }));
     expect(st.idleS).toBeCloseTo(1.1, 5);
   });
 
@@ -94,6 +96,8 @@ describe('rejected takeoff drill (ticket 0107)', () => {
     // Reverse thrust is the lever up with the sleeves out: not an "idle" call.
     expect(rtoTarget(st, { ...s, throttle: 0.8, braking: true, reverserPos: 1 })).toBe('rtoStraight');
     expect(rtoTarget(st, { ...s, throttle: 0, braking: true, gsKts: 50 })).toBe('rtoStraight');
+    // Reverse power past 60 kt: back to idle reverse.
+    expect(rtoTarget(st, { ...s, throttle: 0.8, braking: true, reverserPos: 1, gsKts: 50 })).toBe('rtoStow');
     expect(rtoTarget(st, { ...s, throttle: 0, braking: true, canReverse: false })).toBe('rtoStraight');
     expect(rtoTarget(st, { ...s, kid: true })).toBe('rtoKid');
     st.phase = 'stopped';
@@ -109,7 +113,7 @@ describe('rejected takeoff drill (ticket 0107)', () => {
     const c = createCoach();
     const s = { onGround: true, autopilot: false, aglFt: 0, vsiFpm: 0, throttle: 1 };
     stepCoach(c, { ...s, dsGround: 'rtoRoll' }, 0.1);
-    for (const k of ['rtoIdle', 'rtoBrake', 'rtoReverse', 'rtoStraight']) {
+    for (const k of ['rtoIdle', 'rtoBrake', 'rtoReverse', 'rtoStraight', 'rtoStow']) {
       stepCoach(c, { ...s, dsGround: k }, 0.01);
       expect(c.prompt).toBe(k);
     }
@@ -131,20 +135,26 @@ describe('rejected takeoff drill (ticket 0107)', () => {
     const slow = gradeRto(fired({ phase: 'stopped', idleS: 3, brakeS: 3, stopM: 1.5 * ref, leftM: 1500, maxCrossM: 1 }));
     expect(slow.score).toBeLessThan(good.score);
     expect(['C', 'D']).toContain(slow.grade);
+    expect(slow.reason).toBeTruthy(); // a C or D says what to work on
     const crooked = gradeRto(fired({ phase: 'stopped', idleS: 0.8, stopM: ref, leftM: 2000, maxCrossM: 15 }));
     expect(crooked.score).toBeLessThan(90);
   });
 
   it('caps an overrun, a run off the side and a takeoff after the fire at D, with the reason', () => {
     for (const [phase, re] of [['overrun', /end of the runway/], ['off', /side of the runway/], ['rotated', /Took off after the fire/]]) {
-      const g = gradeRto(fired({ phase, idleS: 0.5, stopM: 100, leftM: 0, maxCrossM: 0 }));
+      const g = gradeRto(fired({ phase, idleS: 0.5, brakeS: 0.6, stopM: 100, leftM: 0, maxCrossM: 0 }));
       expect(g.grade).toBe('D');
       expect(g.title).toBe('Rejected takeoff failed');
       expect(g.reason).toMatch(re);
       expect(g.factors[1].value).toBe('did not stop');
     }
-    // Never idled at all.
-    expect(gradeRto(fired({ phase: 'overrun' })).factors[0]).toMatchObject({ value: 'never', score: 0 });
+    // Never idled at all, or never braked: that is the reason, wherever it ended.
+    const never = gradeRto(fired({ phase: 'off' }));
+    expect(never.factors[0]).toMatchObject({ value: 'never', score: 0 });
+    expect(never.reason).toMatch(/^Never closed the thrust/);
+    expect(gradeRto(fired({ phase: 'overrun', idleS: 1 })).reason).toMatch(/^Never braked/);
+    expect(gradeRto(fired({ phase: 'off', idleS: 1, brakeS: 1.2 })).reason).toMatch(/side of the runway/);
+    expect(gradeRto(fired({ phase: 'rotated' })).reason).toMatch(/Took off/);
   });
 
   it('Kid: the plane closed the thrust and braked, so the reaction is not the player\'s to score', () => {
@@ -166,6 +176,7 @@ describe('rejected takeoff drill (ticket 0107)', () => {
       sim.simTime = 2;
       rtoStep(st, sim);
       expect(st.maxCrossM).toBeCloseTo(Math.abs(g.crossM), 6);
+      expect(st.phase).toBe('fire'); // on the 150 ft runway: not off the side
       expect(Math.abs(g.crossM)).toBeCloseTo(Math.abs(right), 6);
     }
     expect(RTO_END.displacedM).toBe(0);

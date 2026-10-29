@@ -18,7 +18,7 @@ test('phone, Kid: full power, the fire warning, the plane stops itself, the card
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   const snap = () => page.evaluate(() => window.openaeroDebug());
   expect((await snap()).assist).toBe('kid');
-  await expect(page.locator('#txtCoach')).toHaveText(/^Full power \(TO\/GA\), then let go/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Push the throttle to the top, then let go', { timeout: 10_000 });
   const cdp = await page.context().newCDPSession(page);
   const thr = await page.locator('#touchThrottle').boundingBox();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: thr.x + thr.width / 2, y: thr.y + 4, id: 1 }] });

@@ -23,7 +23,7 @@ test('rejected takeoff, Pilot: the fire warning before V1, idle and brakes stop 
   expect(spawn).toMatchObject({ mission: 'kdfw_35c_rto', aircraft: 'b738', onGround: true });
   expect(spawn.rto.failKts).toBeGreaterThanOrEqual(75);
   expect(spawn.rto.failKts).toBeLessThanOrEqual(110);
-  await expect(page.locator('#txtCoach')).toHaveText(/^Full power \(TO\/GA\)/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/^Full power \(throttle to the top\)/, { timeout: 10_000 });
   await page.click('#btnToga');
   await expect.poll(async () => (await snap(page)).rto.phase, { timeout: 90_000, intervals: [100] }).toBe('fire');
   await expect(page.locator('#masterAlertBanner')).toHaveText('ENGINE FIRE — IDLE, BRAKES');
@@ -37,14 +37,14 @@ test('rejected takeoff, Pilot: the fire warning before V1, idle and brakes stop 
   await expect(page.locator('#masterAlertBanner')).toBeHidden({ timeout: 10_000 });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 90_000 });
   await expect(page.locator('#txtResultTitle')).toHaveText('Rejected takeoff');
-  await expect(page.locator('#resultsFactors li').nth(0)).toContainText(/Fire to thrust idle\s*\d+\.\d s/);
+  await expect(page.locator('#resultsFactors li').nth(0)).toContainText(/Fire to thrust back\s*\d+\.\d s/);
   await expect(page.locator('#resultsFactors li').nth(1)).toContainText('of runway left');
   expect((await snap(page)).rto.phase).toBe('stopped');
   const done = await snap(page);
   console.log(`[0107] fire at ${done.rto.failKts} kt, idle ${done.rto.idleS?.toFixed(1)} s, brakes ${done.rto.brakeS?.toFixed(1)} s, stop ${Math.round(done.rto.stopM)} m, grade ${await page.locator('#txtGrade').textContent()}`);
-  // Stopped on the runway: no failure reason. The letter is the harness's own reaction time (a CDP
-  // round trip under 2x warp, ~3.5 s, a C or D); tests/flight/rto.test.js grades a pilot's.
-  await expect(page.locator('#txtGradeReason')).toBeHidden();
+  // Stopped on the runway: no failure reason (a slow C or D gets advice). The letter is the harness's
+  // own reaction time (a CDP round trip under 2x warp, 3.5-6 s); tests/flight/rto.test.js grades a pilot's.
+  expect(await page.locator('#txtGradeReason').textContent()).not.toMatch(/Never|end of the runway|side of the runway|Took off/);
   expect(['S', 'A', 'B', 'C', 'D']).toContain((await page.locator('#txtGrade').textContent()).trim());
   expect(await lowContrastLabels(page, '#resultsCard')).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('rto-1280.png') });

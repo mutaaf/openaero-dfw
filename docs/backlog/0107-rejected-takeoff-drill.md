@@ -55,8 +55,14 @@ starts, the warning appears, a held-brake pilot gets a graded card.
   as a real fire bell (the model has one thrust lever for both engines, no asymmetric thrust).
   The HUD banner says `ENGINE FIRE — IDLE, BRAKES` until the thrust is idle (2 s at least): on a
   phone held sideways alerts take the coach's slot, and the coach has the rest of the reject.
-- Kid: at the fire the plane closes the thrust and sets autobrake MAX (the RTO setting's effect);
-  the card says so and scores the reaction as the plane's.
+- Kid: from the fire to the stop the plane holds the thrust at idle and autobrake MAX (the RTO
+  setting's effect), whatever the throttle is pushed to; its banner says only ENGINE FIRE; the card
+  says so and scores the reaction as the plane's.
+- The reaction is the levers coming back (a key's first tenth of travel), not the time Ctrl takes
+  to wind them to idle; Ctrl+R and Ctrl+B no longer reload or bookmark the page. A D for running
+  off names the real fault (never idled, never braked); a slow stop names its weakest part.
+- Known: the 737 has no RTO autobrake setting (MAX disarms on takeoff thrust), and no fire bell
+  (the coach speaks the call).
 - Flight cards (tests/flight/rto.test.js): the 737's accelerate-stop per 14 CFR 25.109 (idle and
   maximum braking at V1, no reverse, + 2 s at V1) is 5,006 ft against Boeing's 5,100 ft field
   length at 65 t (ACAP §3.3.29); a second's hesitation at full thrust past V1 would need

@@ -925,11 +925,13 @@ let rtoLib = null;
 function checkRto() {
   const ev = sim.rto && !rtoLib.rtoDone(sim.rto) && rtoLib.rtoStep(sim.rto, sim);
   if (!ev) return;
-  if (ev === 'fire') {
-    // Kid: the plane rejects for you (thrust idle, autobrake MAX as the RTO setting does).
-    if (sim.assist === 'kid') { sim.throttle = 0; byId('rngThrottle').value = 0; sim.autobrake = 4; }
-    return;
+  // Kid: the plane rejects for you, and keeps rejecting (thrust idle, autobrake MAX as the RTO
+  // setting does), whatever the throttle is pushed to.
+  if (sim.rto.phase === 'fire' && sim.assist === 'kid') {
+    sim.throttle = 0; sim.reverseCmd = false;
+    if (!sim.autobrakeActive) sim.autobrake = 4;
   }
+  if (ev === 'fire') return;
   byId('masterAlertBanner').classList.add('hidden'); // the card pauses the flight: no warning frozen under it
   const result = rtoLib.gradeRto(sim.rto, sim.assist === 'kid');
   let best = { isNewBest: false, best: null };
@@ -1154,7 +1156,7 @@ function updateCoach(dt) {
   // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
-  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.rto || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1604,9 +1606,9 @@ function integrateSubStep(dt) {
   const banner = byId('masterAlertBanner');
   // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (Kid's plane
   // idles at once: 2 s): a phone held sideways shows alerts in the coach's slot, and the coach has the rest.
-  const rto = sim.rto, fire = rto?.phase === 'fire' && (rto.idleS === null || (sim.assist === 'kid' && sim.simTime - rto.t0 < 2));
+  const rto = sim.rto, kid = sim.assist === 'kid', fire = rto?.phase === 'fire' && (kid ? sim.simTime - rto.t0 < 2 : rto.idleS === null);
   banner.classList.toggle('hidden', !gpwsWarning && !gearWarning && !fire);
-  const bannerText = fire ? 'ENGINE FIRE — IDLE, BRAKES' : gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
+  const bannerText = fire ? (kid ? 'ENGINE FIRE' : 'ENGINE FIRE — IDLE, BRAKES') : gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
   if (banner.textContent !== bannerText) banner.textContent = bannerText;
   // Spoken once per descent below 500 ft (GPWS mode 4A).
   if (gearWarning && !sim.gearWarned) { sim.gearWarned = true; audio.callout('too low, gear'); }
@@ -3004,6 +3006,8 @@ window.addEventListener('wheel', e => {
 // Keyboard Listeners
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
+  // Ctrl winds the power back: Ctrl+R (reverse) and Ctrl+B (brakes) must not reload or bookmark (0107).
+  if (e.ctrlKey && (e.code === 'KeyR' || e.code === 'KeyB') && !modalOpen()) e.preventDefault();
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
   if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
