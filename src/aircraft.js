@@ -137,11 +137,12 @@ export const AIRCRAFT_DATABASE = {
     // reverse. The small disc brakes are torque-limited below the tyres' grip: μ 0.39 at full
     // pedal is fitted to POH Fig. 5-11 (575 ft roll from a near-stall touchdown, 1335 ft from
     // 50 ft; tests/flight/c172.test.js), not a measured brake torque (ticket 0082). Wet
-    // runway (0108, 14 CFR 25.109(c)): 6.00-6 main tyres at 38 psi (POH Section 8), so the
-    // rule's 50 psi row. No anti-skid: a pilot's feet holding the wheels short of a skid get
-    // 0.37, between (c)(2)'s on-off 0.30 and quasi-modulating 0.50, fitted to the UK CAA's
-    // light-aircraft factor (Safety Sense Leaflet 7: a wet paved runway adds 15% to the
-    // landing distance from 50 ft; tests/flight/wetRunway.test.js).
+    // runway (0108): a Part 23 airplane, so 14 CFR 25.109(c) is borrowed, not required. Its
+    // 6.00-6 main tyres run 38 psi (POH Section 8), below the rule's table: its 50 psi row (an
+    // extrapolation on the conservative side). No anti-skid; 0.37 is an effective factor
+    // fitted to the UK CAA's light-aircraft planning factor (Safety Sense Leaflet 7: a wet
+    // paved runway adds 15% to the landing distance from 50 ft; tests/flight/wetRunway.test.js),
+    // between (c)(2)'s on-off 0.30 and quasi-modulating 0.50.
     systems: { flaps: { degPerS: 3 }, brakes: { tauS: 0.3, muMax: 0.39, tirePsi: 38, antiSkid: 0.37 } },
     alphaStallDeg: 14.1,
     maxThrustN: 2100, // Lycoming IO-360-L2A, 180 hp, fixed-pitch prop (static)

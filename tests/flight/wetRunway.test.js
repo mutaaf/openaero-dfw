@@ -5,11 +5,15 @@
 // The same pilot flies the same landing, dry and wet: the air phase is identical, so the
 // touchdown is as gradable as the dry one, and only the roll gets longer.
 //
-// What a wet landing should cost, from two independent planning rules:
-//  - 737: 14 CFR 121.195(d) plans a turbojet's wet landing on 115% of the dry field length,
-//    and the dry field length is the demonstrated distance / 0.6 (121.195(b)); Boeing's ACAP
-//    §3.4.3 dry sea-level curve reads 5,690 ft at 65 t (b738.test.js). A wet stop from 50 ft
-//    must fit in 1.15 × 5,690 = 6,544 ft, or the rule would plan crews off the end.
+// What a wet landing should cost:
+//  - 737: Boeing's advisory landing distances (737-800 QRH, flaps 30, max manual) put a
+//    "good" (wet) runway at roughly 1.4x dry from 50 ft and ~1.6x on the roll, with reverse;
+//    with 25.109(c)'s default 0.80 efficiency (a demonstrated anti-skid usually does better)
+//    and no reverse, the model sits on the pessimistic side of that, so its roll is pinned to
+//    1.5-2.0x dry. A loose ceiling as well: 14 CFR 121.195(d) plans a turbojet's wet landing
+//    on 115% of the dry field length (the demonstrated distance / 0.6, 121.195(b); ACAP §3.4.3
+//    reads 5,690 ft at 65 t, b738.test.js), so the wet stop from 50 ft must fit 6,544 ft or
+//    the dispatch rule itself would be violated. That is a sanity bound, not a validation.
 //  - C172: the UK CAA's Safety Sense Leaflet 7 (Aeroplane Performance) adds 15% to a light
 //    aircraft's landing distance from 50 ft on a wet paved runway. The C172's anti-skid-free
 //    efficiency is fitted to it (aircraft.js), so this card pins the fit.
@@ -53,7 +57,7 @@ function b738Landing({ wet }) {
 }
 
 describe('wet runway braking (14 CFR 25.109(c), ticket 0108)', () => {
-  it('737-800: the same landing, wet, rolls at least 30% further, stops inside 115% of the ACAP field length (14 CFR 121.195(d)); the touchdown is the same', () => {
+  it('737-800: the same landing, wet, rolls 1.5-2x as far (Boeing good-vs-dry pattern, 25.109(c) 0.80), within 121.195(d)\'s 115% of the ACAP field length; the touchdown is the same', () => {
     const dry = b738Landing({ wet: false });
     const wet = b738Landing({ wet: true });
     console.log(`[b738 wet] roll dry ${dry.rollFt.toFixed(0)} ft, wet ${wet.rollFt.toFixed(0)} ft (${((wet.rollFt / dry.rollFt) * 100).toFixed(0)}%), `
@@ -61,7 +65,8 @@ describe('wet runway braking (14 CFR 25.109(c), ticket 0108)', () => {
     expect(wet.stopped).toBe(true);
     expect(wet.airFt).toBeCloseTo(dry.airFt, 0);
     expect(wet.sinkFpm).toBeCloseTo(dry.sinkFpm, 0);
-    expect(wet.rollFt / dry.rollFt).toBeGreaterThanOrEqual(1.3);
+    expect(wet.rollFt / dry.rollFt).toBeGreaterThanOrEqual(1.5);
+    expect(wet.rollFt / dry.rollFt).toBeLessThanOrEqual(2.0);
     expect(wet.airFt + wet.rollFt).toBeLessThanOrEqual(1.15 * 5690);
   });
 

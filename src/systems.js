@@ -157,15 +157,16 @@ export function wetRunwayMuMax(tirePsi, gsKts) {
 
 // Tyre friction for the brake pressure (flightModel.js): rolling μ, plus the brakes up to
 // what anti-skid lets the runway give (dry concrete). Wet (body.wetRunway: the METAR's rain),
-// the most is 25.109(c)(1)'s coefficient at this groundspeed times (c)(2)'s anti-skid
-// efficiency (spec.systems.brakes.antiSkid: on-off 0.30, quasi-modulating 0.50, fully
-// modulating 0.80), never more than dry.
+// the runway caps it at 25.109(c)(1)'s coefficient at this groundspeed times (c)(2)'s
+// anti-skid efficiency (spec.systems.brakes.antiSkid: on-off 0.30, quasi-modulating 0.50,
+// fully modulating 0.80): a light pedal below that grip brakes as on a dry runway. The cap
+// holds rolling resistance too (conservative by its 0.03).
 export const ROLLING_MU = 0.03;
 export function brakeMu(spec, brakePress, wet = false, gsKts = 0) {
   const br = spec.systems?.brakes ?? DEFAULTS.brakes;
-  let muMax = br.muMax;
-  if (wet) muMax = Math.min(muMax, wetRunwayMuMax(br.tirePsi ?? DEFAULTS.brakes.tirePsi, gsKts) * (br.antiSkid ?? DEFAULTS.brakes.antiSkid));
-  return ROLLING_MU + (muMax - ROLLING_MU) * Math.min(1, Math.max(0, brakePress));
+  const mu = ROLLING_MU + (br.muMax - ROLLING_MU) * Math.min(1, Math.max(0, brakePress));
+  if (!wet) return mu;
+  return Math.max(ROLLING_MU, Math.min(mu, wetRunwayMuMax(br.tirePsi ?? DEFAULTS.brakes.tirePsi, gsKts) * (br.antiSkid ?? DEFAULTS.brakes.antiSkid)));
 }
 
 // Net thrust after the reversers: deployed sleeves turn the fan stream forward at the

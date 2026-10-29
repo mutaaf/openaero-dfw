@@ -92,6 +92,10 @@ describe('systems (hydraulics, brakes, reversers)', () => {
     expect(at(0)).toBeCloseTo(0.55, 3); // the dry limit caps it
     expect(brakeMu(b738, 0, true, 100)).toBeCloseTo(0.03); // rolling resistance unchanged
     expect(brakeMu(b738, 1, false, 130)).toBeCloseTo(0.55); // dry unchanged at any speed
+    // The wet runway caps the brakes; it doesn't scale the pedal: a light pedal below the grip
+    // brakes as on a dry runway.
+    expect(brakeMu(b738, 0.3, true, 100)).toBeCloseTo(brakeMu(b738, 0.3, false, 100), 6);
+    expect(brakeMu(b738, 0.6, true, 100)).toBeCloseTo(0.8 * 0.2516, 2);
   });
   it('GPWS "too low, gear" and a gear-up landing', () => {
     expect(isGearWarning(400, -700, false, false)).toBe(true);
