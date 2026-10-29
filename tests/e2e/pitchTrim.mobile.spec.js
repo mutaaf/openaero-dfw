@@ -48,8 +48,8 @@ test('phone, Pilot, touch: push the stick, lift the thumb, and the nose comes ba
   }, () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }));
 });
 
-// Pitch trim (0094): Pilot's touch rocker over the stick trims while held, in reach of the
-// thumb (nothing over it) and clear of the stick; Kid has no rocker (its assists trim).
+// Pitch trim (0094): Pilot's touch rocker beside the throttle trims while held, in reach of the
+// thumb (nothing over it) and clear of the other controls; Kid has no rocker (its assists trim).
 test('phone, Pilot, touch: holding NOSE UP trims the hands-off speed down, NOSE DN back up', async ({ page }) => {
   const errors = collectErrors(page);
   await stubTiles(page);
@@ -68,9 +68,13 @@ test('phone, Pilot, touch: holding NOSE UP trims the hands-off speed down, NOSE 
     const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [b.x + b.width / 2, b.y + b.height / 2]);
     expect(hit).toBe(id.slice(1));
   }
-  const stick = await page.locator('#touchStick').boundingBox();
-  const up = await page.locator('#touchTrimUp').boundingBox();
-  expect(up.y + up.height).toBeLessThanOrEqual(stick.y);
+  const rocker = await page.locator('#touchTrim').boundingBox();
+  const overlaps = (a, c) => a.x < c.x + c.width && c.x < a.x + a.width && a.y < c.y + c.height && c.y < a.y + a.height;
+  for (const id of ['#touchThrottle', '#touchButtons', '#touchStick']) {
+    expect(overlaps(rocker, await page.locator(id).boundingBox()), `rocker vs ${id}`).toBe(false);
+  }
+  const up = await page.locator('#touchTrimUp').boundingBox(), dn = await page.locator('#touchTrimDn').boundingBox();
+  expect(up.y).toBeLessThan(dn.y); // NOSE UP on top
   const hold = async (id) => {
     const b = await page.locator(id).boundingBox();
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 2 }] });

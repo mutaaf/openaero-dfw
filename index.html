@@ -131,7 +131,7 @@
           <b>Right thumb</b>: the stick (drag up to raise the nose)<br>
           <b>Left thumb</b>: throttle (top = full power)<br>
           <b>Middle</b>: gear, flaps, brakes, and ILS AUTO lands it for you<br>
-          <b>Pilot</b>: hold NOSE DN / NOSE UP over the throttle to trim; let go of the stick and it settles on the amber trim speed (T on the speed tape)<br>
+          <b>Pilot</b>: hold NOSE UP / NOSE DN by the throttle to trim; let go of the stick and it settles on the amber trim speed (T on the speed tape)<br>
           <b>Gamepad</b>: left stick flies, RT/LT throttle, A flaps, B gear, X brakes, right stick trims
         </div>
         <div class="hidden lg:grid grid-cols-2 gap-x-4 gap-y-1 pt-1 font-mono">
@@ -416,20 +416,22 @@
   <div id="touchDeck" class="lg:hidden absolute inset-x-0 bottom-0 z-20 pointer-events-none font-mono"
        style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom))">
     <div class="flex items-end justify-between gap-2 px-3">
-      <div class="pointer-events-auto flex flex-col items-center gap-1">
+      <div id="touchLeft" class="flex items-end gap-1.5">
+        <div class="pointer-events-auto flex flex-col items-center gap-1">
+          <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1.5">THR <b id="txtTouchThr" class="text-emerald-400">44%</b></span>
+          <div id="touchThrottle" class="touch-control hud-glass relative w-16 h-44 rounded-2xl overflow-hidden" aria-label="Throttle" role="slider" aria-valuemin="0" aria-valuemax="100">
+            <div id="touchThrottleFill" class="absolute inset-x-0 bottom-0 bg-emerald-500/30"></div>
+            <div id="touchThrottleHandle" class="absolute inset-x-1 h-9 -mb-[18px] rounded-xl bg-slate-200/90 border-2 border-white shadow-lg pointer-events-none"></div>
+          </div>
+        </div>
         <!-- Pitch trim (0094): Pilot only (main.js shows it where the trim is the player's); hold to
-             roll the wheel. NOSE UP over NOSE DN, no wider than the throttle (the speed tape starts
-             just right of this column on a 568 px screen held sideways). -->
-        <div id="touchTrim" class="hidden">
+             roll the wheel. NOSE UP over NOSE DN beside the throttle; over it on a phone held sideways,
+             where the speed tape starts just right of the throttle (styles.css). -->
+        <div id="touchTrim" class="hidden pointer-events-auto">
           <div id="touchTrimRow" class="flex flex-col-reverse gap-1.5 text-[11px] font-bold leading-tight" role="group" aria-label="Pitch trim">
             <button id="touchTrimDn" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Trim nose down">NOSE<br>DN</button>
             <button id="touchTrimUp" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Trim nose up">NOSE<br>UP</button>
           </div>
-        </div>
-        <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1.5">THR <b id="txtTouchThr" class="text-emerald-400">44%</b></span>
-        <div id="touchThrottle" class="touch-control hud-glass relative w-16 h-44 rounded-2xl overflow-hidden" aria-label="Throttle" role="slider" aria-valuemin="0" aria-valuemax="100">
-          <div id="touchThrottleFill" class="absolute inset-x-0 bottom-0 bg-emerald-500/30"></div>
-          <div id="touchThrottleHandle" class="absolute inset-x-1 h-9 -mb-[18px] rounded-xl bg-slate-200/90 border-2 border-white shadow-lg pointer-events-none"></div>
         </div>
       </div>
       <div id="touchButtons" class="pointer-events-auto flex flex-col gap-1.5 text-[11px] font-bold">

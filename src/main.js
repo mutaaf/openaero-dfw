@@ -1892,7 +1892,7 @@ function drawTrimBug(x, y) {
   hudCtx.moveTo(x + 11, by); hudCtx.lineTo(x + 19, by - 5); hudCtx.lineTo(x + 19, by + 5); hudCtx.closePath();
   hudCtx.stroke();
   hudCtx.lineWidth = 1.5;
-  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';
+  hudCtx.fillStyle = '#020617'; // opaque: the tape's numbers must not read through it
   hudCtx.fillRect(x - 52, y + 13, 44, 15);
   hudCtx.fillStyle = '#fcd34d';
   hudCtx.font = 'bold 11px monospace';

@@ -10,8 +10,8 @@ pr: 116
 ---
 
 ## Outcome (Builder, 2026-10-29)
-Trim shipped for Pilot: `[` / `]` (and Numpad 7 / 1), a NOSE UP / NOSE DN rocker over the
-touch throttle (hold it like the wheel), the gamepad's right stick on the standard mapping
+Trim shipped for Pilot: `[` / `]` (and Numpad 7 / 1), a NOSE UP / NOSE DN rocker beside the
+touch throttle (over it on a phone held sideways) (hold it like the wheel), the gamepad's right stick on the standard mapping
 (forward = nose down). It shows only where the trim is the player's: not under Kid/Learner or
 a pitch-holding autopilot (they trim), not on the F-16 (fly-by-wire), not on ?fdm=jsbsim. Held,
 it moves the hands-off speed 9% a second on any airframe (a game-feel rate, `src/trim.js`;

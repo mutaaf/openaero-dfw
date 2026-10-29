@@ -157,7 +157,9 @@ input[type=range] { accent-color: #38bdf8; }
     padding-right: max(0.75rem, var(--safe-right));
   }
   #touchButtons { flex-direction: row; }
-  /* The trim rocker over the throttle (0094): a shorter throttle makes its room. */
+  /* The trim rocker (0094) stands over the throttle, not beside it (the speed tape starts
+     just right of the throttle on a 568 px screen); a shorter throttle makes the room. */
+  #touchLeft { flex-direction: column-reverse; align-items: center; }
   #touchThrottle { height: 7rem; }
   /* Right of the altitude tape (it ends at cx + 186 px), 128 px at most. */
   #touchStick {
@@ -247,11 +249,6 @@ kbd {
   body.view-clean #eicasPanel, body.view-clean #stickPanel, body.view-clean #mapPanel { display: none !important; }
   body.view-clean #keyHints { display: flex; }
   body.view-clean #coach { bottom: 4.5rem; }
-}
-/* A short phone held upright (iPhone SE, 667 px): the throttle gives the trim rocker (0094)
-   its room, so the left column stays under the horizon band. */
-@media (orientation: portrait) and (max-height: 760px) and (max-width: 1023.98px) {
-  #touchThrottle { height: 7rem; }
 }
 /* A touch-only screen at desktop width (iPad held sideways, 1180x820; iPad Pro portrait,
    ticket 0044): the desktop panels assume a mouse and keys, so it flies like a phone or
