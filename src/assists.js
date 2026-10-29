@@ -44,6 +44,7 @@ const DEAD = 0.05;
 const PITCH_RATE_DEG_S = 8;   // full fore/aft stick moves the held pitch this fast
 const PITCH_LEAD_DEG = 4;     // the held pitch never runs further than this ahead of the nose
 const COORD_GAIN = 0.1;       // rudder per degree of sideslip
+const COORD_FROM_M = 3;       // …with the wheels at least this high (0110)
 const CMD_SHARE = 0.85;       // full stick commands this share of a limit; the rest is overshoot room
 const FLARE_FROM_M = 12;      // Kid auto-flare: wheel height where it starts…
 const FLARE_BANK_DEG = 5;     // …and the most bank it allows there (wingtip strike is > 10°)
@@ -69,8 +70,8 @@ export function updateDeparture(st, onGround, aglFt) {
 //      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
 //      localizer bank and glidepath angle on a final), rwyHdgDeg, noseHdgDeg, crossM, crossVelMps,
-//      yawRateRightDegS (on the runway: its true heading or null off it, the nose's, the offset
-//      and drift right of its centreline, the yaw rate; 0110), noFloor (no engine, 0036: the glide is
+//      steerRateDegS (on the runway: its true heading or null off it, the nose's, the offset and
+//      drift right of its centreline, full pedal's steered yaw rate; 0110), noFloor (no engine, 0036: the glide is
 //      steeper than the floor, and holding the floor would only slow it to a mush) }
 // Writes out.elev, out.ail, out.rud (surface commands, -1..1); returns out. No allocation.
 export function shapeControls(cfg, st, s, dt, out) {
@@ -81,7 +82,7 @@ export function shapeControls(cfg, st, s, dt, out) {
     st.pitchHoldDeg = null;
     out.elev = s.pitchIn; out.ail = s.rollIn;
     out.rud = Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null ? s.yawIn
-      : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.yawRateRightDegS);
+      : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS);
     return out;
   }
   if (st.pitchHoldDeg === null) st.pitchHoldDeg = s.pitchDeg;
@@ -133,17 +134,29 @@ export function shapeControls(cfg, st, s, dt, out) {
 
   // Yaw: the pilot's rudder if they use it, else coordinate (rudder + = yaw right cancels
   // a positive, from-the-right sideslip).
-  out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn : clamp(s.betaDeg * COORD_GAIN, -1, 1);
+  // Not with the wheels just off the runway (lift-off, a skip): a crosswind's sideslip there asks for
+  // full pedal, which the nose wheel turns into a swerve when they touch again (0110).
+  out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn
+    : s.wheelHeightM < COORD_FROM_M ? 0 : clamp(s.betaDeg * COORD_GAIN, -1, 1);
   return out;
 }
 
-// Kid and Learner on the runway with the pedals free (0110): the rudder (and the nose wheel on
-// it) points the nose at most 3° off the runway heading back towards the centreline, by the
-// offset right of it (crossM, m) and the drift across it (crossVelMps), damped by the yaw rate
-// (°/s, + = right). The harness's crosswind pilot's gains (tests/flight), in metres.
-export function groundSteerRudder(rwyHdgDeg, noseHdgDeg, crossM, crossVelMps, yawRateRightDegS) {
+// The assists' rudder moves at most this fast (full travel in half a second, main.js): the runway
+// hold and the air's coordination ask for different pedals, and a wheels-on/off moment (lift-off, a
+// skip on touchdown) must not slam it from stop to stop (0110).
+export const RUDDER_SLEW_PER_S = 2;
+export const slewRudder = (cur, cmd, dt) => cur + clamp(cmd - cur, -RUDDER_SLEW_PER_S * dt, RUDDER_SLEW_PER_S * dt);
+
+// Kid and Learner on the runway with the pedals free (0110): the nose turns at most 4°/s
+// towards a heading at most 3° off the runway's, back towards the centreline, by the offset right of
+// it (crossM, m) and the drift across it (crossVelMps). steerRateDegS: the yaw rate full pedal
+// steers at this groundspeed (v·tan δ / wheelbase, main.js), so the pedal it asks is the rate it
+// wants: gentle at landing speeds, full at a walk.
+const GROUND_TURN_DEG_S = 4;
+export function groundSteerRudder(rwyHdgDeg, noseHdgDeg, crossM, crossVelMps, steerRateDegS) {
   const target = rwyHdgDeg - clamp(crossM * 0.5 + crossVelMps, -3, 3);
-  return clamp(headingError(target, noseHdgDeg) * 0.3 - yawRateRightDegS * 0.15, -1, 1);
+  const want = clamp(headingError(target, noseHdgDeg) * 0.5, -GROUND_TURN_DEG_S, GROUND_TURN_DEG_S);
+  return clamp(want / Math.max(0.5, steerRateDegS), -1, 1);
 }
 
 // Kid hands-off line-up on a final: bank (deg, + = right) toward a 20°-max intercept of the

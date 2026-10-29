@@ -38,7 +38,7 @@ import {
   takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN,
 } from './aero.js';
 import {
-  ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls,
+  ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls, slewRudder,
   autoConfigure, kidTargetKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, tillerRudder } from './input.js';
@@ -1436,12 +1436,15 @@ function integrateSubStep(dt) {
   sim.inputSource = targets.source;
   let targetPitch = targets.pitch, targetRoll = targets.roll;
   let targetYaw = targets.yaw;
-  // Pilot on the runway with the touch/drag stick and no rudder keys: its sideways push is a
-  // nose-wheel tiller, not ailerons (0110; one axis can't do both: aileron into the wind steered
-  // the nose into it). Kid and Learner hold the centreline themselves.
+  // Pilot taxiing with the touch/drag stick and no rudder keys: its sideways push is a nose-wheel
+  // tiller, not ailerons (0110; one axis can't do both: aileron into the wind steered the nose into
+  // it). Handed back to the ailerons from 20 to 40 kt, so the roll, a touchdown and a bounce keep
+  // them. Kid and Learner hold the centreline themselves.
   if (sim.onGround && targets.source === 'stick' && !targetYaw && sim.assist === 'pilot' && !sim.apMaster && spec.gear) {
-    targetYaw = tillerRudder(targetRoll, Math.hypot(sim.vel.x, sim.vel.z), spec.gear.noseZ + spec.gear.mainZ, spec.gear.steerDeg ?? 7);
-    targetRoll = 0;
+    const gs = Math.hypot(sim.vel.x, sim.vel.z);
+    const w = THREE.MathUtils.clamp((40 - gs / KTS_TO_MPS) / 20, 0, 1);
+    targetYaw = w * tillerRudder(targetRoll, gs, spec.gear.noseZ + spec.gear.mainZ, spec.gear.steerDeg ?? 7);
+    targetRoll *= 1 - w;
   }
 
   if (sim.pad && sim.pad.throttleRate) {
@@ -2115,19 +2118,20 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     _assistIn.noseHdgDeg = noseDeg;
     _assistIn.crossM = ap.crossM;
     _assistIn.crossVelMps = sim.vel.x * Math.cos(r) + sim.vel.z * Math.sin(r);
-    _assistIn.yawRateRightDegS = -sim.angVel.y * RAD_TO_DEG;
+    const g = spec.gear; // full pedal's nose-wheel yaw rate at this groundspeed (gear.js noseSteerYawRate)
+    _assistIn.steerRateDegS = g ? gsMps * Math.tan((g.steerDeg ?? 7) * DEG_TO_RAD) / (g.noseZ + g.mainZ) * RAD_TO_DEG : 0;
   }
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
   if (sim.onGround) {
     // The takeoff roll's stick, power and the stop are the player's, smoothed like Pilot's.
     sim.elevInput = THREE.MathUtils.lerp(sim.elevInput, _assistOut.elev, dt * 10);
     sim.aileronInput = THREE.MathUtils.lerp(sim.aileronInput, _assistOut.ail, dt * 10);
-    sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, _assistOut.rud, dt * 10);
+    sim.rudderInput = slewRudder(sim.rudderInput, _assistOut.rud, dt);
     return;
   }
   sim.elevInput = _assistOut.elev;
   sim.aileronInput = _assistOut.ail;
-  sim.rudderInput = _assistOut.rud;
+  sim.rudderInput = slewRudder(sim.rudderInput, _assistOut.rud, dt);
   // No engine (0036): no power to manage, and flaps are the pilot's call (the coach says when).
   if (sim.engineFailed) return;
   if (cfg.autoConfig) {

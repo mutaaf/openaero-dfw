@@ -415,20 +415,23 @@ describe('assist level storage and per-level bests', () => {
 describe('on the runway (groundSteerRudder, 0110)', () => {
   const ground = {
     pitchIn: 0, rollIn: 0, yawIn: 0, onGround: true, betaDeg: 20,
-    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, yawRateRightDegS: 0,
+    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, steerRateDegS: 20,
   };
-  it('lined up on the centreline, at rest: no rudder, whatever the sideslip', () => {
+  it('lined up on the centreline: no rudder, whatever the sideslip', () => {
     for (const level of ['kid', 'learner']) {
       expect(shapeControls(assistConfig(level), createAssistState(), ground, 1 / 120, {}).rud).toBeCloseTo(0, 9);
     }
   });
-  it('steers back towards the runway heading and the centreline, damped by the yaw rate', () => {
-    expect(groundSteerRudder(350, 345, 0, 0, 0)).toBeGreaterThan(0); // nose left of the runway: right rudder
-    expect(groundSteerRudder(10, 355, 0, 0, 0)).toBeCloseTo(1, 9); // across north, full right
-    expect(groundSteerRudder(350, 350, 10, 0, 0)).toBeLessThan(0); // right of the centreline: nose left
-    expect(groundSteerRudder(350, 350, 0, 2, 0)).toBeLessThan(0); // drifting right: nose left
-    expect(groundSteerRudder(350, 350, 100, 0, 0)).toBeCloseTo(-0.9, 9); // never more than 3° off the runway
-    expect(groundSteerRudder(350, 350, 0, 0, 4)).toBeLessThan(0); // already yawing right: check it
+  it('steers back towards the runway heading and the centreline', () => {
+    expect(groundSteerRudder(350, 345, 0, 0, 20)).toBeGreaterThan(0); // nose left of the runway: right rudder
+    expect(groundSteerRudder(10, 355, 0, 0, 20)).toBeGreaterThan(0); // across north
+    expect(groundSteerRudder(350, 350, 10, 0, 20)).toBeLessThan(0); // right of the centreline: nose left
+    expect(groundSteerRudder(350, 350, 0, 2, 20)).toBeLessThan(0); // drifting right: nose left
+  });
+  it('asks for at most 4°/s of turn: a little pedal at landing speed, full at a walk', () => {
+    expect(groundSteerRudder(350, 320, 0, 0, 200)).toBeCloseTo(0.02, 9); // 30° off at speed: 4°/s of 200
+    expect(groundSteerRudder(350, 320, 0, 0, 2)).toBe(1);
+    expect(groundSteerRudder(350, 350, 100, 0, 200)).toBeCloseTo(-0.0075, 9); // never more than 3° off: 1.5°/s
   });
   it("the player's pedals win; off a runway the rudder is theirs (0 if they leave it)", () => {
     const cfg = assistConfig('learner');

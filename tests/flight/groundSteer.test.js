@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { assistConfig, createAssistState, shapeControls } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder } from '../../src/assists.js';
 import { aileronForBank } from '../../src/autopilot.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { surfaceWindFactor } from '../../src/weather.js';
@@ -23,7 +23,7 @@ const gameCrosswind = (x, metarKts) => x.windVec.set(-metarKts * KTS_TO_MPS * su
 const flaps = (spec) => (spec === c172 ? 0 : 1);
 
 // One sub-step through the assist the way main.js applyAssists feeds it on runway 36 (true north,
-// centreline x = 0): stick and pedals as given, the rudder smoothed like the game's on the ground.
+// centreline x = 0): stick and pedals as given, smoothed like the game's (the rudder slewed).
 function assisted(level, spec, st, s, x, dt, { pitchIn = 0 } = {}) {
   const { pitchDeg, bankRightDeg } = attitude(x);
   Object.assign(s, {
@@ -31,13 +31,14 @@ function assisted(level, spec, st, s, x, dt, { pitchIn = 0 } = {}) {
     aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex), tailstrikeDeg: spec.maxGroundPitchDeg ?? 15,
     onGround: !!x.onGround, wheelHeightM: x.pos.y - x.groundY - spec.gearHeight, airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS,
     guideBankDeg: 0, guideGammaDeg: 0,
-    rwyHdgDeg: 0, noseHdgDeg: noseRightDeg(x), crossM: x.pos.x, crossVelMps: x.vel.x, yawRateRightDegS: -x.angVel.y * RAD_TO_DEG,
+    rwyHdgDeg: 0, noseHdgDeg: noseRightDeg(x), crossM: x.pos.x, crossVelMps: x.vel.x,
+    steerRateDegS: Math.hypot(x.vel.x, x.vel.z) * Math.tan(spec.gear.steerDeg * DEG_TO_RAD) / (spec.gear.noseZ + spec.gear.mainZ) * RAD_TO_DEG,
   });
   const out = shapeControls(assistConfig(level), st, s, dt, {});
   const k = x.onGround ? Math.min(1, dt * 10) : 1;
   x.elevInput += (out.elev - x.elevInput) * k;
   x.aileronInput += (out.ail - x.aileronInput) * k;
-  x.rudderInput += (out.rud - x.rudderInput) * k;
+  x.rudderInput = slewRudder(x.rudderInput, out.rud, dt);
 }
 
 // Full power, hands off the pedals, the stick back at Vr and let go once it flies, to 50 ft.
@@ -53,6 +54,39 @@ function assistedTakeoff(spec, level, metarKts) {
     if (!liftoff) maxOffM = Math.max(maxOffM, Math.abs(x.pos.x));
   }, (x) => (x.pos.y - x.groundY - spec.gearHeight) * M_TO_FT > 50 || Math.abs(x.pos.x) > 60);
   return { maxOffM, liftoff, t: b.t };
+}
+
+// The wheels-on/off moments (panel, 0110): the runway hold and the air's coordination want different
+// pedals. Learner, a 15 kt METAR crosswind: the yaw rate over the 3 s after lift-off, and over a
+// crabbed (15°) touchdown that skips back off the runway for a moment.
+function liftoffYaw(spec, metarKts) {
+  const b = makeBody(spec, { throttle: 1, flaps: flaps(spec) });
+  b.apMaster = false;
+  const st = createAssistState(), s = {};
+  let t0 = null, maxYawDegS = 0;
+  fly(b, spec, 120, (x, dt) => {
+    gameCrosswind(x, metarKts);
+    if (t0 === null && !x.onGround && x.t > 2) t0 = x.t;
+    assisted('learner', spec, st, s, x, dt, { pitchIn: t0 === null && x.iasKts >= spec.vrKts ? -1 : 0 });
+    if (t0 !== null) maxYawDegS = Math.max(maxYawDegS, Math.abs(x.angVel.y) * RAD_TO_DEG);
+  }, (x) => t0 !== null && x.t - t0 > 3);
+  return { maxYawDegS, lifted: t0 !== null };
+}
+function skipYaw(spec, metarKts) {
+  const b = makeBody(spec, { flaps: 2 });
+  b.quat.setFromEuler(_e.set(0, -15 * DEG_TO_RAD, 0));
+  b.vel.set(0, 0, -spec.vrefKts * KTS_TO_MPS);
+  b.apMaster = false;
+  const st = createAssistState(), s = {};
+  let maxYawDegS = 0;
+  fly(b, spec, 6, (x, dt) => {
+    gameCrosswind(x, metarKts);
+    x.throttle = 0;
+    if (x.t > 1.4 && x.t < 1.42) x.vel.y = 1.5; // the skip
+    assisted('learner', spec, st, s, x, dt);
+    maxYawDegS = Math.max(maxYawDegS, Math.abs(x.angVel.y) * RAD_TO_DEG);
+  });
+  return { maxYawDegS, hdgDeg: noseRightDeg(b) };
 }
 
 // From a touchdown at Vref on the centreline, crabbed 5° into the wind (Kid and Learner keep the
@@ -105,11 +139,21 @@ describe('on the runway in a crosswind (ticket 0110)', () => {
         expect(Math.abs(r.hdgDeg)).toBeLessThan(3);
       });
     }
+    it(`${name} learner: no rudder slam at lift-off or on a skip after a crabbed touchdown (15 kt METAR crosswind)`, () => {
+      const up = liftoffYaw(spec, 15), skip = skipYaw(spec, 15);
+      console.log(`[0110 ${name} learner] 15 kt: yaw after lift-off ≤ ${up.maxYawDegS.toFixed(1)}°/s; crabbed touchdown + skip ≤ ${skip.maxYawDegS.toFixed(1)}°/s, ends ${skip.hdgDeg.toFixed(1)}°`);
+      expect(up.lifted).toBe(true);
+      expect(up.maxYawDegS).toBeLessThan(6);
+      expect(skip.maxYawDegS).toBeLessThan(10);
+      expect(Math.abs(skip.hdgDeg)).toBeLessThan(15);
+    });
     it(`${name} Pilot, pedals neutral: a 5 kt METAR crosswind turns the nose less than 3° on the roll to Vr`, () => {
       const r = pedalsNeutralRoll(spec, 5);
       console.log(`[0110 ${name} pilot] 5 kt crosswind, pedals neutral: heading ±${r.maxHdgDeg.toFixed(1)}°, ${r.offM.toFixed(1)} m off at ${r.iasKts.toFixed(0)} KIAS`);
       expect(r.iasKts).toBeGreaterThanOrEqual(spec.vrKts);
       expect(r.maxHdgDeg).toBeLessThan(3);
+      // and the wheels stay on a 150 ft runway (the drift is the tyres' side slip: the hold is not rigid)
+      expect(Math.abs(r.offM) + spec.gear.trackM / 2).toBeLessThan(22.9);
       // Not glued to the line either: the wind is felt (the nose turns into it, the airplane drifts).
       expect(r.maxHdgDeg).toBeGreaterThan(0.2);
     });

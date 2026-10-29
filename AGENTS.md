@@ -278,8 +278,8 @@ src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI,
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),
                     warnings, heading math
-src/input.js        keyboard state → control targets, virtual stick mapping; tillerRudder: Pilot on the
-                    runway steers the nose wheel with the stick's sideways push (touch has no pedals, 0110)
+src/input.js        keyboard state → control targets, virtual stick mapping; tillerRudder: Pilot taxiing
+                    (< 40 kt) steers the nose wheel with the stick's sideways push (touch has no pedals, 0110)
 src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
 src/styles.css      Tailwind entry + ported custom HUD styles
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):

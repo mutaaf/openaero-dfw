@@ -48,8 +48,8 @@ export function throttleFromPoint(clientY, rect) {
   return Math.max(0, Math.min(1, t));
 }
 
-// Touch has no pedals (0110): Pilot on the runway steers the nose wheel with the stick's sideways
-// push, a tiller (main.js; Kid and Learner hold the centreline themselves). Past a quarter of the
+// Touch has no pedals (0110): Pilot taxiing steers the nose wheel with the stick's sideways push, a
+// tiller (main.js, below 40 kt; Kid and Learner hold the centreline themselves). Past a quarter of the
 // pad (a resting thumb is not a steer), and scaled so full stick turns the airplane at most
 // TILLER_MAX_DEG_S at any groundspeed (gsMps): full nose wheel at taxi speeds, a touch of it on the
 // roll. wheelbaseM and steerDeg are the airframe's (gear.js). Returns the rudder (-1..1, + = right).

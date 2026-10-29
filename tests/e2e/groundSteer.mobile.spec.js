@@ -1,9 +1,9 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
-// Touch has no pedals (0110): on the runway, the stick's sideways push steers the nose wheel,
-// so a phone player on Pilot can hold the centreline in a crosswind. On the 35C takeoff roll,
-// full power from the throttle, then the stick held right: the nose turns right.
+// Touch has no pedals (0110): taxiing (below 40 kt), the stick's sideways push steers the nose
+// wheel, so a phone player on Pilot can steer on the runway. On the 35C takeoff roll, full power
+// from the throttle, then the stick held right early in the roll: the nose turns right.
 const turnRight = (from, to) => ((to - from + 540) % 360) - 180;
 
 for (const [name, viewport] of [['portrait', { width: 390, height: 844 }], ['landscape', { width: 844, height: 390 }]]) {
@@ -22,7 +22,7 @@ for (const [name, viewport] of [['portrait', { width: 390, height: 844 }], ['lan
     const thr = await page.locator('#touchThrottle').boundingBox();
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: thr.x + thr.width / 2, y: thr.y + 4, id: 1 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await expect.poll(async () => (await snap()).gsKts, { timeout: 45_000 }).toBeGreaterThan(15);
+    await expect.poll(async () => (await snap()).gsKts, { timeout: 45_000 }).toBeGreaterThan(8);
     const s0 = await snap();
     const stick = await page.locator('#touchStick').boundingBox();
     const x = stick.x + stick.width / 2, y = stick.y + stick.height / 2;
