@@ -113,9 +113,11 @@ export function stallTarget(s) {
 //      gearLocked, flapsLanding, flareFt (default 50), idleFt (default 30), driftDeg,
 //      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
 //      drill's phase: stallTarget), ds (the dead-stick challenge's or the traffic pattern's
-//      prompt key, its words in deadStick.js DS_TEXT or pattern.js PT_TEXT; rank 1) }
+//      prompt key, its words in deadStick.js DS_TEXT or pattern.js PT_TEXT; rank 1),
+//      dsGround (on the runway before any lift-off: the engine-failure takeoff's, 0104) }
 export function coachTarget(s) {
-  if (s.onGround || s.autopilot) return null;
+  if (s.autopilot) return null;
+  if (s.onGround) return s.dsGround ?? null; // before the first lift-off: a drill's takeoff words (0104)
   if (s.stall) return stallTarget(s);
   if (s.ds) return s.ds; // the dead-stick challenge's own prompt (deadStick.js), above the flare
   if (s.goAround) return goAroundTarget(s);

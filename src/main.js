@@ -142,6 +142,7 @@ const sim = {
   stallDrill: null,
   // Dead-stick challenge (0036, deadStick.js): its state on that mission, and the dead engine
   deadStick: null,
+  engineOut: null, // engine failure after takeoff (0104, engineOut.js)
   engineFailed: false,
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
@@ -914,6 +915,9 @@ function checkStallDrill(dt) {
 let deadLib = null;
 // --- Traffic pattern (ticket 0048, pattern.js): sim.pattern = { end, traffic } on that mission
 let patLib = null;
+// --- Engine failure after takeoff (ticket 0104, engineOut.js): sim.engineOut on those missions;
+// the engine quits at the mission's height (engineOutStep), then the dead-stick's rules apply.
+let eoLib = null;
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
 // only instructions) until Skip; their state is null on every other mission.
@@ -921,11 +925,13 @@ function startDrills(mission) {
   sim.stallDrill = null;
   sim.deadStick = null;
   sim.pattern = null;
+  sim.engineOut = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt);
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
   if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
+  if (mission.engineOutFt) loadDrill(mission, eoLib, () => import('./engineOut.js'), (lib) => { eoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.engineOut = lib.createEngineOut(mission); });
 }
 
 // --- Landing grade ---------------------------------------------------------------
@@ -972,9 +978,12 @@ function checkTouchdown(dt) {
   if (!touchedDown) return;
   sim.landingGraded = true;
   sim.airborneTime = 0;
+  // The engine-failure takeoffs (0104) grade only a landing after the failure: no best without it.
+  if (sim.loadedMission?.engineOutFt && !sim.engineOut?.failed) return;
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   // The dead-stick challenge (0036) is graded on Addison wherever the wheels touch.
-  const end = sim.deadStick ? deadLib.landingEnd((-_euler.y * RAD_TO_DEG + 360) % 360)
+  const glideLib = sim.deadStick ? deadLib : sim.engineOut?.failed ? eoLib : null; // 0036, 0104
+  const end = glideLib ? glideLib.landingEnd((-_euler.y * RAD_TO_DEG + 360) % 360)
     : sim.activeEnd || selectActiveRunway(RUNWAY_ENDS, sim.pos, 0, null);
   if (!end) return;
   const g = approachGeometry(end, sim.pos);
@@ -995,6 +1004,7 @@ function checkTouchdown(dt) {
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
   if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos);
+  else if (glideLib) result = eoLib.engineOutResult(result, sim.engineOut, end, sim.pos);
   if (kidSoftLanding(result)) return;
   const gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
   sim.lastLanding = {
@@ -1120,8 +1130,9 @@ function updateCoach(dt) {
   let prompt = null;
   // Every final is coached (0073), and any approach the player takes over from the autopilot.
   // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
-  // ...and the dead-stick challenge (0036) to the stop.
-  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern))) {
+  // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
+  // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
+  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1145,7 +1156,9 @@ function updateCoach(dt) {
     }
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     coachInput.stall = sim.stallDrill?.phase ?? null;
-    coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim) : null;
+    coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
+      : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : null;
+    coachInput.dsGround = sim.onGround && sim.engineOut ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
@@ -1411,6 +1424,7 @@ function step6DofPhysics(dt) {
   checkStabilizedGate();
   checkGoAround();
   checkStallDrill(dt);
+  if (sim.engineOut && eoLib.engineOutStep(sim.engineOut, sim)) sim.engineFailed = true;
   checkTouchdown(dt);
   checkTakeoffCallouts();
 }
@@ -2128,6 +2142,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
   // Addison, not a glidepath it can't hold (deadStick.js kidGuide).
   if (sim.deadStick) deadLib.kidGuide(sim.deadStick, sim, _assistIn);
+  // The engine quit after takeoff (0104): best glide, land ahead (engineOut.js kidGuide).
+  else if (sim.engineFailed && sim.engineOut) eoLib.kidGuide(sim, _assistIn);
   // The traffic pattern (0048): Kid's guide flies the legs and turns (pattern.js kidGuide).
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   _assistIn.noFloor = sim.engineFailed;
@@ -2240,14 +2256,14 @@ function loadScenario(key, final = null) {
     sim.activeEnd = end;
   } else if (mission.kind === 'takeoff') {
     const end = runwayEnd(mission.airport, mission.rwy);
-    const s = takeoffSpawn(end);
+    const s = takeoffSpawn(end, mission.fullLength ? 30 - end.displacedM : 60); // 0104: all the pavement
     sim.pos.set(s.pos.x, ground.heightAt(s.pos.x, s.pos.z) + sim.spec.gearHeight, s.pos.z);
     sim.vel.set(0, 0, 0);
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0;
-    sim.flapsIndex = 1;
+    sim.flapsIndex = mission.flaps ?? 1;
     // Takeoff trim: a neutral stick flies the climb-out speed (1.2 Vr, in m/s) once it lifts off.
-    trimAlpha = trimAoaDeg(sim.spec, sim.spec.vrKts * 0.617, 1);
+    trimAlpha = trimAoaDeg(sim.spec, sim.spec.vrKts * 0.617, sim.flapsIndex);
     sim.gearDown = true;
     sim.onGround = true;
     sim.activeEnd = end;
@@ -2469,7 +2485,7 @@ function syncUI() {
   byId('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
   byId('txtPhoneAgl').textContent = `${sim.aglFt}`;
   byId('txtPhoneVs').textContent = `${sim.vsiFpm}`;
-  byId('txtPhoneThr').textContent = `${throttlePct}%`;
+  byId('txtPhoneThr').textContent = sim.engineFailed ? 'OUT' : `${throttlePct}%`;
   byId('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;
   const papi = byId('txtPapiStatus');
   const phonePapi = byId('txtPhonePapi');
@@ -2604,6 +2620,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   // So does the dead-stick challenge (0036), and its failed engine with it.
   sim.stallDrill = null;
   sim.deadStick = null;
+  sim.engineOut = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
 });

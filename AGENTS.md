@@ -181,6 +181,13 @@ src/pattern.js      traffic pattern (0048, lazy chunk): the C172 on a left downw
                     out) and the height (1,000 ft, then ~4.2° down from abeam the numbers). Its
                     pt* words reach coach.js through s.ds (the landing coach takes the final);
                     Kid's guide flies the legs, and past the threshold the 3° path to the aim point
+src/engineOut.js    engine failure after takeoff (0104, lazy chunk): the C172 on all of Addison 16,
+                    the engine quits at the mission's engineOutFt (300 or 700 ft). turnbackHeightFt
+                    (reaction, a turn of 180° + twice the cut back from 2R beside, sink 1 + k(n²−1),
+                    the glide back downwind, less the climb's spare speed) decides "you can turn
+                    back" / "land ahead"; flight cards fly the window (tests/flight/engineOut.test.js).
+                    Graded on Addison (deadStick.js's miss grader): ahead in a field ≤ B, a turn back
+                    below the height or a stall ≤ D with what the turn cost; Kid glides ahead
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn.
                     A lazy chunk fetched right after boot (0091); its on/off flag and blank
@@ -357,7 +364,7 @@ snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A 
 imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's
 line-up on the ground track, paid for by main.js's seven `0.514444` literals becoming `KTS_TO_MPS`). 2026-10-28 (0098): 200.994 kB (Kid's final guide as assists.js
 kidFinalGuide with its past-the-threshold gate, +70 B, paid for by the ?debug snapshot's moving-parts poses moving into the lazy surfaces.js
-chunk (`partPoses`), its go-around a plain copy, one `if (debugOverlay)` for the ?debug hooks and a dead `_q1`); 6 B of headroom. 2026-10-28 (0099): 200.982 kB (the piston lapse's friction term, paid for by folding engine.js's P0/T0 constants into the one line that used them); 18 B of headroom. 2026-10-28 (0105): 192.38 kB (−8.6 kB, no behaviour change: the primitive 737's wing and fin were three's `ExtrudeGeometry`, which pulled earcut and every curve class into boot; `src/prism.js` builds the same flat-sided outlines from a `BufferGeometry`). Rank the boot chunk by source (a `--sourcemap` build, gzip per source) before trimming: one three.js class can outweigh a week of literal trims. Gzip
+chunk (`partPoses`), its go-around a plain copy, one `if (debugOverlay)` for the ?debug hooks and a dead `_q1`); 6 B of headroom. 2026-10-28 (0099): 200.982 kB (the piston lapse's friction term, paid for by folding engine.js's P0/T0 constants into the one line that used them); 18 B of headroom. 2026-10-29 (0104): 194.29 kB (the engine-failure missions' entries and wiring, +0.40 kB over main's 193.89; engineOut.js is a 2.6 kB lazy chunk). 2026-10-28 (0105): 192.38 kB (−8.6 kB, no behaviour change: the primitive 737's wing and fin were three's `ExtrudeGeometry`, which pulled earcut and every curve class into boot; `src/prism.js` builds the same flat-sided outlines from a `BufferGeometry`). Rank the boot chunk by source (a `--sourcemap` build, gzip per source) before trimming: one three.js class can outweigh a week of literal trims. Gzip
 eats repeated-literal trims (an `onClick` helper for ~35 click bindings and a `noseHdgDeg()` helper each
 measured 0 or worse): move code to a lazy chunk instead. 2026-10-26 (0036): 200.95 kB (the dead-stick mission, engine-out flag and its effects, coach hook and HUD readouts, paid for by moving the go-around and stall drills' coach words into their lazy chunks through coach.js DRILL_TEXT, and the abeam spawn to a lat/lon). 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
