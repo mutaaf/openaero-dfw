@@ -1,13 +1,18 @@
 ---
 id: 0106
 title: The METAR wind reaches the runway: a headwind shortens the game's takeoff and landing roll
-status: ready
+status: in-progress
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-28
 pr:
 ---
+
+> **Blocked by 0110** (2026-10-29): draft PR #117 implements this ticket and its cards pass, but
+> its validation panel showed that once the wind reaches the wheels, the airplane weathervanes
+> off the runway (Learner's ground rudder steers into the wind, and touch has no rudder). Land
+> 0110 first, then finish #117.
 
 ## Why
 0103's cards show both flight models shorten the roll in a headwind the way the FAA handbook
