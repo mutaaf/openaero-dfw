@@ -23,6 +23,7 @@ import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
 import { DEADSTICK_KEY, createDeadStick, deadStickPrompt, kidGuide } from '../../src/deadStick.js';
+import { trimStep, trimSpeedKts } from '../../src/trim.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -554,6 +555,51 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S stall recov
   });
 });
 
+// Full back stick after the stall (ticket 0094): idle, wings level, the stick held full back
+// from the stall for 30 s. Before 0090 flightModel.js locked at α 90°; after it, it cycled
+// between α ~13° and ~69° (a falling leaf); with 0102's stiffer pitch it settles. Both models
+// settle near α 40°: full stick is spec.elevatorAlphaDeg (36.7°) of α past the trim, on Roskam's
+// linear Cmα and Cmδe, which our JSBSim C172 shares, so JSBSim is not an independent check of the
+// depth. A real 172's post-stall pitch break would hold it shallower; that needs a cited
+// post-stall Cm (ticket 0109). Pinned here: no falling leaf, and the two models agree.
+function fullBackAfterStall() {
+  const b = Object.assign(makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 }), { autoTrim: false });
+  const entry = speedHoldPilot((x) => Math.max(20, 80 - x.t));
+  const sa = stallAoaDeg(c172, 0);
+  let stallT = null;
+  const late = [];
+  fly(b, c172, 60, (x, dt) => {
+    if (stallT === null) { entry(x, dt); if (x.aoaDeg > sa) stallT = x.t; return; }
+    x.throttle = 0; x.elevInput = -1;
+    x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+  }, (x) => {
+    if (stallT !== null && x.t - stallT > 20) late.push(x.aoaDeg);
+    return stallT !== null && x.t - stallT > 30;
+  });
+  return { minA: Math.min(...late), maxA: Math.max(...late), meanA: late.reduce((a, v) => a + v, 0) / late.length };
+}
+
+describe('Cessna 172S full back stick after the stall (both models, ticket 0094)', () => {
+  afterAll(() => useFdm(null));
+  it('no falling leaf: α settles (swings under 5° in the last 10 s, under 45°) and flightModel.js is within 3° of JSBSim', async () => {
+    useFdm(null);
+    const fm = fullBackAfterStall();
+    useFdm(await nodeJsbsim());
+    const jsb = fullBackAfterStall();
+    useFdm(null);
+    for (const [name, r] of [['flightModel', fm], ['jsbsim', jsb]]) {
+      console.log(`[c172 ${name}] full back after the stall: α ${r.minA.toFixed(1)}-${r.maxA.toFixed(1)}° in the last 10 s (mean ${r.meanA.toFixed(1)}°)`);
+      expect(r.maxA - r.minA).toBeLessThan(5);
+      expect(r.maxA).toBeLessThan(45);
+    }
+    expect(Math.abs(fm.meanA - jsb.meanA)).toBeLessThan(3);
+  }, 30000);
+  it.fails('KNOWN GAP (0109): flightModel.js settles at α ≤ 40° (a cited post-stall pitch break; measured 39.7-41.9°)', () => {
+    useFdm(null);
+    expect(fullBackAfterStall().maxA).toBeLessThanOrEqual(40);
+  });
+});
+
 // Hands off, trimmed (ticket 0090): bumped 10 kt fast and let go, a stable airplane trades the
 // speed for height and back in a damped phugoid and settles on the speed it is trimmed for,
 // not on an attitude. Stick neutral throughout, wings held level, trim and power left alone.
@@ -582,6 +628,37 @@ describe('Cessna 172S hands off in trim (flightModel, ticket 0090)', () => {
     console.log(`[c172 ${model}] hands off at ${kts} kt: ${iasKts.toFixed(1)} kt after 3 min, nose up ${noseUpDeg.toFixed(1)}°`);
     expect(noseUpDeg).toBeGreaterThan(2);
     expect(Math.abs(iasKts - kts)).toBeLessThan(2);
+  });
+});
+
+// Pitch trim (ticket 0094): trimmed level at one speed, the pilot rolls the trim (trim.js
+// trimStep at its rate, the stick never touched) until it reads the new speed, sets the power
+// for level flight there and lets go. A stable airplane settles on the trimmed speed (0090).
+function retrim(fromKts, toKts) {
+  const altM = 1500;
+  const b = Object.assign(makeBody(c172, { kts: fromKts, altM, throttle: trimThrottle(c172, fromKts * KTS_TO_MPS, 0, 0, true, airAt(altM)) }),
+    { autoTrim: false, trimAlphaDeg: trimAoaDeg(c172, fromKts * KTS_TO_MPS, 0) });
+  const dir = toKts < fromKts ? 1 : -1; // slower = nose-up trim
+  const reads = () => trimSpeedKts(c172, b.trimAlphaDeg, 0);
+  let trimS = 0;
+  const handsOff = (x) => { x.elevInput = 0; x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z); };
+  fly(b, c172, 1, handsOff);
+  b.throttle = trimThrottle(c172, toKts * KTS_TO_MPS, 0, 0, true, airAt(altM));
+  fly(b, c172, 10, (x, dt) => {
+    handsOff(x);
+    if (dir > 0 ? reads() > toKts : reads() < toKts) { x.trimAlphaDeg = trimStep(x.trimAlphaDeg, dir, dt, c172, 0); trimS += dt; }
+  });
+  fly(b, c172, 180, handsOff);
+  return { trimS, readsKts: reads(), iasKts: b.iasKts };
+}
+
+describe('Cessna 172S pitch trim (flightModel, ticket 0094)', () => {
+  for (const [from, to] of [[90, 70], [70, 90]]) it(`trimmed at ${from} KIAS, rolled to read ${to} and let go: within 2 kt of ${to} after 3 min, the trim run under 3 s`, () => {
+    const r = retrim(from, to);
+    console.log(`[c172 flightModel] trim ${from} → ${to}: ${r.trimS.toFixed(1)} s of trim, reads ${r.readsKts.toFixed(1)}, ${r.iasKts.toFixed(1)} kt after 3 min hands off`);
+    expect(r.trimS).toBeLessThan(3);
+    expect(Math.abs(r.readsKts - to)).toBeLessThan(0.5);
+    expect(Math.abs(r.iasKts - to)).toBeLessThan(2);
   });
 });
 

@@ -157,6 +157,10 @@ input[type=range] { accent-color: #38bdf8; }
     padding-right: max(0.75rem, var(--safe-right));
   }
   #touchButtons { flex-direction: row; }
+  /* The trim rocker (0094) stands over the throttle, not beside it (the speed tape starts
+     just right of the throttle on a 568 px screen); a shorter throttle makes the room. */
+  #touchLeft { flex-direction: column-reverse; align-items: center; }
+  #touchThrottle { height: 7rem; }
   /* Right of the altitude tape (it ends at cx + 186 px), 128 px at most. */
   #touchStick {
     width: clamp(3.5rem, 50vw - 190px - max(0.75rem, var(--safe-right)), 8rem);

@@ -56,3 +56,20 @@ test('a gamepad stick flies the aircraft and its buttons work the systems', asyn
   const after = parseInt(await page.locator('#txtThrottle').textContent(), 10);
   expect(Math.abs(after - (now - 1))).toBeLessThanOrEqual(1);
 });
+
+// Pitch trim (0094): the right stick trims in Pilot, forward = nose down, back = nose up, and
+// trimming alone leaves the keyboard in charge of the stick.
+test('the gamepad right stick trims in Pilot', async ({ page }) => {
+  await stubTiles(page);
+  await installFakePad(page);
+  await enterCockpit(page);
+  await page.evaluate(() => window.__connectPad());
+  const kts = async () => (await page.evaluate(() => window.openaeroDebug())).trimKts;
+  const k0 = await kts();
+  await page.evaluate(() => { window.__pad.axes[3] = 1; });
+  await expect.poll(kts, { timeout: 10_000 }).toBeLessThan(k0 - 8);
+  expect((await page.evaluate(() => window.openaeroDebug())).inputSource).toBe('keyboard');
+  await page.evaluate(() => { window.__pad.axes[3] = -1; });
+  await expect.poll(kts, { timeout: 10_000 }).toBeGreaterThan(k0);
+  await page.evaluate(() => { window.__pad.axes[3] = 0; });
+});

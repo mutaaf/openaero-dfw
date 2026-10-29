@@ -90,7 +90,7 @@ test('phone: two thumbs fly — stick deflects the surfaces while the throttle m
 
 test('phone: controls never overlap each other or the horizon', async ({ page }) => {
   await startFlight(page);
-  const ids = ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons'];
+  const ids = ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons', '#touchTrim'];
   const boxes = [];
   for (const id of ids) {
     const b = await page.locator(id).boundingBox();
@@ -106,9 +106,9 @@ test('phone: controls never overlap each other or the horizon', async ({ page })
   const band = { x: 0, y: 844 * 0.4, width: 390, height: 844 * 0.2 };
   for (const [id, b] of boxes) expect(overlaps(b, band), `${id} covers the horizon`).toBe(false);
   // Every touch target is at least 44px.
-  const targets = await page.locator('#touchButtons button').evaluateAll((els) =>
+  const targets = await page.locator('#touchButtons button, #touchTrim button').evaluateAll((els) =>
     els.map((e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }));
-  expect(targets.length).toBeGreaterThanOrEqual(4);
+  expect(targets.length).toBeGreaterThanOrEqual(6); // Pilot: the trim rocker too (0094)
   for (const [w, h] of targets) { expect(w).toBeGreaterThanOrEqual(44); expect(h).toBeGreaterThanOrEqual(44); }
 });
 
@@ -124,7 +124,7 @@ test('phone: the landing coach fits between the header and the touch deck, off t
   await startFlight(page);
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
   const coach = await page.locator('#coach').boundingBox();
-  for (const id of ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons']) {
+  for (const id of ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons', '#touchTrim']) {
     expect(overlaps(coach, await page.locator(id).boundingBox()), `coach vs ${id}`).toBe(false);
   }
   expect(overlaps(coach, { x: 0, y: 844 * 0.4, width: 390, height: 844 * 0.2 }), 'coach covers the horizon').toBe(false);
