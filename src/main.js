@@ -1080,7 +1080,7 @@ const COACH_DONE_SHOW_S = 4;
 const coachInput = {
   aglFt: 0, vsiFpm: 0, papiWhite: null, throttle: 0, onGround: false, autopilot: false, kid: false,
   iasKts: 0, targetKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0, goAround: false,
-  stall: null, ds: null, noPower: false, bankDeg: 0, bounces: 0, bounceHigh: false,
+  stall: null, ds: null, noPower: false, wet: false, bankDeg: 0, bounces: 0, bounceHigh: false,
   rollout: { gsKts: 0, canReverse: false, reverserPos: 0, braking: false },
 };
 const coachVals = { targetKts: 0, flapsDeg: 0 };
@@ -1147,6 +1147,7 @@ function updateCoach(dt) {
     coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + 3300, LOC_DOT_DEG) : 0;
     coachInput.gearLocked = gearLocked(sim);
     coachInput.flapsLanding = sim.flapsIndex >= 2 && sim.flapPos >= 1.999;
+    coachInput.wet = sim.wetRunway;
     // The drill's missed approach (0047): coached from the gate's call to 2,000 ft. Here the
     // gear prompt means "still down" and the flaps prompt "still at landing flaps" (lever).
     coachInput.goAround = goAroundActive();
@@ -1332,6 +1333,7 @@ function refreshWeather() {
   sim.wx = currentWeather();
   sim.isaDevC = isaDeviationC(sim.wx.tempC, REF_ELEV_M);
   sim.altimInHg = sim.wx.altimInHg || 29.92;
+  sim.wetRunway = !!sim.wx.wetRunway; // the METAR's rain: wet braking (systems.js, 0108)
   scene.fog.density = fogDensityForVisibility(sim.wx.visibilitySm);
   // METAR cloud bases are above the reporting field.
   skyDome?.setClouds(sim.wx.cloudLayers, sim.activeEnd?.thrY ?? 0);
@@ -1382,7 +1384,7 @@ function syncWeatherUI(dt) {
   if (sim.activeEnd && wx.windKts) {
     const c = runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT);
     const hw = Math.round(c.headwindKts), xw = Math.round(Math.abs(c.crosswindKts));
-    rw.textContent = `${sim.activeEnd.ident}: ${Math.abs(hw)} ${hw >= 0 ? 'HW' : 'TW'} · ${xw} XW${xw ? (c.crosswindKts > 0 ? ' R' : ' L') : ''}`;
+    rw.textContent = `${sim.activeEnd.ident}: ${Math.abs(hw)} ${hw >= 0 ? 'HW' : 'TW'} · ${xw} XW${xw ? (c.crosswindKts > 0 ? ' R' : ' L') : ''}${wx.wetRunway ? ' · WET' : ''}`;
   } else {
     rw.textContent = '';
   }
@@ -1946,7 +1948,7 @@ function drawWindBox(w, h, hdgDeg) {
   hudCtx.strokeRect(r.x, r.y, r.w, r.h);
   hudCtx.textAlign = 'left';
   hudCtx.font = 'bold 9px monospace';
-  hudCtx.fillStyle = hw.live ? '#6ee7b7' : '#cbd5e1';
+  hudCtx.fillStyle = hw.wet ? '#fcd34d' : hw.live ? '#6ee7b7' : '#cbd5e1';
   hudCtx.fillText(hw.source, r.x + 3, r.y + 10);
   const arrow = windArrowDeg(hw.dirDeg, hw.kts, hdgDeg);
   if (arrow !== null) {
@@ -3137,6 +3139,7 @@ window.openaeroDebug = () => {
     flapsIndex: sim.flapsIndex,
     aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
+    wetRunway: !!sim.wetRunway,
     // The HUD wind box (0075): what it says and where it is (canvas px = CSS px).
     hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, (-_euler.y * RAD_TO_DEG + 360) % 360), box: { ..._windBox } },
     pixelRatio: resScale.ratio,

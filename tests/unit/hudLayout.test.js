@@ -117,6 +117,16 @@ describe('wind readout (0075)', () => {
     expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: true }, null, o)).toBe(o);
   });
 
+  // Ticket 0108: "WET RWY" only with a wet METAR; a dry one and the scenario say what they did.
+  it('a wet METAR heads the box WET RWY; dry and scenario weather keep their source', () => {
+    const o = {};
+    expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: true, wetRunway: true }, null, o).source).toBe('WET RWY');
+    expect(o.wet).toBe(true);
+    expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: true, wetRunway: false }, null, o).source).toBe('METAR WIND');
+    expect(o.wet).toBe(false);
+    expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: false }, null, o).source).toBe('SCENARIO');
+  });
+
   it('the arrow points where the wind blows, relative to the nose', () => {
     expect(windArrowDeg(350, 10, 350)).toBeCloseTo(180); // on the nose: blows at you
     expect(windArrowDeg(80, 10, 0)).toBeCloseTo(260); // from the right: blows to the left

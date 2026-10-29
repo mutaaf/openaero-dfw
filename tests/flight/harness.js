@@ -353,10 +353,11 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
 // segment, and what the pilot flew: touchdown IAS and sink rate, time airborne again after
 // the first touch, when the nose wheel came down, and the highest pitch and the time with
 // the nose wheel off the runway after it settled (0.5 s after it touched).
-export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2, windKts = 0, metarKts = null, onStep = null } = {}) {
+export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2, windKts = 0, metarKts = null, onStep = null, wet = false } = {}) {
   const tan3 = Math.tan(3 * DEG_TO_RAD);
   const b = makeBody(spec, { kts, altM: 50 / M_TO_FT + spec.gearHeight, flaps, throttle: 0 });
   b.isaDevC = isaDevC;
+  b.wetRunway = wet; // ticket 0108: the METAR's rain on the runway (systems.js brakeMu)
   b.vel.y = b.vel.z * tan3;
   // `windKts` as in shortFieldTakeoff: the body starts at `kts` through the air, so its
   // ground velocity carries the wind (a 3° path through the air; the same sink at a lower

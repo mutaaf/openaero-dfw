@@ -18,6 +18,7 @@ export const BOUNCE_HIGH_FT = 5;
 
 export const COACH_PROMPTS = {
   papi: 'Keep two white, two red on the PAPI',
+  wet: 'Wet runway: expect a longer roll, brake early', // a METAR with rain (0108)
   high: "You're high: ease the nose down",
   low: "You're low: raise the nose, add power",
   sink: 'Sinking fast: raise the nose, add power',
@@ -54,7 +55,7 @@ export const COACH_PROMPTS = {
 export const DRILL_TEXT = {};
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
 const RANK = {
-  papi: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
+  papi: 1, wet: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
   slow: 2, flaps: 2, sink: 2, gear: 3, flare: 3, decrab: 3, idle: 4,
   done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6, bounce: 5, bounceGa: 5, bounceHigh: 5, bounceKid: 5,
   gaPower: 4, gaPitch: 4, gaFlaps: 4, gaGear: 4, gaClimb: 4, gaKid: 4,
@@ -114,7 +115,8 @@ export function stallTarget(s) {
 //      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
 //      drill's phase: stallTarget), ds (the dead-stick challenge's or the traffic pattern's
 //      prompt key, its words in deadStick.js DS_TEXT or pattern.js PT_TEXT; rank 1),
-//      dsGround (on the runway before any lift-off: the engine-failure takeoff's, 0104) }
+//      dsGround (on the runway before any lift-off: the engine-failure takeoff's, 0104),
+//      wet (the METAR's rain wets the runway: said on a steady final above 500 ft, 0108) }
 export function coachTarget(s) {
   if (s.autopilot) return null;
   if (s.onGround) return s.dsGround ?? null; // before the first lift-off: a drill's takeoff words (0104)
@@ -134,7 +136,7 @@ export function coachTarget(s) {
   if (s.papiWhite >= 3) return 'high';
   if (s.papiWhite <= 1) return 'low';
   if (fast > 10) return 'fast';
-  return 'papi';
+  return s.wet && s.aglFt > 500 ? 'wet' : 'papi';
 }
 
 // On the ground after the landing. r: { gsKts, canReverse (the airframe has reversers and

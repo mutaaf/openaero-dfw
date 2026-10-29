@@ -17,6 +17,16 @@ describe('coachTarget', () => {
   it('on the glidepath it points at the PAPI', () => {
     expect(coachTarget(onPath)).toBe('papi');
   });
+  // Ticket 0108: a wet METAR says so on a steady final, above 500 ft; then the PAPI again.
+  it('a wet runway (METAR rain) is announced on a steady final above 500 ft, never over a correction', () => {
+    expect(coachTarget({ ...onPath, wet: true })).toBe('wet');
+    expect(coachText('wet')).toMatch(/wet runway/i);
+    expect(coachText('wet')).toMatch(/longer roll/i);
+    expect(coachTarget({ ...onPath, wet: true, aglFt: 450 })).toBe('papi');
+    expect(coachTarget({ ...onPath, wet: true, papiWhite: 4 })).toBe('high');
+    expect(coachTarget({ ...onPath, wet: true, kid: true })).toBe('kid');
+    expect(coachTarget({ ...onPath, wet: false })).toBe('papi');
+  });
   it('3 or 4 white is high: nose down', () => {
     expect(coachTarget({ ...onPath, papiWhite: 3 })).toBe('high');
     expect(coachTarget({ ...onPath, papiWhite: 4 })).toBe('high');

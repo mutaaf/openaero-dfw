@@ -151,7 +151,7 @@ export function stepFlightModel(body, spec, dt) {
     // their pull below the CG loads the nose wheel.
     if (struts) gearFriction(body, spec, fwd, vAlong, totalForceWorld, _gearM);
     else {
-      const mu = locked ? brakeMu(spec, body.brakePress) : 0.5;
+      const mu = locked ? brakeMu(spec, body.brakePress, body.wetRunway, Math.abs(vAlong) * MPS_TO_KTS) : 0.5;
       const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
       totalForceWorld.x += fwd.x * roll;
       totalForceWorld.z += fwd.z * roll;

@@ -1,12 +1,12 @@
 ---
 id: 0108
 title: A wet runway from the METAR: longer stops and a coach that says so
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-29
-pr:
+pr: 124
 ---
 ## Why
 Real weather is pillar 3, but weather only moves wind and visibility. Rain on the METAR
@@ -26,11 +26,22 @@ only when the METAR (live) or the scripted scenario says so, never invented. Coa
 are unchanged.
 
 ## Acceptance criteria
-- [ ] Unit: METAR strings with RA/-RA/+RA/TSRA/DZ set wetRunway, clear ones and `VCSH`-only do not
-- [ ] Flight card: the same 737 and C172 landing rolls, wet vs dry, stop distance longer by 30-100%, landings still gradable
-- [ ] Dry cards unchanged (no existing flight card regresses)
-- [ ] The HUD/coach says "wet" only with a wet METAR; offline fallback is dry and says nothing
-- [ ] No boot-budget increase beyond headroom (put the wet text in a lazy chunk if needed)
+- [x] Unit: METAR strings with RA/-RA/+RA/TSRA/DZ set wetRunway, clear ones and `VCSH`-only do not
+- [x] Flight card: the same 737 and C172 landing rolls, wet vs dry, stop distance longer by 30-100%, landings still gradable
+  (C172 +33%, also +14% from 50 ft against the UK CAA's +15%; 737 +98%, inside 14 CFR 121.195(d)'s 115% of the
+  ACAP field length)
+- [x] Dry cards unchanged (no existing flight card regresses)
+- [x] The HUD/coach says "wet" only with a wet METAR; offline fallback is dry and says nothing
+- [x] No boot-budget increase beyond headroom (194.35 → 195.00 kB of 201)
+
+## Shipped notes
+The wet friction is 14 CFR 25.109(c)(1)'s wet tyre-to-ground braking coefficient (a cubic in
+groundspeed per tyre pressure) times (c)(2)'s anti-skid efficiency, never above dry
+(systems.js brakeMu). 737: 205 psi, fully modulating 0.80. C172: 38 psi (the rule's 50 psi
+row), no anti-skid, 0.37 fitted to UK CAA Safety Sense Leaflet 7's +15% wet paved landing
+distance. A thunderstorm with no precipitation (`TS`) is not wet: only RA/DZ falling at the
+field is. The wet runway's side grip and rolling resistance are unchanged; JSBSim
+(`?fdm=jsbsim`) does not read the flag yet.
 
 ## Test plan
 `tests/unit/weather.test.js` parsing; `tests/flight/` wet vs dry landing roll cards; one e2e

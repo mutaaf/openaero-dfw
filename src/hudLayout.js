@@ -80,13 +80,15 @@ export function windArrowDeg(fromDeg, kts, hdgDeg) {
 
 // The readout's text (pure; main.js refreshes it once a second, so the HUD allocates
 // nothing per frame). wx is the weather module's record ({ windDirDeg, windKts, gustKts,
-// live }); comps is runwayWindComponents for the active runway, or null when there is none
+// live, wetRunway }); comps is runwayWindComponents for the active runway, or null when there is none
 // or the aircraft is above WIND_SHOW_COMPONENTS_FT.
 export function windReadout(wx, comps, out = {}) {
   const kts = Math.round(wx.windKts || 0);
   const vrb = wx.windDirDeg === null || wx.windDirDeg === undefined;
   out.live = !!wx.live;
-  out.source = out.live ? 'METAR WIND' : 'SCENARIO';
+  // A wet runway (0108) only ever comes from the METAR's rain, so it takes the source line.
+  out.wet = !!wx.wetRunway;
+  out.source = out.wet ? 'WET RWY' : out.live ? 'METAR WIND' : 'SCENARIO';
   out.calm = kts < 2;
   // The arrow reads these, so it always agrees with the text it sits beside.
   out.dirDeg = vrb ? null : wx.windDirDeg;
