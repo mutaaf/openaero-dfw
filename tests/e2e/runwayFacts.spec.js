@@ -20,12 +20,15 @@ for (const { width, height, hasTouch } of SIZES) {
       const facts = page.locator('#txtRunwayFacts');
       await expect(facts).toBeVisible();
       await expect(facts).toHaveText('RWY 35C: 13,400 × 150 ft · 358°M · THR 562 ft (OurAirports)');
-      const f = await facts.boundingBox();
+      const line = await page.locator('#txtRunwayFactsLine').boundingBox();
+      const p = await facts.boundingBox();
       const da = await page.locator('#txtDensityAlt').boundingBox();
-      // One line of 11 px text, below the density altitude line and not over it.
-      expect(f.height).toBeLessThan(20);
-      expect(f.y).toBeGreaterThanOrEqual(da.y + da.height - 0.5);
-      expect(f.x + f.width).toBeLessThanOrEqual(width);
+      // The facts are one line of 11 px text inside the column (the source may wrap after them
+      // on a wide font), below the density altitude line and not over it.
+      expect(line.height).toBeLessThan(20);
+      expect(line.x + line.width).toBeLessThanOrEqual(p.x + p.width + 0.5);
+      expect(p.y).toBeGreaterThanOrEqual(da.y + da.height - 0.5);
+      expect(p.x + p.width).toBeLessThanOrEqual(width);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       expect(errors).toEqual([]);
     });
@@ -41,23 +44,29 @@ test('another runway follows the pick, and a drill with no runway shows no line'
   await page.locator('#missionList .btnMission[data-scenario="deadstick_kads_16"]').click();
   await expect(page.locator('#txtDensityAlt')).toContainText('Density altitude DFW area:');
   await expect(page.locator('#txtRunwayFacts')).toBeHidden();
-  await expect(page.locator('#txtRunwayFacts')).toHaveText('');
+  await expect(page.locator('#txtRunwayFactsLine')).toHaveText('');
 });
 
 test.describe('every mission at 390x844', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-  test('each runway\'s line fits on one line', async ({ page }) => {
+  test('each runway\'s facts fit on one line inside the column', async ({ page }) => {
     await stubTiles(page);
     await page.goto(BASE);
     const facts = page.locator('#txtRunwayFacts');
+    // CI's and phones' fonts run wider than the sandbox's: leave room for ~15% more.
+    await page.addStyleTag({ content: '#txtRunwayFactsLine { letter-spacing: 0.1em; }' });
     const keys = await page.locator('#missionList .btnMission:not(.hidden)').evaluateAll((els) => els.map((e) => e.dataset.scenario));
     let shown = 0;
     for (const key of keys) {
       await page.locator(`#missionList .btnMission[data-scenario="${key}"]`).click();
       if (!(await facts.isVisible())) continue;
       shown++;
-      expect((await facts.boundingBox()).height, `${key}: ${await facts.innerText()}`).toBeLessThan(20);
+      const line = await page.locator('#txtRunwayFactsLine').boundingBox();
+      const p = await facts.boundingBox();
+      const what = `${key}: ${await facts.innerText()}`;
+      expect(line.height, what).toBeLessThan(20);
+      expect(line.x + line.width, what).toBeLessThanOrEqual(p.x + p.width + 0.5);
     }
     expect(shown).toBeGreaterThan(10);
   });

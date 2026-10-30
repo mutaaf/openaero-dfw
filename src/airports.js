@@ -121,11 +121,12 @@ export const RUNWAYS_GEOM = RUNWAY_DATA.map((r) => {
 });
 
 // The start screen's chart line (0114): ident, length x width, magnetic heading, threshold
-// elevation; '' when the mission has no runway. The source is named: a survey, not the AIP.
+// elevation; '' when the mission has no runway. index.html names the source beside it
+// (OurAirports, a survey, not the AIP).
 const ftText = (ft) => Math.round(ft).toLocaleString('en-US');
 export function runwayFactsText(end) {
   if (!end) return '';
-  return `RWY ${end.ident}: ${ftText(end.lengthFt)} × ${ftText(end.widthFt)} ft · ${magHeadingText(end.hdgT)}°M · THR ${ftText(end.thrElevFt)} ft (OurAirports)`;
+  return `RWY ${end.ident}: ${ftText(end.lengthFt)} × ${ftText(end.widthFt)} ft · ${magHeadingText(end.hdgT)}°M · THR ${ftText(end.thrElevFt)} ft`;
 }
 
 export function runwayEnd(airport, ident) {

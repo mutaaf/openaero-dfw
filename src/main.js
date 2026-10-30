@@ -1421,7 +1421,7 @@ function syncDensityAltitude() {
   if (text + hint + facts === daShown) return;
   daShown = text + hint + facts;
   const factsEl = byId('txtRunwayFacts');
-  factsEl.textContent = facts;
+  byId('txtRunwayFactsLine').textContent = facts;
   factsEl.classList.toggle('hidden', !facts);
   byId('txtDaValue').textContent = text;
   const el = byId('txtThinAir');

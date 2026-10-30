@@ -140,7 +140,7 @@ describe('runwayFactsText', () => {
   it('KDFW 35C: ident, magnetic heading, 13,400 x 150 ft, threshold elevation', () => {
     const e = runwayEnd('KDFW', '35C');
     // OurAirports (and the FAA chart) list 17C/35C as 13,400 x 150 ft; 17R/35L is the 200 ft one.
-    expect(runwayFactsText(e)).toBe('RWY 35C: 13,400 × 150 ft · 358°M · THR 562 ft (OurAirports)');
+    expect(runwayFactsText(e)).toBe('RWY 35C: 13,400 × 150 ft · 358°M · THR 562 ft');
     // The course flown down the final to the threshold (sim frame: +X east, -Z north), less magvar.
     const p = approachSpawn(e, 5).pos;
     expect(Math.abs(approachGeometry(e, p).crossM)).toBeLessThan(0.01);
@@ -152,7 +152,7 @@ describe('runwayFactsText', () => {
     for (const rwy of RUNWAY_DATA) {
       for (const [end, other] of [[rwy.le, rwy.he], [rwy.he, rwy.le]]) {
         const text = runwayFactsText(runwayEnd(rwy.airport, end.ident));
-        const m = text.match(/^RWY (\w+): ([\d,]+) × ([\d,]+) ft · (\d{3})°M · THR ([\d,]+) ft \(OurAirports\)$/);
+        const m = text.match(/^RWY (\w+): ([\d,]+) × ([\d,]+) ft · (\d{3})°M · THR ([\d,]+) ft$/);
         expect(m, text).not.toBeNull();
         expect(m[1]).toBe(end.ident);
         expect(Number(m[2].replace(/,/g, ''))).toBe(rwy.lengthFt);
