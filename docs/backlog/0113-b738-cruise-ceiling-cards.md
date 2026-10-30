@@ -46,4 +46,4 @@ Fuel burn and range, climb schedules, RVSM, any change to engine.js beyond what 
   card. The cruise Mach 0.79 and ceiling FL410 are also EUROCONTROL's Aircraft Performance
   Database (B738); Boeing's ACAP §3.2.4 says only "cruise Mach = LRC".
 - Measured: FL350, Mach 0.79: drag 39.2 kN vs 70.1 kN full thrust; the trim throttle (54%) flies
-  level at +3 fpm. At 42,000 ft full thrust still climbs ~900 fpm: `it.fails` KNOWN GAP (0116).
+  level at +3 fpm. At 42,000 ft full thrust still climbs ~1,200 fpm: `it.fails` KNOWN GAP (0116).

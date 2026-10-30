@@ -10,7 +10,7 @@ pr:
 ---
 
 ## Why
-Found shipping 0113. At 65 t, ISA, the 737 still climbs at ~900 fpm with full thrust at
+Found shipping 0113. At 65 t, ISA, the 737 still climbs at ~1,200 fpm with full thrust at
 42,000 ft (Mach 0.79) and holds level flight to about FL520, where the real airplane's ceiling
 is FL410 (EUROCONTROL Aircraft Performance Database B738; EASA TCDS IM.A.120 Issue 30 p. 28,
 maximum operating altitude 41,000 ft). 41,000 ft is a legal operating limit, not a

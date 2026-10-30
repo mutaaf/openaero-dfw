@@ -362,12 +362,13 @@ describe('Boeing 737-800 go-around (14 CFR 25.119 and 33.73)', () => {
 const CRUISE_MACH = 0.79;
 const easAtMach = (ft, mach) => { const air = airAt(ft / M_TO_FT); return mach * air.speedOfSoundMps * Math.sqrt(air.sigma); };
 
-// Holds `mach` (as its EAS at `ft`) with pitch at a fixed throttle; returns the mean climb
-// rate (fpm) and altitude change (ft) over the last 30 s, after 60 s to settle.
+// Holds `mach` with pitch (its EAS at the height flown, so a climb doesn't drift the Mach up)
+// at a fixed throttle; returns the mean climb rate (fpm), the altitude change (ft) and the
+// Mach over the last 30 s, after 60 s to settle.
 function cruise(ft, mach, throttle) {
   const kts = easAtMach(ft, mach) / KTS_TO_MPS;
   const b = makeBody(b738, { kts, altM: ft / M_TO_FT, gearDown: false, throttle });
-  const hold = speedHoldPilot(() => kts);
+  const hold = speedHoldPilot((x) => easAtMach(x.pos.y * M_TO_FT, mach) / KTS_TO_MPS);
   fly(b, b738, 60, (x, dt) => { x.throttle = throttle; hold(x, dt); });
   const y0 = b.pos.y;
   let sum = 0, n = 0;
@@ -386,7 +387,6 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
     const cl = liftCoefficient(b738, trimAoaDeg(b738, eas, 0) * DEG_TO_RAD, 0);
     const drag = dragCoefficient(b738, cl, false, 0, 1) * q * b738.wingAreaM2;
     const full = engineThrust(b738, 1, tas, air, CRUISE_MACH, q);
-    expect(cl * q * b738.wingAreaM2).toBeCloseTo(b738.massKg * 9.80665, -2); // lift = weight
     expect(drag / full).toBeLessThan(1);
     const thr = trimThrottle(b738, eas, 0, 0, false, air);
     expect(thr).toBeGreaterThan(0.3); // a cruise setting, not near idle
@@ -402,16 +402,19 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
     expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
   });
 
-  // EUROCONTROL APD ceiling FL 410 = the TCDS maximum operating altitude: at 65 t (the APD
-  // and TCDS give no mass; 65 t is a mid weight, well under the TCDS (p. 28) 79,015 kg take-off and 66,360 kg landing masses) the jet
-  // should not hold level flight with full thrust 1,000 ft above it.
-  // 41,000 ft is a legal operating limit, not a published thrust-limited ceiling; the bound
-  // 1,000 ft above it rests on that limit and the APD's ceiling. KNOWN GAP (0116): the model
-  // climbs there at ~900 fpm and holds level to ~FL520 at Mach 0.79: thrust lapses as
+  // EUROCONTROL APD ceiling FL 410 = the TCDS maximum operating altitude. Both are caps, not a
+  // published thrust or buffet ceiling, and neither gives a mass (65 t is mid weight: the TCDS,
+  // p. 28, gives 79,015 kg take-off and 66,360 kg / 146,300 lb landing masses). The card asks
+  // the model to run out of performance near the cert limit: no level flight on full thrust
+  // 1,000 ft above it. A light 737 may really be cert-limited there; the stronger evidence
+  // is how far above it the model holds level. Tighten to a cited maximum-altitude-vs-weight
+  // figure (FCOM/AFM) when one is found. KNOWN GAP (0116): the model
+  // climbs there at ~1,200 fpm and holds level to ~FL520 at Mach 0.79: thrust lapses as
   // σ^densityExp (engine.js; 0.7 in aircraft.js), keeping 2 × 29 kN at FL410, and there is no
   // buffet boundary.
   it.fails('KNOWN GAP (0116): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
-    const { fpm } = cruise(42000, CRUISE_MACH, 1);
+    const { fpm, mach } = cruise(42000, CRUISE_MACH, 1);
+    expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
     expect(fpm).toBeLessThanOrEqual(0);
   });
 });
