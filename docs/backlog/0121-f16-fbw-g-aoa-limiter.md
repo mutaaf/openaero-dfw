@@ -10,14 +10,15 @@ pr:
 ---
 
 ## Why
-Found carding 0118. In Pilot, the F-16's stick is a raw stabilator: full back stick at 450 kt and
-15,000 ft pulls ~14 g by 1 s, then α runs through the 28° stall to 90° and the nose goes over the
+Found carding 0118. In Pilot, the F-16's stick is a raw stabilator: full back stick at 450 KCAS and
+15,000 ft pulls ~13 g by 1 s, then α runs through the 28° stall to 90° and the nose goes over the
 top; at 150 kt the same pull goes to α 90° too. The real airplane's flight control system flies
 the stick as a load-factor command, limited to 9 g (USAF fact sheet: "can withstand up to nine
 G's", https://www.af.mil/About-Us/Fact-Sheets/Display/Article/104505/f-16-fighting-falcon/) and,
 slow, to α 25° (NASA TP-1538 p. 12, https://ntrs.nasa.gov/citations/19800005879). A player in Pilot
 pulling full back should get a hard, bounded pull, and a pilot should not be able to tumble a Viper with
-one hand. `tests/flight/f16.test.js` "KNOWN GAP (0121)" measures both.
+one hand. Part of the overshoot is the wing (0066: CL above TP-1538's at 25°, no Mach term),
+so fit the command law with 0066 in mind. `tests/flight/f16.test.js` "KNOWN GAP (0121)" measures both.
 
 ## What
 On `spec.pitchFbw` airframes (`src/flightModel.js`), turn the stick into a command: stick → a

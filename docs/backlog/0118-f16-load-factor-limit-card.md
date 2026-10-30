@@ -38,5 +38,5 @@ from the accelerometer-equivalent in the harness (add a small helper if absent).
 Rolling g, departures, 3D structural effects, blackout visuals.
 
 ## Result (2026-10-30)
-The model reaches a hard pull (≥ 7.5 g, a passing card) but has no g or AoA limiter: ~14 g at
-450 kt and α 90° at 150 kt. Both are `KNOWN GAP (0121)` cards; the limiter is ticket 0121.
+The model reaches a hard pull (≥ 7.5 g, a passing card) but has no g or AoA limiter: ~13 g at
+450 KCAS (434 KEAS) and α 90° at 150 kt. Both are `KNOWN GAP (0121)` cards; the limiter is ticket 0121.

@@ -153,7 +153,7 @@ describe('F-16C capability bound (not a performance claim)', () => {
 // 15,000 ft: fast, the pull is a hard 9 g and no more (7.5-9.5 g: ~9 g held, a transient to
 // 9.5); slow, the wing runs out first and the AoA limit holds α at 25° (well under 9 g). The
 // seat's load factor is loadFactorMeter's (harness.js). The model's indicated speed is EAS:
-// 450 KEAS is ~460 KCAS at 15,000 ft.
+// the ticket's 450 KCAS is 434 KEAS at 15,000 ft, ISA (Mach 0.87).
 const fullPull = (kts) => {
   const b = makeBody(f16, { kts, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
   const meter = loadFactorMeter();
@@ -180,20 +180,21 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
     within(sum / n, 1, 0.02);
   });
 
-  it('a full pull at 450 kt, 15,000 ft is a hard pull: at least 7.5 g within 5 s', () => {
-    expect(fullPull(450).peakG).toBeGreaterThanOrEqual(7.5);
+  it('a full pull at 450 KCAS (434 KEAS), 15,000 ft is a hard pull: at least 7.5 g within 5 s', () => {
+    expect(fullPull(434).peakG).toBeGreaterThanOrEqual(7.5);
   });
 
   // The model has no g limiter: full back stick is full stabilator whatever the speed, so the
-  // pull overshoots to ~14 g by 1 s and α then runs through the stall to 90° (the nose pitches
-  // over the top). The fix is a load-factor and AoA command law on spec.pitchFbw (0121).
-  it.fails('KNOWN GAP (0121): the same pull stays at or under 9.5 g (the 9 g limit and a transient; model: ~14 g)', () => {
-    expect(fullPull(450).peakG).toBeLessThanOrEqual(9.5);
+  // pull overshoots to ~13 g by 1 s and α then runs through the stall until it pegs at 90° (the
+  // nose goes over the top). Part of the overshoot is the wing (0066: CL above TP-1538's at 25°,
+  // no Mach term); the fix is a load-factor and AoA command law on spec.pitchFbw (0121).
+  it.fails('KNOWN GAP (0121): the same pull stays at or under 9.5 g (the 9 g limit and a transient; model: ~13 g)', () => {
+    expect(fullPull(434).peakG).toBeLessThanOrEqual(9.5);
   });
 
   // Slow, the same pull should stop at the AoA limit: α ≤ 25° (a 1° transient allowed), and the
-  // load factor stays well under 9 g. The model does stay under 9 g (~1.7 g), but because α
-  // runs past the 28° stall to 90°, not because anything holds it (0121).
+  // load factor stays well under 9 g. The model does stay under 9 g (~1.7 g; at 150 kt the dynamic
+  // pressure allows no more), but α runs past the 28° stall and pegs at 90° (0121).
   it.fails('KNOWN GAP (0121): a full pull at 150 kt, 15,000 ft is AoA-limited: α ≤ 26° and under 9 g (model: α 90°)', () => {
     const { peakG, maxAoa } = fullPull(150);
     expect(maxAoa).toBeLessThanOrEqual(26);
