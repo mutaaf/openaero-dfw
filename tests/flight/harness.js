@@ -4,7 +4,7 @@
 import { Vector3, Quaternion, Euler } from 'three';
 import { stepFlightModel } from '../../src/flightModel.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank, flareSinkMps } from '../../src/autopilot.js';
-import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT } from '../../src/constants.js';
+import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT, GRAVITY } from '../../src/constants.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { surfaceWindFactor } from '../../src/weather.js';
@@ -98,6 +98,22 @@ export function settle(body, spec, seconds, pilot, f, settleS = 40) {
   let sum = 0, n = 0;
   fly(body, spec, seconds, (b, dt) => { pilot(b, dt); sum += f(b); n++; });
   return sum / n;
+}
+
+// The load factor an accelerometer on the pilot's seat reads (n, in g, + = pushed into the
+// seat): the specific force (acceleration less gravity) along the body's up axis. Call it
+// once after each sub-step (fly's `until`); it measures the step from the velocity change,
+// so the first call returns 1 (in trim).
+export function loadFactorMeter() {
+  const v0 = new Vector3(), f = new Vector3(), up = new Vector3();
+  let primed = false;
+  return (body, dt = DT) => {
+    if (!primed) { primed = true; v0.copy(body.vel); return 1; }
+    f.copy(body.vel).sub(v0).divideScalar(dt);
+    f.y += GRAVITY;
+    v0.copy(body.vel);
+    return f.dot(up.set(0, 1, 0).applyQuaternion(body.quat)) / GRAVITY;
+  };
 }
 
 // POH short-field takeoff: flaps 10, full power, rotate at 45 KIAS to a nose-high 11°
