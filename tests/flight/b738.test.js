@@ -405,9 +405,11 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
   // EUROCONTROL APD ceiling FL 410 = the TCDS maximum operating altitude: at 65 t (the APD
   // and TCDS give no mass; 65 t is a mid weight, well under the TCDS (p. 28) 79,015 kg take-off and 66,360 kg landing masses) the jet
   // should not hold level flight with full thrust 1,000 ft above it.
-  // KNOWN GAP (0116): the model climbs there at ~900 fpm and holds level to ~FL520 at Mach
-  // 0.79: thrust lapses as σ^0.7 (aircraft.js), so it keeps 2 × 29 kN at FL410 where a
-  // CFM56-7B's maximum cruise rating is nearer 2 × 24 kN, and there is no buffet boundary.
+  // 41,000 ft is a legal operating limit, not a published thrust-limited ceiling; the bound
+  // 1,000 ft above it rests on that limit and the APD's ceiling. KNOWN GAP (0116): the model
+  // climbs there at ~900 fpm and holds level to ~FL520 at Mach 0.79: thrust lapses as
+  // σ^densityExp (engine.js; 0.7 in aircraft.js), keeping 2 × 29 kN at FL410, and there is no
+  // buffet boundary.
   it.fails('KNOWN GAP (0116): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
     const { fpm } = cruise(42000, CRUISE_MACH, 1);
     expect(fpm).toBeLessThanOrEqual(0);
