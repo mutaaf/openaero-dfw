@@ -144,6 +144,7 @@ const sim = {
   deadStick: null,
   engineOut: null, // engine failure after takeoff (0104, engineOut.js)
   rto: null, // rejected takeoff drill (0107, rto.js)
+  windshear: null, // microburst windshear drill (0112, windshear.js)
   engineFailed: false,
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
@@ -793,6 +794,7 @@ function attachDetailedModel(type) {
 function checkStabilizedGate() {
   const end = sim.activeEnd;
   if (!end || sim.onGround || sim.engineFailed) return; // no "go around" without an engine
+  if (sim.windshear && sim.windshear.phase !== 'final') return; // the windshear's warning has it (0112)
   const gs = sim.gateState;
   const aaeFt = (sim.pos.y - end.thrY) * M_TO_FT;
   const gateFt = isImc(sim.wx) ? GATE_IMC_FT : GATE_VMC_FT;
@@ -939,6 +941,23 @@ function checkRto() {
   updateCoach(0);
   showResults(result, best, rtoLib.RTO_END, null);
 }
+// --- Microburst windshear (ticket 0112, windshear.js): sim.windshear on that mission; the shear
+// starts at 600 ft on the final (its air added in updateWind), graded when out of it (or not).
+let wsLib = null;
+function checkWindshear(dt) {
+  const ev = sim.windshear && wsLib.shearStep(sim.windshear, sim, dt);
+  if (ev === 'warning') {
+    sim.apMaster = false; sim.apApproach = false; // the escape is flown by hand (the training aid's manual one)
+    audio.callout('windshear, windshear, windshear');
+  }
+  if (ev !== 'clear' && ev !== 'failed') return;
+  byId('masterAlertBanner').classList.add('hidden');
+  const result = wsLib.gradeShear(sim.windshear, sim.assist === 'kid');
+  let best = { isNewBest: false, best: null };
+  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
+  updateCoach(0);
+  showResults(result, best, wsLib.SHEAR_END, null);
+}
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
 // only instructions) until Skip; their state is null on every other mission.
@@ -948,6 +967,7 @@ function startDrills(mission) {
   sim.pattern = null;
   sim.engineOut = null;
   sim.rto = null;
+  sim.windshear = null;
   sim.engineFailed = !!mission.deadStick;
   drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto);
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
@@ -955,6 +975,7 @@ function startDrills(mission) {
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
   if (mission.engineOutFt) loadDrill(mission, eoLib, () => import('./engineOut.js'), (lib) => { eoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.engineOut = lib.createEngineOut(mission); });
   if (mission.rto) loadDrill(mission, rtoLib, () => import('./rto.js'), (lib) => { rtoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.rto = lib.createRto(); });
+  if (mission.windshear) loadDrill(mission, wsLib, () => import('./windshear.js'), (lib) => { wsLib = lib; if (sim.aircraftKey === mission.aircraft) { const d = courseVector(runwayEnd(mission.airport, mission.rwy).hdgT); sim.windshear = lib.createShear(d.x, d.z); } });
 }
 
 // --- Landing grade ---------------------------------------------------------------
@@ -1004,6 +1025,7 @@ function checkTouchdown(dt) {
   // The engine-failure takeoffs (0104) grade only a landing after the failure: no best without it.
   if (sim.loadedMission?.engineOutFt && !sim.engineOut?.failed) return;
   if (sim.loadedMission?.rto) return; // the rejected takeoff (0107) is graded at its stop
+  if (sim.windshear && sim.windshear.phase !== 'final') return; // the windshear escape (0112) is graded out of it
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   // The dead-stick challenge (0036) is graded on Addison wherever the wheels touch.
   const glideLib = sim.deadStick ? deadLib : sim.engineOut?.failed ? eoLib : null; // 0036, 0104
@@ -1182,7 +1204,8 @@ function updateCoach(dt) {
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     coachInput.stall = sim.stallDrill?.phase ?? null;
     coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
-      : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim) : null;
+      : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim)
+      : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim) : null;
     coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto) ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
@@ -1410,6 +1433,7 @@ function updateWind(dt) {
   sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
   const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY));
   sim.windVec.set(w.x, 0, w.z);
+  if (sim.windshear) wsLib.addShearWind(sim.windshear, sim); // the microburst (0112)
 }
 
 function windText(wx) {
@@ -1489,6 +1513,7 @@ function step6DofPhysics(dt) {
   checkStallDrill(dt);
   if (sim.engineOut && eoLib.engineOutStep(sim.engineOut, sim)) sim.engineFailed = true;
   checkRto();
+  checkWindshear(dt);
   checkTouchdown(dt);
   checkTakeoffCallouts();
 }
@@ -1644,8 +1669,10 @@ function integrateSubStep(dt) {
   // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (Kid's plane
   // idles at once: 2 s): a phone held sideways shows alerts in the coach's slot, and the coach has the rest.
   const rto = sim.rto, kid = sim.assist === 'kid', fire = rto?.phase === 'fire' && (kid ? sim.simTime - rto.t0 < 2 : rto.idleS === null);
-  banner.classList.toggle('hidden', !gpwsWarning && !gearWarning && !fire);
-  const bannerText = fire ? (kid ? 'ENGINE FIRE' : 'ENGINE FIRE — IDLE, BRAKES') : gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
+  // The windshear warning (0112), its first 6 s.
+  const shear = sim.windshear?.phase === 'warning' && sim.simTime - sim.windshear.warnT < 6;
+  banner.classList.toggle('hidden', !gpwsWarning && !gearWarning && !fire && !shear);
+  const bannerText = fire ? (kid ? 'ENGINE FIRE' : 'ENGINE FIRE — IDLE, BRAKES') : shear ? (kid ? 'WINDSHEAR' : 'WINDSHEAR — MAX THRUST, PITCH 15°') : gearWarning ? 'TOO LOW — GEAR' : 'PULL UP — TERRAIN AHEAD';
   if (banner.textContent !== bannerText) banner.textContent = bannerText;
   // Spoken once per descent below 500 ft (GPWS mode 4A).
   if (gearWarning && !sim.gearWarned) { sim.gearWarned = true; audio.callout('too low, gear'); }
@@ -2203,7 +2230,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.guideBankDeg = 0;
   _assistIn.guideGammaDeg = 0;
   const ap = sim.approach;
-  if (departing || drill?.kidClimb) {
+  // Kid's windshear escape (0112): full power and the climb guide from the warning.
+  const wsEscape = sim.windshear && wsLib.kidEscape(sim.windshear);
+  if (departing || drill?.kidClimb || wsEscape) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
     kidFinalGuide(sim.activeEnd, ap, -_euler.y * RAD_TO_DEG, Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG, _assistIn);
@@ -2231,14 +2260,15 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   sim.rudderInput = slewRudder(sim.rudderInput, _assistOut.rud, dt);
   // No engine (0036): no power to manage, and flaps are the pilot's call (the coach says when).
   if (sim.engineFailed) return;
-  if (cfg.autoConfig) {
+  if (cfg.autoConfig && !wsEscape) { // no gear or flaps in the shear
     _assistCfg.gearDown = sim.gearDown; _assistCfg.flapsIndex = sim.flapsIndex;
     autoConfigure(spec, sim, _assistCfg);
     sim.gearDown = _assistCfg.gearDown; sim.flapsIndex = _assistCfg.flapsIndex;
   }
   if (cfg.autoThrottle) {
     updateIasTrend(dt);
-    if (drill && drill.kidThrottle !== null) {
+    if (wsEscape) sim.throttle = 1;
+    else if (drill && drill.kidThrottle !== null) {
       sim.throttle = drill.kidThrottle; // the stall drill: idle until the stall, then full power
     } else if (departing) {
       sim.throttle = 1; // full power until 1,000 ft
@@ -2696,6 +2726,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.deadStick = null;
   sim.engineOut = null;
   sim.rto = null;
+  sim.windshear = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
 });
@@ -3232,6 +3263,7 @@ window.openaeroDebug = () => {
     stallDrill: sim.stallDrill ? { ...sim.stallDrill } : null,
     engineFailed: !!sim.engineFailed,
     rto: sim.rto ? { ...sim.rto } : null,
+    windshear: sim.windshear ? { ...sim.windshear } : null,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
       { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
