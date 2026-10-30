@@ -123,7 +123,10 @@ input[type=range] { accent-color: #38bdf8; }
   #hudMenu.open { display: flex; }
 }
 /* The coach card yields to the open menu sheet (they meet in phone landscape). */
-.hud-menu-open #coach { visibility: hidden; }
+.hud-menu-open #coach, .hud-menu-open #calloutCaption { visibility: hidden; }
+/* Callout captions (0117): hudLayout.js takeoffCallTop (heading box top max(cy - 145, 72) + 28),
+   left of the wind box (windBoxRect: x = min(cx + 126, w - 70)), so between the tapes too. */
+#calloutCaption { top: max(calc(50% - 117px), 100px); max-width: min(248px, calc(100% - 148px)); width: max-content; }
 
 /* The alert banners stand under the top bar, which moves down by the status bar's inset when
    installed (0086); a phone held sideways puts them in the coach's slot below. */

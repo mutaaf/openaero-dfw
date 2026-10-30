@@ -335,7 +335,11 @@ src/input.js        keyboard state → control targets, virtual stick mapping; t
                     (< 40 kt) steers the nose wheel with the stick's sideways push (touch has no pedals, 0110);
                     touchGroundRudder: otherwise (thumb not steering, or above 40 kt) Pilot on touch gets
                     groundSteerRudder's centreline hold on the runway (0106)
-src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
+src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture); the GPWS heights,
+                    sink rate / pull up and the sim's calls are picked sound or not, each to a caption
+src/captions.js     callout captions (0117): #calloutCaption shows each spoken call's words for 1.2 s, in
+                    the takeoff call's slot under the heading box (it wins it), left of the wind box; a queued
+                    call joins the line; plainCaption gives Kid/Learner plain words (pure, tested)
 src/styles.css      Tailwind entry + ported custom HUD styles
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):
                     GET /openaero/api/metar?ids=KDFW,… → aviationweather.gov METARs,

@@ -57,6 +57,7 @@ import {
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
+import { createCaption, plainCaption, captionWords } from './captions.js';
 // Boot-budget trim (0078): one short name for the ~200 element lookups.
 const byId = (id) => document.getElementById(id);
 
@@ -232,7 +233,20 @@ scene.add(sunLight);
 const sun = { elevationDeg: 50, azimuthDeg: 210 };
 const _sunVec = { x: 0, y: 0, z: 0 };
 
-const audio = createAudio(sim, updateAudioButton);
+// Every spoken callout is captioned (0117), sound on or off; the line clears itself in renderLoop.
+const captionEl = byId('calloutCaption');
+// Each call is its own no-wrap span (one that fits the line), so a joined line breaks between calls.
+const caption = createCaption((t) => {
+  captionEl.replaceChildren(...t.split(' · ').flatMap((w, i) => {
+    const s = document.createElement('span');
+    if (w.length <= 26) s.className = 'whitespace-nowrap';
+    s.textContent = w;
+    return i ? [' · ', s] : [s];
+  }));
+  captionEl.classList.toggle('hidden', !t);
+});
+const sayCaption = (t, queued) => caption.say(sim.assist === 'pilot' ? captionWords(t) : plainCaption(captionWords(t)), performance.now() / 1000, queued);
+const audio = createAudio(sim, updateAudioButton, sayCaption);
 
 function updateAudioButton() {
   const txt = byId('txtAudioState');
@@ -1971,7 +1985,8 @@ function renderHud() {
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
   if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(cx, cy);
-  if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil) drawTakeoffCall(cx, cy);
+  // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
+  if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
 
   hudCtx.restore();
 }
@@ -3162,7 +3177,8 @@ function renderLoop(time) {
   renderHud();
   renderRadar();
   syncUI();
-  audio.update();
+  audio.update(!modalOpen());
+  caption.update(performance.now() / 1000);
 }
 
 // The sky follows the camera; runway lights and PAPIs brighten as the light goes.
@@ -3202,6 +3218,8 @@ if (debugOverlay) {
     && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm });
   // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce.
   window.openaeroDebugHop = (mps) => { sim.vel.y = mps; };
+  // ?debug (tests, 0117): put words on the caption line as audio.js would.
+  window.openaeroDebugCaption = sayCaption;
   // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
   window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
 }
@@ -3268,6 +3286,7 @@ window.openaeroDebug = () => {
     paused: sim.paused,
     gfxLost: gfx.lost,
     audio: audio.state,
+    caption: caption.text,
     wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,

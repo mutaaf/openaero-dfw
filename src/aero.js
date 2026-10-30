@@ -104,15 +104,21 @@ const CALLOUT_WORDS = ['one thousand', 'five hundred', 'four hundred', 'three hu
 // Spoken word for a GPWS_ALT_THRESHOLDS index (the real automatic callout cadence).
 export const calloutWord = (i) => CALLOUT_WORDS[i];
 
-// Index into GPWS_ALT_THRESHOLDS that should fire now, or -1. Each threshold has a
-// 35 ft window below it and does not repeat while it is the last one called.
+// Index into GPWS_ALT_THRESHOLDS that should fire now, or -1. Each threshold has a 35 ft
+// window below it; only the lowest threshold at or above the aircraft counts (under 50 ft the
+// windows overlap, and the highest match called "fifty" again after "forty", 0117), and only
+// one below the last called: a bounce or a dip in the terrain never calls a height twice.
+// gpwsRearm re-arms them after a climb.
 export function gpwsCalloutIndex(aglFt, lastIdx) {
-  for (let i = 0; i < GPWS_ALT_THRESHOLDS.length; i++) {
+  for (let i = GPWS_ALT_THRESHOLDS.length - 1; i >= 0; i--) {
     const thresh = GPWS_ALT_THRESHOLDS[i];
-    if (aglFt <= thresh && aglFt > thresh - 35 && lastIdx !== i) return i;
+    if (aglFt <= thresh) return aglFt > thresh - 35 && i > lastIdx ? i : -1;
   }
   return -1;
 }
+// The callouts re-arm (-1) once the aircraft is 100 ft above the last height called (a go-around,
+// a touch-and-go's climb-out); otherwise lastIdx stands.
+export const gpwsRearm = (aglFt, lastIdx) => (lastIdx >= 0 && aglFt > GPWS_ALT_THRESHOLDS[lastIdx] + 100 ? -1 : lastIdx);
 
 // Takeoff callouts (0035): the pilot monitoring's "eighty knots" (airspeed cross-check),
 // "V1", "rotate", then "positive rate" once the aircraft climbs. Wording varies by operator;
