@@ -8,7 +8,7 @@
 // airspeed, and leave the gear and flaps where they are until out of it. Pure: no THREE, no DOM.
 // Tested in tests/unit/windshear.test.js and flown headless in tests/flight/windshear.test.js.
 import { curve, letterGrade } from './landing.js';
-import { DRILL_TEXT, RANK } from './coach.js';
+import { DRILL_TEXT, RANK, TOUCH_WORDS } from './coach.js';
 import { stallAoaDeg } from './aero.js';
 import { runwayEnd } from './airports.js';
 import { M_TO_FT } from './constants.js';
@@ -75,14 +75,21 @@ export function shearAt(s, out = { headKts: 0, downFpm: 0 }) {
 export const SHEAR_TEXT = {
   wsGain: 'Speed jumping? Keep the power: it can be windshear',
   wsMax: 'WINDSHEAR! Full power: throttle to the top',
-  wsPitch: 'Pull up to 15° nose up and hold it',
-  wsHold: 'Hold the nose up: don\'t dive for speed',
-  wsShaker: 'Stick shaker: ease off a little, keep the nose up',
+  wsPitch: 'Nose up to 15° (S or ↑) and hold it',
+  wsHold: 'Hold the nose up (S or ↑): don\'t dive for speed',
+  wsShaker: 'Stick shaker: ease the nose down a little, keep it up',
   wsLevel: 'Wings level',
   wsClear: 'Climbing out of it: hold full power',
   wsKid: 'Windshear! Let go: the plane climbs out for you',
 };
 Object.assign(DRILL_TEXT, SHEAR_TEXT);
+// On the touch stick thumb up is nose up: the one drill where the wrong way flies into the ground.
+Object.assign(TOUCH_WORDS, {
+  wsMax: 'WINDSHEAR! Full power: slide the throttle to the top',
+  wsPitch: 'Nose up: push the stick up to 15° and hold it',
+  wsHold: 'Keep the stick up, nose up: don\'t dive for speed',
+  wsShaker: 'Stick shaker: ease the stick down a little, keep the nose up',
+});
 // Each escape step replaces the last at once (a higher rank interrupts; coach.js).
 Object.assign(RANK, { wsGain: 2, wsClear: 4, wsMax: 5, wsKid: 5, wsPitch: 6, wsLevel: 6, wsHold: 7, wsShaker: 8 });
 

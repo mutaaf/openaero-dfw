@@ -945,7 +945,7 @@ function checkRto() {
 // starts at 600 ft on the final (its air added in updateWind), graded when out of it (or not).
 let wsLib = null;
 function checkWindshear(dt) {
-  const ev = sim.windshear && wsLib.shearStep(sim.windshear, sim, dt);
+  const ev = sim.windshear && wsLib.shearLive(sim.windshear) && wsLib.shearStep(sim.windshear, sim, dt);
   if (ev === 'warning') {
     sim.apMaster = false; sim.apApproach = false; // the escape is flown by hand (the training aid's manual one)
     audio.callout('windshear, windshear, windshear');

@@ -144,6 +144,10 @@ describe('the coach', () => {
     st.phase = 'clear';
     expect(shearTarget(st, s())).toBe(null);
     for (const k of ['wsGain', 'wsMax', 'wsPitch', 'wsHold', 'wsShaker', 'wsLevel', 'wsClear', 'wsKid']) expect(coachText(k)).toMatch(/\w/);
+    // Which way is nose up: thumb up on the touch stick, S or ↑ on the keyboard.
+    expect(coachText('wsPitch', { touch: true })).toMatch(/stick up/);
+    expect(coachText('wsShaker', { touch: true })).toMatch(/stick down/);
+    expect(coachText('wsPitch')).toMatch(/S or ↑/);
   });
 });
 
