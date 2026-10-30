@@ -11,8 +11,8 @@
 //    over a mile short of the runway.
 //  - What the cards pin, all relative (no published height-loss figure exists for this
 //    shear): flown on at approach power and attitude, the 737 sinks into the ground well
-//    short of the threshold; full power with no pull-up does too (the training aid's point:
-//    thrust alone does not stop the sink); a 1 s escape climbs out without a stall or a
+//    short of the threshold; full power with no pull-up loses three times the escape's height
+//    (the training aid's point: thrust alone does not stop the sink, pitch does); a 1 s escape climbs out without a stall or a
 //    shaker, losing less than 250 ft; diving for speed at full power loses more and grades
 //    worse; a late escape (6 s) still makes it, lower and graded lower.
 import { describe, it, expect } from 'vitest';
@@ -96,10 +96,13 @@ describe('Boeing 737-800 microburst escape (FAA-Boeing Windshear Training Aid; A
     expect(r.grade.grade).toBe('CRASH');
   });
 
-  it('full power without the pull-up still sinks into the ground', () => {
-    const r = flyShear('thrust');
-    expect(r.st.ground).toBe(true);
-    expect(r.grade.grade).toBe('CRASH');
+  it('full power without the pull-up loses three times the escape\'s height, and is graded for the low nose', () => {
+    const r = flyShear('thrust'), esc = flyShear('escape');
+    expect(r.st.ground).toBe(false);
+    expect(r.lostFt).toBeGreaterThan(3 * esc.lostFt);
+    expect(r.st.lowFt).toBeLessThan(200);
+    expect(r.grade.score).toBeLessThanOrEqual(69);
+    expect(r.grade.reason).toMatch(/nose low/);
   });
 
   it('the escape (full power, 15° nose up, 1 s) climbs out with no stall or stick shaker, an A or better', () => {
@@ -108,7 +111,7 @@ describe('Boeing 737-800 microburst escape (FAA-Boeing Windshear Training Aid; A
     expect(r.st.stalled).toBe(false);
     expect(r.maxAoa).toBeLessThan(r.stallAoa);
     expect(r.st.shakerS).toBeLessThan(1);
-    expect(r.lostFt).toBeGreaterThan(50); // the shear costs height even flown well
+    expect(r.lostFt).toBeGreaterThan(50); // the shear costs height even flown well (the downdraft fades below 400 ft)
     expect(r.lostFt).toBeLessThan(250);
     expect(r.st.minPitchDeg).toBeGreaterThan(12);
     expect(['S', 'A']).toContain(r.grade.grade);
@@ -118,7 +121,7 @@ describe('Boeing 737-800 microburst escape (FAA-Boeing Windshear Training Aid; A
     const esc = flyShear('escape', 3), chase = flyShear('chase', 3);
     expect(chase.st.phase).toBe('clear'); // the 737's thrust gets it out, low
     expect(chase.lostFt).toBeGreaterThan(esc.lostFt + 100);
-    expect(chase.st.diveDeg).toBeGreaterThan(2); // the nose went down after the warning
+    expect(chase.st.diveDeg).toBeGreaterThan(2); // the nose went down after the power came in
     expect(esc.st.diveDeg).toBeLessThan(1);
     expect(chase.grade.score).toBeLessThan(esc.grade.score);
     expect(chase.grade.score).toBeLessThanOrEqual(69);

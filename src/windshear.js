@@ -27,6 +27,10 @@ export const SHEAR_PROFILE = [
   [0, 0, 0], [5, 15, 0], [10, 0, 900], [14, -15, 1500], [20, -20, 1500], [30, -20, 1500], [38, -10, 0], [46, 0, 0],
 ];
 export const SHEAR_END_S = 46;
+// The downdraft turns into the outflow near the ground: it fades linearly below this height and is
+// zero at the surface (the Oseguera-Bowles microburst model, NASA TM-100632: vertical air goes to
+// nothing at the ground). The height is the wheels' above the terrain under them.
+export const SHEAR_DOWN_FADE_FT = 400;
 // The warning (a reactive windshear alert like the 737's GPWS mode 7) comes as the headwind's
 // fall and the downdraft first add up to a hazard.
 export const SHEAR_WARN_S = 7;
@@ -36,7 +40,8 @@ export const SHEAR_MAX_THROTTLE = 0.95;
 export const SHEAR_TARGET_PITCH_DEG = 15;
 export const SHEAR_PITCHED_DEG = 12;
 export const SHEAR_CHASE_PITCH_DEG = 5;
-// Diving for speed: the nose this far below where it was at the warning (an escape only raises it).
+// Diving for speed: the nose this far below where it was when the power came in (an escape only
+// raises it; before the power, a frozen pilot's nose sagging is the reaction factor's, not a dive).
 export const SHEAR_DIVE_DEG = 2;
 // The nose's lowest (held up through the sink?) counts from this long after the warning, or
 // after full power if that came later (no power yet: from both): a 737 rotates ~2.5°/s, so a
@@ -86,7 +91,7 @@ Object.assign(RANK, { wsGain: 2, wsClear: 4, wsMax: 5, wsKid: 5, wsPitch: 6, wsL
 // dirX, dirZ: the runway's course (the headwind blows against it).
 export const createShear = (dirX = 0, dirZ = -1) => ({
   phase: 'final', dirX, dirZ, t0: 0, warnT: 0, startFt: 0, lowFt: Infinity, maxS: null, pitchS: null,
-  minPitchDeg: Infinity, warnPitchDeg: 0, diveDeg: 0, peakBankDeg: 0, shakerS: 0, stalled: false, ground: false, config: null, configChanged: false,
+  minPitchDeg: Infinity, powerPitchDeg: 0, diveDeg: 0, peakBankDeg: 0, shakerS: 0, stalled: false, ground: false, config: null, configChanged: false,
 });
 
 export const shearLive = (st) => st.phase === 'final' || st.phase === 'shear' || st.phase === 'warning';
@@ -107,15 +112,15 @@ export function stepShear(st, s) {
   let ev = '';
   if (st.phase === 'shear') {
     if (ts < SHEAR_WARN_S) return '';
-    st.phase = 'warning'; st.warnT = s.t; st.config = s.config; st.warnPitchDeg = s.pitchDeg; ev = 'warning';
+    st.phase = 'warning'; st.warnT = s.t; st.config = s.config; ev = 'warning';
   }
   const since = s.t - st.warnT;
-  if (st.maxS === null && s.throttle >= SHEAR_MAX_THROTTLE) st.maxS = since;
+  if (st.maxS === null && s.throttle >= SHEAR_MAX_THROTTLE) { st.maxS = since; st.powerPitchDeg = s.pitchDeg; }
   if (st.pitchS === null && s.pitchDeg >= SHEAR_PITCHED_DEG) st.pitchS = since;
   const from = st.maxS === null ? SHEAR_PITCH_FROM_S + SHEAR_ROTATE_S : Math.max(SHEAR_PITCH_FROM_S, st.maxS + SHEAR_ROTATE_S);
   if (ts < SHEAR_END_S) {
     if (since >= from && s.pitchDeg < st.minPitchDeg) st.minPitchDeg = s.pitchDeg;
-    if (st.warnPitchDeg - s.pitchDeg > st.diveDeg) st.diveDeg = st.warnPitchDeg - s.pitchDeg;
+    if (st.maxS !== null && st.powerPitchDeg - s.pitchDeg > st.diveDeg) st.diveDeg = st.powerPitchDeg - s.pitchDeg;
   }
   const bank = Math.abs(s.bankDeg);
   if (bank > st.peakBankDeg) st.peakBankDeg = bank;
@@ -205,15 +210,16 @@ function input(sim, dt) {
 }
 export const shearStep = (st, sim, dt) => stepShear(st, input(sim, dt));
 export const shearPrompt = (st, sim) => shearTarget(st, input(sim, 0));
-// The microburst's air on top of the METAR's (main.js updateWind, every sub-step): the headwind
-// against the runway's course, the downdraft down.
+// The microburst's air on top of the METAR's (main.js updateWind, every frame): the headwind
+// against the runway's course, the downdraft down (fading out below SHEAR_DOWN_FADE_FT).
 export function addShearWind(st, sim) {
   if (st.phase !== 'shear' && st.phase !== 'warning') return;
   shearAt(sim.simTime - st.t0, _sh);
   const w = _sh.headKts * 0.514444;
   sim.windVec.x -= st.dirX * w;
   sim.windVec.z -= st.dirZ * w;
-  sim.windVec.y = -_sh.downFpm * 0.3048 / 60;
+  const aglFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
+  sim.windVec.y = -_sh.downFpm * 0.3048 / 60 * Math.max(0, Math.min(1, aglFt / SHEAR_DOWN_FADE_FT));
 }
 // Kid: full power and the climb guide from the warning until out of it (main.js applyAssists).
 export const kidEscape = (st) => st.phase === 'warning';

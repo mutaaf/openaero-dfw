@@ -31,7 +31,7 @@ describe('the microburst (ticket 0112)', () => {
 
   it('blows the headwind against the runway course, and the downdraft down', () => {
     const st = createShear(0.6, -0.8);
-    const sim = { simTime: 105, windVec: { x: 1, y: 0, z: 2 } };
+    const sim = { simTime: 105, windVec: { x: 1, y: 0, z: 2 }, pos: { y: 300 }, groundY: 0, spec: { gearHeight: 0 } };
     addShearWind(st, sim); // on the final: no shear yet
     expect(sim.windVec).toEqual({ x: 1, y: 0, z: 2 });
     st.phase = 'shear'; st.t0 = 100;
@@ -42,6 +42,11 @@ describe('the microburst (ticket 0112)', () => {
     addShearWind(st, sim); // the core: a 20 kt tailwind, 1,500 fpm down
     expect(sim.windVec.x).toBeCloseTo(0.6 * 20 * 0.514444, 6);
     expect(sim.windVec.y).toBeCloseTo(-1500 * 0.3048 / 60, 6);
+    // Near the ground the downdraft turns into the outflow: half at 200 ft, none on the runway.
+    sim.pos.y = 200 * 0.3048; addShearWind(st, sim);
+    expect(sim.windVec.y).toBeCloseTo(-750 * 0.3048 / 60, 6);
+    sim.pos.y = 0; addShearWind(st, sim);
+    expect(sim.windVec.y).toBeCloseTo(0, 9);
   });
 });
 
@@ -94,11 +99,14 @@ describe('the drill', () => {
     expect(st).toMatchObject({ stalled: true, configChanged: true, peakBankDeg: 12 });
   });
 
-  it('a nose lowered after the warning is a dive; the nose low before the pull-up had time is not counted', () => {
+  it('a nose lowered after the power came in is a dive; a sag before it, or low before the pull-up had time, is not', () => {
     const st = createShear();
     step(st, 0, { aglFt: 600 });
-    step(st, SHEAR_WARN_S, { pitchDeg: 2 });
-    step(st, 8, { pitchDeg: 1, throttle: 1 });
+    step(st, SHEAR_WARN_S, { pitchDeg: 4 });
+    step(st, 7.5, { pitchDeg: 2 }); // a frozen pilot's nose sags: the reaction's, not a dive
+    expect(st.diveDeg).toBe(0);
+    step(st, 8, { pitchDeg: 2, throttle: 1 });
+    step(st, 8.5, { pitchDeg: 1, throttle: 1 });
     expect(st.diveDeg).toBeCloseTo(1, 6);
     expect(st.minPitchDeg).toBe(Infinity); // full power at 1 s: the hold counts from 6 s
     step(st, SHEAR_WARN_S + 6, { pitchDeg: -3, throttle: 1 });

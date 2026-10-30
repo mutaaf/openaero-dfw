@@ -794,7 +794,7 @@ function attachDetailedModel(type) {
 function checkStabilizedGate() {
   const end = sim.activeEnd;
   if (!end || sim.onGround || sim.engineFailed) return; // no "go around" without an engine
-  if (sim.windshear && sim.windshear.phase !== 'final') return; // the windshear's warning has it (0112)
+  if (sim.windshear) return; // the windshear drill (0112): its warning, not the gate, calls the escape
   const gs = sim.gateState;
   const aaeFt = (sim.pos.y - end.thrY) * M_TO_FT;
   const gateFt = isImc(sim.wx) ? GATE_IMC_FT : GATE_VMC_FT;
