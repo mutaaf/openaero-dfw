@@ -63,8 +63,8 @@ export const RANK = {
   stIdle: 4, stSlow: 4, stKidSlow: 4, stPower: 4, stWings: 4, stClimb: 4, stNose: 5, stKid: 5,
 };
 
-// On a touch screen the keys are buttons.
-const TOUCH_WORDS = {
+// On a touch screen the keys are buttons (a drill's chunk adds its own, e.g. windshear.js).
+export const TOUCH_WORDS = {
   gear: 'Gear down! Tap GEAR: you are about to land',
   reverse: 'Reverse thrust: tap REV, then add power',
   brake: 'Tap BRAKES to stop',
