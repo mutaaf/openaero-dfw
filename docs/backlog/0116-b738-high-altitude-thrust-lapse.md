@@ -1,6 +1,6 @@
 ---
 id: 0116
-title: 737 thrust lapse at altitude: no level flight above the FL410 ceiling at 65 t
+title: 737 thrust lapse at altitude matched to CFM (the FL410 ceiling itself moved to 0120)
 status: shipped
 priority: P1
 size: M
@@ -52,5 +52,9 @@ Fuel burn, step climbs, the F-16's engine.
   ~36 kN from FL410 to FL440 as CL rises 0.66 → 0.76, because the airframe has no
   compressibility drag rise or buffet boundary. It is now KNOWN GAP (0120). Not tuned to pass:
   closing it with thrust alone would put full thrust ~6% under CFM's own figure.
+- Partial by design: the thrust half shipped; the title's original outcome (no level flight
+  above FL410 at 65 t) is 0120's card. The JSBSim backend (`?fdm=jsbsim`) has its own engines
+  and is untouched. Panel: physics, device and first-timer found no regressions; the fixes were
+  wording (a stale 56% margin comment, the Mattingly check's disagreement at FL350, changelog).
 - Below FL100 the lapse costs a few % (at DFW's 600 ft −0.4%, at 10,000 ft −7%); every takeoff,
   go-around (25.119), spool (33.73), drill and cruise card is unchanged and green.

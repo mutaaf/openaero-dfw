@@ -377,8 +377,8 @@ function cruise(ft, mach, throttle) {
 }
 
 describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120; 0113)', () => {
-  // Measured: drag 39.2 kN against 70.1 kN of full thrust (56%) at FL350, Mach 0.79 (455 KTAS,
-  // 253 KEAS), L/D 16.3. The margin is generous; the ceiling card below says why.
+  // Measured: drag 39.2 kN against 52.9 kN of full thrust (74%; 70.1 kN, 56%, before 0116's
+  // CFM fit) at FL350, Mach 0.79 (455 KTAS, 253 KEAS), L/D 16.3.
   it('at FL350, Mach 0.79 (EUROCONTROL APD cruise), 65 t, level flight needs less thrust than the engines have', () => {
     const air = airAt(35000 / M_TO_FT);
     const eas = easAtMach(35000, CRUISE_MACH);
