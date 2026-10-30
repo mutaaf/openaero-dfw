@@ -77,9 +77,12 @@ export const AIRCRAFT_DATABASE = {
     alphaStallDeg: 14.8,
     maxThrustN: 240000, // 2x CFM56-7B (120 kN each)
     // Lapse fit: ~18% less thrust by Mach 0.23 at sea level (high-bypass takeoff curves),
-    // σ^0.7 with altitude; idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s
-    // from flight idle to 95%).
-    engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.7, spoolTau: 1.2 },
+    // σ^0.94 with altitude, fitted (0116) to CFM's max climb thrust at 35,000 ft, Mach 0.8, ISA:
+    // 26.5 kN per installed engine, every -7B rating (Snecma CFM56-7B fact sheet, June 2006;
+    // was σ^0.7, 35 kN). Mattingly's high-bypass lapse (Aircraft Engine Design, 2nd ed., eq.
+    // 2.45a, δ0·(1 − 0.49√M)) agrees within ~1% at 10,000 ft, Mach 0.5, and is ~11% under it at
+    // FL410. Idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s from flight idle to 95%).
+    engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.94, spoolTau: 1.2 },
     vneKts: 340, // VMO (FAA TCDS A16WE, 737-800): the nose-down trim stop's hands-off speed (trim.js, 0094)
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
     vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)

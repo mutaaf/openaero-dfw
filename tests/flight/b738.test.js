@@ -402,17 +402,25 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
     expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
   });
 
+  // Snecma CFM56-7B fact sheet (Direction de la Communication, June 2006), "Poussée max. en
+  // montée, 35 000 ft – Mach 0,8 – ISA, moteur avionné": 26.50 kN for every rating, -7B18 to
+  // -7B27. Full throttle in the sim is that max climb thrust up there (0116; σ^0.7 gave 35 kN).
+  it('full thrust at 35,000 ft, Mach 0.8, ISA is CFM\'s max climb thrust, 26.5 kN per installed engine (±5%)', () => {
+    const air = airAt(35000 / M_TO_FT);
+    within(engineThrust(b738, 1, 0.8 * air.speedOfSoundMps, air, 0.8, 0) / 2, 26500, 0.05);
+  });
+
   // EUROCONTROL APD ceiling FL 410 = the TCDS maximum operating altitude. Both are caps, not a
   // published thrust or buffet ceiling, and neither gives a mass (65 t is mid weight: the TCDS,
   // p. 28, gives 79,015 kg take-off and 66,360 kg / 146,300 lb landing masses). The card asks
   // the model to run out of performance near the cert limit: no level flight on full thrust
   // 1,000 ft above it. A light 737 may really be cert-limited there; the stronger evidence
   // is how far above it the model holds level. Tighten to a cited maximum-altitude-vs-weight
-  // figure (FCOM/AFM) when one is found. KNOWN GAP (0116): the model
-  // climbs there at ~1,200 fpm and holds level to ~FL520 at Mach 0.79: thrust lapses as
-  // σ^densityExp (engine.js; 0.7 in aircraft.js), keeping 2 × 29 kN at FL410, and there is no
-  // buffet boundary.
-  it.fails('KNOWN GAP (0116): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
+  // figure (FCOM/AFM) when one is found. KNOWN GAP (0120): with the thrust now on CFM's figure
+  // (0116, the card below) the model climbs there at ~170 fpm and holds level to ~FL438 (was
+  // ~1,200 fpm and ~FL520). What is left is the wing: drag stays ~36 kN from FL410 to FL440 as
+  // CL climbs 0.66 → 0.76 at Mach 0.79, with no compressibility drag rise or buffet boundary.
+  it.fails('KNOWN GAP (0120): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
     const { fpm, mach } = cruise(42000, CRUISE_MACH, 1);
     expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
     expect(fpm).toBeLessThanOrEqual(0);

@@ -1,12 +1,12 @@
 ---
 id: 0116
 title: 737 thrust lapse at altitude: no level flight above the FL410 ceiling at 65 t
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-30
-pr:
+pr: 132
 ---
 
 ## Why
@@ -29,13 +29,28 @@ known-gap card `tests/flight/b738.test.js` "KNOWN GAP (0116)" passes, without re
 takeoff, go-around (25.119) and spool (33.73) cards. Optional: a high-speed buffet onset CL.
 
 ## Acceptance criteria
-- [ ] A cited CFM56-7B (or 737-800) high-altitude thrust source before any fit to it
-- [ ] The 0116 card passes and moves from `it.fails` to `it`
-- [ ] The FL350 Mach 0.79 cruise cards (0113) still pass: level flight within the thrust available
-- [ ] Every other b738 card unchanged and green; the thrust source cited in aircraft.js
+- [x] A cited CFM56-7B (or 737-800) high-altitude thrust source before any fit to it
+- [ ] The 0116 card passes and moves from `it.fails` to `it` (not met: the thrust half is fixed, the wing half is 0120)
+- [x] The FL350 Mach 0.79 cruise cards (0113) still pass: level flight within the thrust available
+- [x] Every other b738 card unchanged and green; the thrust source cited in aircraft.js
 
 ## Test plan
 `tests/flight/b738.test.js`; `tests/unit/engine.test.js` for the new lapse.
 
 ## Out of scope
 Fuel burn, step climbs, the F-16's engine.
+
+## Shipped notes
+- Source: Snecma's CFM56-7B fact sheet (Direction de la Communication, June 2006): max climb
+  thrust at 35,000 ft, Mach 0.8, ISA, installed, 26.50 kN for every rating (-7B18 to -7B27).
+  The model had 35.1 kN there. `densityExp` 0.7 → 0.94 puts it at 26.49 kN, a new card (±5%).
+  Cross-check: Mattingly's high-bypass lapse (Aircraft Engine Design, 2nd ed., eq. 2.45a)
+  agrees within ~1% at 10,000 ft, Mach 0.5, and is ~11% under the fit at FL410. JSBSim's
+  Aero-Matic CFM56.xml (a generic table, not CFM data) gives ~42 kN at FL350, Mach 0.8: not used.
+- Measured at 65 t, Mach 0.79, full thrust: FL350 +875 fpm, FL410 +271, FL420 +172, FL430 +74,
+  FL440 −23 (level ceiling ~FL438, was ~FL520). The 42,000 ft card still fails: the drag stays
+  ~36 kN from FL410 to FL440 as CL rises 0.66 → 0.76, because the airframe has no
+  compressibility drag rise or buffet boundary. It is now KNOWN GAP (0120). Not tuned to pass:
+  closing it with thrust alone would put full thrust ~6% under CFM's own figure.
+- Below FL100 the lapse costs a few % (at DFW's 600 ft −0.4%, at 10,000 ft −7%); every takeoff,
+  go-around (25.119), spool (33.73), drill and cruise card is unchanged and green.
