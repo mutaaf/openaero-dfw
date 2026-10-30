@@ -306,7 +306,8 @@ src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter
                     (0111: the FAA-H-8083-25 rule, display only) for the start screen's #txtDensityAlt line
                     and the takeoff briefing toast on Fly, with a thin-air hint 1,500 ft above the field
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
-                    windmilling at idle), turbofan (Mach/density lapse, idle, spool lag)
+                    windmilling at idle), turbofan (Mach/density lapse, idle, spool lag; the 737's σ^0.94
+                    fitted to CFM's FL350 max climb thrust, 0116)
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),

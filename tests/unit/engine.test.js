@@ -44,6 +44,15 @@ describe('turbofan', () => {
     expect(engineThrust(DB.b738, 1, 78, sl, 0.23, 0) / t0).toBeCloseTo(0.82, 1);
     expect(engineThrust(DB.b738, 1, 230, airAt(10668), 0.78, 0) / t0).toBeLessThan(0.3);
   });
+  // 0116: σ^0.94 puts full thrust on CFM's max climb (26.5 kN per engine at FL350, Mach 0.8;
+  // tests/flight/b738.test.js); below FL100 it costs only a few % against the old σ^0.7.
+  it('lapses to ~22% of static thrust at FL350, Mach 0.8, and the same Mach lapse at any height', () => {
+    const t0 = engineThrust(DB.b738, 1, 0, sl, 0, 0);
+    const fl350 = airAt(35000 / 3.28084);
+    expect(engineThrust(DB.b738, 1, 237, fl350, 0.8, 0) / t0).toBeCloseTo(0.221, 3);
+    expect(engineThrust(DB.b738, 1, 0, airAt(600 / 3.28084), 0, 0) / t0).toBeCloseTo(0.984, 3);
+    expect(engineThrust(DB.b738, 1, 0, fl350, 0, 0) / t0).toBeCloseTo(Math.pow(fl350.sigma, 0.94), 6);
+  });
   it('idles at a few % of static thrust', () => {
     expect(engineThrust(DB.b738, 0, 0, sl, 0, 0) / DB.b738.engine.staticThrustN).toBeCloseTo(0.04, 3);
   });
