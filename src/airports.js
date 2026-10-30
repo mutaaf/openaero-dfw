@@ -6,6 +6,7 @@
 import { latLonToSimMeters } from './geo.js';
 import { DEG_TO_RAD, NM_TO_M } from './constants.js';
 import { ftMslToY } from './terrain.js';
+import { magHeadingText } from './magvar.js';
 
 const FT = 0.3048;
 export const GLIDE_DEG = 3.0;
@@ -77,7 +78,8 @@ function buildEnd(rwy, end, other) {
   const disp = end.displacedFt * FT;
   // Threshold height (sim Y): on the runway plane between the two surveyed ends.
   const t = disp / (rwy.lengthFt * FT);
-  const thrY = ftMslToY(end.elevFt + (other.elevFt - end.elevFt) * t);
+  const thrElevFt = end.elevFt + (other.elevFt - end.elevFt) * t;
+  const thrY = ftMslToY(thrElevFt);
   return {
     id: `${rwy.airport}_${end.ident}`,
     airport: rwy.airport,
@@ -85,6 +87,9 @@ function buildEnd(rwy, end, other) {
     name: `${rwy.airport} ${end.ident}`,
     hdgT: end.hdgT,
     elevFt: end.elevFt,
+    thrElevFt,
+    lengthFt: rwy.lengthFt,
+    widthFt: rwy.widthFt,
     widthM: rwy.widthFt * FT,
     lengthM: rwy.lengthFt * FT,
     endX: p.x, endZ: p.z,
@@ -114,6 +119,15 @@ export const RUNWAYS_GEOM = RUNWAY_DATA.map((r) => {
     bx: b.x, bz: b.z, by: ftMslToY(r.he.elevFt),
   };
 });
+
+// The start screen's chart line (0114): ident, length x width, magnetic heading, threshold
+// elevation; '' when the mission has no runway. index.html names the source beside it
+// (OurAirports, a survey, not the AIP).
+const ftText = (ft) => Math.round(ft).toLocaleString('en-US');
+export function runwayFactsText(end) {
+  if (!end) return '';
+  return `RWY ${end.ident}: ${ftText(end.lengthFt)} × ${ftText(end.widthFt)} ft · ${magHeadingText(end.hdgT)}°M · THR ${ftText(end.thrElevFt)} ft`;
+}
 
 export function runwayEnd(airport, ident) {
   return RUNWAY_ENDS.find((e) => e.airport === airport && e.ident === ident) || null;

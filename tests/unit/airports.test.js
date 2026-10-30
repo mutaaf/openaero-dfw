@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { RUNWAY_DATA, RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, approachGeometry, selectActiveRunway, approachSpawn, GLIDE_DEG, AIM_POINT_M } from '../../src/airports.js';
+import { RUNWAY_DATA, runwayFactsText, RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, approachGeometry, selectActiveRunway, approachSpawn, GLIDE_DEG, AIM_POINT_M } from '../../src/airports.js';
 import { latLonToSimMeters } from '../../src/geo.js';
+import { MAG_VAR_DEG } from '../../src/magvar.js';
 
 describe('runway data (OurAirports)', () => {
   it('has every runway at the six DFW-area fields', () => {
@@ -131,5 +132,42 @@ describe('real field elevations', () => {
     const r = RUNWAYS_GEOM.find((g) => g.name === 'KDFW 13L/31R');
     expect(r.ay).toBeCloseTo((550 - 606) * FT, 3);
     expect(r.by).toBeCloseTo((508 - 606) * FT, 3);
+  });
+});
+
+// Ticket 0114: the line a pilot checks against the chart (OurAirports survey data).
+describe('runwayFactsText', () => {
+  it('KDFW 35C: ident, magnetic heading, 13,400 x 150 ft, threshold elevation', () => {
+    const e = runwayEnd('KDFW', '35C');
+    // OurAirports (and the FAA chart) list 17C/35C as 13,400 x 150 ft; 17R/35L is the 200 ft one.
+    expect(runwayFactsText(e)).toBe('RWY 35C: 13,400 × 150 ft · 358°M · THR 562 ft');
+    // The course flown down the final to the threshold (sim frame: +X east, -Z north), less magvar.
+    const p = approachSpawn(e, 5).pos;
+    expect(Math.abs(approachGeometry(e, p).crossM)).toBeLessThan(0.01);
+    const course = (Math.atan2(e.thrX - p.x, -(e.thrZ - p.z)) * 180 / Math.PI + 360) % 360;
+    const magCourse = (course - MAG_VAR_DEG + 360) % 360;
+    expect(Math.abs(358 - magCourse)).toBeLessThan(1);
+  });
+  it('reads back every runway end: length, width and threshold elevation from the survey', () => {
+    for (const rwy of RUNWAY_DATA) {
+      for (const [end, other] of [[rwy.le, rwy.he], [rwy.he, rwy.le]]) {
+        const text = runwayFactsText(runwayEnd(rwy.airport, end.ident));
+        const m = text.match(/^RWY (\w+): ([\d,]+) × ([\d,]+) ft · (\d{3})°M · THR ([\d,]+) ft$/);
+        expect(m, text).not.toBeNull();
+        expect(m[1]).toBe(end.ident);
+        expect(Number(m[2].replace(/,/g, ''))).toBe(rwy.lengthFt);
+        expect(Number(m[3].replace(/,/g, ''))).toBe(rwy.widthFt);
+        // The landing threshold: down the runway's slope by any displacement.
+        const thr = end.elevFt + (other.elevFt - end.elevFt) * end.displacedFt / rwy.lengthFt;
+        expect(Number(m[5].replace(/,/g, ''))).toBe(Math.round(thr));
+        // The runway number is the magnetic heading in tens of degrees (±1 for the old charts).
+        const num = Number(end.ident.replace(/\D/g, '')) * 10;
+        const dh = ((Number(m[4]) - num + 540) % 360) - 180;
+        expect(Math.abs(dh)).toBeLessThanOrEqual(10);
+      }
+    }
+  });
+  it('no runway, no line', () => {
+    expect(runwayFactsText(null)).toBe('');
   });
 });

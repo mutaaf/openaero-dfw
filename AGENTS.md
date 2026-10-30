@@ -139,7 +139,8 @@ src/main.js         renderer + scene build, 6-DOF integrator, camera, HUD/radar 
 src/constants.js    units, KDFW origin, field elevation
 src/aircraft.js     aircraft database (mass, wing, lift/drag, thrust, V-speeds, damping)
 src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
-                    thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns
+                    thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns; runwayFactsText
+                    (0114): the start screen's chart line (ident, length x width, °M, threshold ft MSL)
 src/missions.js     mission catalogue (approaches by runway end, tours by spawn, a blurb each;
                     groupMissions() builds the start-screen picker, ticket 0029) + the dynamic
                     crosswind_today mission (weather.js pickCrosswindRunway, live METARs only)
