@@ -57,6 +57,7 @@ import {
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
+import { createCaption } from './captions.js';
 // Boot-budget trim (0078): one short name for the ~200 element lookups.
 const byId = (id) => document.getElementById(id);
 
@@ -232,7 +233,10 @@ scene.add(sunLight);
 const sun = { elevationDeg: 50, azimuthDeg: 210 };
 const _sunVec = { x: 0, y: 0, z: 0 };
 
-const audio = createAudio(sim, updateAudioButton);
+// Every spoken callout is captioned (0117), sound on or off; the line clears itself in renderLoop.
+const captionEl = byId('calloutCaption');
+const caption = createCaption((t) => { captionEl.textContent = t; captionEl.classList.toggle('hidden', !t); });
+const audio = createAudio(sim, updateAudioButton, (t, queued) => caption.say(t, performance.now() / 1000, queued));
 
 function updateAudioButton() {
   const txt = byId('txtAudioState');
@@ -3163,6 +3167,7 @@ function renderLoop(time) {
   renderRadar();
   syncUI();
   audio.update();
+  caption.update(performance.now() / 1000);
 }
 
 // The sky follows the camera; runway lights and PAPIs brighten as the light goes.
@@ -3268,6 +3273,7 @@ window.openaeroDebug = () => {
     paused: sim.paused,
     gfxLost: gfx.lost,
     audio: audio.state,
+    caption: caption.text,
     wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,

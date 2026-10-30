@@ -1,10 +1,11 @@
 // Web Audio synthesis: engine tone, wind rush, stall horn; spoken GPWS callouts
 // (speechSynthesis, on-device, no network) with chirps as the fallback.
 // createAudio(sim) binds to the shared sim state; nothing starts until init() runs
-// from a user gesture (browser autoplay policy).
+// from a user gesture (browser autoplay policy). Every callout's words also go to
+// caption(text, queued) (0117), sound or not, so the calls are picked even with it off.
 import { gpwsCalloutIndex, GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, calloutWord, stallWarningKts } from './aero.js';
 
-export function createAudio(sim, onStateChange) {
+export function createAudio(sim, onStateChange, caption = () => {}) {
   let audioCtx = null;
   let engineOsc = null, engineFilter = null, engineGain = null;
   let windNoiseNode = null, windFilter = null, windGain = null;
@@ -100,6 +101,8 @@ export function createAudio(sim, onStateChange) {
     } catch (e) { return false; }
   }
 
+  // Wall-clock seconds: the callout timing runs before (or without) the AudioContext.
+  const clock = () => performance.now() / 1000;
   let gateCallAt = -10;
   function checkGpwsCallouts() {
     if (sim.onGround || sim.vel.y >= 0) return;
@@ -108,22 +111,32 @@ export function createAudio(sim, onStateChange) {
       sim.lastCalloutIdx = i;
       // An altitude callout cuts off a stale one, but never the gate's "unstabilized" call
       // (made the same frame, or just before when the terrain dips under the final).
-      if (!say(calloutWord(i), { interrupt: audioCtx.currentTime - gateCallAt > 2.5 })) chirp(587.33, 0.18);
-      if (GPWS_ALT_THRESHOLDS[i] === 20 && sim.throttle > 0.05 && !sim.engineFailed) say('retard', { interrupt: false });
+      const interrupt = clock() - gateCallAt > 2.5;
+      caption(calloutWord(i), !interrupt);
+      if (!say(calloutWord(i), { interrupt })) chirp(587.33, 0.18);
+      if (GPWS_ALT_THRESHOLDS[i] === 20 && sim.throttle > 0.05 && !sim.engineFailed) {
+        caption('retard', true);
+        say('retard', { interrupt: false });
+      }
     }
   }
 
   let lastPullUp = -10;
   function checkGpwsWarning() {
     if (!isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround)) return;
-    const now = audioCtx.currentTime;
+    const now = clock();
     if (now - lastPullUp < 3) return;
     lastPullUp = now;
-    if (!say(sim.aglFt < 250 ? 'pull up' : 'sink rate')) chirp(880, 0.4);
+    const words = sim.aglFt < 250 ? 'pull up' : 'sink rate';
+    caption(words);
+    if (!say(words)) chirp(880, 0.4);
   }
 
   function update() {
-    if (!audioCtx || !sim.audioEnabled || sim.paused) return;
+    if (sim.paused) return;
+    checkGpwsCallouts();
+    checkGpwsWarning();
+    if (!audioCtx || !sim.audioEnabled) return;
     const now = audioCtx.currentTime;
     const basePitch = sim.aircraftKey === 'c172' ? 65 : 120;
     const thr = sim.engineFailed ? 0 : sim.throttle; // a dead engine (0036) only windmills
@@ -133,15 +146,14 @@ export function createAudio(sim, onStateChange) {
     windGain.gain.setTargetAtTime(0.015 + speedRatio * 0.065, now, 0.1);
     const stalling = isStallWarning(sim.iasKts, stallWarningKts(sim.spec, sim.flapsIndex), sim.onGround);
     stallGain.gain.setTargetAtTime(stalling ? 0.07 : 0.0, now, 0.05);
-    checkGpwsCallouts();
-    checkGpwsWarning();
   }
 
   // One-off callouts from the sim (the stabilized gate, ticket 0020): queued behind the
   // altitude callout that fires at the same height, a low chirp when speech is unavailable.
   function callout(text) {
+    gateCallAt = clock();
+    caption(text, true);
     if (!audioCtx || !sim.audioEnabled) return;
-    gateCallAt = audioCtx.currentTime;
     if (!say(text, { interrupt: false })) chirp(440, 0.3);
   }
 

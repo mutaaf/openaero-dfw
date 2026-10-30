@@ -118,6 +118,18 @@ describe('GPWS callouts', () => {
   it('does not repeat the last callout', () => {
     expect(gpwsCalloutIndex(990, 0)).toBe(-1);
   });
+  it('calls each height once, in order, on a descent to the runway (0117)', () => {
+    const said = [];
+    let last = -1;
+    for (let ft = 1010; ft > 0; ft -= 0.2) {
+      const i = gpwsCalloutIndex(ft, last);
+      if (i >= 0) { said.push(GPWS_ALT_THRESHOLDS[i]); last = i; }
+    }
+    expect(said).toEqual(GPWS_ALT_THRESHOLDS);
+  });
+  it('still calls a height a fast descent jumped into the window of', () => {
+    expect(GPWS_ALT_THRESHOLDS[gpwsCalloutIndex(36, 6)]).toBe(40); // "fifty" last, now 36 ft
+  });
 });
 
 // Takeoff callouts (0035): a roll from 0 to Vr + 10 kt, lift-off 2 kt after Vr, then a

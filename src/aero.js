@@ -105,11 +105,13 @@ const CALLOUT_WORDS = ['one thousand', 'five hundred', 'four hundred', 'three hu
 export const calloutWord = (i) => CALLOUT_WORDS[i];
 
 // Index into GPWS_ALT_THRESHOLDS that should fire now, or -1. Each threshold has a
-// 35 ft window below it and does not repeat while it is the last one called.
+// 35 ft window below it and does not repeat while it is the last one called. Only the lowest
+// threshold at or above the aircraft counts: under 50 ft the windows overlap, and the highest
+// match called "fifty" again after "forty" (0117's captions showed it).
 export function gpwsCalloutIndex(aglFt, lastIdx) {
-  for (let i = 0; i < GPWS_ALT_THRESHOLDS.length; i++) {
+  for (let i = GPWS_ALT_THRESHOLDS.length - 1; i >= 0; i--) {
     const thresh = GPWS_ALT_THRESHOLDS[i];
-    if (aglFt <= thresh && aglFt > thresh - 35 && lastIdx !== i) return i;
+    if (aglFt <= thresh) return aglFt > thresh - 35 && lastIdx !== i ? i : -1;
   }
   return -1;
 }

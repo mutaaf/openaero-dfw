@@ -1,12 +1,12 @@
 ---
 id: 0117
 title: Caption every spoken GPWS and takeoff callout on screen
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: accessibility
 created: 2026-10-30
-pr:
+pr: 136
 ---
 
 ## Why
