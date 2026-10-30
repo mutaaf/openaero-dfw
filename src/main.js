@@ -765,6 +765,7 @@ function buildAircraft(type) {
   aircraftRoot.traverse((o) => { if (o.isMesh) o.userData.own = true; });
   rigSurfaces(animRefs, aircraftRoot);
   scene.add(aircraftRoot);
+  ads?.paint(aircraftRoot);
   attachDetailedModel(type);
 }
 
@@ -784,7 +785,7 @@ let detailedModelsArmed = false;
 function attachDetailedModel(type) {
   const refs = animRefs;
   if (detailedModelsArmed) import('./aircraftModel.js').then((m) => m.attachModel(aircraftRoot, type, import.meta.env.BASE_URL, refs, () => refs === animRefs))
-    .catch((e) => console.warn('[openaero] no aircraft model:', e));
+    .then(() => ads?.paint()).catch((e) => console.warn('[openaero] no aircraft model:', e));
 }
 
 // --- Stabilized-approach gate (ticket 0020) ----------------------------------------
@@ -1103,10 +1104,17 @@ function resumeFromResults() {
   if (resultsPaused && sim.paused) setPaused(false);
   resultsPaused = false;
 }
-byId('btnFlyAgain').addEventListener('click', () => {
+// Marquee (src/ads.js, a lazy chunk): menus and this card only, never in flight. FLY AGAIN may show
+// a capped post-flight break while the flight is still paused behind the card.
+let ads = null, adHeld = false;
+function flyAgain() {
   byId('resultsCard').classList.add('hidden');
   resumeFromResults();
   loadScenario(sim.missionKey);
+}
+byId('btnFlyAgain').addEventListener('click', () => {
+  const brk = ads?.between();
+  if (brk) brk.then(flyAgain); else flyAgain();
 });
 byId('btnKeepRolling').addEventListener('click', () => {
   byId('resultsCard').classList.add('hidden');
@@ -3402,6 +3410,15 @@ function boot() {
     applySun();       // sky, stars, Moon and the caption
   }).catch((err) => console.warn('Sky unavailable, plain haze instead:', err.message));
   loadResults().catch(() => {}); // retried at the card
+  import('./ads.js').then((m) => {
+    ads = m.createAds({
+      level: () => sim.assist,
+      inMenu: () => modalOpen() || !resultsCard.classList.contains('hidden'),
+      pause: () => { adHeld = !sim.paused; setPaused(true); },
+      resume: () => { if (adHeld) setPaused(false); adHeld = false; },
+      root: () => aircraftRoot,
+    });
+  }).catch(() => {});
   buildAircraft('b738');
   // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap.
   const linked = missionFromLink(window.location.search);
