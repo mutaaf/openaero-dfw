@@ -101,8 +101,9 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
     } catch (e) { return false; }
   }
 
-  // Wall-clock seconds: the callout timing runs before (or without) the AudioContext.
-  const clock = () => performance.now() / 1000;
+  // Seconds of speech time: the AudioContext's clock (real time, like the voice) once sound has
+  // started; before that the page clock, while nothing is spoken anyway.
+  const clock = () => (audioCtx ? audioCtx.currentTime : performance.now() / 1000);
   let gateCallAt = -10;
   function checkGpwsCallouts() {
     sim.lastCalloutIdx = gpwsRearm(sim.aglFt, sim.lastCalloutIdx);
@@ -131,8 +132,10 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
     if (now - lastPullUp < 3) return;
     lastPullUp = now;
     const words = sim.aglFt < 250 ? 'pull up' : 'sink rate';
-    caption(words);
-    if (!say(words)) chirp(880, 0.4);
+    // Like a height call, it queues behind the gate's call rather than cutting it off.
+    const interrupt = now - gateCallAt > 2.5;
+    caption(words, !interrupt);
+    if (!say(words, { interrupt })) chirp(880, 0.4);
   }
 
   // flying false (the start screen over the default final) holds the callouts.

@@ -62,3 +62,14 @@ describe('audio callouts are captioned with sound off (0117)', () => {
     expect(said).toEqual(['sink rate']);
   });
 });
+
+describe('the gate call is never cut off (0020, 0117)', () => {
+  it('a sink rate warning just after the gate queues behind it', () => {
+    const said = [];
+    const sim = simAt(520, { lastCalloutIdx: 1 });
+    const audio = createAudio(sim, () => {}, (t, queued) => said.push([t, !!queued]));
+    audio.callout('unstabilized, go around');
+    sim.aglFt = 440; sim.vsiFpm = -2000; audio.update();
+    expect(said).toEqual([['unstabilized, go around', true], ['sink rate', true]]);
+  });
+});
