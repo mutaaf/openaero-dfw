@@ -1,7 +1,7 @@
 ---
 id: 0116
 title: 737 thrust lapse at altitude: no level flight above the FL410 ceiling at 65 t
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity
