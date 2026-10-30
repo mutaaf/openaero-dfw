@@ -125,7 +125,7 @@ export const RUNWAYS_GEOM = RUNWAY_DATA.map((r) => {
 const ftText = (ft) => Math.round(ft).toLocaleString('en-US');
 export function runwayFactsText(end) {
   if (!end) return '';
-  return `RWY ${end.ident}: ${ftText(end.lengthFt)} × ${ftText(end.widthFt)} ft · ${magHeadingText(end.hdgT)}°M · ${ftText(end.thrElevFt)} ft MSL (OurAirports)`;
+  return `RWY ${end.ident}: ${ftText(end.lengthFt)} × ${ftText(end.widthFt)} ft · ${magHeadingText(end.hdgT)}°M · THR ${ftText(end.thrElevFt)} ft (OurAirports)`;
 }
 
 export function runwayEnd(airport, ident) {

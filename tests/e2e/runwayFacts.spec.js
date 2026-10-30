@@ -19,7 +19,7 @@ for (const { width, height, hasTouch } of SIZES) {
       await page.goto(BASE);
       const facts = page.locator('#txtRunwayFacts');
       await expect(facts).toBeVisible();
-      await expect(facts).toHaveText('RWY 35C: 13,400 × 150 ft · 358°M · 562 ft MSL (OurAirports)');
+      await expect(facts).toHaveText('RWY 35C: 13,400 × 150 ft · 358°M · THR 562 ft (OurAirports)');
       const f = await facts.boundingBox();
       const da = await page.locator('#txtDensityAlt').boundingBox();
       // One line of 11 px text, below the density altitude line and not over it.
@@ -37,7 +37,7 @@ test('another runway follows the pick, and a drill with no runway shows no line'
   await page.goto(BASE);
   // Addison 16's threshold is displaced 979 ft down a rising runway: 634 ft, not the end's 633.
   await page.locator('#missionList .btnMission[data-scenario="kads_16_final"]').click();
-  await expect(page.locator('#txtRunwayFacts')).toHaveText(/^RWY 16: 7,203 × 100 ft · 15[78]°M · 634 ft MSL/);
+  await expect(page.locator('#txtRunwayFacts')).toHaveText(/^RWY 16: 7,203 × 100 ft · 15[78]°M · THR 634 ft \(OurAirports\)$/);
   await page.locator('#missionList .btnMission[data-scenario="deadstick_kads_16"]').click();
   await expect(page.locator('#txtDensityAlt')).toContainText('Density altitude DFW area:');
   await expect(page.locator('#txtRunwayFacts')).toBeHidden();
