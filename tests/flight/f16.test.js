@@ -21,7 +21,8 @@
 //    max thrust the model has little of the table's ram rise with Mach: Tmax at sea level is
 //    28,886 lbf at M 1.0 vs 21,420 at M 0.2 there, 1.35 ×; 1.05 × in the model.)
 //  - the flight-control system (g and AoA limiters): out of scope for 0053; the 25° AoA
-//    limit below only sets the AoA at which the 1-g speed card is computed.
+//    limit below sets the AoA at which the 1-g speed card is computed, and 0118's full-pull
+//    cards measure that the model has neither limiter yet (0121).
 //  - induced drag: aspectRatio 3.2 is the bare 31 ft wing (9.449² / 27.87); the span card
 //    checks the USAF span, which (we infer) includes the wingtip missile rails.
 //
@@ -32,7 +33,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
 import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, attitude, vsFpm } from './harness.js';
+import { makeBody, fly, attitude, vsFpm, loadFactorMeter } from './harness.js';
 
 const f16 = AIRCRAFT_DATABASE.f16;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -142,5 +143,61 @@ describe('F-16C capability bound (not a performance claim)', () => {
     expect(b.pos.y * M_TO_FT).toBeGreaterThanOrEqual(40000);
     expect(maxAoa).toBeLessThan(stallAoaDeg(f16, 0));
     expect(minIas).toBeGreaterThan(stallSpeedKts(f16, 0));
+  });
+});
+
+// Ticket 0118: what a full pull does. USAF fact sheet (the copy above): "With a full load of
+// internal fuel, the F-16 can withstand up to nine G's" (the spec's 12 t is empty + internal
+// fuel, the card above), and the fly-by-wire flight control system holds the airplane to it;
+// TP-1538 p. 12: the AoA limiter holds α "at or below 25°". So stick full back, wings level, at
+// 15,000 ft: fast, the pull is a hard 9 g and no more (7.5-9.5 g: ~9 g held, a transient to
+// 9.5); slow, the wing runs out first and the AoA limit holds α at 25° (well under 9 g). The
+// seat's load factor is loadFactorMeter's (harness.js). The model's indicated speed is EAS:
+// the ticket's 450 KCAS is 434 KEAS at 15,000 ft, ISA (Mach 0.87).
+const fullPull = (kts) => {
+  const b = makeBody(f16, { kts, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
+  const meter = loadFactorMeter();
+  meter(b);
+  let peakG = 0, maxAoa = 0;
+  fly(b, f16, 5, (x) => {
+    x.elevInput = -1; // elevator + = nose down: full back stick
+    x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+  }, (x) => {
+    peakG = Math.max(peakG, meter(x));
+    maxAoa = Math.max(maxAoa, x.aoaDeg);
+    return false;
+  });
+  return { peakG, maxAoa };
+};
+
+describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-1538)', () => {
+  it('the load factor meter reads 1 g in trimmed level flight (450 kt, 15,000 ft), ±2%', () => {
+    const b = makeBody(f16, { kts: 450, altM: 15000 / M_TO_FT, throttle: 0.5, gearDown: false });
+    const meter = loadFactorMeter();
+    meter(b);
+    let sum = 0, n = 0;
+    fly(b, f16, 0.5, null, (x) => { sum += meter(x); n++; return false; });
+    within(sum / n, 1, 0.02);
+  });
+
+  it('a full pull at 450 KCAS (434 KEAS), 15,000 ft is a hard pull: at least 7.5 g within 5 s', () => {
+    expect(fullPull(434).peakG).toBeGreaterThanOrEqual(7.5);
+  });
+
+  // The model has no g limiter: full back stick is full stabilator whatever the speed, so the
+  // pull overshoots to ~13 g by 1 s and α then runs through the stall until it pegs at 90° (the
+  // nose goes over the top). Part of the overshoot is the wing (0066: CL above TP-1538's at 25°,
+  // no Mach term); the fix is a load-factor and AoA command law on spec.pitchFbw (0121).
+  it.fails('KNOWN GAP (0121): the same pull stays at or under 9.5 g (the 9 g limit and a transient; model: ~13 g)', () => {
+    expect(fullPull(434).peakG).toBeLessThanOrEqual(9.5);
+  });
+
+  // Slow, the same pull should stop at the AoA limit: α ≤ 25° (a 1° transient allowed), and the
+  // load factor stays well under 9 g. The model does stay under 9 g (~1.7 g; at 150 kt the dynamic
+  // pressure allows no more), but α runs past the 28° stall and pegs at 90° (0121).
+  it.fails('KNOWN GAP (0121): a full pull at 150 kt, 15,000 ft is AoA-limited: α ≤ 26° and under 9 g (model: α 90°)', () => {
+    const { peakG, maxAoa } = fullPull(150);
+    expect(maxAoa).toBeLessThanOrEqual(26);
+    expect(peakG).toBeLessThan(9);
   });
 });
