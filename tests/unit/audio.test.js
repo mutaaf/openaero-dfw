@@ -30,6 +30,19 @@ describe('audio callouts are captioned with sound off (0117)', () => {
     expect(said).toEqual([['unstabilized, go around', true]]);
   });
 
+  it('a second approach after a go-around is called again; nothing behind the start screen', () => {
+    const said = [];
+    const sim = simAt(520);
+    const audio = createAudio(sim, () => {}, (t) => said.push(t));
+    sim.aglFt = 490; audio.update(false);
+    expect(said).toEqual([]);
+    audio.update();
+    expect(said).toEqual(['five hundred']);
+    sim.vel.y = 5; sim.aglFt = 650; audio.update(); // the go-around's climb
+    sim.vel.y = -3.5; sim.aglFt = 495; audio.update();
+    expect(said).toEqual(['five hundred', 'five hundred']);
+  });
+
   it('captions sink rate / pull up, and nothing while paused', () => {
     const said = [];
     const sim = simAt(420, { vsiFpm: -2000, lastCalloutIdx: 2, paused: true });

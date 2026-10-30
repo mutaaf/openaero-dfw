@@ -3,7 +3,7 @@
 // createAudio(sim) binds to the shared sim state; nothing starts until init() runs
 // from a user gesture (browser autoplay policy). Every callout's words also go to
 // caption(text, queued) (0117), sound or not, so the calls are picked even with it off.
-import { gpwsCalloutIndex, GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, calloutWord, stallWarningKts } from './aero.js';
+import { gpwsCalloutIndex, gpwsRearm, GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, calloutWord, stallWarningKts } from './aero.js';
 
 export function createAudio(sim, onStateChange, caption = () => {}) {
   let audioCtx = null;
@@ -105,6 +105,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
   const clock = () => performance.now() / 1000;
   let gateCallAt = -10;
   function checkGpwsCallouts() {
+    sim.lastCalloutIdx = gpwsRearm(sim.aglFt, sim.lastCalloutIdx);
     if (sim.onGround || sim.vel.y >= 0) return;
     const i = gpwsCalloutIndex(sim.aglFt, sim.lastCalloutIdx);
     if (i >= 0 && i < GPWS_ALT_THRESHOLDS.length) {
@@ -132,10 +133,13 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
     if (!say(words)) chirp(880, 0.4);
   }
 
-  function update() {
+  // flying false (the start screen over the default final) holds the callouts.
+  function update(flying = true) {
     if (sim.paused) return;
-    checkGpwsCallouts();
-    checkGpwsWarning();
+    if (flying) {
+      checkGpwsCallouts();
+      checkGpwsWarning();
+    }
     if (!audioCtx || !sim.audioEnabled) return;
     const now = audioCtx.currentTime;
     const basePitch = sim.aircraftKey === 'c172' ? 65 : 120;

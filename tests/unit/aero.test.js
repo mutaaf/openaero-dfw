@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
-  inducedDragK, headingError, headingFromYaw, papiWhiteLights, gpwsCalloutIndex,
+  inducedDragK, headingError, headingFromYaw, papiWhiteLights, gpwsCalloutIndex, gpwsRearm,
   GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, takeoffCalloutIndex, TAKEOFF_CALLOUTS,
   TAKEOFF_CALLOUT_HUD_PLAIN,
 } from '../../src/aero.js';
@@ -121,11 +121,32 @@ describe('GPWS callouts', () => {
   it('calls each height once, in order, on a descent to the runway (0117)', () => {
     const said = [];
     let last = -1;
-    for (let ft = 1010; ft > 0; ft -= 0.2) {
+    for (let ft = 1010; ft > 0; ft -= 1) { // sim.aglFt is whole feet
       const i = gpwsCalloutIndex(ft, last);
       if (i >= 0) { said.push(GPWS_ALT_THRESHOLDS[i]); last = i; }
     }
     expect(said).toEqual(GPWS_ALT_THRESHOLDS);
+  });
+  it('a fast descent (3,000 fpm at 4 fps, 12 ft a frame) calls each height it lands in, in order, never twice', () => {
+    const said = [];
+    let last = -1;
+    for (let ft = 1010; ft > 0; ft -= 12.5) {
+      const i = gpwsCalloutIndex(Math.round(ft), last);
+      if (i >= 0) { said.push(GPWS_ALT_THRESHOLDS[i]); last = i; }
+    }
+    expect(said.slice(0, 6)).toEqual([1000, 500, 400, 300, 200, 100]);
+    expect([...said].sort((a, b) => b - a)).toEqual(said);
+    expect(new Set(said).size).toBe(said.length);
+  });
+  it('a bounce or a dip in the terrain never calls a height above the last one again', () => {
+    expect(gpwsCalloutIndex(15, 10)).toBe(-1); // "ten", bounced to 15 ft
+    expect(gpwsCalloutIndex(45, 7)).toBe(-1); // "forty", the ground fell away under the final
+  });
+  it('re-arms 100 ft above the last height called (go-around, touch-and-go)', () => {
+    expect(gpwsRearm(400, 1)).toBe(1); // "five hundred", still within 100 ft
+    expect(gpwsRearm(601, 1)).toBe(-1);
+    expect(gpwsRearm(111, 10)).toBe(-1); // "ten", climbing out of a touch-and-go
+    expect(gpwsRearm(50, -1)).toBe(-1);
   });
   it('still calls a height a fast descent jumped into the window of', () => {
     expect(GPWS_ALT_THRESHOLDS[gpwsCalloutIndex(36, 6)]).toBe(40); // "fifty" last, now 36 ft

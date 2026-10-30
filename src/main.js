@@ -3166,7 +3166,7 @@ function renderLoop(time) {
   renderHud();
   renderRadar();
   syncUI();
-  audio.update();
+  audio.update(!modalOpen());
   caption.update(performance.now() / 1000);
 }
 

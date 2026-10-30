@@ -25,8 +25,8 @@ test('sound off, a final to the runway captions each GPWS height once, in order,
   expect((await page.evaluate(() => window.openaeroDebug())).audio).toBe('off');
   const caps = await page.evaluate(() => window.__captions);
   const heights = caps.map((c) => c.text.split(' · ')[0]);
-  // From 1.3 NM down: each height once, in order (no "fifty" again after "forty"); "ten" only
-  // when the flare is still sinking through it.
+  // From 1.3 NM down: each height once, in order (no "fifty" again after "forty"). No "ten" on
+  // the 737: sim.aglFt is the CG's height, ~11 ft over the runway at touchdown (ticket 0122).
   expect(heights.slice(heights.indexOf('four hundred'), heights.indexOf('twenty') + 1)).toEqual(
     ['four hundred', 'three hundred', 'two hundred', 'one hundred', 'fifty', 'forty', 'thirty', 'twenty']);
   expect(new Set(heights).size).toBe(heights.length);
