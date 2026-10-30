@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
 import { recordCaptions, overlaps } from './captionHelpers.js';
-import { headingBoxTop, HEADING_BOX_H } from '../../src/hudLayout.js';
+import { headingBoxTop, HEADING_BOX_H, windBoxRect } from '../../src/hudLayout.js';
 
 // Ticket 0117: every spoken callout is captioned on screen, with the sound off too.
 // A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
@@ -37,6 +37,8 @@ test('sound off, a final to the runway captions each GPWS height once, in order,
     const hb = { x: c.w / 2 - 52, y: headingBoxTop(c.h / 2), width: 104, height: HEADING_BOX_H };
     expect(c.rect.width, c.text).toBeLessThanOrEqual(260);
     expect(overlaps(c.rect, hb), `${c.text}: heading box`).toBe(false);
+    const wb = windBoxRect(c.w, c.h);
+    expect(overlaps(c.rect, { x: wb.x, y: wb.y, width: wb.w, height: wb.h }), `${c.text}: wind box`).toBe(false);
     expect(overlaps(c.rect, c.coach), `${c.text}: coach`).toBe(false);
     expect(overlaps(c.rect, c.master), `${c.text}: banner`).toBe(false);
     expect(overlaps(c.rect, c.stall), `${c.text}: stall banner`).toBe(false);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createCaption, CAPTION_HOLD_S, plainCaption } from '../../src/captions.js';
+import { createCaption, CAPTION_HOLD_S, plainCaption, captionWords } from '../../src/captions.js';
 
 const recorder = () => {
   const shown = [];
@@ -70,5 +70,12 @@ describe('plainCaption (0117 panel)', () => {
     expect(plainCaption('sink rate')).toBe('sink rate · too fast down');
     expect(plainCaption('too low, gear')).toBe('too low, gear · gear down');
     expect(plainCaption('five hundred')).toBe('five hundred');
+  });
+});
+
+describe('captionWords (0117 panel)', () => {
+  it('shortens the triple windshear call to fit the line', () => {
+    expect(captionWords('windshear, windshear, windshear')).toBe('windshear ×3');
+    expect(captionWords('pull up')).toBe('pull up');
   });
 });

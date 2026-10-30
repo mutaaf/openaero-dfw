@@ -57,7 +57,7 @@ import {
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
-import { createCaption, plainCaption } from './captions.js';
+import { createCaption, plainCaption, captionWords } from './captions.js';
 // Boot-budget trim (0078): one short name for the ~200 element lookups.
 const byId = (id) => document.getElementById(id);
 
@@ -245,7 +245,7 @@ const caption = createCaption((t) => {
   }));
   captionEl.classList.toggle('hidden', !t);
 });
-const sayCaption = (t, queued) => caption.say(sim.assist === 'pilot' ? t : plainCaption(t), performance.now() / 1000, queued);
+const sayCaption = (t, queued) => caption.say(sim.assist === 'pilot' ? captionWords(t) : plainCaption(captionWords(t)), performance.now() / 1000, queued);
 const audio = createAudio(sim, updateAudioButton, sayCaption);
 
 function updateAudioButton() {
@@ -1985,7 +1985,8 @@ function renderHud() {
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
   if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(cx, cy);
-  if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil) drawTakeoffCall(cx, cy);
+  // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
+  if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
 
   hudCtx.restore();
 }

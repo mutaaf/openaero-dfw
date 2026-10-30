@@ -1,11 +1,12 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 import { recordCaptions, overlaps } from './captionHelpers.js';
-import { headingBoxTop, HEADING_BOX_H } from '../../src/hudLayout.js';
+import { headingBoxTop, HEADING_BOX_H, windBoxRect } from '../../src/hudLayout.js';
 
 // Ticket 0117 on a phone (the `phone` project: touch), upright and held sideways: a real
 // callout's caption stays between the tapes and clear of the coach, the banners and the heading box.
-for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+// 390x664 and 375x667: an iPhone in a Safari tab and an iPhone SE, where the wind box comes down beside it.
+for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 390, height: 664 }, { width: 375, height: 667 }]) {
   test.describe(`captions ${vp.width}x${vp.height}`, () => {
     test.use({ viewport: vp, hasTouch: true, isMobile: true });
 
@@ -23,8 +24,10 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
       await expect.poll(() => page.evaluate(() => window.__captions.length), { timeout: 45_000 }).toBeGreaterThan(1);
       for (const c of await page.evaluate(() => window.__captions)) {
         const hb = { x: c.w / 2 - 52, y: headingBoxTop(c.h / 2), width: 104, height: HEADING_BOX_H };
-        expect(c.rect.width, c.text).toBeLessThanOrEqual(260);
+        expect(c.rect.width, c.text).toBeLessThanOrEqual(248);
         expect(overlaps(c.rect, hb), `${c.text}: heading box`).toBe(false);
+        const wb = windBoxRect(c.w, c.h);
+        expect(overlaps(c.rect, { x: wb.x, y: wb.y, width: wb.w, height: wb.h }), `${c.text}: wind box`).toBe(false);
         expect(overlaps(c.rect, c.coach), `${c.text}: coach`).toBe(false);
         expect(overlaps(c.rect, c.master), `${c.text}: banner`).toBe(false);
         expect(overlaps(c.rect, c.stall), `${c.text}: stall banner`).toBe(false);
@@ -33,7 +36,7 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
       }
       // The longest real pairings: the gate's call with the 500 ft call it queues behind, and
       // the windshear warning; a joined line breaks only between calls, two lines at most.
-      for (const pair of [['unstabilized, go around', 'five hundred'], ['windshear, windshear, windshear', 'four hundred']]) {
+      for (const pair of [['unstabilized, go around', 'five hundred'], ['sink rate', 'too low, gear'], ['windshear, windshear, windshear', 'four hundred']]) {
         const r = await page.evaluate(([a, b]) => {
           window.openaeroDebugCaption(a);
           window.openaeroDebugCaption(b, true);
@@ -42,9 +45,11 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
           const b2 = el.getBoundingClientRect();
           return { text: el.textContent, spans, rect: { x: b2.x, y: b2.y, width: b2.width, height: b2.height }, w: innerWidth, h: innerHeight };
         }, pair);
-        expect(r.text).toBe(`${pair[0]} · ${pair[1]}`);
-        expect(r.spans[1], `${r.text}: the height call stays on one line`).toBe(1);
-        expect(r.rect.width, r.text).toBeLessThanOrEqual(260);
+        expect(r.text.endsWith(` · ${pair[1]}`), r.text).toBe(true);
+        expect(r.spans[r.spans.length - 1], `${r.text}: the last call stays on one line`).toBe(1);
+        expect(r.rect.width, r.text).toBeLessThanOrEqual(248);
+        const wb = windBoxRect(r.w, r.h);
+        expect(overlaps(r.rect, { x: wb.x, y: wb.y, width: wb.w, height: wb.h }), `${r.text}: wind box`).toBe(false);
         expect(r.rect.height, `${r.text}: two lines at most`).toBeLessThanOrEqual(40);
         if (r.w > r.h) expect(r.rect.y + r.rect.height, r.text).toBeLessThanOrEqual(r.h * 0.35);
       }

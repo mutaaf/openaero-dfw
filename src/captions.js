@@ -4,6 +4,9 @@
 // called when the line changes ('' clears it), never per frame.
 export const CAPTION_HOLD_S = 1.2;
 // Kid and Learner read plain words where the call is jargon (like TAKEOFF_CALLOUT_HUD_PLAIN).
+// The triple windshear call reads as one word and a count (it fits the line).
+const SHORT = { 'windshear, windshear, windshear': 'windshear ×3' };
+export const captionWords = (words) => SHORT[words] || words;
 const PLAIN = { retard: 'throttle idle', 'sink rate': 'sink rate · too fast down', 'too low, gear': 'too low, gear · gear down' };
 export const plainCaption = (words) => PLAIN[words] || words;
 
