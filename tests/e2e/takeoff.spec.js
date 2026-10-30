@@ -47,9 +47,10 @@ test('Cessna takeoff with sound off: nothing spoken, rotate and positive rate st
   await page.selectOption('#selScenario', 'kdfw_takeoff');
   await page.click('#btnToga');
   await expect.poll(async () => (await debug(page)).takeoffCalls, { timeout: 60_000 }).toEqual(['rotate']);
+  // Hold the nose up through the climb: Pilot's trim is the runway's, so a stick let go the
+  // moment the wheels leave settles the Cessna back on (a race the CI load decides).
   await page.keyboard.down('ArrowUp');
-  await expect.poll(async () => (await debug(page)).onGround, { timeout: 20_000 }).toBe(false);
-  await page.keyboard.up('ArrowUp');
   await expect.poll(async () => (await debug(page)).takeoffCalls, { timeout: 30_000 }).toEqual(['rotate', 'positive rate']);
+  await page.keyboard.up('ArrowUp');
   expect(await page.evaluate(() => window.__spoken)).toEqual([]);
 });
