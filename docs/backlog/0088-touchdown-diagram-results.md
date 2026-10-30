@@ -1,7 +1,7 @@
 ---
 id: 0088
 title: Results card shows where you touched down on a runway diagram
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: player-feel
