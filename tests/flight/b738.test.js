@@ -18,7 +18,7 @@ import { airAt } from '../../src/atmosphere.js';
 import { liftCoefficient, dragCoefficient, stallSpeedKts, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
-import { makeBody, fly, attitude, vsFpm } from './harness.js';
+import { makeBody, fly, attitude, vsFpm, speedHoldPilot } from './harness.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
 const vApp = (b738.vrefKts + 5) * 0.514444;
@@ -347,5 +347,69 @@ describe('Boeing 737-800 go-around (14 CFR 25.119 and 33.73)', () => {
       (x) => { if (t95 === null && engineThrust(b738, x.engineN, vref * KTS_TO_MPS, air, 0.23, 0) >= 0.95 * full) t95 = x.t; return t95 !== null; });
     expect(t95).not.toBeNull();
     expect(t95).toBeLessThanOrEqual(5);
+  });
+});
+
+// Cruise and ceiling (ticket 0113), 65 t, ISA, clean (gear up, flaps 0):
+//  - EUROCONTROL Aircraft Performance Database, B738, "Cruise": MACH 0.79, ceiling FL 410
+//    (learningzone.eurocontrol.int/ilp/customs/ATCPFDB/details.aspx?ICAO=B738)
+//  - EASA TCDS IM.A.120 (Boeing 737), Issue 30, 28 Oct 2026, Section 4.1 (737-800), III.11,
+//    p. 28: "Maximum Operating Altitude: 12,497 m (41,000 ft) pressure altitude". Its airspeed
+//    limits (III.10) say only "See Airplane Flight Manual", so no card reads an MMO.
+//    (easa.europa.eu/en/downloads/7297/en; the FAA TCDS A16WE copy the ticket named refused
+//    the sandbox.)
+// The model has no Mach drag rise or buffet boundary: below Mach 0.79 neither should matter much.
+const CRUISE_MACH = 0.79;
+const easAtMach = (ft, mach) => { const air = airAt(ft / M_TO_FT); return mach * air.speedOfSoundMps * Math.sqrt(air.sigma); };
+
+// Holds `mach` (as its EAS at `ft`) with pitch at a fixed throttle; returns the mean climb
+// rate (fpm) and altitude change (ft) over the last 30 s, after 60 s to settle.
+function cruise(ft, mach, throttle) {
+  const kts = easAtMach(ft, mach) / KTS_TO_MPS;
+  const b = makeBody(b738, { kts, altM: ft / M_TO_FT, gearDown: false, throttle });
+  const hold = speedHoldPilot(() => kts);
+  fly(b, b738, 60, (x, dt) => { x.throttle = throttle; hold(x, dt); });
+  const y0 = b.pos.y;
+  let sum = 0, n = 0;
+  fly(b, b738, 30, (x, dt) => { x.throttle = throttle; hold(x, dt); sum += vsFpm(x); n++; });
+  return { fpm: sum / n, dFt: (b.pos.y - y0) * M_TO_FT, mach: b.mach };
+}
+
+describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120; 0113)', () => {
+  // Measured: drag 39.2 kN against 70.1 kN of full thrust (56%) at FL350, Mach 0.79 (455 KTAS,
+  // 253 KEAS), L/D 16.3. The margin is generous; the ceiling card below says why.
+  it('at FL350, Mach 0.79 (EUROCONTROL APD cruise), 65 t, level flight needs less thrust than the engines have', () => {
+    const air = airAt(35000 / M_TO_FT);
+    const eas = easAtMach(35000, CRUISE_MACH);
+    const tas = CRUISE_MACH * air.speedOfSoundMps;
+    const q = 0.5 * 1.225 * eas * eas;
+    const cl = liftCoefficient(b738, trimAoaDeg(b738, eas, 0) * DEG_TO_RAD, 0);
+    const drag = dragCoefficient(b738, cl, false, 0, 1) * q * b738.wingAreaM2;
+    const full = engineThrust(b738, 1, tas, air, CRUISE_MACH, q);
+    expect(cl * q * b738.wingAreaM2).toBeCloseTo(b738.massKg * 9.80665, -2); // lift = weight
+    expect(drag / full).toBeLessThan(1);
+    const thr = trimThrottle(b738, eas, 0, 0, false, air);
+    expect(thr).toBeGreaterThan(0.3); // a cruise setting, not near idle
+    expect(thr).toBeLessThan(1);
+  });
+
+  // The same, flown: the trim throttle holds Mach 0.79 at FL350 within a few hundred fpm.
+  it('flown at FL350 on the trim throttle, holding Mach 0.79 with pitch, it stays level (±300 fpm, ±0.01 M)', () => {
+    const eas = easAtMach(35000, CRUISE_MACH);
+    const thr = trimThrottle(b738, eas, 0, 0, false, airAt(35000 / M_TO_FT));
+    const { fpm, mach } = cruise(35000, CRUISE_MACH, thr);
+    expect(Math.abs(fpm)).toBeLessThanOrEqual(300);
+    expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
+  });
+
+  // EUROCONTROL APD ceiling FL 410 = the TCDS maximum operating altitude: at 65 t (the APD
+  // and TCDS give no mass; 65 t is a mid weight, well under the TCDS (p. 28) 79,015 kg take-off and 66,360 kg landing masses) the jet
+  // should not hold level flight with full thrust 1,000 ft above it.
+  // KNOWN GAP (0116): the model climbs there at ~900 fpm and holds level to ~FL520 at Mach
+  // 0.79: thrust lapses as σ^0.7 (aircraft.js), so it keeps 2 × 29 kN at FL410 where a
+  // CFM56-7B's maximum cruise rating is nearer 2 × 24 kN, and there is no buffet boundary.
+  it.fails('KNOWN GAP (0116): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
+    const { fpm } = cruise(42000, CRUISE_MACH, 1);
+    expect(fpm).toBeLessThanOrEqual(0);
   });
 });
