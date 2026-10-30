@@ -1,12 +1,12 @@
 ---
 id: 0113
 title: 737 cruise and ceiling cards: Mach at FL350 and the certified ceiling
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-30
-pr:
+pr: 128
 ---
 
 ## Why
@@ -29,12 +29,21 @@ stated there, do not invent it: card only what is cited. A card the model misses
 `it.fails` with a new ticket (engine.js turbofan Mach/density lapse is the likely cause).
 
 ## Acceptance criteria
-- [ ] At least two new cards (cruise Mach thrust margin at FL350; ceiling) each citing its source and page
-- [ ] Any miss is an `it.fails` with its ticket id, never a loosened bound
-- [ ] `npm test` green; existing cards unchanged
+- [x] At least two new cards (cruise Mach thrust margin at FL350; ceiling) each citing its source and page
+- [x] Any miss is an `it.fails` with its ticket id, never a loosened bound
+- [x] `npm test` green; existing cards unchanged
 
 ## Test plan
 `tests/flight/b738.test.js` additions only; `npm run check:fast`.
 
 ## Out of scope
 Fuel burn and range, climb schedules, RVSM, any change to engine.js beyond what a failing card needs (that is its own ticket).
+
+## Shipped notes
+- Sources: the ceiling is EASA TCDS IM.A.120 Issue 30, §4.1 III.11, p. 28 (41,000 ft); the
+  caat.or.th copy of FAA A16WE answered with a Cloudflare challenge and the FAA's DRS refused the
+  sandbox. The TCDS gives no airspeed limits ("See Airplane Flight Manual"), so there is no MMO
+  card. The cruise Mach 0.79 and ceiling FL410 are also EUROCONTROL's Aircraft Performance
+  Database (B738); Boeing's ACAP §3.2.4 says only "cruise Mach = LRC".
+- Measured: FL350, Mach 0.79: drag 39.2 kN vs 70.1 kN full thrust; the trim throttle (54%) flies
+  level at +3 fpm. At 42,000 ft full thrust still climbs ~1,200 fpm: `it.fails` KNOWN GAP (0116).
