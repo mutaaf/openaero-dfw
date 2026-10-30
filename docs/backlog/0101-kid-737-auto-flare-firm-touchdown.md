@@ -1,12 +1,12 @@
 ---
 id: 0101
 title: Kid's 737 flares to a gentle touchdown in the zone instead of balloon-and-sink
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-28
-pr:
+pr: 129
 ---
 
 ## Why
@@ -26,13 +26,20 @@ per-aircraft flare height (spec.flareFtKid) like the real 737's ~20-30 ft flare 
 737 NG: flare at ~20 ft, touchdown 1,000-1,500 ft past the threshold).
 
 ## Acceptance criteria
-- [ ] tests/flight/kidFinal.test.js: the `it.fails` 737 card (calm, < 600 m) passes and moves to
+- [x] tests/flight/kidFinal.test.js: the `it.fails` 737 card (calm, < 600 m) passes and moves to
       `it`; add < 240 fpm to it; both 737 cards and all three Cessna cards still pass
-- [ ] tests/flight/pattern.test.js and tests/e2e/assists.spec.js still land
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] tests/flight/pattern.test.js and tests/e2e/assists.spec.js still land
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 Promote the `it.fails` card in tests/flight/kidFinal.test.js; assert the touchdown rate.
 
 ## Out of scope
 Learner and Pilot (no auto-flare). The crosswind de-crab (0100).
+
+## Shipped
+A per-airframe flare profile: `spec.kidFlarePerS` (737: 0.315 of the wheel height per second; the
+Cessna keeps autopilot.js's 0.2). Headless the 737 now lands 220-350 m in at 60-180 fpm, calm to a
+25 kt headwind and in a 10 kt crosswind; in the game the default final went from 576 m / 328 fpm to
+273 m / 219 fpm (grade A). An attitude flare (pitch up N° at a height) and a sink-rate feedback loop
+were tried first and were worse: the jet's path lags its nose, so both ballooned or sank.

@@ -238,6 +238,10 @@ test.describe(() => {
     console.log(`[0097] short final ${short.crossM.toFixed(1)} m, nose ${(((short.headingDeg - short.runwayHdgT + 540) % 360) - 180).toFixed(1)}°; touchdown ${td.crossM.toFixed(1)} m off, ${td.pastThresholdM.toFixed(0)} m past, ${td.vsFpm.toFixed(0)} fpm, ${td.grade}`);
     expect(Math.abs(td.crossM)).toBeLessThan(8);
     expect(td.grade).not.toBe('CRASH');
+    // Ticket 0101: the 737's own flare profile puts it down gently inside landing.js's 600 m zone
+    // (it ballooned and sank on at ~350 fpm ~650 m in on the Cessna's).
+    expect(td.pastThresholdM).toBeLessThan(600);
+    expect(td.vsFpm).toBeGreaterThan(-300);
     expect(errors).toEqual([]);
   });
 });

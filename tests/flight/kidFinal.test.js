@@ -60,7 +60,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex),
       tailstrikeDeg: spec.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, wheelHeightM: wheelM,
-      airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS,
+      airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, flarePerS: spec.kidFlarePerS,
     });
     shapeControls(cfg, ast, s, dt, out);
     x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
@@ -121,13 +121,20 @@ describe('Kid hands off on a straight-in final in the 737 (flightModel, ticket 0
       expect(r.td.pastThrM).toBeLessThan(3000 / M_TO_FT);
     });
   }
-  // Known gap (ticket 0101): Kid's auto-flare (assists.js: sink 0.2/s of the wheel height from
-  // 12 m, no less than 0.8 m/s) is a ~10 s flare at the 737's ~140 kt, ~700 m of float past an
-  // aim point the guide now reaches; landing.js's full-marks zone ends at 600 m.
-  it.fails('kdfw_35c_final, calm: touches down within landing.js\'s 600 m zone', () => {
-    const r = flyKidFinal('b738', 'kdfw_35c_final');
-    expect(r.td.pastThrM).toBeLessThan(600);
-  });
+  // Ticket 0101: Kid's auto-flare at the Cessna's pace (sink 0.2/s of the wheel height from 12 m)
+  // was a ~10 s flare at the 737's ~150 kt: a balloon to ~8 ft, then ~350 fpm 650 m in, past
+  // landing.js's full-marks zone. The jet's own profile (spec.kidFlarePerS) flares from ~40 ft and
+  // lands it ~700-1,150 ft in (Boeing 737 NG FCTM: flare ~20-30 ft, touchdown 1,000-1,500 ft).
+  for (const [name, wind] of [['calm', {}], ['15 kt headwind', { fromDeg: 0, kts: 15 }], ['25 kt headwind', { fromDeg: 0, kts: 25 }], ['10 kt crosswind', { fromDeg: 270, kts: 10 }]]) {
+    it(`kdfw_35c_final, ${name}: touches down gently within landing.js's 600 m zone`, () => {
+      const r = flyKidFinal('b738', 'kdfw_35c_final', wind);
+      log('b738', 'kdfw_35c_final', name, r);
+      expectLanded(r);
+      expect(r.td.pastThrM).toBeGreaterThan(150);
+      expect(r.td.pastThrM).toBeLessThan(600);
+      expect(r.td.vsFpm).toBeGreaterThan(-240); // landing.js: rate scores 75+ under 240 fpm
+    });
+  }
 });
 
 // A kid who lets go over the runway (first-timer panel): past the threshold the guide flies only

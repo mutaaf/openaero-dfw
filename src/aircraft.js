@@ -65,6 +65,13 @@ export const AIRCRAFT_DATABASE = {
     pitchAuthority: 0.5,
     rollAuthority: 1.0,
     maxGroundPitchDeg: 11, // tailstrike
+    // Kid's auto-flare sink profile (assists.js, 0101): 0.315 of the wheel height per second, not the
+    // Cessna's 0.2. At ~150 kt the slow profile was a ~10 s flare the pitch hold lagged: a balloon,
+    // then ~330-360 fpm 580-650 m in. Fitted headless (tests/flight/kidFinal.test.js: 220-350 m in,
+    // 60-180 fpm, calm to 25 kt headwind) and in the game (default final: 273 m, 219 fpm; it was 576 m,
+    // 328 fpm); Boeing's FCTM: flare ~20-30 ft, touchdown 1,000-1,500 ft in. Steeper is firmer (0.36:
+    // 371 fpm in the game); at 0.31 the calm flare balloons again (~560 m).
+    kidFlarePerS: 0.315,
     alphaStallDeg: 14.8,
     maxThrustN: 240000, // 2x CFM56-7B (120 kN each)
     // Lapse fit: ~18% less thrust by Mach 0.23 at sea level (high-bypass takeoff curves),

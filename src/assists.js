@@ -67,7 +67,7 @@ export function updateDeparture(st, onGround, aglFt) {
 // One sub-step of input shaping. cfg = assistConfig(level) (never null here).
 // s: { pitchIn, rollIn, yawIn (raw stick targets: pitch + = nose down, roll + = right),
 //      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), aoaDeg, betaDeg, dihedralAil,
-//      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true),
+//      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true), flarePerS (spec.kidFlarePerS),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
 //      localizer bank and glidepath angle on a final), rwyHdgDeg, noseHdgDeg, crossM, crossVelMps,
 //      steerRateDegS (on the runway: its true heading or null off it, the nose's, the offset and
@@ -104,7 +104,8 @@ export function shapeControls(cfg, st, s, dt, out) {
   // Kid auto-flare: near the ground, never less nose-up than the flare's sink-rate profile.
   if (cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M) {
     // Air-relative path (true airspeed), to match the air-relative angle of attack added to it.
-    const flareGammaDeg = Math.atan2(flareSinkMps(Math.max(0, s.wheelHeightM)), Math.max(20, s.airspeedMps)) * 180 / Math.PI;
+    // s.flarePerS: the airframe's sink profile (spec.kidFlarePerS, 0101), else autopilot.js's.
+    const flareGammaDeg = Math.atan2(flareSinkMps(Math.max(0, s.wheelHeightM), s.flarePerS), Math.max(20, s.airspeedMps)) * 180 / Math.PI;
     st.pitchHoldDeg = Math.min(Math.max(st.pitchHoldDeg, flareGammaDeg + s.aoaDeg), s.tailstrikeDeg - TAIL_MARGIN_DEG);
   }
   // Angle-of-attack protection: the pitch that would put the wing at its limit on the
