@@ -13,7 +13,7 @@ import { magHeadingText } from './magvar.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
-  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES,
+  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES, runwayFactsText,
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
@@ -1417,8 +1417,12 @@ function syncDensityAltitude() {
   const kind = sim.loadedMission?.kind;
   const hint = d.thin ? THIN_AIR[kind] || THIN_AIR.other : '';
   const text = `Density altitude ${d.where}: ${d.ft} (${d.src}).`;
-  if (text + hint === daShown) return;
-  daShown = text + hint;
+  const facts = runwayFactsText(sim.activeEnd);
+  if (text + hint + facts === daShown) return;
+  daShown = text + hint + facts;
+  const factsEl = byId('txtRunwayFacts');
+  factsEl.textContent = facts;
+  factsEl.classList.toggle('hidden', !facts);
   byId('txtDaValue').textContent = text;
   const el = byId('txtThinAir');
   el.textContent = hint;

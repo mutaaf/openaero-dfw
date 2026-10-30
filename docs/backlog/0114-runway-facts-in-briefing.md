@@ -1,7 +1,7 @@
 ---
 id: 0114
 title: Runway facts you can check against a chart: length, width and elevation in the briefing
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
