@@ -1,8 +1,8 @@
 ---
 id: 0101
 title: Kid's 737 flares to a gentle touchdown in the zone instead of balloon-and-sink
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: S
 lens: player-feel
 created: 2026-10-28
