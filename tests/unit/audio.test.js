@@ -43,6 +43,14 @@ describe('audio callouts are captioned with sound off (0117)', () => {
     expect(said).toEqual(['five hundred', 'five hundred']);
   });
 
+  it('a sink rate warning holds the height callouts back (EGPWS priority)', () => {
+    const said = [];
+    const sim = simAt(410, { vsiFpm: -2700, lastCalloutIdx: 1 });
+    const audio = createAudio(sim, () => {}, (t) => said.push(t));
+    sim.aglFt = 398; audio.update();
+    expect(said).toEqual(['sink rate']);
+  });
+
   it('captions sink rate / pull up, and nothing while paused', () => {
     const said = [];
     const sim = simAt(420, { vsiFpm: -2000, lastCalloutIdx: 2, paused: true });

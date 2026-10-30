@@ -31,6 +31,23 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
         // Held sideways, above the horizon box the layout keeps free (35% … 65% of the height).
         if (c.w > c.h) expect(c.rect.y + c.rect.height, c.text).toBeLessThanOrEqual(c.h * 0.35);
       }
+      // The longest real pairings: the gate's call with the 500 ft call it queues behind, and
+      // the windshear warning; a joined line breaks only between calls, two lines at most.
+      for (const pair of [['unstabilized, go around', 'five hundred'], ['windshear, windshear, windshear', 'four hundred']]) {
+        const r = await page.evaluate(([a, b]) => {
+          window.openaeroDebugCaption(a);
+          window.openaeroDebugCaption(b, true);
+          const el = document.getElementById('calloutCaption');
+          const spans = [...el.querySelectorAll('span')].map((s) => s.getClientRects().length);
+          const b2 = el.getBoundingClientRect();
+          return { text: el.textContent, spans, rect: { x: b2.x, y: b2.y, width: b2.width, height: b2.height }, w: innerWidth, h: innerHeight };
+        }, pair);
+        expect(r.text).toBe(`${pair[0]} · ${pair[1]}`);
+        expect(r.spans[1], `${r.text}: the height call stays on one line`).toBe(1);
+        expect(r.rect.width, r.text).toBeLessThanOrEqual(260);
+        expect(r.rect.height, `${r.text}: two lines at most`).toBeLessThanOrEqual(40);
+        if (r.w > r.h) expect(r.rect.y + r.rect.height, r.text).toBeLessThanOrEqual(r.h * 0.35);
+      }
       await page.screenshot({ path: test.info().outputPath(`captions-${vp.width}x${vp.height}.png`) });
       expect(errors).toEqual([]);
     });

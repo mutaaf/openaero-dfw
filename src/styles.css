@@ -126,7 +126,7 @@ input[type=range] { accent-color: #38bdf8; }
 .hud-menu-open #coach, .hud-menu-open #calloutCaption { visibility: hidden; }
 /* Callout captions (0117): hudLayout.js takeoffCallTop (heading box top max(cy - 145, 72) + 28),
    no wider than the gap between the tapes (cx - 131 … cx + 130). */
-#calloutCaption { top: max(calc(50% - 117px), 100px); max-width: 256px; width: max-content; }
+#calloutCaption { top: max(calc(50% - 117px), 100px); max-width: 260px; width: max-content; }
 
 /* The alert banners stand under the top bar, which moves down by the status bar's inset when
    installed (0086); a phone held sideways puts them in the coach's slot below. */

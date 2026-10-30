@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createCaption, CAPTION_HOLD_S } from '../../src/captions.js';
+import { createCaption, CAPTION_HOLD_S, plainCaption } from '../../src/captions.js';
 
 const recorder = () => {
   const shown = [];
@@ -61,5 +61,14 @@ describe('createCaption (0117)', () => {
     const { shown, cap } = recorder();
     cap.say('', 0);
     expect(shown).toEqual([]);
+  });
+});
+
+describe('plainCaption (0117 panel)', () => {
+  it('gives Kid and Learner plain words for the jargon, and leaves the rest', () => {
+    expect(plainCaption('retard')).toBe('throttle idle');
+    expect(plainCaption('sink rate')).toBe('sink rate · too fast down');
+    expect(plainCaption('too low, gear')).toBe('too low, gear · gear down');
+    expect(plainCaption('five hundred')).toBe('five hundred');
   });
 });

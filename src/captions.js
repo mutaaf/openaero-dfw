@@ -3,6 +3,9 @@
 // for CAPTION_HOLD_S whether or not sound is on. Pure: `show(text)` is the only side effect,
 // called when the line changes ('' clears it), never per frame.
 export const CAPTION_HOLD_S = 1.2;
+// Kid and Learner read plain words where the call is jargon (like TAKEOFF_CALLOUT_HUD_PLAIN).
+const PLAIN = { retard: 'throttle idle', 'sink rate': 'sink rate · too fast down', 'too low, gear': 'too low, gear · gear down' };
+export const plainCaption = (words) => PLAIN[words] || words;
 
 export function createCaption(show, holdS = CAPTION_HOLD_S) {
   let text = '';

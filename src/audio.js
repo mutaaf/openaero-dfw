@@ -107,6 +107,8 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
   function checkGpwsCallouts() {
     sim.lastCalloutIdx = gpwsRearm(sim.aglFt, sim.lastCalloutIdx);
     if (sim.onGround || sim.vel.y >= 0) return;
+    // A sink rate / pull up warning outranks the heights (EGPWS priority): none while it lasts.
+    if (isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround)) return;
     const i = gpwsCalloutIndex(sim.aglFt, sim.lastCalloutIdx);
     if (i >= 0 && i < GPWS_ALT_THRESHOLDS.length) {
       sim.lastCalloutIdx = i;
