@@ -177,6 +177,21 @@ describe('the grade', () => {
     expect(kid.factors[0].value).toBe('the plane did it');
     expect(kid.reason).toBe(null);
   });
+  it('says "Capped" only when the cap lowered the score; a low nose held is not called a chase', () => {
+    const dive = gradeShear(done({ diveDeg: 6 }));
+    expect(dive.reason).toMatch(/chase the airspeed.*Capped at C\./);
+    const lowAndLate = gradeShear(done({ minPitchDeg: 2, maxS: 6, pitchS: null, lowFt: 150 }));
+    expect(lowAndLate.reason).toMatch(/nose too low/);
+    expect(lowAndLate.reason).not.toMatch(/Capped/);
+    expect(lowAndLate.grade).toBe('D');
+    // The height lost never reads more than the start height.
+    expect(gradeShear(done({ phase: 'failed', ground: true, lowFt: -3, startFt: 599 })).factors[3].value).toBe('599 ft of 599');
+  });
+  it('Kid: the pitch and hold are the plane\'s, not scored or advised', () => {
+    const kid = gradeShear(done({ maxS: 0, pitchS: 7, minPitchDeg: 5, diveDeg: 0 }), true);
+    expect(kid.factors.slice(0, 3).map((f) => f.value)).toEqual(['the plane did it', 'the plane did it', 'the plane did it']);
+    expect(kid.reason).toBe(null);
+  });
   it('a slow escape gets advice on its weakest part', () => {
     expect(gradeShear(done({ maxS: 5 })).reason).toMatch(/Full power the moment/);
   });

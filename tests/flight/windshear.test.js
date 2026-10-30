@@ -102,7 +102,7 @@ describe('Boeing 737-800 microburst escape (FAA-Boeing Windshear Training Aid; A
     expect(r.lostFt).toBeGreaterThan(3 * esc.lostFt);
     expect(r.st.lowFt).toBeLessThan(200);
     expect(r.grade.score).toBeLessThanOrEqual(69);
-    expect(r.grade.reason).toMatch(/nose low/);
+    expect(r.grade.reason).toMatch(/nose too low/); // held, not dived: not called a chase
   });
 
   it('the escape (full power, 15° nose up, 1 s) climbs out with no stall or stick shaker, an A or better', () => {

@@ -113,7 +113,7 @@ export function stepShear(st, s) {
     return 'start';
   }
   if (!shearLive(st)) return '';
-  if (s.aglFt < st.lowFt) st.lowFt = s.aglFt;
+  if (s.aglFt < st.lowFt) st.lowFt = Math.max(0, s.aglFt);
   if (s.onGround) { st.ground = true; st.phase = 'failed'; return 'failed'; }
   const ts = s.t - st.t0;
   let ev = '';
@@ -155,9 +155,10 @@ export function shearTarget(st, s) {
 const REASONS = {
   ground: 'Flew into the ground: full power and 15° nose up the moment the warning comes.',
   notOut: 'Never climbed out of it: full power and hold the nose up.',
-  stall: 'Stalled: hold the nose just under the stick shaker, not past it. Capped at D.',
-  chase: 'Kept the nose low in the shear: hold 15° and don\'t chase the airspeed, it costs height. Capped at C.',
-  config: 'Moved the gear or flaps in the shear: leave them until you are out of it. Capped at C.',
+  stall: 'Stalled: hold the nose just under the stick shaker, not past it.',
+  chase: 'Lowered the nose to chase the airspeed: hold 15°, diving costs the height you need.',
+  low: 'Kept the nose too low: 15° nose up and hold it, even as the speed falls.',
+  config: 'Moved the gear or flaps in the shear: leave them until you are out of it.',
   reaction: 'Full power the moment WINDSHEAR sounds: every second costs height.',
   pitch: 'Pull up to 15° nose up promptly and hold it.',
   hold: 'Hold the nose up through the sink; the airspeed comes back with the climb.',
@@ -165,18 +166,20 @@ const REASONS = {
   shaker: 'Ease the nose down only enough to quiet the stick shaker.',
 };
 const WEIGHTS = { reaction: 0.3, pitch: 0.15, hold: 0.2, height: 0.25, shaker: 0.1 };
+const PLANE = 'the plane did it';
 
-// The grade, once the drill has ended. kid: Kid level flew the escape.
+// The grade, once the drill has ended. kid: Kid level flew the escape (power, pitch, gear and
+// flaps are the plane's: those factors aren't the player's to score or to be told about).
 export function gradeShear(st, kid = false) {
-  const lostFt = Math.max(0, st.startFt - st.lowFt);
+  const lostFt = Math.min(st.startFt, Math.max(0, st.startFt - st.lowFt));
   const minPitch = st.minPitchDeg === Infinity ? null : st.minPitchDeg;
   const factors = [
-    { key: 'reaction', label: 'Warning to full power', value: kid ? 'the plane did it' : st.maxS === null ? 'never' : `${st.maxS.toFixed(1)} s`,
+    { key: 'reaction', label: 'Warning to full power', value: kid ? PLANE : st.maxS === null ? 'never' : `${st.maxS.toFixed(1)} s`,
       score: kid ? 100 : st.maxS === null ? 0 : curve(st.maxS, [[1, 100], [2, 85], [4, 40], [7, 0]]) },
-    { key: 'pitch', label: 'Warning to 12° nose up', value: st.pitchS === null ? 'never' : `${st.pitchS.toFixed(1)} s`,
-      score: st.pitchS === null ? 0 : curve(st.pitchS, [[4, 100], [6, 75], [10, 30], [14, 0]]) },
-    { key: 'hold', label: 'Lowest nose in the shear', value: minPitch === null ? '–' : `${Math.round(minPitch)}°`,
-      score: minPitch === null ? 0 : curve(minPitch, [[-3, 0], [0, 10], [SHEAR_CHASE_PITCH_DEG, 40], [8, 75], [12, 100]]) },
+    { key: 'pitch', label: 'Warning to 12° nose up', value: kid ? PLANE : st.pitchS === null ? 'never' : `${st.pitchS.toFixed(1)} s`,
+      score: kid ? 100 : st.pitchS === null ? 0 : curve(st.pitchS, [[4, 100], [6, 75], [10, 30], [14, 0]]) },
+    { key: 'hold', label: 'Lowest nose in the shear', value: kid ? PLANE : minPitch === null ? '–' : `${Math.round(minPitch)}°`,
+      score: kid ? 100 : minPitch === null ? 0 : curve(minPitch, [[-3, 0], [0, 10], [SHEAR_CHASE_PITCH_DEG, 40], [8, 75], [12, 100]]) },
     { key: 'height', label: 'Height lost', value: `${Math.round(lostFt)} ft of ${Math.round(st.startFt)}`,
       score: curve(lostFt, [[200, 100], [300, 75], [450, 30], [550, 0]]) },
     { key: 'shaker', label: 'Stick shaker', value: `${st.shakerS.toFixed(1)} s`,
@@ -185,12 +188,16 @@ export function gradeShear(st, kid = false) {
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
   let reason = null;
+  // A cap says so only when it lowered the score.
+  const cap = (n, why) => { reason = score > n ? `${why} Capped at ${letterGrade(n)}.` : why; score = Math.min(score, n); };
   const failed = st.phase === 'failed';
   if (st.ground) { score = 0; reason = REASONS.ground; }
-  else if (failed) { score = Math.min(score, FAIL_CAP); reason = REASONS.notOut; }
-  else if (st.stalled) { score = Math.min(score, FAIL_CAP); reason = REASONS.stall; }
-  else if (st.diveDeg > SHEAR_DIVE_DEG || (minPitch !== null && minPitch < SHEAR_CHASE_PITCH_DEG)) { score = Math.min(score, CHASE_CAP); reason = REASONS.chase; }
-  else if (st.configChanged && !kid) { score = Math.min(score, CHASE_CAP); reason = REASONS.config; }
+  else if (failed) cap(FAIL_CAP, REASONS.notOut);
+  else if (kid) reason = null; // the plane flew it: nothing to tell the kid but the grade
+  else if (st.stalled) cap(FAIL_CAP, REASONS.stall);
+  else if (st.diveDeg > SHEAR_DIVE_DEG) cap(CHASE_CAP, REASONS.chase);
+  else if (minPitch !== null && minPitch < SHEAR_CHASE_PITCH_DEG) cap(CHASE_CAP, REASONS.low);
+  else if (st.configChanged) cap(CHASE_CAP, REASONS.config);
   else if (score < 85) reason = REASONS[factors.reduce((a, f) => (f.score < a.score ? f : a)).key];
   return {
     kind: 'windshear', title: failed ? 'Windshear: not out of it' : 'Windshear escape', grade: st.ground ? 'CRASH' : letterGrade(score), score, factors, reason,

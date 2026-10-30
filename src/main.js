@@ -946,10 +946,9 @@ function checkRto() {
 let wsLib = null;
 function checkWindshear(dt) {
   const ev = sim.windshear && wsLib.shearLive(sim.windshear) && wsLib.shearStep(sim.windshear, sim, dt);
-  if (ev === 'warning') {
-    sim.apMaster = false; sim.apApproach = false; // the escape is flown by hand (the training aid's manual one)
-    audio.callout('windshear, windshear, windshear');
-  }
+  if (ev === 'warning') audio.callout('windshear, windshear, windshear');
+  // The escape is flown by hand (the training aid's manual one): ILS AUTO stays off until out of it.
+  if (sim.windshear?.phase === 'warning') { sim.apMaster = false; sim.apApproach = false; }
   if (ev !== 'clear' && ev !== 'failed') return;
   byId('masterAlertBanner').classList.add('hidden');
   const result = wsLib.gradeShear(sim.windshear, sim.assist === 'kid');
@@ -1157,7 +1156,8 @@ const tutorInput = {
 const tutorVals = { targetKts: 0, hdgDeg: 0, altFt: 0 };
 
 function updateTutor(dt) {
-  if (!tutorEnabled || !tutorLib) { tutor.caption = null; return null; }
+  // The windshear escape (0112) is the coach's, never the autopilot tutor's.
+  if (!tutorEnabled || !tutorLib || sim.windshear?.phase === 'warning') { tutor.caption = null; return null; }
   tutorInput.apMaster = sim.apMaster;
   tutorInput.apApproach = sim.apApproach;
   tutorInput.apHdgHold = sim.apHdgHold;
@@ -1178,7 +1178,8 @@ function updateCoach(dt) {
   // ...and the stall drill (0087) until it is graded, whatever the checkbox (until Skip).
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
-  if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1894,7 +1895,7 @@ function renderHud() {
   hudCtx.rotate(-rollRad);
   const pitchPxPerDeg = 7;
   const curPitchDeg = pitchRad * RAD_TO_DEG;
-  [-20, -10, -5, 0, 5, 10, 20].forEach(deg => {
+  [-20, -10, -5, 0, 5, 10, 15, 20].forEach(deg => {
     const dy = (curPitchDeg - deg) * pitchPxPerDeg;
     if (dy > -140 && dy < 140) {
       hudCtx.strokeStyle = deg === 0 ? 'rgba(56, 189, 248, 0.9)' : 'rgba(56, 189, 248, 0.45)';
@@ -2232,7 +2233,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   const ap = sim.approach;
   // Kid's windshear escape (0112): full power and the climb guide from the warning.
   const wsEscape = sim.windshear && wsLib.kidEscape(sim.windshear);
-  if (departing || drill?.kidClimb || wsEscape) {
+  if (wsEscape) {
+    _assistIn.guideGammaDeg = 15 - sim.aoaDeg; // the escape's 15° nose up (Kid's pitch cap, 12.75°, and stall margin hold it under)
+  } else if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
     kidFinalGuide(sim.activeEnd, ap, -_euler.y * RAD_TO_DEG, Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG, _assistIn);
@@ -2268,6 +2271,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   if (cfg.autoThrottle) {
     updateIasTrend(dt);
     if (wsEscape) sim.throttle = 1;
+    else if (sim.windshear?.phase === 'shear') { /* the outflow's speed gain: keep the power (the trap is to take it off) */ }
     else if (drill && drill.kidThrottle !== null) {
       sim.throttle = drill.kidThrottle; // the stall drill: idle until the stall, then full power
     } else if (departing) {

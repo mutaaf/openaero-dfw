@@ -29,9 +29,11 @@ Forward-looking windshear alerts, a radar overlay, a real storm model.
 
 ## Shipped notes
 The 737 on DFW 35C (Delta 191's microburst, NTSB AAR-86/05, was on DFW 17L). The shear runs 46 s
-from 600 ft; the warning comes 7 s in. Headless (tests/flight/windshear.test.js): flown on at approach
-power it hits ~1.6 km short; full power with no pull-up also hits; a 1 s escape loses ~150 ft (S); a
-3 s escape ~250 ft (B); a dive for speed ~420 ft (capped C); a 6 s reaction ~400 ft (D). Kid's
-assist (full power, its climb guide) loses ~290 ft in the game. No published height-loss figure
+from 600 ft; the warning comes 7 s in; the downdraft fades out below 400 ft (Oseguera-Bowles, NASA
+TM-100632: no vertical air at the ground). Headless (tests/flight/windshear.test.js): flown on at
+approach power it hits ~1.4 km short; full power with no pull-up gets down to ~140 ft (D); a 1 s escape
+loses ~150 ft (S); a 3 s escape ~245 ft (B); a dive for speed ~370 ft (C); a 6 s reaction ~370 ft (D).
+Kid's assist (power held through the outflow, then full power and its 12.75° pitch cap) loses
+~280 ft in the game (S). No published height-loss figure
 exists for this shear, so the cards are relative. Out of scope still: a predictive (radar) alert,
 a C172 version, the shear on other runways.

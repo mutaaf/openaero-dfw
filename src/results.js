@@ -10,6 +10,8 @@ export function showResults(sim, result, best, end, gate) {
   const goAround = result.kind === 'goAround';
   byId('txtResultTitle').textContent = result.title ?? (goAround ? 'Go-around complete' : 'Landing grade');
   byId('btnKeepRolling').textContent = sim.onGround ? 'KEEP ROLLING' : 'KEEP FLYING';
+  // A drill that ended in the ground (the windshear, 0112) has nothing to keep flying: FLY AGAIN only.
+  byId('btnKeepRolling').classList.toggle('hidden', result.kind === 'windshear' && result.grade === 'CRASH');
   const gradeEl = byId('txtGrade');
   gradeEl.textContent = result.grade;
   gradeEl.className = `${result.grade === 'CRASH' ? 'text-2xl' : 'text-5xl'} font-black w-20 text-center ${GRADE_COLOURS[result.grade]}`;

@@ -26,6 +26,11 @@ test('windshear on Kid: the warning, the plane climbs out of the microburst, gra
   await expect(page.locator('#masterAlertBanner')).toBeVisible();
   await expect(page.locator('#txtCoach')).toHaveText(/Windshear! Let go/);
   await page.screenshot({ path: test.info().outputPath('windshear-1280-warning.png') });
+  // ILS AUTO can't take the escape back (the panel's first-timer reached for it): the coach keeps its card.
+  await page.evaluate(() => document.getElementById('btnApApr').click());
+  await page.waitForTimeout(1000);
+  await expect(page.locator('#txtCoachLabel')).toHaveText('Coach');
+  await expect(page.locator('#txtCoach')).toHaveText(/Windshear! Let go/);
   const warn = await snap(page);
   expect(warn.windshear.startFt).toBeGreaterThan(550);
   await expect.poll(async () => (await snap(page)).throttle, { timeout: 5_000 }).toBe(1);
@@ -36,7 +41,8 @@ test('windshear on Kid: the warning, the plane climbs out of the microburst, gra
   expect(done.gearDown).toBe(true); // Kid's assists leave the gear and flaps alone in the shear
   await expect(page.locator('#txtResultTitle')).toHaveText('Windshear escape');
   await expect(page.locator('#resultsFactors li').nth(0)).toContainText('the plane did it');
-  expect(['S', 'A', 'B', 'C']).toContain((await page.locator('#txtGrade').textContent()).trim());
+  await expect(page.locator('#txtGradeReason')).toBeHidden(); // nothing to blame the kid for: the plane flew it
+  expect(['S', 'A', 'B']).toContain((await page.locator('#txtGrade').textContent()).trim());
   expect(await lowContrastLabels(page, '#resultsCard')).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('windshear-1280.png') });
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_best')));
