@@ -146,7 +146,7 @@ src/coach.js        landing coach on every final (0073): gear, flaps, speed, cen
 src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes the pilot's
                     input before stepFlightModel (physics untouched): bank/pitch/AoA
                     envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,
-                    no-dive floor, auto-flare; kidFinalGuide is Kid's hands-off final (the
+                    no-dive floor, auto-flare (sink profile per airframe: spec.kidFlarePerS, the 737's quicker, 0101); kidFinalGuide is Kid's hands-off final (the
                     3° path, past the threshold only low over the first third, ≤ 2°, 0098;
                     flight cards in tests/flight/kidFinal.test.js); main.js adds Kid's autothrottle, gear/flaps
                     and soft landing. On the runway Kid and Learner hold its centreline with the

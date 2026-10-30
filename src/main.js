@@ -2194,6 +2194,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.onGround = sim.onGround;
   _assistIn.wheelHeightM = wheelHeightM;
   _assistIn.airspeedMps = sim.tasKts * KTS_TO_MPS;
+  _assistIn.flarePerS = spec.kidFlarePerS;
+  _assistIn.vsMps = sim.vel.y;
   // A touchdown waiting to settle (0091) is a landing, not a touch-and-go: Kid holds the flare at
   // idle through a bounce instead of climbing away from it, so the bounce is graded.
   const departing = cfg.autoThrottle && updateDeparture(assistState, sim.onGround && !pendingLanding, sim.aglFt);
