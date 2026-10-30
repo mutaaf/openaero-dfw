@@ -90,6 +90,19 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    is one per page, never persisted. Edge (`src/worker/`): `aviationweather.gov` only.
    Adding any other host needs the operator: open a `proposal/` PR.
    No analytics, ads, trackers, fonts or scripts from CDNs. Everything else is bundled.
+   **One exception, the operator's decision of 2026-10-30 ("split by audience"):** the same-origin
+   Marquee loader `../ads/v1/ads.js` (mutaafaziz.com/ads, a separate Worker and repo; app id
+   `openaero`, audience kids) is allowed, wired by `src/ads.js` (a lazy chunk). Its slots are all
+   menu context (`title` banner on the start screen, `postflight` interstitial on FLY AGAIN,
+   `livery` rewarded): Google ads appear only there, tagged child-directed by Marquee, which may
+   then load Google's ad script (`pagead2.googlesyndication.com` and its frames) from a menu, never
+   at boot and never in flight. **No ad, ad request or ad call in flight** (start screen or results
+   card on screen, the sim paused for any break, audio with it). The rewarded ad is opt-in only (a
+   button that says it is an ad, hidden when the slot has no fill). Kid shows no ads at all, nor
+   does a clean view the player chose (stored). The post-flight break skips a visit's first FLY
+   AGAIN and is capped (`BREAK_GAP_MS`). A missing or blocked loader is a no-op; nothing waits on an
+   ad. e2e serves an empty loader (tests/e2e/fixtures.js); tests/e2e/ads.spec.js proves no call
+   fires in flight. Any other ad network, tracker or analytics still needs a `proposal/` PR.
 4. **Frame budget.** The render loop must hold 60fps on a mid-range laptop and stay
    playable on a recent phone. No per-frame allocations in hot paths (reuse vectors and
    arrays), no layout thrash from the HUD.

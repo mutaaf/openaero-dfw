@@ -15,6 +15,10 @@ import { test as base, expect } from '@playwright/test';
 export const test = base.extend({
   simWarp: [1, { option: true }],
   context: async ({ context, simWarp }, use) => {
+    // Marquee's loader is same-origin in production (../ads/v1/ads.js, mutaafaziz.com/ads);
+    // vite preview has no /ads/, so serve an empty loader: no 404 in the console, no ads (the
+    // no-op path). tests/e2e/ads.spec.js routes its own recording loader over this.
+    await context.route('**/ads/**', (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
     await context.addInitScript(() => {
       if (window.speechSynthesis) {
         window.speechSynthesis.speak = () => {};

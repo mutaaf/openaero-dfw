@@ -463,6 +463,9 @@
   </div>
   <div id="toast" role="status" aria-live="polite" class="hidden pointer-events-none absolute left-1/2 -translate-x-1/2 w-max max-w-[min(90vw,28rem)] text-center z-40 px-4 py-2 rounded-xl hud-glass text-xs font-mono text-sky-200" style="top: 45%"></div>
 
+  <!-- Marquee, same-origin (mutaafaziz.com/ads, operator decision 2026-10-30): menu slots only;
+       src/ads.js shows them on the start screen and the results card, never in flight -->
+  <script async src="../ads/v1/ads.js" data-app="openaero" data-slots="title:banner:menu,postflight:interstitial:menu,livery:rewarded:menu"></script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
