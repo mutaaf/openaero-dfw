@@ -43,3 +43,8 @@ Cessna keeps autopilot.js's 0.2). Headless the 737 now lands 220-350 m in at 60-
 25 kt headwind and in a 10 kt crosswind; in the game the default final went from 576 m / 328 fpm to
 273 m / 219 fpm (grade A). An attitude flare (pitch up N° at a height) and a sink-rate feedback loop
 were tried first and were worse: the jet's path lags its nose, so both ballooned or sank.
+Panel: inside the flare band Kid's hands-off guide no longer lowers the nose while the airplane
+climbs (a pull, balloon and let-go dived into the runway at 622-710 fpm headless); the Cessna's
+cards are unchanged. Known: a 10 kt tailwind still lands ~745 m in (gentle, inside the TDZ, as
+before); the F-16 under Kid still lands ~610 m / ~350 fpm and the autoland keeps the 0.2 profile
+(both untouched here).
