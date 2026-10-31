@@ -278,3 +278,17 @@ test.describe(() => {
     expect((await snap()).paused).toBe(false);
   });
 });
+
+// 0128: the low-speed band on a touch phone (Pilot): red just under the stall speed in the tape's column.
+test('phone: the speed tape shows the red low-speed band under the 737\'s flaps-30 stall speed', async ({ page }) => {
+  await startFlight(page);
+  await expect.poll(() => page.evaluate(() => window.openaeroDebug?.().stallKts ?? null)).not.toBeNull();
+  const [r, g, b] = await page.evaluate(() => {
+    const c = document.getElementById('hudCanvas'), s = window.openaeroDebug();
+    const x = Math.round(c.width / 2 - 131 - 6), y = Math.round(c.height / 2 + (s.iasKts - (s.stallKts - 3)) * 2);
+    return [...c.getContext('2d').getImageData(x, y, 1, 1).data];
+  });
+  expect(r).toBeGreaterThan(180);
+  expect(g).toBeLessThan(110);
+  expect(b).toBeLessThan(110);
+});

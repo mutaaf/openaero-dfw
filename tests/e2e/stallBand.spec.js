@@ -13,7 +13,7 @@ async function fly(page, assist) {
   await expect(page.locator('#onboardingModal')).toBeHidden();
 }
 
-// The HUD canvas pixel in the band's column (x - 8 … x - 4 of the speed tape at cx - 131) at the
+// The HUD canvas pixel in the band's column (x - 7 … x - 4 of the speed tape at cx - 131) at the
 // speed `mul` × (the stall speed, or the IAS with `of: 'ias'`) + `add` (2 px per kt from the box),
 // read in the same evaluate as the IAS.
 const bandPixel = (page, { of = 'stall', mul = 1, add = 0 }) => page.evaluate(([o, m, a]) => {
@@ -32,12 +32,13 @@ for (const size of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) 
     await page.setViewportSize(size);
     const errors = collectErrors(page);
     await fly(page, 'learner');
+    await expect.poll(async () => (await snap(page)).stallKts).not.toBeNull();
     const s = await snap(page);
     expect(s.mission).toBe('kdfw_35c_final');
     // The model's own 1 g stall at flaps 30 (tests/flight/b738.test.js flies it): ~122 kt.
     expect(s.stallKts).toBeGreaterThan(118);
     expect(s.stallKts).toBeLessThan(126);
-    expect(s.iasKts - s.stallKts).toBeLessThan(45); // on the tape's 45 kt under the box
+    expect(s.iasKts - s.stallKts).toBeLessThan(42); // 3 kt under Vs is still on the tape's 45 kt
     // Red 3 kt under the stall speed, amber just over it, the tape's own colour well above 1.1 Vs.
     expect(isRed(await bandPixel(page, { add: -3 }))).toBe(true);
     const amber = await bandPixel(page, { mul: 1.05 });

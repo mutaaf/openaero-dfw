@@ -2052,15 +2052,21 @@ function drawSpeedLimit(x, y) {
 // The low-speed band (0128, hudLayout.js stallBand): red from the tape's bottom up to the 1 g stall
 // speed for the flaps, amber up to 1.1 Vs, in the speed limit's column (the two never meet).
 const _stallBand = { redTop: 0, redBot: 0, red: false, amberTop: 0, amberBot: 0, amber: false };
+// A dark edge either side keeps it readable over bright ground and to red-green colour blindness
+// (the hue alone was ~1.4:1 against green terrain).
 function drawStallBand(x, y) {
   const b = stallBand(y, sim.stallKts, sim.iasKts, _stallBand);
+  if (!b.red && !b.amber) return;
+  const top = b.amber ? b.amberTop : b.redTop;
+  hudCtx.fillStyle = '#020617';
+  hudCtx.fillRect(x - 8, top, 5, b.redBot - top);
   if (b.red) {
-    hudCtx.fillStyle = 'rgba(239, 68, 68, 0.95)';
-    hudCtx.fillRect(x - 8, b.redTop, 4, b.redBot - b.redTop);
+    hudCtx.fillStyle = '#ef4444';
+    hudCtx.fillRect(x - 7, b.redTop, 3, b.redBot - b.redTop);
   }
   if (b.amber) {
-    hudCtx.fillStyle = 'rgba(245, 158, 11, 0.95)';
-    hudCtx.fillRect(x - 8, b.amberTop, 4, b.amberBot - b.amberTop);
+    hudCtx.fillStyle = '#f59e0b';
+    hudCtx.fillRect(x - 7, b.amberTop, 3, b.amberBot - b.amberTop);
   }
 }
 
