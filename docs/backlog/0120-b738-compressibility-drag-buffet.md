@@ -1,12 +1,12 @@
 ---
 id: 0120
 title: 737 compressibility drag and buffet: no level flight above the FL410 limit at 65 t
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-30
-pr:
+pr: 142
 ---
 
 ## Why
@@ -29,12 +29,22 @@ every parameter (sweep, thickness, airfoil technology factor) from a cited sourc
 must not be fitted to make the card pass.
 
 ## Acceptance criteria
-- [ ] Every new aero parameter cited (Boeing ACAP, a published 737 NG wing study, or similar)
-- [ ] The 0120 card passes and moves from `it.fails` to `it`
-- [ ] The FL350 cruise cards and CFM's FL350 thrust card still pass; low-speed cards unchanged
+- [x] Every new aero parameter cited (Boeing ACAP, a published 737 NG wing study, or similar)
+- [ ] The 0120 card passes and moves from `it.fails` to `it` — not met with the cited parameters
+  alone: +172 → +67 fpm at FL420 (level to ~FL426, was ~FL438); the card is now KNOWN GAP (0129)
+  (buffet boundary, stratosphere thrust lapse), not tuned past its sources
+- [x] The FL350 cruise cards and CFM's FL350 thrust card still pass; low-speed cards unchanged
 
 ## Test plan
 `tests/flight/b738.test.js`; a unit test in `tests/unit/` for the drag rise against Mach and CL.
 
 ## Out of scope
 The F-16 and C172, a shaker or buffet sound, Mach tuck.
+
+## Shipped (2026-10-31)
+`src/aero.js` waveDragCd: Mason's Korn equation (Configuration Aerodynamics §7.5.2) with Lock's
+fourth-power rise; `b738.transonic` { κA 0.95 (Mason, supercritical), t/c 0.1289 and sweep 25°
+(Jenkinson's Aircraft Data File) }; past MDD the rise continues at MDD's 0.1 slope (bounded).
+Consistency check (it informed the choice of κA between Mason's two values): 20 counts at ~M 0.822
+at the FL350 cruise CL vs MMO 0.82 (Boeing puts MDD, 20 counts, at MMO: Scholz & Ciornei,
+DGLR-2005-122). Remainder: 0129.

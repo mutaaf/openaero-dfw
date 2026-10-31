@@ -1,12 +1,12 @@
 ---
 id: 0119
 title: B738 card: idle descent rate and speed schedule match EUROCONTROL's published descent
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-30
-pr:
+pr: 140
 ---
 
 ## Why
@@ -25,9 +25,9 @@ speed schedule holds without exceeding VMO/MMO (340 KCAS / M 0.82, EASA TCDS IM.
 A mismatch becomes an `it.fails` card with its own ticket.
 
 ## Acceptance criteria
-- [ ] A card quotes the APD descent figures with the URL and the date read
-- [ ] Idle descent at the schedule is within ±20% of the published rate, or a known-gap card exists
-- [ ] No existing 737 card regresses
+- [x] A card quotes the APD descent figures with the URL and the date read
+- [x] Idle descent at the schedule is within ±20% of the published rate, or a known-gap card exists
+- [x] No existing 737 card regresses
 
 ## Test plan
 Flight cards in `tests/flight/b738.test.js` beside the 0113 cruise cards, using the same harness
@@ -35,3 +35,6 @@ helpers; no src change unless trivially required.
 
 ## Out of scope
 Speedbrakes, VNAV logic, any change to the thrust lapse (that is 0116).
+
+## Shipped (2026-10-31)
+The Validator's #140 added the cards (Mach 0.78 floor passes; 280 kt is KNOWN GAP 0126); marked shipped by the Builder in #142.

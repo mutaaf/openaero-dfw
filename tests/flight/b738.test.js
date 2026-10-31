@@ -358,7 +358,7 @@ describe('Boeing 737-800 go-around (14 CFR 25.119 and 33.73)', () => {
 //    limits (III.10) say only "See Airplane Flight Manual", so no card reads an MMO.
 //    (easa.europa.eu/en/downloads/7297/en; the FAA TCDS A16WE copy the ticket named refused
 //    the sandbox.)
-// The model has no Mach drag rise or buffet boundary: below Mach 0.79 neither should matter much.
+// The 737 has a Mach drag rise (0120) but no buffet boundary.
 const CRUISE_MACH = 0.79;
 const easAtMach = (ft, mach) => { const air = airAt(ft / M_TO_FT); return mach * air.speedOfSoundMps * Math.sqrt(air.sigma); };
 
@@ -377,15 +377,15 @@ function cruise(ft, mach, throttle) {
 }
 
 describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120; 0113)', () => {
-  // Measured: drag 39.2 kN against 52.9 kN of full thrust (74%; 70.1 kN, 56%, before 0116's
-  // CFM fit) at FL350, Mach 0.79 (455 KTAS, 253 KEAS), L/D 16.3.
+  // Measured: drag 39.9 kN (0.7 of it the drag rise, 0120) against 52.9 kN of full thrust (75%; 70.1 kN, 56%, before 0116's
+  // CFM fit) at FL350, Mach 0.79 (455 KTAS, 253 KEAS), L/D 16.0 (16.3 without it).
   it('at FL350, Mach 0.79 (EUROCONTROL APD cruise), 65 t, level flight needs less thrust than the engines have', () => {
     const air = airAt(35000 / M_TO_FT);
     const eas = easAtMach(35000, CRUISE_MACH);
     const tas = CRUISE_MACH * air.speedOfSoundMps;
     const q = 0.5 * 1.225 * eas * eas;
     const cl = liftCoefficient(b738, trimAoaDeg(b738, eas, 0) * DEG_TO_RAD, 0);
-    const drag = dragCoefficient(b738, cl, false, 0, 1) * q * b738.wingAreaM2;
+    const drag = dragCoefficient(b738, cl, false, 0, 1, CRUISE_MACH) * q * b738.wingAreaM2;
     const full = engineThrust(b738, 1, tas, air, CRUISE_MACH, q);
     expect(drag / full).toBeLessThan(1);
     const thr = trimThrottle(b738, eas, 0, 0, false, air);
@@ -402,6 +402,27 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
     expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
   });
 
+  // Compressibility drag rise (0120, aero.js waveDragCd: Mason's Korn equation + Lock's fourth power,
+  // with the 737's 25° sweep and 12.89% t/c from Jenkinson's data file, κA 0.95). Boeing and Airbus
+  // define MDD as the Mach where wave drag reaches 20 counts (ΔCD 0.002) and set it at MMO (Scholz &
+  // Ciornei, "Mach number, relative thickness, sweep and lift coefficient of the wing", DGLR-2005-122,
+  // HAW Hamburg); the 737-800's MMO is 0.82. Measured at FL350, 65 t: 5.5 counts at the Mach 0.79
+  // cruise, 18.2 at Mach 0.82 (20 counts at ~0.822; Mason's slope-0.1 MDD is ~27 counts, ~0.008 later).
+  // κA was chosen between Mason's two values with this agreement in view, so it is a consistency
+  // check, not an independent one; no parameter is tuned to it.
+  it('at FL350, 65 t, wave drag is ~20 counts at MMO 0.82 (Boeing\'s MDD) and under 10 at the Mach 0.79 cruise', () => {
+    const counts = (mach) => {
+      const eas = easAtMach(35000, mach);
+      const cl = liftCoefficient(b738, trimAoaDeg(b738, eas, 0) * DEG_TO_RAD, 0);
+      return (dragCoefficient(b738, cl, false, 0, 1, mach) - dragCoefficient(b738, cl, false, 0, 1)) * 1e4;
+    };
+    expect(counts(0.82)).toBeGreaterThanOrEqual(15);
+    expect(counts(0.82)).toBeLessThanOrEqual(25);
+    expect(counts(0.79)).toBeGreaterThan(0);
+    expect(counts(0.79)).toBeLessThan(10);
+    expect(counts(0.65)).toBe(0); // below Mcrit at cruise lift: no drag rise
+  });
+
   // Snecma CFM56-7B fact sheet (Direction de la Communication, June 2006), "Poussée max. en
   // montée, 35 000 ft – Mach 0,8 – ISA, moteur avionné": 26.50 kN for every rating, -7B18 to
   // -7B27. Full throttle in the sim is that max climb thrust up there (0116; σ^0.7 gave 35 kN).
@@ -416,11 +437,12 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
   // the model to run out of performance near the cert limit: no level flight on full thrust
   // 1,000 ft above it. A light 737 may really be cert-limited there; the stronger evidence
   // is how far above it the model holds level. Tighten to a cited maximum-altitude-vs-weight
-  // figure (FCOM/AFM) when one is found. KNOWN GAP (0120): with the thrust now on CFM's figure
-  // (0116, the card below) the model climbs there at ~170 fpm and holds level to ~FL438 (was
-  // ~1,200 fpm and ~FL520). What is left is the wing: drag stays ~36 kN from FL410 to FL440 as
-  // CL climbs 0.66 → 0.76 at Mach 0.79, with no compressibility drag rise or buffet boundary.
-  it.fails('KNOWN GAP (0120): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
+  // figure (FCOM/AFM) when one is found. KNOWN GAP (0129): with CFM's thrust (0116) and the Korn
+  // drag rise (0120, the card below: +19 counts here) the model still climbs at ~+67 fpm (was +172
+  // before 0120, ~+1,200 before 0116) and holds Mach 0.79 level to ~FL426 (was ~FL438; ~FL520).
+  // At MMO 0.82 it only just holds FL410 on full thrust (+18 fpm; it fails by ~FL415). What is left: no buffet boundary, and one σ exponent for
+  // the thrust above FL350 (Mattingly lapses ~10% faster by FL420), both uncited so far.
+  it.fails('KNOWN GAP (0129): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
     const { fpm, mach } = cruise(42000, CRUISE_MACH, 1);
     expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
     expect(fpm).toBeLessThanOrEqual(0);

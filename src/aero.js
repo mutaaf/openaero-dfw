@@ -68,11 +68,32 @@ export function inducedDragK(spec) {
 // while the gear is in transit (an estimate: ~a third of the gear's drag).
 export const GEAR_CD = 0.018;
 export const GEAR_DOORS_CD = 0.006;
-export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect) {
+// `mach` adds the airframe's compressibility drag rise (waveDragCd; 0 by default and below Mcrit).
+export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect, mach = 0) {
   const flapCd = spec.flapCd ? notchValue(spec.flapCd, flapsIndex, 0) : flapsIndex * 0.012;
   const g = spec.fixedGear ? 1 : Number(gearDown);
   const gearCd = GEAR_CD * g + (g > 0 && g < 1 ? GEAR_DOORS_CD : 0);
-  return spec.cd0 + gearCd + flapCd + inducedDragK(spec) * cl * cl * groundEffect;
+  return spec.cd0 + gearCd + flapCd + inducedDragK(spec) * cl * cl * groundEffect + waveDragCd(spec, cl, mach);
+}
+
+// Compressibility drag rise (0120), for an airframe with spec.transonic { kappaA, tOverC,
+// sweepDeg }: W.H. Mason, Configuration Aerodynamics, Sect. 7.5.2 (Virginia Tech), the Korn
+// equation extended to sweep by simple sweep theory, MDD = κA/cosΛ − (t/c)/cos²Λ − CL/(10 cos³Λ),
+// and Lock's fourth-power drag rise from Mcrit = MDD − (0.1/80)^(1/3) (so dCD/dM = 0.1 at MDD):
+// ΔCD = 20 (M − Mcrit)^4. Lift either way loads the wing (|CL|). Lock's shape is fitted up to
+// MDD; past it the fourth power runs away (~700 counts at Mach 1), so beyond MDD the rise goes on
+// at MDD's slope, 0.1 per Mach (an assumption: ~220 counts at Mach 1, a transport's order).
+const LOCK_DM = Math.cbrt(0.1 / 80);
+const LOCK_RISE_AT_MDD = 20 * LOCK_DM ** 4; // 26.9 counts
+export function dragDivergenceMach(spec, cl) {
+  const t = spec.transonic, c = Math.cos(t.sweepDeg * DEG_TO_RAD);
+  return t.kappaA / c - t.tOverC / (c * c) - Math.abs(cl) / (10 * c * c * c);
+}
+export function waveDragCd(spec, cl, mach) {
+  if (!spec.transonic || !(mach > 0.5)) return 0;
+  const dm = mach - (dragDivergenceMach(spec, cl) - LOCK_DM);
+  if (dm <= 0) return 0;
+  return dm < LOCK_DM ? 20 * dm * dm * dm * dm : LOCK_RISE_AT_MDD + 0.1 * (dm - LOCK_DM);
 }
 
 // Heading error in degrees, wrapped to [-180, 180].

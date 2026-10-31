@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient,
+  clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient, waveDragCd, dragDivergenceMach,
   inducedDragK, headingError, headingFromYaw, papiWhiteLights, gpwsCalloutIndex, gpwsRearm,
   GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, takeoffCalloutIndex, TAKEOFF_CALLOUTS,
   TAKEOFF_CALLOUT_HUD_PLAIN,
@@ -57,6 +57,44 @@ describe('groundEffectFactor', () => {
   });
   it('treats heights below 1 m as 1 m', () => {
     expect(groundEffectFactor(0, 10)).toBe(groundEffectFactor(1, 10));
+  });
+});
+
+// Ticket 0120: Mason's Korn-equation drag rise (Configuration Aerodynamics, Sect. 7.5.2, eq. 7-8),
+// the expected numbers worked by hand from the formula, not read back from the code:
+//   MDD = κA/cosΛ − (t/c)/cos²Λ − CL/(10 cos³Λ), Mcrit = MDD − (0.1/80)^(1/3), ΔCD = 20 (M − Mcrit)^4
+// 737-800: κA 0.95, t/c 0.1289, Λ 25°: κA/cosΛ 1.04821, (t/c)/cos²Λ 0.15693, 1/(10 cos³Λ) 0.134330.
+describe('waveDragCd (0120: Korn + Lock drag rise)', () => {
+  it('drag divergence Mach falls with lift: 0.8241 at CL 0.5, 0.7972 at CL 0.7', () => {
+    expect(dragDivergenceMach(b738, 0.5)).toBeCloseTo(0.82412, 4);
+    expect(dragDivergenceMach(b738, 0.7)).toBeCloseTo(0.79726, 4);
+  });
+  it('is zero below the critical Mach (MDD − 0.1077) and 20 (M − Mcrit)^4 above it', () => {
+    expect(waveDragCd(b738, 0.5, 0.6)).toBe(0);
+    expect(waveDragCd(b738, 0.5, 0.716)).toBe(0); // Mcrit 0.716394
+    expect(waveDragCd(b738, 0.5, 0.79)).toBeCloseTo(20 * (0.79 - 0.716394) ** 4, 6); // ≈ 5.9 counts
+    expect(waveDragCd(b738, 0.7, 0.79)).toBeCloseTo(20 * (0.79 - 0.689528) ** 4, 6); // ≈ 20 counts
+  });
+  it('is 0.1 per Mach of slope at MDD (Mason\'s definition of the divergence Mach)', () => {
+    const mdd = dragDivergenceMach(b738, 0.5), h = 1e-5;
+    expect((waveDragCd(b738, 0.5, mdd + h) - waveDragCd(b738, 0.5, mdd - h)) / (2 * h)).toBeCloseTo(0.1, 4);
+  });
+  it('past MDD it goes on at MDD\'s 0.1 slope instead of the runaway fourth power (bounded at Mach 1)', () => {
+    const mdd = dragDivergenceMach(b738, 0.2); // 0.86455
+    const atMdd = 20 * (0.1 / 80) ** (4 / 3); // 0.002692
+    expect(waveDragCd(b738, 0.2, 0.95)).toBeCloseTo(atMdd + 0.1 * (0.95 - mdd), 6); // ~112 counts (Lock alone: 279)
+    expect(waveDragCd(b738, 0.2, 1.1)).toBeCloseTo(atMdd + 0.1 * (1.1 - mdd), 6); // ~262 counts (Lock alone: ~4,000)
+    expect(waveDragCd(b738, 0.2, 1.0)).toBeLessThan(0.03);
+  });
+  it('a pushover loads the wing too: a negative CL rises like a positive one', () => {
+    expect(waveDragCd(b738, -0.3, 0.8)).toBeCloseTo(waveDragCd(b738, 0.3, 0.8), 10);
+  });
+  it('only an airframe with transonic data has it (C172, F-16 unchanged), and dragCoefficient adds it', () => {
+    expect(waveDragCd(AIRCRAFT_DATABASE.c172, 0.5, 0.9)).toBe(0);
+    expect(waveDragCd(AIRCRAFT_DATABASE.f16, 0.5, 0.9)).toBe(0);
+    expect(dragCoefficient(b738, 0.6, false, 0, 1, 0.8) - dragCoefficient(b738, 0.6, false, 0, 1))
+      .toBeCloseTo(waveDragCd(b738, 0.6, 0.8), 10);
+    expect(dragCoefficient(b738, 0.6, false, 0, 1, 0.3)).toBe(dragCoefficient(b738, 0.6, false, 0, 1));
   });
 });
 
