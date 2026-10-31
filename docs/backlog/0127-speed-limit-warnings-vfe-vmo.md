@@ -1,12 +1,12 @@
 ---
 id: 0127
 title: Overspeed warning and a flap-limit mark on the speed tape (VFE, VMO / VNE)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-31
-pr:
+pr: 143
 ---
 
 ## Why

@@ -49,6 +49,22 @@ export const vrefFor = (spec, flapsIndex) => spec.vrefKtsByFlap?.[flapsIndex] ??
 
 export const stallWarningKts = (spec, flapsIndex) => stallSpeedKts(spec, flapsIndex) + 5;
 
+// The speed limit (KIAS) for where the flaps are (0127): VMO / VNE clean, else the placard of the
+// first notch the flaps have reached or passed (a flap between 10 and 30 is past 10's placard, as
+// the C172's "10°-30°: 85" reads). null for an airframe without the data (the F-16).
+export function speedLimitKts(spec, flapDeg) {
+  const vmo = spec.vneKts ?? null, vfe = spec.vfeKtsByFlap, d = spec.flapDetentsDeg;
+  if (vmo === null || !vfe || !d) return vmo;
+  for (let i = 0; i < d.length; i++) if (flapDeg <= d[i] + 0.5) return i === 0 ? vmo : Math.min(vmo, vfe[i]);
+  return Math.min(vmo, vfe[d.length - 1]);
+}
+
+// The overspeed warning's latch: on above the limit, off only OVERSPEED_REARM_KTS below it, so a
+// speed riding the line is called once (one caption, one spoken call), not every gust.
+export const OVERSPEED_REARM_KTS = 3;
+export const overspeedStep = (warned, iasKts, limitKts) =>
+  limitKts !== null && iasKts > (warned ? limitKts - OVERSPEED_REARM_KTS : limitKts);
+
 // Ground-effect factor on drag (McCormick-style, 1 = out of ground effect).
 export function groundEffectFactor(heightM, wingSpanM) {
   const h = Math.max(1.0, heightM);

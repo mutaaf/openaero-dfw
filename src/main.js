@@ -35,7 +35,7 @@ import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
-  takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN,
+  takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN, speedLimitKts, overspeedStep,
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls, slewRudder,
@@ -52,7 +52,7 @@ import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1,
+  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
@@ -86,6 +86,7 @@ const sim = {
   // Systems (systems.js): the levers above are commands; gearPos/flapDeg/brakePress/
   // reverserPos are where things are. autobrake 0 OFF, 1–3, 4 MAX; reverseCmd the reverse levers.
   autobrake: 0, reverseCmd: false,
+  speedLimitKts: null, overspeed: false, // the flaps' / VMO limit and its warning latch (0127)
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
   // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
   mslOffsetM: REF_ELEV_M, isaDevC: 0, altimInHg: 29.92, sigma: 1,
@@ -1704,6 +1705,12 @@ function integrateSubStep(dt) {
   // Spoken once per descent below 500 ft (GPWS mode 4A).
   if (gearWarning && !sim.gearWarned) { sim.gearWarned = true; audio.callout('too low, gear'); }
   else if (!gearWarning && sim.aglFt > 600) sim.gearWarned = false;
+  // Overspeed (0127): past VMO / VNE or the flaps' placard, one "overspeed" (caption + voice) and
+  // the IAS box flashes amber; a warning only, nothing breaks. Kid has no limit to keep.
+  sim.speedLimitKts = kid ? null : speedLimitKts(spec, sim.flapDeg ?? 0);
+  const over = overspeedStep(sim.overspeed, sim.iasKts, sim.speedLimitKts);
+  if (over && !sim.overspeed) audio.callout('overspeed');
+  sim.overspeed = over;
 }
 
 function updatePapi() {
@@ -1814,7 +1821,7 @@ function updateCamera() {
 
 // One HUD tape: a vertical scale whose inner edge is at x (side −1 = scale to the left of
 // it, +1 = to the right), centred on y, scrolling so `value` sits at the readout.
-function drawTape(x, y, side, value, pxPerUnit, minor, major) {
+function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false) {
   const half = 90;
   hudCtx.save();
   hudCtx.beginPath();
@@ -1843,12 +1850,14 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major) {
   // The readout box points at the scale.
   const bw = side < 0 ? 44 : 56;
   const bx = side < 0 ? x - 8 - bw : x + 8;
+  // An overspeed (0127) turns the box amber, flashing twice a second (steady for reduced motion).
+  const amber = warn && (reducedMotion || (performance.now() / 250 | 0) % 2 === 0);
   hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';
-  hudCtx.strokeStyle = '#38bdf8';
+  hudCtx.strokeStyle = amber ? '#f59e0b' : '#38bdf8';
   hudCtx.beginPath();
   hudCtx.rect(bx, y - 11, bw, 22);
   hudCtx.fill(); hudCtx.stroke();
-  hudCtx.fillStyle = '#f0f9ff';
+  hudCtx.fillStyle = amber ? '#fbbf24' : '#f0f9ff';
   hudCtx.font = 'bold 13px monospace';
   hudCtx.textAlign = 'center';
   hudCtx.fillText(`${Math.round(value)}`, bx + bw / 2, y + 4.5);
@@ -1940,8 +1949,9 @@ function renderHud() {
 
   // Speed and altitude tapes: see-through scales that scroll past a boxed readout, so
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
-  drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20);
+  drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
   drawTape(cx + 130, cy, 1, sim.mslFt, 0.2, 100, 500);
+  if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
   const showTrim = trimControl();
   if (showTrim !== trimShown) { // the rocker follows (no layout work on other frames)
@@ -2020,6 +2030,17 @@ function drawSpeedBug(x, y) {
   hudCtx.textAlign = 'right';
   hudCtx.fillText(`SPD ${Math.round(target)}`, x, y + 106);
   hudCtx.textAlign = 'left';
+}
+
+// The speed limit for the flaps (0127, aero.js speedLimitKts): an amber tick at it and an amber
+// strip from it up the tape, inside the target band's strip; nothing when it is above the tape.
+const _limitBand = { y: 0, tick: false, top: 0, bot: 0, show: false };
+function drawSpeedLimit(x, y) {
+  const b = speedLimitBand(y, sim.speedLimitKts, sim.iasKts, _limitBand);
+  if (!b.show) return;
+  hudCtx.fillStyle = 'rgba(245, 158, 11, 0.85)';
+  hudCtx.fillRect(x - 7, b.top, 3, b.bot - b.top);
+  if (b.tick) hudCtx.fillRect(x - 16, b.y - 1, 16, 2);
 }
 
 // Pilot's trim (0094) works where the trim is the player's: not under an assist or a
@@ -2438,6 +2459,7 @@ function loadScenario(key, final = null) {
   // gear and flaps start where the spawn put the levers.
   sim.autobrake = mission.kind === 'final' && systemsOf(sim.spec).autobrake ? 2 : 0;
   sim.gearWarned = false;
+  sim.overspeed = false;
   seedSystems(sim.spec, sim);
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
   // Airborne spawns fly their speed through the air: the wind adds to the ground velocity
@@ -3214,8 +3236,9 @@ function updateDebugOverlay(dt) {
 
 if (debugOverlay) {
   // ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
-  window.openaeroDebugFinal = (airport, rwy, distNm) => runwayEnd(airport, rwy)
-    && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm });
+  // fastKts (0127): that much over the final's speed, flaps and all (an overspeed on the final).
+  window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0) => runwayEnd(airport, rwy)
+    && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts });
   // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce.
   window.openaeroDebugHop = (mps) => { sim.vel.y = mps; };
   // ?debug (tests, 0117): put words on the caption line as audio.js would.
@@ -3244,6 +3267,8 @@ window.openaeroDebug = () => {
     trimAlphaDeg: sim.trimAlphaDeg,
     trimKts: sim.trimAlphaDeg == null ? null : trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex),
     trimShown,
+    speedLimitKts: sim.speedLimitKts ?? null,
+    overspeed: !!sim.overspeed,
     inputSource: sim.inputSource,
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
