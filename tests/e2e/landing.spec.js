@@ -27,8 +27,8 @@ test('a landing is graded and the personal best survives a reload', async ({ pag
   const strip = page.locator('#touchdownStrip');
   await expect(strip).toBeVisible();
   const along = Math.round(landed.pastThresholdM), cross = Math.round(Math.abs(landed.crossM));
-  await expect(strip).toHaveAttribute('aria-label', new RegExp(`^Touched down ${along} m past the threshold, `
-    + (cross < 1 ? 'on the centreline' : `${cross} m ${landed.crossM > 0 ? 'right' : 'left'} of centre`)));
+  await expect(strip).toHaveAttribute('aria-label', new RegExp(`^Touched down ${along} metres past the threshold, `
+    + (cross < 1 ? 'on the centreline' : `${cross} metres ${landed.crossM > 0 ? 'right' : 'left'} of centre`)));
   const px = await strip.evaluate((c) => ({ w: c.clientWidth, h: c.clientHeight, sx: c.width / c.clientWidth }));
   const L = stripLayout({ pastThresholdM: landed.pastThresholdM, crossM: landed.crossM, lengthM: 4084, widthM: 45.7 }, px.w, px.h);
   // The dot's colour is under its centre (not the runway's slate grey).

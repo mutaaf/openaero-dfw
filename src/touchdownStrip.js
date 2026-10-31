@@ -9,13 +9,13 @@ export const AIM_POINT_M = 1000 * FT;
 const AIM_LEN_M = 150 * FT;
 export const tdzLengthM = (lengthM) => Math.min(3000 * FT, lengthM / 3);
 
-// Landing left to right: the threshold near the left edge (a little ground before it for an
-// undershoot), the far end at the right. Across is stretched (a 45 m runway is a few pixels at
+// Landing left to right: the threshold near the left edge and the far end near the right, with
+// a little ground beyond each (an undershoot, an overrun). Across is stretched (a 45 m runway is a few pixels at
 // the length's scale): the runway is half the strip's height, so left of centre is up.
 export function stripLayout(td, w, h) {
   const r = 3.5;
   const thrX = w * 0.08;
-  const endX = Math.max(thrX + 1, w - 2);
+  const endX = Math.max(thrX + 1, w * 0.94);
   const pxPerM = (endX - thrX) / Math.max(1, td.lengthM);
   const cy = h / 2;
   const pyPerM = (h * 0.5) / Math.max(1, td.widthM);
@@ -34,10 +34,10 @@ export function stripLayout(td, w, h) {
 
 export function touchdownLabel(td) {
   const along = Math.round(td.pastThresholdM);
-  const parts = [along < 0 ? `${-along} m short of the threshold` : `${along} m past the threshold`];
+  const parts = [along < 0 ? `${-along} metres short of the threshold` : `${along} metres past the threshold`];
   if (td.pastThresholdM > td.lengthM) parts.push("past the runway's end");
   const cross = Math.round(Math.abs(td.crossM));
-  parts.push(cross < 1 ? 'on the centreline' : `${cross} m ${td.crossM > 0 ? 'right' : 'left'} of centre`);
+  parts.push(cross < 1 ? 'on the centreline' : `${cross} metres ${td.crossM > 0 ? 'right' : 'left'} of centre`);
   if (Math.abs(td.crossM) > td.widthM / 2) parts.push('off the runway');
   return `Touched down ${parts.join(', ')}.`;
 }
@@ -58,10 +58,17 @@ export function drawStrip(canvas, td, grade) {
   const top = L.edgeTop, rh = L.edgeBottom - L.edgeTop;
   ctx.fillStyle = '#475569'; // the runway (slate-600)
   ctx.fillRect(L.thrX, top, L.endX - L.thrX, rh);
-  ctx.fillStyle = 'rgba(52, 211, 153, 0.3)'; // the touchdown zone (emerald)
+  ctx.fillStyle = 'rgba(52, 211, 153, 0.45)'; // the touchdown zone (emerald)
   ctx.fillRect(L.thrX, top, L.tdzX - L.thrX, rh);
   ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(L.thrX, top, 2, rh); // threshold bar
+  // Threshold piano keys, and an arrow in the ground before them: the way you were landing.
+  for (let i = 0; i < 4; i++) ctx.fillRect(L.thrX + 1, top + rh * (0.06 + i * 0.25), 4, rh * 0.13);
+  const ax = L.thrX * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(ax - 3, L.cy - 4);
+  ctx.lineTo(ax + 3, L.cy);
+  ctx.lineTo(ax - 3, L.cy + 4);
+  ctx.fill();
   // The aiming point: a solid block either side of the centreline.
   const bw = Math.max(2, L.aimLenPx), bh = rh * 0.22;
   ctx.fillRect(L.aimX, L.cy - rh * 0.36, bw, bh);
@@ -70,15 +77,20 @@ export function drawStrip(canvas, td, grade) {
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(L.thrX + 4, L.cy);
+  ctx.moveTo(L.thrX + 8, L.cy);
   ctx.lineTo(L.endX, L.cy);
   ctx.stroke();
   ctx.setLineDash([]);
+  // The dot: a dark ring in a white halo, so every grade's colour stands out on the runway and
+  // the zone. Off the picture (pinned to its edge) it is hollow: past here, not here.
   ctx.beginPath();
   ctx.arc(L.dotX, L.dotY, L.r, 0, Math.PI * 2);
-  ctx.fillStyle = DOT[grade] || DOT.B;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#f8fafc';
+  ctx.stroke();
+  ctx.fillStyle = L.clamped ? '#0f172a' : DOT[grade] || DOT.B;
   ctx.fill();
   ctx.lineWidth = 1.5;
-  ctx.strokeStyle = '#0f172a';
+  ctx.strokeStyle = L.clamped ? DOT[grade] || DOT.B : '#0f172a';
   ctx.stroke();
 }

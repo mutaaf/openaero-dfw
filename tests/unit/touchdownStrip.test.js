@@ -17,7 +17,7 @@ describe('stripLayout', () => {
   const L = stripLayout(td, W, H);
   it('threshold on the left, the far end on the right, the centreline in the middle', () => {
     expect(L.thrX).toBeGreaterThan(0);
-    expect(L.endX).toBeCloseTo(W - 2, 6);
+    expect(L.endX).toBeCloseTo(W * 0.94, 6); // ground past the end for an overrun
     expect(L.cy).toBe(H / 2);
     expect(L.endX - L.thrX).toBeCloseTo(td.lengthM * L.pxPerM, 6);
   });
@@ -54,6 +54,10 @@ describe('stripLayout', () => {
     const long = stripLayout({ ...td, pastThresholdM: 5000 }, W, H);
     expect(long.dotX).toBeLessThanOrEqual(W - long.r);
     expect(long.clamped).toBe(true);
+    // An overrun reads past the runway's end, not on it.
+    const over = stripLayout({ ...td, pastThresholdM: td.lengthM + 60 }, W, H);
+    expect(over.clamped).toBe(false);
+    expect(over.dotX - over.r).toBeGreaterThan(over.endX);
   });
   it('a zero-size canvas does not throw or make NaN', () => {
     const z = stripLayout(td, 0, 0);
@@ -63,15 +67,15 @@ describe('stripLayout', () => {
 
 describe('touchdownLabel', () => {
   it('reads the numbers for a screen reader', () => {
-    expect(touchdownLabel(td)).toBe('Touched down 640 m past the threshold, 3 m left of centre.');
-    expect(touchdownLabel({ ...td, crossM: 4.6 })).toBe('Touched down 640 m past the threshold, 5 m right of centre.');
+    expect(touchdownLabel(td)).toBe('Touched down 640 metres past the threshold, 3 metres left of centre.');
+    expect(touchdownLabel({ ...td, crossM: 4.6 })).toBe('Touched down 640 metres past the threshold, 5 metres right of centre.');
   });
   it('on the centreline, short of the runway, past its end', () => {
-    expect(touchdownLabel({ ...td, crossM: 0.3 })).toBe('Touched down 640 m past the threshold, on the centreline.');
-    expect(touchdownLabel({ ...td, pastThresholdM: -42.4 })).toBe('Touched down 42 m short of the threshold, 3 m left of centre.');
-    expect(touchdownLabel({ ...td, pastThresholdM: 4200 })).toMatch(/^Touched down 4200 m past the threshold, past the runway's end/);
+    expect(touchdownLabel({ ...td, crossM: 0.3 })).toBe('Touched down 640 metres past the threshold, on the centreline.');
+    expect(touchdownLabel({ ...td, pastThresholdM: -42.4 })).toBe('Touched down 42 metres short of the threshold, 3 metres left of centre.');
+    expect(touchdownLabel({ ...td, pastThresholdM: 4200 })).toMatch(/^Touched down 4200 metres past the threshold, past the runway's end/);
   });
   it('off the side says so', () => {
-    expect(touchdownLabel({ ...td, crossM: 30 })).toBe('Touched down 640 m past the threshold, 30 m right of centre, off the runway.');
+    expect(touchdownLabel({ ...td, crossM: 30 })).toBe('Touched down 640 metres past the threshold, 30 metres right of centre, off the runway.');
   });
 });
