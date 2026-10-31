@@ -330,7 +330,10 @@ src/aero.js         pure aero/avionics: CL with stall, CD + ground effect + the 
                     (waveDragCd, 0120: Mason's Korn + Lock, spec.transonic), PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),
-                    warnings, heading math
+                    warnings, heading math; speedLimitKts (0127): VMO/VNE clean, else the flaps'
+                    placard (spec.vfeKtsByFlapDeg, by where the flaps are, in transit too), overspeedStep's latch (re-arms
+                    3 kt below); main.js calls "overspeed" once, flashes the IAS box, and hudLayout.js
+                    speedLimitBand marks the tape (not for Kid)
 src/weather.js      METAR parsing, wind vector, gusts, runway components, fog; surfaceWindFactor
                     (0106): the METAR's 10 m wind by the log law (z0 0.03 m) at the CG's height,
                     ~70% on the runway, which main.js updateWind applies; metarWetRunway (0108): RA/DZ

@@ -21,6 +21,19 @@ export function fixed1(v) {
   return s === '-0.0' ? '0.0' : s;
 }
 
+// The speed limit on the speed tape (0127, 2 px per kt over the tape's ±90 px): `tick` when
+// the limit is on the tape's span (y), and an amber band from it up to the tape's top (top,
+// bot clamped to the span; `show` false when the limit is above it). Writes into `out`.
+export function speedLimitBand(cy, limitKts, iasKts, out) {
+  const y = cy - (limitKts - iasKts) * 2;
+  out.y = y;
+  out.tick = y >= cy + TAPE_TOP && y <= cy - TAPE_TOP;
+  out.top = cy + TAPE_TOP;
+  out.bot = Math.min(y, cy - TAPE_TOP);
+  out.show = out.bot > out.top;
+  return out;
+}
+
 // The takeoff callout's word box (0035): 26 px tall, 232 px wide (24 characters of bold
 // 15 px monospace), centred, just under the heading box. On the roll the horizon is at cy
 // and rotating moves it down, so the word stays in the sky; it fits between the tapes.
