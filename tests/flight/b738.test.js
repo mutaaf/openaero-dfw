@@ -437,12 +437,12 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
   // the model to run out of performance near the cert limit: no level flight on full thrust
   // 1,000 ft above it. A light 737 may really be cert-limited there; the stronger evidence
   // is how far above it the model holds level. Tighten to a cited maximum-altitude-vs-weight
-  // figure (FCOM/AFM) when one is found. KNOWN GAP (0127): with CFM's thrust (0116) and the Korn
+  // figure (FCOM/AFM) when one is found. KNOWN GAP (0129): with CFM's thrust (0116) and the Korn
   // drag rise (0120, the card below: +19 counts here) the model still climbs at ~+67 fpm (was +172
   // before 0120, ~+1,200 before 0116) and holds Mach 0.79 level to ~FL426 (was ~FL438; ~FL520).
   // At MMO 0.82 it only just holds FL410 on full thrust (+18 fpm; it fails by ~FL415). What is left: no buffet boundary, and one σ exponent for
   // the thrust above FL350 (Mattingly lapses ~10% faster by FL420), both uncited so far.
-  it.fails('KNOWN GAP (0127): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
+  it.fails('KNOWN GAP (0129): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
     const { fpm, mach } = cruise(42000, CRUISE_MACH, 1);
     expect(Math.abs(mach - CRUISE_MACH)).toBeLessThanOrEqual(0.01);
     expect(fpm).toBeLessThanOrEqual(0);
