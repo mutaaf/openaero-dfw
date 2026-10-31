@@ -55,6 +55,7 @@ import {
   windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
+import { radioAltitudeM } from './gear.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
 import { createCaption, plainCaption, captionWords } from './captions.js';
@@ -75,7 +76,7 @@ const sim = {
 
   // Flight Parameters
   iasKts: 140, tasKts: 144, gsKts: 122, mach: 0.22,
-  vsiFpm: -700, aglFt: 1270, mslFt: 1876, gLoad: 1.0,
+  vsiFpm: -700, aglFt: 1270, raFt: 1258, mslFt: 1876, gLoad: 1.0,
   aoaDeg: 2.4, betaDeg: 0,
 
   // Controls
@@ -1685,6 +1686,8 @@ function integrateSubStep(dt) {
 
   // Telemetry derivatives
   sim.aglFt = Math.max(0, Math.round((sim.pos.y - sim.groundY) * M_TO_FT));
+  // Radio altitude (0122): the main wheels' height, what the GPWS calls and warnings read.
+  sim.raFt = Math.round(radioAltitudeM(sim, spec) * M_TO_FT);
   sim.mslFt = Math.round(yToFtMsl(sim.pos.y));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
   sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
@@ -1692,8 +1695,8 @@ function integrateSubStep(dt) {
   // Warning alerts
   // Keyed to where the flaps are, like the tape's band (0128): moving the lever doesn't move the wing.
   const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapPos ?? sim.flapsIndex), sim.onGround);
-  const gpwsWarning = isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround);
-  const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
+  const gpwsWarning = isGpwsWarning(sim.raFt, sim.vsiFpm, sim.onGround);
+  const gearWarning = !gpwsWarning && isGearWarning(sim.raFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
   const banner = byId('masterAlertBanner');
   // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (Kid's plane
@@ -1706,7 +1709,7 @@ function integrateSubStep(dt) {
   if (banner.textContent !== bannerText) banner.textContent = bannerText;
   // Spoken once per descent below 500 ft (GPWS mode 4A).
   if (gearWarning && !sim.gearWarned) { sim.gearWarned = true; audio.callout('too low, gear'); }
-  else if (!gearWarning && sim.aglFt > 600) sim.gearWarned = false;
+  else if (!gearWarning && sim.raFt > 600) sim.gearWarned = false;
   // Overspeed (0127): past VMO / VNE or the flaps' placard, one "overspeed" (caption + voice) and
   // the IAS box flashes amber; a warning only, nothing breaks. Kid has no limit to keep.
   sim.speedLimitKts = kid ? null : speedLimitKts(spec, sim.flapDeg ?? 0);
@@ -3325,6 +3328,7 @@ window.openaeroDebug = () => {
     fdm: jsbsim && jsbsim.flies(sim.aircraftKey) ? 'jsbsim' : 'builtin',
     groundY: sim.groundY,
     aglFt: sim.aglFt,
+    raFt: sim.raFt, // radio altitude at the main wheels (0122)
     mslFt: sim.mslFt,
     onGround: sim.onGround,
     iasKts: sim.iasKts,

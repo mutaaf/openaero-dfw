@@ -25,11 +25,16 @@ test('sound off, a final to the runway captions each GPWS height once, in order,
   expect((await page.evaluate(() => window.openaeroDebug())).audio).toBe('off');
   const caps = await page.evaluate(() => window.__captions);
   const heights = caps.map((c) => c.text.split(' · ')[0]);
-  // From 1.3 NM down: each height once, in order (no "fifty" again after "forty"). No "ten" on
-  // the 737: sim.aglFt is the CG's height, ~11 ft over the runway at touchdown (ticket 0122).
-  expect(heights.slice(heights.indexOf('four hundred'), heights.indexOf('twenty') + 1)).toEqual(
-    ['four hundred', 'three hundred', 'two hundred', 'one hundred', 'fifty', 'forty', 'thirty', 'twenty']);
+  // From 1.3 NM down: each height once, in order (no "fifty" again after "forty"), down to "ten"
+  // before the 737's mains touch: the calls read the radio altitude at the wheels (0122), not the
+  // CG's height, which is ~12 ft over the runway at touchdown.
+  expect(heights.slice(heights.indexOf('four hundred'), heights.indexOf('ten') + 1)).toEqual(
+    ['four hundred', 'three hundred', 'two hundred', 'one hundred', 'fifty', 'forty', 'thirty', 'twenty', 'ten']);
   expect(new Set(heights).size).toBe(heights.length);
+  // "twenty" with the main wheels 20 ± 3 ft over the runway, the CG well above them.
+  const twenty = caps.find((c) => c.text.startsWith('twenty'));
+  expect(Math.abs(twenty.raFt - 20), `twenty at ${twenty.raFt} ft`).toBeLessThanOrEqual(3);
+  expect(twenty.aglFt - twenty.raFt).toBeGreaterThan(8);
   // Shown, then gone ~1.2 s later.
   await expect(page.locator('#calloutCaption')).toBeHidden({ timeout: 5_000 });
   // Between the tapes, under the heading box, clear of the coach and the alert banners.

@@ -1,7 +1,7 @@
 ---
 id: 0122
 title: GPWS callouts and the gear warning read the radio altitude at the wheels, not the CG
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
@@ -23,9 +23,9 @@ aircraftModel.js `rotationLift`). Leave the HUD's AGL readout and every other co
 decision (coach, landing grade, assists read `sim.aglFt`).
 
 ## Acceptance criteria
-- [ ] On the 737's default final the "ten" callout is called before touchdown
-- [ ] "twenty" comes with the main wheels 20 ± 3 ft over the runway on each aircraft
-- [ ] No flight card regresses
+- [x] On the 737's default final the "ten" callout is called before touchdown
+- [x] "twenty" comes with the main wheels 20 ± 3 ft over the runway on each aircraft
+- [x] No flight card regresses
 
 ## Test plan
 Unit: the wheel-height helper at 0° and 5° pitch per aircraft. E2E: tests/e2e/captions.spec.js's
