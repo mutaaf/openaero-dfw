@@ -37,4 +37,4 @@ helpers; no src change unless trivially required.
 Speedbrakes, VNAV logic, any change to the thrust lapse (that is 0116).
 
 ## Shipped (2026-10-31)
-The Validator's #140 added the cards (Mach 0.78 floor passes; 280 kt is KNOWN GAP 0126); marked shipped by the Builder in #141.
+The Validator's #140 added the cards (Mach 0.78 floor passes; 280 kt is KNOWN GAP 0126); marked shipped by the Builder in #142.
