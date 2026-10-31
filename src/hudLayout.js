@@ -14,6 +14,13 @@ export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
 
+// One decimal for a HUD readout that sits near zero (the AoA badge): a tiny negative value
+// would print "-0.0", flicker against "0.0" and shift the line it is in.
+export function fixed1(v) {
+  const s = v.toFixed(1);
+  return s === '-0.0' ? '0.0' : s;
+}
+
 // The takeoff callout's word box (0035): 26 px tall, 232 px wide (24 characters of bold
 // 15 px monospace), centred, just under the heading box. On the roll the horizon is at cy
 // and rotating moves it down, so the word stays in the sky; it fits between the tapes.

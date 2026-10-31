@@ -59,7 +59,9 @@ test.describe('every mission at 390x844', () => {
     const keys = await page.locator('#missionList .btnMission:not(.hidden)').evaluateAll((els) => els.map((e) => e.dataset.scenario));
     let shown = 0;
     for (const key of keys) {
-      await page.locator(`#missionList .btnMission[data-scenario="${key}"]`).click();
+      // A DOM click: Playwright's actionability waits cost seconds a mission under SwiftShader
+      // with the sim running behind the start screen (CI timed out at 60 s with ~40 of them).
+      await page.evaluate((k) => document.querySelector(`#missionList .btnMission[data-scenario="${k}"]`).click(), key);
       if (!(await facts.isVisible())) continue;
       shown++;
       const line = await page.locator('#txtRunwayFactsLine').boundingBox();
