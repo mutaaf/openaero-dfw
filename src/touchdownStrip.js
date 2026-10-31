@@ -55,8 +55,9 @@ const DOT = { S: '#f0abfc', A: '#6ee7b7', B: '#7dd3fc', C: '#fcd34d', D: '#fb923
 export function drawStrip(canvas, td, grade) {
   const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1)); // crisp even on a <1x test screen
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
+  // Safari fires resize as its toolbars come and go: keep the backing store when the size holds.
+  if (canvas.width !== Math.round(w * dpr)) canvas.width = Math.round(w * dpr);
+  if (canvas.height !== Math.round(h * dpr)) canvas.height = Math.round(h * dpr);
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
