@@ -104,7 +104,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
   // Seconds of speech time: the AudioContext's clock (real time, like the voice) once sound has
   // started; before that the page clock, while nothing is spoken anyway.
   const clock = () => (audioCtx ? audioCtx.currentTime : performance.now() / 1000);
-  let gateCallAt = -10;
+  let gateCallAt = -10, retardAt = -10;
   function checkGpwsCallouts() {
     // Heights, retard, sink rate and pull up read the radio altitude at the main wheels (sim.raFt,
     // 0122), as the real callouts do: the CG is ~12 ft up when a 737's mains touch.
@@ -117,12 +117,14 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
       sim.lastCalloutIdx = i;
       // An altitude callout cuts off a stale one, but never the gate's "unstabilized" call
       // (made the same frame, or just before when the terrain dips under the final).
-      const interrupt = clock() - gateCallAt > 2.5;
+      // Nor a "retard" still being said: on a 737's flare "ten" follows "twenty, retard" ~1 s later (0122).
+      const interrupt = clock() - gateCallAt > 2.5 && clock() - retardAt > 1.5;
       caption(calloutWord(i), !interrupt);
       if (!say(calloutWord(i), { interrupt })) chirp(587.33, 0.18);
       if (GPWS_ALT_THRESHOLDS[i] === 20 && sim.throttle > 0.05 && !sim.engineFailed) {
         caption('retard', true);
         say('retard', { interrupt: false });
+        retardAt = clock();
       }
     }
   }

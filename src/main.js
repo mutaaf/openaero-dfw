@@ -1188,7 +1188,7 @@ function updateTutor(dt) {
   tutorInput.apHdgHold = sim.apHdgHold;
   tutorInput.apAltHold = sim.apAltHold;
   tutorInput.onGround = sim.onGround;
-  tutorInput.aglFt = sim.aglFt;
+  tutorInput.aglFt = sim.raFt; // an autopilot's flare and retard modes read the radio altitude (0122)
   tutorInput.crossM = sim.approach.crossM;
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
@@ -1969,7 +1969,7 @@ function renderHud() {
     if (!showTrim) { trimHeld.up = trimHeld.dn = false; sim.touchTrim = 0; }
   }
   if (showTrim && sim.trimAlphaDeg != null) drawTrimBug(cx - 131, cy);
-  if (sim.activeEnd && !sim.onGround && sim.aglFt < 60) drawFlareCue(cx, cy);
+  if (sim.activeEnd && !sim.onGround && sim.raFt < 60) drawFlareCue(cx, cy);
 
   // Heading
   const hdgTop = headingBoxTop(cy);
@@ -2147,9 +2147,10 @@ function drawWindBox(w, h, hdgDeg) {
   }
 }
 
-// Flare cue (0073): under 60 ft, FLARE above the boresight (and IDLE under 30 ft with power on).
+// Flare cue (0073): under 60 ft, FLARE above the boresight (and IDLE with power on from 20 ft of radio
+// altitude, with the "retard" call, 0122).
 function drawFlareCue(cx, cy) {
-  const idle = sim.aglFt < 30 && sim.throttle > 0.05;
+  const idle = sim.raFt <= 20 && sim.throttle > 0.05;
   hudCtx.font = 'bold 15px monospace';
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = idle ? '#fcd34d' : '#6ee7b7';
@@ -2588,7 +2589,7 @@ function syncUI() {
   if (!draggingThrottle && Math.abs(Number(rng.value) - throttlePct) >= 1) rng.value = throttlePct;
   byId('txtIasGs').textContent = `${Math.round(sim.iasKts)}/${sim.gsKts}K`;
   byId('txtAltMsl').textContent = `${sim.mslFt} FT`;
-  byId('txtAltAgl').textContent = `${sim.aglFt} FT`;
+  byId('txtAltAgl').textContent = `${sim.raFt} FT`; // RADAR AGL: the wheels' radio altitude (0122)
   byId('txtVsi').textContent = `${sim.vsiFpm} FPM`;
   byId('txtGLoad').textContent = `${sim.gLoad.toFixed(2)}G`;
   byId('txtAoaBadge').textContent = `${fixed1(sim.aoaDeg)}°`;
@@ -2667,7 +2668,7 @@ function syncUI() {
   if (ilsEl.textContent !== ilsTxt) ilsEl.textContent = ilsTxt;
   byId('touchIls').classList.toggle('active-amber', revSlot ? sim.reverserPos > 0 : sim.apApproach);
   byId('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
-  byId('txtPhoneAgl').textContent = `${sim.aglFt}`;
+  byId('txtPhoneAgl').textContent = `${sim.raFt}`; // the wheels' height, what the callouts say (0122)
   byId('txtPhoneVs').textContent = `${sim.vsiFpm}`;
   byId('txtPhoneThr').textContent = sim.engineFailed ? 'OUT' : `${throttlePct}%`;
   byId('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;

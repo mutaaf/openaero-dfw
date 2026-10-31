@@ -50,6 +50,12 @@ describe('radio altitude at the main wheels (0122)', () => {
     expect(radioAltitudeM(body(10, 0, -10), spec)).toBeCloseTo(banked, 6);
   });
 
+  it('nose down, still the mains (the nose wheel is lower and not read)', () => {
+    const spec = AIRCRAFT_DATABASE.b738;
+    expect(radioAltitudeM(body(below(spec, -5) + 20 * FT_TO_M, -5), spec) * M_TO_FT).toBeCloseTo(20, 1);
+    expect(below(spec, -5)).toBeLessThan(below(spec, 0));
+  });
+
   it('without gear geometry: the CG height less gearHeight', () => {
     const spec = { gearHeight: 2 };
     expect(radioAltitudeM(body(12), spec)).toBeCloseTo(10, 6);

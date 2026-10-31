@@ -178,7 +178,8 @@ export function tailVsMainsAccel(body, spec, iasKts) {
 // main-gear touchdown and the automatic callouts are wheel heights; the CG is gearHeight
 // + strokeM over the runway at that moment (~12 ft on a 737). Nose up lowers the mains
 // (they are aft of the CG), a bank lowers the low wing's main. No gear geometry: the CG's
-// height less gearHeight. Allocates nothing.
+// height less gearHeight. Rigged to the mains: nose down, the nose wheel is lower (~4.5 ft at -5°
+// on a 737) and isn't read; past 90° of bank it reads high, where a real one loses lock. Allocates nothing.
 export function radioAltitudeM(body, spec) {
   if (!spec.gear) return Math.max(0, body.pos.y - body.groundY - spec.gearHeight);
   const c = gearConstants(spec), q = body.quat;

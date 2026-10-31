@@ -29,13 +29,13 @@ export const TUTOR_TEXT = {
 };
 const RANK = { onpath: 1, cruise: 1, heading: 1, altitude: 1, high: 2, low: 2, slow: 2, fast: 2, intercept: 2, flare: 4, retard: 4, rollout: 5 };
 
-// s: { apMaster, apApproach, apHdgHold, apAltHold, onGround, aglFt, crossM,
+// s: { apMaster, apApproach, apHdgHold, apAltHold, onGround, aglFt (radio altitude, 0122), crossM,
 //      heightAbovePathM, iasKts, targetKts }
 export function tutorTarget(s) {
   if (!s.apMaster) return null;
   if (s.apApproach) {
     if (s.onGround) return 'rollout';
-    if (s.aglFt < 25) return 'retard';
+    if (s.aglFt <= 20) return 'retard'; // radio altitude, with the GPWS "retard" (0122)
     if (s.aglFt < 50) return 'flare';
     if (Math.abs(s.crossM) > 30) return 'intercept';
     if (s.heightAbovePathM > 8) return 'high';

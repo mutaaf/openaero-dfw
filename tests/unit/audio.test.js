@@ -94,6 +94,19 @@ describe('the callouts read the radio altitude at the wheels, not the CG (0122)'
     expect(said).toEqual(['twenty', 'retard']);
   });
 
+  it('"ten" queues behind a "retard" still being said; with no retard it cuts in as before', () => {
+    const said = [];
+    const sim = simAt(24, { vsiFpm: -500, lastCalloutIdx: 8 });
+    const audio = createAudio(sim, () => {}, (t, queued) => said.push([t, !!queued]));
+    for (let ft = 24; ft >= 8; ft -= 1) { sim.raFt = ft; audio.update(); }
+    expect(said).toEqual([['twenty', false], ['retard', true], ['ten', true]]);
+    const idle = [];
+    const sim2 = simAt(24, { vsiFpm: -500, throttle: 0, lastCalloutIdx: 8 });
+    const audio2 = createAudio(sim2, () => {}, (t, queued) => idle.push([t, !!queued]));
+    for (let ft = 24; ft >= 8; ft -= 1) { sim2.raFt = ft; audio2.update(); }
+    expect(idle).toEqual([['twenty', false], ['ten', false]]);
+  });
+
   it('pull up (not sink rate) under 250 ft of radio altitude', () => {
     const said = [];
     const sim = simAt(245, { vsiFpm: -2000, aglFt: 257 });

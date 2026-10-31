@@ -22,6 +22,9 @@ describe('tutorTarget', () => {
     expect(tutorTarget(approach())).toBe('onpath');
     expect(tutorTarget(approach({ aglFt: 40, crossM: 120 }))).toBe('flare');
     expect(tutorTarget(approach({ aglFt: 10 }))).toBe('retard');
+    // aglFt is the radio altitude (0122): retard with the GPWS call at 20 ft, not before.
+    expect(tutorTarget(approach({ aglFt: 20 }))).toBe('retard');
+    expect(tutorTarget(approach({ aglFt: 21 }))).toBe('flare');
     expect(tutorTarget(approach({ onGround: true }))).toBe('rollout');
   });
   it('explains heading and altitude hold', () => {
