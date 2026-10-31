@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { headingBoxTop, HEADING_BOX_H, TAPE_TOP, BELOW_TOP_BAR, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg, BASE_FOV_DEG, MIN_HFOV_DEG, MAX_FOV_DEG,
-  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, WIND_BOX_W, WIND_BOX_H } from '../../src/hudLayout.js';
+  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, WIND_BOX_W, WIND_BOX_H, fixed1 } from '../../src/hudLayout.js';
 import { runwayWindComponents, scenarioWeather } from '../../src/weather.js';
 import { runwayEnd } from '../../src/airports.js';
 
@@ -198,5 +198,19 @@ describe('wind readout (0075)', () => {
     for (const s of [r.xw, r.hw]) expect(s.length * 6, s).toBeLessThanOrEqual(WIND_BOX_W - 24);
     expect(windReadout(scenarioWeather(), null).source.length * 5.5).toBeLessThanOrEqual(WIND_BOX_W - 4);
     expect('METAR WIND'.length * 5.5).toBeLessThanOrEqual(WIND_BOX_W - 4);
+  });
+});
+
+describe('fixed1', () => {
+  // A parked airplane's AoA wobbles around zero; "-0.0°" and "0.0°" took turns on the
+  // top bar and shifted its whole right-aligned line (main went red on surfaces.spec).
+  it('never prints a negative zero', () => {
+    for (const v of [-0, -0.0001, -0.04, -0.049]) expect(fixed1(v)).toBe('0.0');
+    expect(fixed1(0.04)).toBe('0.0');
+  });
+  it('keeps the sign and one decimal otherwise', () => {
+    expect(fixed1(-0.06)).toBe('-0.1');
+    expect(fixed1(-12.34)).toBe('-12.3');
+    expect(fixed1(15.26)).toBe('15.3');
   });
 });

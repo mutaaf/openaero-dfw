@@ -52,7 +52,7 @@ import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind,
+  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
@@ -2537,7 +2537,7 @@ function syncUI() {
   byId('txtAltAgl').textContent = `${sim.aglFt} FT`;
   byId('txtVsi').textContent = `${sim.vsiFpm} FPM`;
   byId('txtGLoad').textContent = `${sim.gLoad.toFixed(2)}G`;
-  byId('txtAoaBadge').textContent = `${sim.aoaDeg.toFixed(1)}°`;
+  byId('txtAoaBadge').textContent = `${fixed1(sim.aoaDeg)}°`;
 
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   byId('txtRadarHdg').textContent = `${magHeadingText(-_euler.y * RAD_TO_DEG)}°M`;

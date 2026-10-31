@@ -77,7 +77,9 @@ test('full left vs full right stick moves the Cessna\'s ailerons in the chase vi
   const still = await diff(page, right.png, right2.png); // the same stick twice: the noise floor
   info.annotations.push({ type: 'pixels', description: JSON.stringify({ moved, still }) });
   // The wings change clearly more than the same stick held twice does (the noise: the prop,
-  // the airplane settling on its struts). Measured: moved 105-111 sampled pixels, still 0-13.
+  // the airplane settling on its struts). Measured: moved 105-111 sampled pixels, still 0-13;
+  // 2026-10-31 at 1280x720: moved 245-280, still 4-45 (an AoA badge flickering "-0.0°"/"0.0°"
+  // shifted the top bar's line and read ~80 until hudLayout.js fixed1).
   const sum = (d) => d.left + d.right;
   expect(sum(moved)).toBeGreaterThan(3 * sum(still) + 30);
   expect(Math.min(moved.left, moved.right)).toBeGreaterThan(5); // both wings, not one

@@ -278,7 +278,8 @@ src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box 
                     landscape; portrait opens towards 60° across, capped at 80° vertical:
                     an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the wind box
                     (0075): over the altitude tape, its text (source, arrow, speed, XW/HW
-                    vs the active runway under 1,500 ft) refreshed once a second
+                    vs the active runway under 1,500 ft) refreshed once a second; fixed1
+                    (the AoA badge's one decimal, never "-0.0", 2026-10-31)
 src/prism.js        flat-sided prism from a convex outline (the primitive 737's wing and fin; no
                     ExtrudeGeometry, which costs ~8 kB of boot JS: earcut + three's curves, 0105)
 src/aircraftModel.js  detailed open-licensed glTF aircraft (0045), lazy after the first Fly:
