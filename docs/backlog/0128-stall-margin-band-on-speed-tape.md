@@ -1,12 +1,12 @@
 ---
 id: 0128
 title: A red low-speed band on the speed tape at the stall speed for the current flaps
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-10-31
-pr:
+pr: 144
 ---
 
 ## Why

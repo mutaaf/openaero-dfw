@@ -35,7 +35,7 @@ import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './
 import {
   headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
-  takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN, speedLimitKts, overspeedStep,
+  takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN, speedLimitKts, overspeedStep, stallSpeedKts,
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls, slewRudder,
@@ -52,7 +52,7 @@ import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand,
+  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
@@ -87,6 +87,7 @@ const sim = {
   // reverserPos are where things are. autobrake 0 OFF, 1–3, 4 MAX; reverseCmd the reverse levers.
   autobrake: 0, reverseCmd: false,
   speedLimitKts: null, overspeed: false, // the flaps' / VMO limit and its warning latch (0127)
+  stallKts: null, // the 1 g stall speed for where the flaps are, the tape's red band (0128)
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
   // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
   mslOffsetM: REF_ELEV_M, isaDevC: 0, altimInHg: 29.92, sigma: 1,
@@ -1689,7 +1690,8 @@ function integrateSubStep(dt) {
   sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
 
   // Warning alerts
-  const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapsIndex), sim.onGround);
+  // Keyed to where the flaps are, like the tape's band (0128): moving the lever doesn't move the wing.
+  const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapPos ?? sim.flapsIndex), sim.onGround);
   const gpwsWarning = isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround);
   const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
@@ -1711,6 +1713,9 @@ function integrateSubStep(dt) {
   const over = overspeedStep(sim.overspeed, sim.iasKts, sim.speedLimitKts);
   if (over && !sim.overspeed) audio.callout('overspeed');
   sim.overspeed = over;
+  // The low-speed band (0128): the 1 g stall speed for where the flaps are (in transit too). Kid
+  // has none (its protection keeps it off the stall), nor the F-16 (fly-by-wire, no card for it).
+  sim.stallKts = kid || spec.pitchFbw ? null : stallSpeedKts(spec, sim.flapPos ?? sim.flapsIndex);
 }
 
 function updatePapi() {
@@ -1952,6 +1957,7 @@ function renderHud() {
   drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
   drawTape(cx + 130, cy, 1, sim.mslFt, 0.2, 100, 500);
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
+  if (sim.stallKts && !sim.onGround) drawStallBand(cx - 131, cy);
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
   const showTrim = trimControl();
   if (showTrim !== trimShown) { // the rocker follows (no layout work on other frames)
@@ -2041,6 +2047,27 @@ function drawSpeedLimit(x, y) {
   hudCtx.fillStyle = 'rgba(249, 115, 22, 0.9)'; // orange: not the trim bug's amber
   hudCtx.fillRect(x - 7, b.top, 3, b.bot - b.top);
   if (b.tick) hudCtx.fillRect(x - 8, b.y - 1, 8, 2); // clear of the readout box (ends at x - 8)
+}
+
+// The low-speed band (0128, hudLayout.js stallBand): red from the tape's bottom up to the 1 g stall
+// speed for the flaps, amber up to 1.1 Vs, in the speed limit's column (the two never meet).
+const _stallBand = { redTop: 0, redBot: 0, red: false, amberTop: 0, amberBot: 0, amber: false };
+// A dark edge either side keeps it readable over bright ground and to red-green colour blindness
+// (the hue alone was ~1.4:1 against green terrain).
+function drawStallBand(x, y) {
+  const b = stallBand(y, sim.stallKts, sim.iasKts, _stallBand);
+  if (!b.red && !b.amber) return;
+  const top = b.amber ? b.amberTop : b.redTop;
+  hudCtx.fillStyle = '#020617';
+  hudCtx.fillRect(x - 8, top, 5, b.redBot - top);
+  if (b.red) {
+    hudCtx.fillStyle = '#ef4444';
+    hudCtx.fillRect(x - 7, b.redTop, 3, b.redBot - b.redTop);
+  }
+  if (b.amber) {
+    hudCtx.fillStyle = '#f59e0b';
+    hudCtx.fillRect(x - 7, b.amberTop, 3, b.amberBot - b.amberTop);
+  }
 }
 
 // Pilot's trim (0094) works where the trim is the player's: not under an assist or a
@@ -3271,6 +3298,7 @@ window.openaeroDebug = () => {
     trimShown,
     speedLimitKts: sim.speedLimitKts ?? null,
     overspeed: !!sim.overspeed,
+    stallKts: sim.stallKts ?? null,
     inputSource: sim.inputSource,
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,

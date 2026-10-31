@@ -34,6 +34,24 @@ export function speedLimitBand(cy, limitKts, iasKts, out) {
   return out;
 }
 
+// The low-speed band on the speed tape (0128, 2 px per kt over ±90 px): red from the tape's
+// bottom up to the 1 g stall speed (aero.js stallSpeedKts for where the flaps are), amber from it
+// up to STALL_CAUTION × Vs. Each part is clamped to the span and hidden (`red` / `amber` false)
+// when it is below it (flying fast). Writes into `out`.
+export const STALL_CAUTION = 1.1;
+export function stallBand(cy, stallKts, iasKts, out) {
+  const top = cy + TAPE_TOP, bot = cy - TAPE_TOP;
+  const yVs = cy - (stallKts - iasKts) * 2;
+  const yCaution = cy - (stallKts * STALL_CAUTION - iasKts) * 2;
+  out.redTop = Math.max(top, yVs);
+  out.redBot = bot;
+  out.red = out.redTop < bot;
+  out.amberTop = Math.max(top, yCaution);
+  out.amberBot = Math.min(bot, out.redTop);
+  out.amber = out.amberTop < out.amberBot;
+  return out;
+}
+
 // The takeoff callout's word box (0035): 26 px tall, 232 px wide (24 characters of bold
 // 15 px monospace), centred, just under the heading box. On the roll the horizon is at cy
 // and rotating moves it down, so the word stays in the sky; it fits between the tapes.
