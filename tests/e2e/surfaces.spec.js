@@ -18,7 +18,9 @@ async function frameWith(page, key) {
   await pause(page);
   await page.waitForTimeout(600);
   const s = await snap(page);
-  const png = await page.locator('#simCanvas').screenshot();
+  // The 3D scene alone: every panel and the HUD canvas over it carry numbers that tick on
+  // their own (the METAR's age, the 1 s wind box, speeds), which read as "noise" here.
+  const png = await page.locator('#simCanvas').screenshot({ style: 'body * { visibility: hidden !important; } #simCanvas { visibility: visible !important; }' });
   await pause(page);
   await page.keyboard.up(key);
   return { s, png: png.toString('base64') };
@@ -78,8 +80,9 @@ test('full left vs full right stick moves the Cessna\'s ailerons in the chase vi
   info.annotations.push({ type: 'pixels', description: JSON.stringify({ moved, still }) });
   // The wings change clearly more than the same stick held twice does (the noise: the prop,
   // the airplane settling on its struts). Measured: moved 105-111 sampled pixels, still 0-13;
-  // 2026-10-31 at 1280x720: moved 245-280, still 4-45 (an AoA badge flickering "-0.0°"/"0.0°"
-  // shifted the top bar's line and read ~80 until hudLayout.js fixed1).
+  // 2026-10-31 at 1280x720 with the panels in the shot: moved 245-280, still 4-45, and up to
+  // ~160 on CI (an AoA badge flickering "-0.0°"/"0.0°" shifted the top bar's line, and other
+  // live text ticks); the 3D scene alone: moved 303-309, still 2-8.
   const sum = (d) => d.left + d.right;
   expect(sum(moved)).toBeGreaterThan(3 * sum(still) + 30);
   expect(Math.min(moved.left, moved.right)).toBeGreaterThan(5); // both wings, not one
