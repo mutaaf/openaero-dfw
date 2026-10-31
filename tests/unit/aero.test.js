@@ -79,6 +79,13 @@ describe('waveDragCd (0120: Korn + Lock drag rise)', () => {
     const mdd = dragDivergenceMach(b738, 0.5), h = 1e-5;
     expect((waveDragCd(b738, 0.5, mdd + h) - waveDragCd(b738, 0.5, mdd - h)) / (2 * h)).toBeCloseTo(0.1, 4);
   });
+  it('past MDD it goes on at MDD\'s 0.1 slope instead of the runaway fourth power (bounded at Mach 1)', () => {
+    const mdd = dragDivergenceMach(b738, 0.2); // 0.86455
+    const atMdd = 20 * (0.1 / 80) ** (4 / 3); // 0.002692
+    expect(waveDragCd(b738, 0.2, 0.95)).toBeCloseTo(atMdd + 0.1 * (0.95 - mdd), 6); // ~112 counts (Lock alone: 279)
+    expect(waveDragCd(b738, 0.2, 1.1)).toBeCloseTo(atMdd + 0.1 * (1.1 - mdd), 6); // ~262 counts (Lock alone: ~4,000)
+    expect(waveDragCd(b738, 0.2, 1.0)).toBeLessThan(0.03);
+  });
   it('a pushover loads the wing too: a negative CL rises like a positive one', () => {
     expect(waveDragCd(b738, -0.3, 0.8)).toBeCloseTo(waveDragCd(b738, 0.3, 0.8), 10);
   });

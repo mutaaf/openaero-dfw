@@ -80,9 +80,11 @@ export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect, ma
 // sweepDeg }: W.H. Mason, Configuration Aerodynamics, Sect. 7.5.2 (Virginia Tech), the Korn
 // equation extended to sweep by simple sweep theory, MDD = κA/cosΛ − (t/c)/cos²Λ − CL/(10 cos³Λ),
 // and Lock's fourth-power drag rise from Mcrit = MDD − (0.1/80)^(1/3) (so dCD/dM = 0.1 at MDD):
-// ΔCD = 20 (M − Mcrit)^4. Lift either way loads the wing (|CL|). Lock's shape is fitted near
-// MDD; well past it (a dive beyond ~M 0.9) it overstates the rise, which only slows the dive.
+// ΔCD = 20 (M − Mcrit)^4. Lift either way loads the wing (|CL|). Lock's shape is fitted up to
+// MDD; past it the fourth power runs away (~700 counts at Mach 1), so beyond MDD the rise goes on
+// at MDD's slope, 0.1 per Mach (an assumption: ~220 counts at Mach 1, a transport's order).
 const LOCK_DM = Math.cbrt(0.1 / 80);
+const LOCK_RISE_AT_MDD = 20 * LOCK_DM ** 4; // 26.9 counts
 export function dragDivergenceMach(spec, cl) {
   const t = spec.transonic, c = Math.cos(t.sweepDeg * DEG_TO_RAD);
   return t.kappaA / c - t.tOverC / (c * c) - Math.abs(cl) / (10 * c * c * c);
@@ -90,7 +92,8 @@ export function dragDivergenceMach(spec, cl) {
 export function waveDragCd(spec, cl, mach) {
   if (!spec.transonic || !(mach > 0.5)) return 0;
   const dm = mach - (dragDivergenceMach(spec, cl) - LOCK_DM);
-  return dm > 0 ? 20 * dm * dm * dm * dm : 0;
+  if (dm <= 0) return 0;
+  return dm < LOCK_DM ? 20 * dm * dm * dm * dm : LOCK_RISE_AT_MDD + 0.1 * (dm - LOCK_DM);
 }
 
 // Heading error in degrees, wrapped to [-180, 180].

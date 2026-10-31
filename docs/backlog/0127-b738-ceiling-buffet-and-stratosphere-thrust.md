@@ -12,8 +12,8 @@ pr:
 ## Why
 Found shipping 0120. With CFM's FL350 thrust (0116) and the Korn/Lock drag rise from cited 737
 geometry (0120), the 65 t 737 still climbs at ~+67 fpm on full thrust at FL420, Mach 0.79, and holds
-Mach 0.79 level to about FL428, above the FL410 maximum operating altitude (EASA TCDS IM.A.120 p. 28;
-EUROCONTROL APD ceiling FL410). At MMO 0.82 it only just holds FL410 on full thrust (+8 fpm; fails by ~FL415). `tests/flight/b738.test.js`
+Mach 0.79 level to about FL426, above the FL410 maximum operating altitude (EASA TCDS IM.A.120 p. 28;
+EUROCONTROL APD ceiling FL410). At MMO 0.82 it only just holds FL410 on full thrust (+18 fpm; fails by ~FL415). `tests/flight/b738.test.js`
 "KNOWN GAP (0127)" measures it. Two uncited parts remain: there is no high-speed buffet boundary
 (a real crew's maximum altitude keeps a 1.3 g buffet margin), and the thrust above FL350 is one σ^0.94
 exponent fitted at FL350 only (Mattingly eq. 2.45a lapses ~10% faster by FL420).

@@ -407,7 +407,9 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
   // define MDD as the Mach where wave drag reaches 20 counts (ΔCD 0.002) and set it at MMO (Scholz &
   // Ciornei, "Mach number, relative thickness, sweep and lift coefficient of the wing", DGLR-2005-122,
   // HAW Hamburg); the 737-800's MMO is 0.82. Measured at FL350, 65 t: 5.5 counts at the Mach 0.79
-  // cruise, 18.2 at Mach 0.82. A cross-check of the cited parameters, none of them fitted to it.
+  // cruise, 18.2 at Mach 0.82 (20 counts at ~0.822; Mason's slope-0.1 MDD is ~27 counts, ~0.008 later).
+  // κA was chosen between Mason's two values with this agreement in view, so it is a consistency
+  // check, not an independent one; no parameter is tuned to it.
   it('at FL350, 65 t, wave drag is ~20 counts at MMO 0.82 (Boeing\'s MDD) and under 10 at the Mach 0.79 cruise', () => {
     const counts = (mach) => {
       const eas = easAtMach(35000, mach);
@@ -437,8 +439,8 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
   // is how far above it the model holds level. Tighten to a cited maximum-altitude-vs-weight
   // figure (FCOM/AFM) when one is found. KNOWN GAP (0127): with CFM's thrust (0116) and the Korn
   // drag rise (0120, the card below: +19 counts here) the model still climbs at ~+67 fpm (was +172
-  // before 0120, ~+1,200 before 0116) and holds Mach 0.79 level to ~FL428 (was ~FL438; ~FL520).
-  // At MMO 0.82 it only just holds FL410 on full thrust (+8 fpm; it fails by ~FL415). What is left: no buffet boundary, and one σ exponent for
+  // before 0120, ~+1,200 before 0116) and holds Mach 0.79 level to ~FL426 (was ~FL438; ~FL520).
+  // At MMO 0.82 it only just holds FL410 on full thrust (+18 fpm; it fails by ~FL415). What is left: no buffet boundary, and one σ exponent for
   // the thrust above FL350 (Mattingly lapses ~10% faster by FL420), both uncited so far.
   it.fails('KNOWN GAP (0127): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
     const { fpm, mach } = cruise(42000, CRUISE_MACH, 1);
