@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { gradeLanding } from '../../src/landing.js';
-import { stripLayout, touchdownLabel, AIM_POINT_M, tdzLengthM } from '../../src/touchdownStrip.js';
+import { stripLayout, touchdownLabel } from '../../src/touchdownStrip.js';
+import { ZONE_FULL_M } from '../../src/landing.js';
+import { AIM_POINT_M } from '../../src/airports.js';
 
 // Ticket 0088: the results card's runway strip. 35C: 13,400 ft x 150 ft (4,084 m x 45.7 m).
 const td = { pastThresholdM: 640, crossM: -3.2, lengthM: 4084, widthM: 45.7 };
@@ -28,16 +30,30 @@ describe('stripLayout', () => {
     expect(Math.abs(L.dotY - (L.cy - 3.2 * L.pyPerM))).toBeLessThan(1);
     expect(L.clamped).toBe(false);
   });
-  it('the runway edges are its width, the aiming point 1,000 ft down, the zone 3,000 ft', () => {
+  it('the runway edges are its width, the aim point where the 3D runway paints it, the green band the zone full marks', () => {
     expect(L.edgeTop).toBeCloseTo(L.cy - (td.widthM / 2) * L.pyPerM, 6);
     expect(L.edgeBottom).toBeCloseTo(L.cy + (td.widthM / 2) * L.pyPerM, 6);
-    expect(AIM_POINT_M).toBeCloseTo(1000 * 0.3048, 6);
     expect(L.aimX).toBeCloseTo(L.thrX + AIM_POINT_M * L.pxPerM, 6);
-    expect(L.tdzX).toBeCloseTo(L.thrX + 3000 * 0.3048 * L.pxPerM, 6);
+    expect(L.zoneX0).toBeCloseTo(L.thrX + ZONE_FULL_M[0] * L.pxPerM, 6);
+    expect(L.zoneX1).toBeCloseTo(L.thrX + ZONE_FULL_M[1] * L.pxPerM, 6);
+    // The band is where gradeLanding's zone factor scores 100, and just outside it less.
+    const zone = (m) => gradeLanding({ ...good, pastThresholdM: m }).factors.find((f) => f.key === 'zone').score;
+    expect(zone(ZONE_FULL_M[0])).toBe(100);
+    expect(zone(ZONE_FULL_M[1])).toBe(100);
+    expect(zone(ZONE_FULL_M[1] + 100)).toBeLessThan(100);
+    expect(zone(ZONE_FULL_M[0] - 50)).toBeLessThan(100);
   });
-  it('a short runway keeps its zone to the first third', () => {
-    expect(tdzLengthM(1800)).toBeCloseTo(600, 6);
-    expect(tdzLengthM(4084)).toBeCloseTo(914.4, 6);
+  it('a displaced threshold: its pavement before the threshold, the dot on it when you land there', () => {
+    const d = { ...td, pastThresholdM: -200, crossM: 5, lengthM: 1897, widthM: 30.5, displacedM: 298 }; // Addison 16
+    const D = stripLayout(d, W, H);
+    expect(D.padX).toBeCloseTo(W * 0.08, 6);
+    expect(D.thrX - D.padX).toBeCloseTo(298 * D.pxPerM, 6);
+    expect(D.endX - D.thrX).toBeCloseTo(1897 * D.pxPerM, 6);
+    expect(D.clamped).toBe(false);
+    expect(D.dotX).toBeGreaterThan(D.padX);
+    expect(D.dotX).toBeLessThan(D.thrX);
+    expect(touchdownLabel(d)).toBe('Touched down 200 metres before the threshold, on the displaced pavement, 5 metres right of centre.');
+    expect(touchdownLabel({ ...d, pastThresholdM: -320 })).toMatch(/^Touched down 320 metres short of the threshold/);
   });
   it('right of centre is down; short of the threshold is left of it', () => {
     const r = stripLayout({ ...td, crossM: 5 }, W, H);
@@ -73,6 +89,8 @@ describe('touchdownLabel', () => {
   it('on the centreline, short of the runway, past its end', () => {
     expect(touchdownLabel({ ...td, crossM: 0.3 })).toBe('Touched down 640 metres past the threshold, on the centreline.');
     expect(touchdownLabel({ ...td, pastThresholdM: -42.4 })).toBe('Touched down 42 metres short of the threshold, 3 metres left of centre.');
+    // Under half a metre short is still short (the grade says so), never "0 metres past".
+    expect(touchdownLabel({ ...td, pastThresholdM: -0.3 })).toMatch(/^Touched down 0 metres short of the threshold/);
     expect(touchdownLabel({ ...td, pastThresholdM: 4200 })).toMatch(/^Touched down 4200 metres past the threshold, past the runway's end/);
   });
   it('off the side says so', () => {

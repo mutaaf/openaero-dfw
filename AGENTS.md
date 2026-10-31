@@ -155,7 +155,8 @@ src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/
 src/results.js      the results card (lazy chunk, prefetched after boot, retried at the card); the
                     flight pauses behind it, in the air and on the rollout (0106); its runway strip
                     (0088, src/touchdownStrip.js, in the same chunk) draws gradeLanding's `touchdown`
-                    (along/across, runway length/width): aiming point 1,000 ft, zone 3,000 ft (or a third)
+                    (along/across, runway length/width, the end's displaced pavement): the aiming point at
+                    airports.js AIM_POINT_M, the green band at landing.js ZONE_FULL_M (the zone's full marks)
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)

@@ -1,22 +1,26 @@
 // The results card's runway strip (0088): a top-down picture of where the wheels touched.
 // Imported by results.js only, so it rides in that lazy chunk. stripLayout and touchdownLabel
 // are pure (tests/unit/touchdownStrip.test.js); drawStrip paints a 2D canvas.
-// td: gradeLanding's `touchdown` = { pastThresholdM, crossM (+ = right), lengthM, widthM }.
-const FT = 0.3048;
-// AIM 2-3-3: the aiming point marking starts about 1,000 ft past the threshold, and the
-// touchdown zone is the first 3,000 ft (the first third on a runway too short for that).
-export const AIM_POINT_M = 1000 * FT;
-const AIM_LEN_M = 150 * FT;
-export const tdzLengthM = (lengthM) => Math.min(3000 * FT, lengthM / 3);
+// td: gradeLanding's `touchdown` = { pastThresholdM, crossM (+ = right), lengthM, widthM }, plus
+// the runway end's displacedM (results.js).
+import { ZONE_FULL_M } from './landing.js';
+import { AIM_POINT_M } from './airports.js';
+// The aiming-point blocks where the 3D runway paints them (main.js: AIM_POINT_M, the 3° path's
+// aim, ~1,000 ft, AIM 2-3-3), 150 ft long; the green band is where the grade's "Touchdown zone"
+// scores full marks (landing.js ZONE_FULL_M), so the picture and the score agree.
+const AIM_LEN_M = 150 * 0.3048;
 
-// Landing left to right: the threshold near the left edge and the far end near the right, with
-// a little ground beyond each (an undershoot, an overrun). Across is stretched (a 45 m runway is a few pixels at
-// the length's scale): the runway is half the strip's height, so left of centre is up.
+// Landing left to right: the pavement starts near the left edge (a displaced threshold's
+// pavement first, td.displacedM), the far end near the right, with a little ground beyond each
+// (an undershoot, an overrun). Across is stretched (a 45 m runway is a few pixels at the
+// length's scale): the runway is half the strip's height, so left of centre is up.
 export function stripLayout(td, w, h) {
   const r = 3.5;
-  const thrX = w * 0.08;
-  const endX = Math.max(thrX + 1, w * 0.94);
-  const pxPerM = (endX - thrX) / Math.max(1, td.lengthM);
+  const disp = td.displacedM || 0;
+  const padX = w * 0.08;
+  const endX = Math.max(padX + 1, w * 0.94);
+  const pxPerM = (endX - padX) / Math.max(1, td.lengthM + disp);
+  const thrX = padX + disp * pxPerM;
   const cy = h / 2;
   const pyPerM = (h * 0.5) / Math.max(1, td.widthM);
   const x = thrX + td.pastThresholdM * pxPerM;
@@ -24,17 +28,20 @@ export function stripLayout(td, w, h) {
   const dotX = Math.min(Math.max(x, r), Math.max(r, w - r));
   const dotY = Math.min(Math.max(y, r), Math.max(r, h - r));
   return {
-    w, h, r, thrX, endX, pxPerM, cy, pyPerM,
+    w, h, r, padX, thrX, endX, pxPerM, cy, pyPerM,
     edgeTop: cy - (td.widthM / 2) * pyPerM, edgeBottom: cy + (td.widthM / 2) * pyPerM,
     aimX: thrX + AIM_POINT_M * pxPerM, aimLenPx: AIM_LEN_M * pxPerM,
-    tdzX: thrX + tdzLengthM(td.lengthM) * pxPerM,
+    zoneX0: thrX + ZONE_FULL_M[0] * pxPerM, zoneX1: thrX + ZONE_FULL_M[1] * pxPerM,
     dotX, dotY, clamped: dotX !== x || dotY !== y,
   };
 }
 
 export function touchdownLabel(td) {
-  const along = Math.round(td.pastThresholdM);
-  const parts = [along < 0 ? `${-along} metres short of the threshold` : `${along} metres past the threshold`];
+  const along = Math.abs(Math.round(td.pastThresholdM));
+  const short = td.pastThresholdM < 0;
+  const parts = [!short ? `${along} metres past the threshold`
+    : -td.pastThresholdM <= (td.displacedM || 0) ? `${along} metres before the threshold, on the displaced pavement`
+      : `${along} metres short of the threshold`];
   if (td.pastThresholdM > td.lengthM) parts.push("past the runway's end");
   const cross = Math.round(Math.abs(td.crossM));
   parts.push(cross < 1 ? 'on the centreline' : `${cross} metres ${td.crossM > 0 ? 'right' : 'left'} of centre`);
@@ -58,12 +65,16 @@ export function drawStrip(canvas, td, grade) {
   const top = L.edgeTop, rh = L.edgeBottom - L.edgeTop;
   ctx.fillStyle = '#475569'; // the runway (slate-600)
   ctx.fillRect(L.thrX, top, L.endX - L.thrX, rh);
-  ctx.fillStyle = 'rgba(52, 211, 153, 0.45)'; // the touchdown zone (emerald)
-  ctx.fillRect(L.thrX, top, L.tdzX - L.thrX, rh);
+  if (L.thrX > L.padX) { // a displaced threshold's pavement: darker (takeoff and rollout, not for landing)
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(L.padX, top, L.thrX - L.padX, rh);
+  }
+  ctx.fillStyle = 'rgba(52, 211, 153, 0.45)'; // the zone's full marks (emerald)
+  ctx.fillRect(L.zoneX0, top, L.zoneX1 - L.zoneX0, rh);
   ctx.fillStyle = '#f8fafc';
   // Threshold piano keys, and an arrow in the ground before them: the way you were landing.
   for (let i = 0; i < 4; i++) ctx.fillRect(L.thrX + 1, top + rh * (0.06 + i * 0.25), 4, rh * 0.13);
-  const ax = L.thrX * 0.5;
+  const ax = L.padX * 0.5;
   ctx.beginPath();
   ctx.moveTo(ax - 3, L.cy - 4);
   ctx.lineTo(ax + 3, L.cy);

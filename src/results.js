@@ -57,7 +57,7 @@ export function showResults(sim, result, best, end, gate) {
   // The runway strip (0088): a landing on the runway's own picture; none for a drill's card or a
   // glide that missed the runway (the miss is its own line, the strip would only pin it to an edge).
   const strip = byId('touchdownStrip');
-  const td = result.madeRunway === false ? null : result.touchdown;
+  const td = result.madeRunway === false || !result.touchdown ? null : { ...result.touchdown, displacedM: end.displacedM || 0 };
   strip.classList.toggle('hidden', !td);
   strip.setAttribute('aria-label', td ? touchdownLabel(td) : '');
   shownStrip = td ? { td, grade: result.grade } : null;
