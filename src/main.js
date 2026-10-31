@@ -2009,12 +2009,13 @@ function renderHud() {
   // it), the glideslope bar where the path is (below when you're high). They read in dots
   // (0123, hudLayout.js ilsBarOffsetPx), the angle a real ILS needle shows and the stabilized
   // gate judges, with a tick at each dot. The glideslope bar goes on the ground (a takeoff roll
-  // starts past the threshold, under the path: full-scale fly-up) and once past its antenna.
+  // starts past the threshold, under the path: full-scale fly-up), once past its antenna, and
+  // under the flare cue's 60 ft, where a real needle swings to fly-up and a kid would chase it.
   sim.ilsLocBarPx = sim.ilsGsBarPx = null;
   if (sim.activeEnd && sim.approach.distM > -500 && sim.approach.distM < 20000) {
     const B = ILS_BOX_HALF;
     const locDev = sim.ilsLocBarPx = -ilsBarOffsetPx(sim.ilsLocDots);
-    const gs = !sim.onGround && sim.approach.distM > -AIM_POINT_M;
+    const gs = !sim.onGround && sim.raFt >= 60 && sim.approach.distM > -AIM_POINT_M;
     const gsDev = gs ? (sim.ilsGsBarPx = ilsBarOffsetPx(sim.ilsGsDots)) : 0;
 
     hudCtx.fillStyle = 'rgba(245, 158, 11, 0.8)';

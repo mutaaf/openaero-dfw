@@ -68,3 +68,17 @@ test('on the takeoff roll there is no glideslope bar (it would read full-scale f
   expect(s.ilsGsBarPx).toBeNull();
   expect(Math.abs(s.ilsLocBarPx)).toBeLessThan(6); // lined up on the centreline
 });
+
+test('under the flare cue (60 ft) the glideslope bar goes; the localizer bar stays', async ({ page }) => {
+  test.setTimeout(90_000);
+  await fly(page);
+  await page.evaluate(() => window.openaeroDebugFinal('KDFW', '35C', 0.1));
+  // A ~100 ft short final: read once the wheels are under 50 ft and still in the air.
+  let s;
+  await expect.poll(async () => {
+    s = await page.evaluate(() => window.openaeroDebug());
+    return s.raFt < 50 && s.raFt > 3;
+  }, { timeout: 30_000, intervals: [50] }).toBe(true);
+  expect(s.ilsGsBarPx).toBeNull();
+  expect(s.ilsLocBarPx).not.toBeNull();
+});
