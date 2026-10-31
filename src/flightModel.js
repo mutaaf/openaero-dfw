@@ -68,7 +68,7 @@ export function stepFlightModel(body, spec, dt) {
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
   const groundEffect = groundEffectFactor(body.pos.y - body.groundY, spec.wingSpanM);
-  let cd = dragCoefficient(spec, cl, body.gearPos, body.flapPos, groundEffect);
+  let cd = dragCoefficient(spec, cl, body.gearPos, body.flapPos, groundEffect, body.mach);
 
   // Auto ground spoilers: out over ~1 s on the ground with the thrust levers at idle, in
   // again as soon as they are advanced (reverse thrust keeps them out). Lift dumped onto
@@ -267,8 +267,8 @@ export function trimThrottle(spec, iasMps, flapsIndex, gammaDeg, gearDown = true
   const aoaRad = trimAoaDeg(spec, iasMps, flapsIndex) * DEG_TO_RAD;
   const cl = liftCoefficient(spec, aoaRad, flapsIndex);
   const q = dynamicPressure(iasMps);
-  const drag = dragCoefficient(spec, cl, gearDown, flapsIndex, 1) * q * spec.wingAreaM2;
+  const tas = iasMps / Math.sqrt(air.sigma), mach = tas / air.speedOfSoundMps;
+  const drag = dragCoefficient(spec, cl, gearDown, flapsIndex, 1, mach) * q * spec.wingAreaM2;
   const thrust = (drag + spec.massKg * GRAVITY * Math.sin(gammaDeg * DEG_TO_RAD)) / Math.cos(aoaRad);
-  const tas = iasMps / Math.sqrt(air.sigma);
-  return throttleForThrust(spec, thrust, tas, air, tas / air.speedOfSoundMps, q);
+  return throttleForThrust(spec, thrust, tas, air, mach, q);
 }

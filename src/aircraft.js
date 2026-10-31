@@ -86,6 +86,15 @@ export const AIRCRAFT_DATABASE = {
     // under CFM at FL350 and ~11% under the fit at FL410: a sanity check, not a second source.
     // Idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s from flight idle to 95%).
     engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.94, spoolTau: 1.2 },
+    // Compressibility drag rise (aero.js waveDragCd, 0120; Mason's Korn + Lock). Sweep 25° at the
+    // quarter chord and average t/c 12.89% are the 737's in Jenkinson, Simpkin & Rhodes, Civil Jet
+    // Aircraft Design (1999), Aircraft Data File (its t/c row is the Original/Classic; the NG keeps the
+    // 25° sweep and no NG figure is published there). κA 0.95 is Mason's supercritical-section value
+    // (0.87 for NACA 6-series), not fitted: the NG's wing is Boeing's advanced (aft-loaded) section. Cross-check, not a
+    // fit: MDD at a cruise CL of 0.5 is then 0.824, Boeing's practice puts MDD at MMO (Scholz &
+    // Ciornei, DGLR-2005-122) and the 737-800's MMO is 0.82; κA 0.87 would put MDD at 0.736, below the
+    // 0.785-0.79 the 737 really cruises at. A buffet boundary is not modelled.
+    transonic: { kappaA: 0.95, tOverC: 0.1289, sweepDeg: 25 },
     vneKts: 340, // VMO (FAA TCDS A16WE, 737-800): the nose-down trim stop's hands-off speed (trim.js, 0094)
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
     vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)

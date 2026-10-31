@@ -326,7 +326,8 @@ src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
                     windmilling at idle), turbofan (Mach/density lapse, idle, spool lag; the 737's σ^0.94
                     fitted to CFM's FL350 max climb thrust, 0116)
-src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
+src/aero.js         pure aero/avionics: CL with stall, CD + ground effect + the 737's Mach drag rise
+                    (waveDragCd, 0120: Mason's Korn + Lock, spec.transonic), PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),
                     warnings, heading math
