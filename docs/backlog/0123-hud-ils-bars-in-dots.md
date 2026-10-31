@@ -1,7 +1,7 @@
 ---
 id: 0123
 title: HUD fly-to bars read in ILS dots, so they move with the angle like a real localizer and glideslope
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity

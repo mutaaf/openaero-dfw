@@ -52,6 +52,17 @@ export function stallBand(cy, stallKts, iasKts, out) {
   return out;
 }
 
+// The ILS fly-to bars (0123) read in dots (aero.js ilsDots, the gate's scale): ILS_PX_PER_DOT per
+// dot, a tick at each, clamped at full scale (2 dots: 2.5° of localizer, 0.7° of glideslope, FAA
+// AIM 1-1-9), inside the crosshair box's ±ILS_BOX_HALF px. A NaN draws centred.
+export const ILS_PX_PER_DOT = 30;
+export const ILS_MAX_DOTS = 2;
+export const ILS_BOX_HALF = 70;
+export function ilsBarOffsetPx(dots, pxPerDot = ILS_PX_PER_DOT, maxDots = ILS_MAX_DOTS) {
+  if (!(dots === dots)) return 0;
+  return Math.max(-maxDots, Math.min(maxDots, dots)) * pxPerDot;
+}
+
 // The takeoff callout's word box (0035): 26 px tall, 232 px wide (24 characters of bold
 // 15 px monospace), centred, just under the heading box. On the roll the horizon is at cy
 // and rotating moves it down, so the word stays in the sky; it fits between the tapes.
