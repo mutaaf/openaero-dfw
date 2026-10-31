@@ -171,3 +171,22 @@ export function tailVsMainsAccel(body, spec, iasKts) {
   const cap = Math.min(1, (iasKts / (0.8 * (spec.vrKts ?? spec.vrefKts))) ** 2);
   return (-(body.elevInput ?? 0) * cap * m) / spec.inertia.pitch;
 }
+
+// Radio altitude (0122): the lowest main wheel's height over the ground (m), the struts
+// hanging out as they do in the air, so it reads 0 the moment a main tyre touches (and
+// stays 0 on the runway with the struts in). A radio altimeter is rigged to read 0 at
+// main-gear touchdown and the automatic callouts are wheel heights; the CG is gearHeight
+// + strokeM over the runway at that moment (~12 ft on a 737). Nose up lowers the mains
+// (they are aft of the CG), a bank lowers the low wing's main. No gear geometry: the CG's
+// height less gearHeight. Rigged to the mains: nose down, the nose wheel is lower (~4.5 ft at -5°
+// on a 737) and isn't read; past 90° of bank it reads high, where a real one loses lock. Allocates nothing.
+export function radioAltitudeM(body, spec) {
+  if (!spec.gear) return Math.max(0, body.pos.y - body.groundY - spec.gearHeight);
+  const c = gearConstants(spec), q = body.quat;
+  let low = Infinity;
+  for (let i = 1; i < 3; i++) {
+    _r.copy(c.wheels[i]).applyQuaternion(q);
+    if (_r.y < low) low = _r.y;
+  }
+  return Math.max(0, body.pos.y + low - body.groundY);
+}

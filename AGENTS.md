@@ -319,6 +319,10 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
                     (noseWheelYawHold, 0110; cards in tests/flight/groundSteer.test.js); nearly
                     stopped and not breaking away, static friction holds a parked airplane against wind and
                     idle thrust, and its heading up to the tyres' scrub moment (wheelScrubYawHold, 0106)
+                    radioAltitudeM (0122): the lowest main wheel's height (struts out, 0 at touchdown) =
+                    sim.raFt, what the GPWS heights, retard, sink rate / pull up and too low gear read
+                    (audio.js, main.js), as do the RADAR AGL box, the phone's AGL, the HUD FLARE/IDLE cue
+                    and the AP tutor's flare/retard; the coach, grade and assists keep sim.aglFt (the CG's)
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table); densityAltitudeFt
                     (0111: the FAA-H-8083-25 rule, display only) for the start screen's #txtDensityAlt line

@@ -55,6 +55,7 @@ import {
   windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
+import { radioAltitudeM } from './gear.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
 import { createCaption, plainCaption, captionWords } from './captions.js';
@@ -75,7 +76,7 @@ const sim = {
 
   // Flight Parameters
   iasKts: 140, tasKts: 144, gsKts: 122, mach: 0.22,
-  vsiFpm: -700, aglFt: 1270, mslFt: 1876, gLoad: 1.0,
+  vsiFpm: -700, aglFt: 1270, raFt: 1258, mslFt: 1876, gLoad: 1.0,
   aoaDeg: 2.4, betaDeg: 0,
 
   // Controls
@@ -1187,7 +1188,7 @@ function updateTutor(dt) {
   tutorInput.apHdgHold = sim.apHdgHold;
   tutorInput.apAltHold = sim.apAltHold;
   tutorInput.onGround = sim.onGround;
-  tutorInput.aglFt = sim.aglFt;
+  tutorInput.aglFt = sim.raFt; // an autopilot's flare and retard modes read the radio altitude (0122)
   tutorInput.crossM = sim.approach.crossM;
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
@@ -1685,6 +1686,8 @@ function integrateSubStep(dt) {
 
   // Telemetry derivatives
   sim.aglFt = Math.max(0, Math.round((sim.pos.y - sim.groundY) * M_TO_FT));
+  // Radio altitude (0122): the main wheels' height, what the GPWS calls and warnings read.
+  sim.raFt = Math.round(radioAltitudeM(sim, spec) * M_TO_FT);
   sim.mslFt = Math.round(yToFtMsl(sim.pos.y));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
   sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
@@ -1692,8 +1695,8 @@ function integrateSubStep(dt) {
   // Warning alerts
   // Keyed to where the flaps are, like the tape's band (0128): moving the lever doesn't move the wing.
   const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapPos ?? sim.flapsIndex), sim.onGround);
-  const gpwsWarning = isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround);
-  const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
+  const gpwsWarning = isGpwsWarning(sim.raFt, sim.vsiFpm, sim.onGround);
+  const gearWarning = !gpwsWarning && isGearWarning(sim.raFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
   const banner = byId('masterAlertBanner');
   // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (Kid's plane
@@ -1706,7 +1709,7 @@ function integrateSubStep(dt) {
   if (banner.textContent !== bannerText) banner.textContent = bannerText;
   // Spoken once per descent below 500 ft (GPWS mode 4A).
   if (gearWarning && !sim.gearWarned) { sim.gearWarned = true; audio.callout('too low, gear'); }
-  else if (!gearWarning && sim.aglFt > 600) sim.gearWarned = false;
+  else if (!gearWarning && sim.raFt > 600) sim.gearWarned = false;
   // Overspeed (0127): past VMO / VNE or the flaps' placard, one "overspeed" (caption + voice) and
   // the IAS box flashes amber; a warning only, nothing breaks. Kid has no limit to keep.
   sim.speedLimitKts = kid ? null : speedLimitKts(spec, sim.flapDeg ?? 0);
@@ -1966,7 +1969,7 @@ function renderHud() {
     if (!showTrim) { trimHeld.up = trimHeld.dn = false; sim.touchTrim = 0; }
   }
   if (showTrim && sim.trimAlphaDeg != null) drawTrimBug(cx - 131, cy);
-  if (sim.activeEnd && !sim.onGround && sim.aglFt < 60) drawFlareCue(cx, cy);
+  if (sim.activeEnd && !sim.onGround && sim.raFt < 60) drawFlareCue(cx, cy);
 
   // Heading
   const hdgTop = headingBoxTop(cy);
@@ -2144,9 +2147,10 @@ function drawWindBox(w, h, hdgDeg) {
   }
 }
 
-// Flare cue (0073): under 60 ft, FLARE above the boresight (and IDLE under 30 ft with power on).
+// Flare cue (0073): under 60 ft, FLARE above the boresight (and IDLE with power on from 20 ft of radio
+// altitude, with the "retard" call, 0122).
 function drawFlareCue(cx, cy) {
-  const idle = sim.aglFt < 30 && sim.throttle > 0.05;
+  const idle = sim.raFt <= 20 && sim.throttle > 0.05;
   hudCtx.font = 'bold 15px monospace';
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = idle ? '#fcd34d' : '#6ee7b7';
@@ -2585,7 +2589,7 @@ function syncUI() {
   if (!draggingThrottle && Math.abs(Number(rng.value) - throttlePct) >= 1) rng.value = throttlePct;
   byId('txtIasGs').textContent = `${Math.round(sim.iasKts)}/${sim.gsKts}K`;
   byId('txtAltMsl').textContent = `${sim.mslFt} FT`;
-  byId('txtAltAgl').textContent = `${sim.aglFt} FT`;
+  byId('txtAltAgl').textContent = `${sim.raFt} FT`; // RADAR AGL: the wheels' radio altitude (0122)
   byId('txtVsi').textContent = `${sim.vsiFpm} FPM`;
   byId('txtGLoad').textContent = `${sim.gLoad.toFixed(2)}G`;
   byId('txtAoaBadge').textContent = `${fixed1(sim.aoaDeg)}°`;
@@ -2664,7 +2668,7 @@ function syncUI() {
   if (ilsEl.textContent !== ilsTxt) ilsEl.textContent = ilsTxt;
   byId('touchIls').classList.toggle('active-amber', revSlot ? sim.reverserPos > 0 : sim.apApproach);
   byId('txtPhoneIas').textContent = `${Math.round(sim.iasKts)}`;
-  byId('txtPhoneAgl').textContent = `${sim.aglFt}`;
+  byId('txtPhoneAgl').textContent = `${sim.raFt}`; // the wheels' height, what the callouts say (0122)
   byId('txtPhoneVs').textContent = `${sim.vsiFpm}`;
   byId('txtPhoneThr').textContent = sim.engineFailed ? 'OUT' : `${throttlePct}%`;
   byId('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;
@@ -3325,6 +3329,7 @@ window.openaeroDebug = () => {
     fdm: jsbsim && jsbsim.flies(sim.aircraftKey) ? 'jsbsim' : 'builtin',
     groundY: sim.groundY,
     aglFt: sim.aglFt,
+    raFt: sim.raFt, // radio altitude at the main wheels (0122)
     mslFt: sim.mslFt,
     onGround: sim.onGround,
     iasKts: sim.iasKts,
