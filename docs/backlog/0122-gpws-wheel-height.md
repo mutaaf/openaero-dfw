@@ -1,7 +1,7 @@
 ---
 id: 0122
 title: GPWS callouts and the gear warning read the radio altitude at the wheels, not the CG
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: authenticity
