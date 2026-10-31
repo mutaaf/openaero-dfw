@@ -334,6 +334,8 @@ src/aero.js         pure aero/avionics: CL with stall, CD + ground effect + the 
                     placard (spec.vfeKtsByFlapDeg, by where the flaps are, in transit too), overspeedStep's latch (re-arms
                     3 kt below); main.js calls "overspeed" once, flashes the IAS box, and hudLayout.js
                     speedLimitBand marks the tape (not for Kid)
+                    stallSpeedKts (1 g, sea-level ρ: the model's IAS is EAS) at sim.flapPos is the tape's low-speed
+                    band (0128, hudLayout.js stallBand: red up to Vs, amber to 1.1 Vs; not for Kid, not on the ground)
 src/weather.js      METAR parsing, wind vector, gusts, runway components, fog; surfaceWindFactor
                     (0106): the METAR's 10 m wind by the log law (z0 0.03 m) at the CG's height,
                     ~70% on the runway, which main.js updateWind applies; metarWetRunway (0108): RA/DZ

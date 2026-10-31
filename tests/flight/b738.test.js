@@ -15,7 +15,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { engineThrust } from '../../src/engine.js';
 import { airAt } from '../../src/atmosphere.js';
-import { liftCoefficient, dragCoefficient, stallSpeedKts, vrefFor } from '../../src/aero.js';
+import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { makeBody, fly, attitude, vsFpm, speedHoldPilot } from './harness.js';
@@ -48,6 +48,22 @@ describe('Boeing 737-800', () => {
     expect(b738.flapDetentsDeg[FLAPS_40]).toBe(40);
     expect(Math.abs(vrefFor(b738, FLAPS_40) - vrefKts(FLAPS_40))).toBeLessThanOrEqual(1);
     expect(vrefFor(b738, FLAPS_30)).toBe(b738.vrefKts);
+  });
+
+  // The speed tape's red band (0128) ends at stallSpeedKts: it must be where this airplane really
+  // stalls. Flown at idle, wings level, slowing 1 kt/s until the wing passes its stall angle.
+  it('flown to the stall at each flap notch, it stalls within 3 kt of the speed tape\'s red band (stallSpeedKts)', () => {
+    for (const flaps of [0, FLAPS_10, FLAPS_30, FLAPS_40]) {
+      const v0 = stallSpeedKts(b738, flaps) + 25;
+      const b = makeBody(b738, { kts: v0, altM: 1500, flaps });
+      let kts = null;
+      fly(b, b738, 90, speedHoldPilot((x) => Math.max(20, v0 - x.t)), (x) => {
+        if (x.aoaDeg > stallAoaDeg(b738, flaps)) { kts = x.iasKts; return true; }
+        return false;
+      });
+      expect(kts).not.toBeNull();
+      expect(Math.abs(kts - stallSpeedKts(b738, flaps))).toBeLessThanOrEqual(3);
+    }
   });
 
   it('landing configuration L/D is about 7–8', () => {
