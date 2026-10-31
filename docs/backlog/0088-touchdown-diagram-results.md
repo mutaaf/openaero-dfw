@@ -1,12 +1,12 @@
 ---
 id: 0088
 title: Results card shows where you touched down on a runway diagram
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-10-24
-pr:
+pr: 138
 ---
 
 ## Why
@@ -22,10 +22,10 @@ runway length/width; draw a small 2D canvas strip in the results card (CSS only 
 no new assets), marking the aiming point, the touchdown zone, the centreline and the dot.
 
 ## Acceptance criteria
-- [ ] After a landing the card shows a strip with the dot at the measured touchdown position (within 1 px of the computed position)
-- [ ] The strip is labelled for screen readers ("touched down 640 m past the threshold, 3 m left of centre")
-- [ ] The card still fits at 390x844 and 844x390 without scrolling the page
-- [ ] No console errors; boot JS stays within budget
+- [x] After a landing the card shows a strip with the dot at the measured touchdown position (within 1 px of the computed position)
+- [x] The strip is labelled for screen readers ("touched down 640 m past the threshold, 3 m left of centre")
+- [x] The card still fits at 390x844 and 844x390 without scrolling the page
+- [x] No console errors; boot JS stays within budget
 
 ## Test plan
 Unit test for the position -> pixel mapping and the text label; e2e checks the strip exists

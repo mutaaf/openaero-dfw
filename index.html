@@ -58,7 +58,9 @@
     <div id="txtGradeReason" class="hidden text-xs text-red-300 pt-2"></div>
     <div id="tipRow" class="hidden text-xs pt-2"><span class="text-[10px] uppercase tracking-widest text-slate-400">Next time</span> <span id="txtTip" class="text-sky-200"></span></div>
     <div id="txtStabilized" class="hidden text-[11px] font-bold pt-2 text-amber-300"></div>
-    <ul id="resultsFactors" class="flex flex-col gap-1.5 py-3 text-[11px]"></ul>
+    <!-- Where the wheels touched (0088): runway strip drawn by src/touchdownStrip.js -->
+    <canvas id="touchdownStrip" class="hidden block w-full h-6 mt-2" role="img" aria-label=""></canvas>
+    <ul id="resultsFactors" class="flex flex-col gap-1.5 pt-2 pb-3 text-[11px]"></ul>
     <div class="grid grid-cols-2 gap-2">
       <button id="btnFlyAgain" class="hud-btn active rounded-xl min-h-[44px] text-xs font-bold">FLY AGAIN</button>
       <button id="btnKeepRolling" class="hud-btn rounded-xl min-h-[44px] text-xs">KEEP ROLLING</button>

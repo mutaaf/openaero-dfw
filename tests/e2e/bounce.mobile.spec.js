@@ -2,7 +2,7 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0091 on a phone (390x844, touch): the bounce prompt and the results card with its
-// "Bounced once" line and the next-time tip (0061) fit the screen without a scroll, upright
+// "Bounced once" line, the next-time tip (0061) and the runway strip (0088) fit the screen without a scroll, upright
 // and held sideways.
 test('phone: the bounce prompt and the capped results card fit 390x844', async ({ page }) => {
   test.setTimeout(150_000);
@@ -52,7 +52,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   await page.screenshot({ path: test.info().outputPath('bounce-390.png') });
   // Held sideways (844x390): both buttons stay on screen with the bounce line showing.
   await page.setViewportSize({ width: 844, height: 390 });
-  for (const id of ['#tipRow', '#btnFlyAgain', '#btnKeepRolling']) {
+  for (const id of ['#tipRow', '#touchdownStrip', '#btnFlyAgain', '#btnKeepRolling']) {
     await expect(page.locator(id)).toBeInViewport({ ratio: 1 });
   }
   // With a stabilized-gate line too (an ordinary final has one), the buttons stay inside the
@@ -63,7 +63,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
     g.classList.remove('hidden');
   });
   const card = await page.locator('#resultsCard').boundingBox();
-  for (const id of ['#tipRow', '#btnFlyAgain', '#btnKeepRolling']) {
+  for (const id of ['#tipRow', '#touchdownStrip', '#btnFlyAgain', '#btnKeepRolling']) {
     const b = await page.locator(id).boundingBox();
     expect(b.y + b.height, id).toBeLessThanOrEqual(card.y + card.height);
   }

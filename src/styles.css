@@ -286,3 +286,9 @@ details[open] > summary::before { transform: rotate(90deg); }
   position: absolute; left: 8px; bottom: 14px; z-index: 40; font: 10px monospace; color: #a7f3d0;
   background: rgba(2, 6, 23, .7); padding: 2px 6px; border-radius: 4px; pointer-events: none;
 }
+/* The results card on a short screen (a phone held sideways): the runway strip (0088) and the
+   factor rows close up so FLY AGAIN stays inside the card with a line of room for a wider font. */
+@media (max-height: 480px) {
+  #touchdownStrip { height: 1.25rem; margin-top: 0.375rem; }
+  #resultsFactors { gap: 0.25rem; }
+}

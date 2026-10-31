@@ -50,7 +50,9 @@ export function gradeLanding(t) {
   else if (bank > 10) { grade = 'CRASH'; reason = 'Wingtip strike: too much bank at touchdown.'; }
   else if (t.pastThresholdM < 0) { grade = 'D'; reason = 'Touched down short of the runway.'; }
   else if (offRunway) { grade = 'D'; reason = 'Touched down off the runway.'; }
-  return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason };
+  // Where the wheels touched, for the card's runway strip (0088, touchdownStrip.js).
+  const touchdown = { pastThresholdM: t.pastThresholdM, crossM: t.crossM, lengthM: t.runwayLengthM, widthM: t.runwayWidthM };
+  return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason, touchdown };
 }
 
 // Bounced landings (ticket 0091). A bounce is the wheels back above BOUNCE_FT for at least

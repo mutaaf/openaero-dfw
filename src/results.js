@@ -3,6 +3,7 @@
 // main.js pauses the flight first (in the air, 0047; on the rollout, 0106).
 import { GRADE_COLOURS } from './landing.js';
 import { landingTip } from './landingTip.js';
+import { drawStrip, touchdownLabel } from './touchdownStrip.js';
 
 const byId = (id) => document.getElementById(id);
 export function showResults(sim, result, best, end, gate) {
@@ -53,4 +54,17 @@ export function showResults(sim, result, best, end, gate) {
     list.appendChild(li);
   }
   card.classList.remove('hidden');
+  // The runway strip (0088): a landing on the runway's own picture; none for a drill's card or a
+  // glide that missed the runway (the miss is its own line, the strip would only pin it to an edge).
+  const strip = byId('touchdownStrip');
+  const td = result.madeRunway === false ? null : result.touchdown;
+  strip.classList.toggle('hidden', !td);
+  strip.setAttribute('aria-label', td ? touchdownLabel(td) : '');
+  shownStrip = td ? { td, grade: result.grade } : null;
+  if (td) drawStrip(strip, td, result.grade);
 }
+// Turned sideways with the card up, the strip changes size: draw it again at the new one.
+let shownStrip = null;
+addEventListener('resize', () => {
+  if (shownStrip && !byId('resultsCard').classList.contains('hidden')) drawStrip(byId('touchdownStrip'), shownStrip.td, shownStrip.grade);
+});
