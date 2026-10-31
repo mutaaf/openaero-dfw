@@ -1,12 +1,12 @@
 ---
 id: 0123
 title: HUD fly-to bars read in ILS dots, so they move with the angle like a real localizer and glideslope
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-10-31
-pr:
+pr: 146
 ---
 
 ## Why
@@ -25,8 +25,9 @@ full scale is 0.7 degrees (FAA AIM 1-1-9, https://www.faa.gov/air_traffic/public
 
 ## What
 Drive both bars from `ilsDots(...)` with the same antenna distances the gate uses
-(`main.js` ~l.821-830): px = dots * a fixed px-per-dot, clamped at +-2.5 dots (localizer, full
-scale 2 dots of 1.25 degrees) and +-2 dots (glideslope). Draw small dot ticks at the dots so the
+(`main.js` ~l.821-830): px = dots * a fixed px-per-dot, clamped at +-2 dots for both (full scale: 2 dots of 1.25
+degrees = 2.5 degrees of localizer, 2 of 0.35 = 0.7 degrees of glideslope; an earlier draft said
++-2.5 dots for the localizer, which mixed up dots and degrees and would leave the 140 px box). Draw small dot ticks at the dots so the
 bar can be read against them. Pure maths in `src/aero.js` or `src/hudLayout.js` (a
 `ilsBarOffsetPx(dots, pxPerDot, maxDots)` helper), not in the draw call. The bars still show
 only on an approach (activeEnd, -500 m to 20 km), and Kid keeps them hidden if it hides them today.

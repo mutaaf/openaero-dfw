@@ -214,3 +214,45 @@ describe('fixed1', () => {
     expect(fixed1(15.26)).toBe('15.3');
   });
 });
+
+// Ticket 0123: the HUD's localizer and glideslope fly-to bars read in ILS dots (aero.js ilsDots),
+// the scale the stabilized gate's "more than 1 dot" is judged on.
+import { ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF } from '../../src/hudLayout.js';
+import { ilsDots, LOC_DOT_DEG, GS_DOT_DEG } from '../../src/aero.js';
+
+describe('ilsBarOffsetPx (0123)', () => {
+  it('draws zero error through the centre and one dot on one tick', () => {
+    expect(ilsBarOffsetPx(0)).toBe(0);
+    expect(ilsBarOffsetPx(1)).toBe(ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(-1)).toBe(-ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(0.5)).toBeCloseTo(ILS_PX_PER_DOT / 2, 9);
+  });
+
+  it('is symmetric and clamps at full scale (2 dots: 2.5° localizer, 0.7° glideslope, AIM 1-1-9)', () => {
+    expect(ILS_MAX_DOTS).toBe(2);
+    expect(ILS_MAX_DOTS * LOC_DOT_DEG).toBeCloseTo(2.5, 9);
+    expect(ILS_MAX_DOTS * GS_DOT_DEG).toBeCloseTo(0.7, 9);
+    for (const d of [0.3, 1.7, 2, 3, 40]) expect(ilsBarOffsetPx(-d)).toBe(-ilsBarOffsetPx(d));
+    expect(ilsBarOffsetPx(2)).toBe(ILS_MAX_DOTS * ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(7)).toBe(ILS_MAX_DOTS * ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(-1e6)).toBe(-ILS_MAX_DOTS * ILS_PX_PER_DOT);
+  });
+
+  it('never leaves the 140 px crosshair box, and a bad input draws centred', () => {
+    expect(ILS_BOX_HALF).toBe(70);
+    expect(ILS_MAX_DOTS * ILS_PX_PER_DOT).toBeLessThan(ILS_BOX_HALF);
+    expect(ilsBarOffsetPx(NaN)).toBe(0);
+    expect(ilsBarOffsetPx(Infinity)).toBe(ILS_MAX_DOTS * ILS_PX_PER_DOT);
+  });
+
+  it('is a function of the angle only: the same angular error is the same offset at 4 NM and 1 NM', () => {
+    const nm = 1852;
+    for (const deg of [0.1, 0.35, 0.6]) {
+      const off = (distM) => ilsBarOffsetPx(ilsDots(Math.tan(deg * Math.PI / 180) * distM, distM, GS_DOT_DEG));
+      expect(off(4 * nm)).toBeCloseTo(off(1 * nm), 9);
+    }
+    // ...and the same 100 m off the centreline is much more of a dot at 1 NM than at 4 NM.
+    const loc = (distM) => ilsBarOffsetPx(ilsDots(100, distM, LOC_DOT_DEG));
+    expect(loc(1 * nm + 3300)).toBeGreaterThan(loc(4 * nm + 3300) * 1.8);
+  });
+});

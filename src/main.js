@@ -53,6 +53,7 @@ import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
   windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
+  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { radioAltitudeM } from './gear.js';
@@ -164,6 +165,8 @@ const sim = {
   activeEnd: null,
   missionKey: 'kdfw_35c_final',
   approach: { distM: 0, crossM: 0, heightAbovePathM: 0, pathHeightM: 0 },
+  // ILS deviations in dots (0123, + = right of / above), on the stabilized gate's antennas.
+  ilsLocDots: 0, ilsGsDots: 0, ilsLocBarPx: null, ilsGsBarPx: null,
   rwySelectTimer: 0,
   pad: null,
   inputSource: 'keyboard',
@@ -819,9 +822,8 @@ function checkStabilizedGate() {
   const ap = sim.approach;
   // On the final: within 18 m per ft of gate height (3x the 3° path's distance to the gate:
   // a steep dive from a 4 NM final still counts, a tour 15 km out doesn't) and 3 loc dots.
-  const geom = gs.armed && aaeFt <= gs.armFt && sim.vel.y < 0 ? RUNWAYS_GEOM.find((r) => r.ends.includes(end.id)) : null;
   let locDots = 0;
-  if (geom) locDots = ilsDots(ap.crossM, ap.distM + geom.lengthM - end.displacedM + 300, LOC_DOT_DEG);
+  if (gs.armed && aaeFt <= gs.armFt && sim.vel.y < 0) locDots = ilsDots(ap.crossM, ap.distM + locPastThresholdM(end), LOC_DOT_DEG);
   const onFinal = ap.distM > 0 && ap.distM < gs.armFt * 18 && Math.abs(locDots) <= 3;
   const step = gateStep(gs, aaeFt, gateFt, sim.vel.y < 0, onFinal);
   if (step === 'reset') sim.gate = null;
@@ -1215,8 +1217,8 @@ function updateCoach(dt) {
     coachInput.kid = sim.assist === 'kid';
     coachInput.iasKts = sim.iasKts;
     coachInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
-    // Localizer dots from the antenna ~3.3 km past the threshold (close enough for advice).
-    coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + 3300, LOC_DOT_DEG) : 0;
+    // Localizer dots on the HUD bar's and the gate's antenna (0123).
+    coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + locPastThresholdM(sim.activeEnd), LOC_DOT_DEG) : 0;
     coachInput.gearLocked = gearLocked(sim);
     coachInput.flapsLanding = sim.flapsIndex >= 2 && sim.flapPos >= 1.999;
     coachInput.wet = sim.wetRunway;
@@ -1765,7 +1767,23 @@ function updateActiveRunway(dt) {
     const hdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
     if (!sim.onGround) sim.activeEnd = selectActiveRunway(RUNWAY_ENDS, sim.pos, hdg, sim.activeEnd);
   }
-  if (sim.activeEnd) Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
+  if (sim.activeEnd) {
+    const ap = Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
+    sim.ilsLocDots = ilsDots(ap.crossM, ap.distM + locPastThresholdM(sim.activeEnd), LOC_DOT_DEG);
+    sim.ilsGsDots = ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG);
+  } else sim.ilsLocDots = sim.ilsGsDots = 0;
+}
+
+// The localizer antenna's distance past a landing threshold (~300 m beyond the far end), as the
+// stabilized gate measures it (checkStabilizedGate); looked up once per runway end.
+let _locEnd = null, _locPastM = 0;
+function locPastThresholdM(end) {
+  if (end !== _locEnd) {
+    const geom = RUNWAYS_GEOM.find((r) => r.ends.includes(end.id));
+    _locEnd = end;
+    _locPastM = (geom ? geom.lengthM : end.lengthM) - end.displacedM + 300;
+  }
+  return _locPastM;
 }
 
 function updateCamera() {
@@ -1988,18 +2006,34 @@ function renderHud() {
 
   // ILS Guidance Crosshairs
   // Fly-to bars: the localizer bar sits where the centreline is (left when you're right of
-  // it), the glideslope bar where the path is (below when you're high).
+  // it), the glideslope bar where the path is (below when you're high). They read in dots
+  // (0123, hudLayout.js ilsBarOffsetPx), the angle a real ILS needle shows and the stabilized
+  // gate judges, with a tick at each dot. The glideslope bar goes on the ground (a takeoff roll
+  // starts past the threshold, under the path: full-scale fly-up), once past its antenna, and
+  // under the flare cue's 60 ft, where a real needle swings to fly-up and a kid would chase it.
+  sim.ilsLocBarPx = sim.ilsGsBarPx = null;
   if (sim.activeEnd && sim.approach.distM > -500 && sim.approach.distM < 20000) {
-    const locDev = THREE.MathUtils.clamp(-sim.approach.crossM * 0.08, -80, 80);
-    const gsDev = THREE.MathUtils.clamp(sim.approach.heightAbovePathM * 0.4, -60, 60);
+    const B = ILS_BOX_HALF;
+    const locDev = sim.ilsLocBarPx = -ilsBarOffsetPx(sim.ilsLocDots);
+    const gs = !sim.onGround && sim.raFt >= 60 && sim.approach.distM > -AIM_POINT_M;
+    const gsDev = gs ? (sim.ilsGsBarPx = ilsBarOffsetPx(sim.ilsGsDots)) : 0;
 
+    hudCtx.fillStyle = 'rgba(245, 158, 11, 0.8)';
+    for (let k = -ILS_MAX_DOTS; k <= ILS_MAX_DOTS; k++) {
+      if (!k) continue;
+      const o = k * ILS_PX_PER_DOT;
+      // Upright marks along the bottom (localizer), flat ones down the right (glideslope): shaped
+      // across their scale so they don't read as pitch-ladder rungs, and apart at the corner.
+      hudCtx.fillRect(cx + o - 1, cy + B - 8, 2, 6);
+      if (gs) hudCtx.fillRect(cx + B - 8, cy + o - 1, 6, 2);
+    }
     hudCtx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
-    hudCtx.setLineDash([3, 3]);
+    hudCtx.setLineDash(ILS_DASH);
     hudCtx.beginPath();
-    hudCtx.moveTo(cx + locDev, cy - 70); hudCtx.lineTo(cx + locDev, cy + 70);
-    hudCtx.moveTo(cx - 70, cy + gsDev); hudCtx.lineTo(cx + 70, cy + gsDev);
+    hudCtx.moveTo(cx + locDev, cy - B); hudCtx.lineTo(cx + locDev, cy + B);
+    if (gs) { hudCtx.moveTo(cx - B, cy + gsDev); hudCtx.lineTo(cx + B, cy + gsDev); }
     hudCtx.stroke();
-    hudCtx.setLineDash([]);
+    hudCtx.setLineDash(NO_DASH);
   }
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
@@ -2009,6 +2043,8 @@ function renderHud() {
 
   hudCtx.restore();
 }
+
+const ILS_DASH = [3, 3], NO_DASH = [];
 
 // Screen position (HUD canvas px) of a world point, or null behind the camera.
 const _hudP = new THREE.Vector3();
@@ -3303,6 +3339,7 @@ window.openaeroDebug = () => {
     speedLimitKts: sim.speedLimitKts ?? null,
     overspeed: !!sim.overspeed,
     stallKts: sim.stallKts ?? null,
+    ilsLocDots: sim.ilsLocDots, ilsGsDots: sim.ilsGsDots, ilsLocBarPx: sim.ilsLocBarPx, ilsGsBarPx: sim.ilsGsBarPx,
     inputSource: sim.inputSource,
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
