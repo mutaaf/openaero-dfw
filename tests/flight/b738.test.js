@@ -438,7 +438,7 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
   // figure (FCOM/AFM) when one is found. KNOWN GAP (0127): with CFM's thrust (0116) and the Korn
   // drag rise (0120, the card below: +19 counts here) the model still climbs at ~+67 fpm (was +172
   // before 0120, ~+1,200 before 0116) and holds Mach 0.79 level to ~FL428 (was ~FL438; ~FL520).
-  // At MMO 0.82 it no longer holds FL410. What is left: no buffet boundary, and one σ exponent for
+  // At MMO 0.82 it only just holds FL410 on full thrust (+8 fpm; it fails by ~FL415). What is left: no buffet boundary, and one σ exponent for
   // the thrust above FL350 (Mattingly lapses ~10% faster by FL420), both uncited so far.
   it.fails('KNOWN GAP (0127): with full thrust at 42,000 ft, Mach 0.79, 65 t, it cannot hold level flight (ceiling FL410)', () => {
     const { fpm, mach } = cruise(42000, CRUISE_MACH, 1);
