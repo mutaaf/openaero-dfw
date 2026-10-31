@@ -49,14 +49,16 @@ export const vrefFor = (spec, flapsIndex) => spec.vrefKtsByFlap?.[flapsIndex] ??
 
 export const stallWarningKts = (spec, flapsIndex) => stallSpeedKts(spec, flapsIndex) + 5;
 
-// The speed limit (KIAS) for where the flaps are (0127): VMO / VNE clean, else the placard of the
-// first notch the flaps have reached or passed (a flap between 10 and 30 is past 10's placard, as
-// the C172's "10°-30°: 85" reads). null for an airframe without the data (the F-16).
+// The speed limit (KIAS) for where the flaps are (0127): VMO / VNE with the flaps up, else the placard
+// of the first breakpoint in spec.vfeKtsByFlapDeg at or beyond the flaps' actual angle (flaps between
+// two placards are past the lower one: the C172's "10°-30°: 85", the 737's 25-30 at 30's 175). null
+// for an airframe without the data (the F-16). Compared with the model's IAS, which is EAS: VMO is
+// KCAS, so up high the call comes a few knots late (~5 kt at 10,000 ft); under 250 kt it is < 2 kt.
 export function speedLimitKts(spec, flapDeg) {
-  const vmo = spec.vneKts ?? null, vfe = spec.vfeKtsByFlap, d = spec.flapDetentsDeg;
-  if (vmo === null || !vfe || !d) return vmo;
-  for (let i = 0; i < d.length; i++) if (flapDeg <= d[i] + 0.5) return i === 0 ? vmo : Math.min(vmo, vfe[i]);
-  return Math.min(vmo, vfe[d.length - 1]);
+  const vmo = spec.vneKts ?? null, vfe = spec.vfeKtsByFlapDeg;
+  if (vmo === null || !vfe || flapDeg <= 0.5) return vmo;
+  for (const [deg, kts] of vfe) if (flapDeg <= deg + 0.5) return Math.min(vmo, kts);
+  return Math.min(vmo, vfe[vfe.length - 1][1]);
 }
 
 // The overspeed warning's latch: on above the limit, off only OVERSPEED_REARM_KTS below it, so a

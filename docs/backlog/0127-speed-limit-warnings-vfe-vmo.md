@@ -39,13 +39,13 @@ only: structural failure is out of scope). Kid is exempt (assist level hides it,
 other pilot-only cues). F-16 and gear-extended limits are out of scope.
 
 ## Acceptance criteria
-- [ ] `speedLimit` returns the flap limit for the current notch and VMO/VNE with flaps up, per aircraft, pinned in a unit test with the cited values
-- [ ] The amber limit mark is drawn on the tape when it is on the tape's span, and is hidden when it is off it
-- [ ] IAS above the limit shows one "Overspeed" caption and one spoken callout (not repeated every frame); it clears when IAS drops below
-- [ ] The 737 on the default final at Vref (150 kt, flaps 30) never triggers it; the same airplane at 200 kt with flaps 30 does
-- [ ] Not shown for Kid
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse; no new per-frame allocations
-- [ ] No frame-time regression (e2e perf probe within budget)
+- [x] `speedLimit` returns the flap limit for the current notch and VMO/VNE with flaps up, per aircraft, pinned in a unit test with the cited values
+- [x] The amber limit mark is drawn on the tape when it is on the tape's span, and is hidden when it is off it
+- [x] IAS above the limit shows one "Overspeed" caption and one spoken callout (not repeated every frame); it clears when IAS drops below
+- [x] The 737 on the default final at Vref (150 kt, flaps 30) never triggers it; the same airplane at 200 kt with flaps 30 does
+- [x] Not shown for Kid
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse; no new per-frame allocations
+- [x] No frame-time regression (e2e perf probe within budget)
 
 ## Test plan
 Unit: `speedLimit` per aircraft and notch; the hudLayout tape-mark helper (on/off span);

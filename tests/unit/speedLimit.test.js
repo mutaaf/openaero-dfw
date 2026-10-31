@@ -23,12 +23,30 @@ describe('speedLimitKts', () => {
     expect(speedLimitKts(c172, 30)).toBe(85);
   });
 
-  it('flaps moving past a notch take the next notch\'s limit (the placard covers the position, not the lever)', () => {
+  it('flaps in transit take the placard of where they are, including the 737\'s 15 and 25 on the way', () => {
     expect(speedLimitKts(b738, 0.3)).toBe(340); // a hair of travel is still clean
     expect(speedLimitKts(b738, 4)).toBe(210);
-    expect(speedLimitKts(b738, 12)).toBe(175);
+    expect(speedLimitKts(b738, 12)).toBe(200);
+    expect(speedLimitKts(b738, 15)).toBe(200);
+    expect(speedLimitKts(b738, 20)).toBe(190);
+    expect(speedLimitKts(b738, 27)).toBe(175);
     expect(speedLimitKts(b738, 35)).toBe(162);
     expect(speedLimitKts(c172, 15)).toBe(85);
+  });
+
+  it('a 737 retracting 30 -> 10 at 185 kt is called once, only while the flaps are still past 25', () => {
+    let warned = false, calls = 0;
+    for (let deg = 30; deg >= 10; deg -= 0.25) {
+      const w = overspeedStep(warned, 185, speedLimitKts(b738, deg));
+      if (w && !warned) calls++;
+      warned = w;
+      if (deg < 25) expect(w, `${deg}°`).toBe(false);
+    }
+    expect(calls).toBe(1);
+  });
+
+  it('flap load relief: flaps held at 30 above 162 kt are inside the 175 limit', () => {
+    expect(speedLimitKts(b738, 30)).toBeGreaterThan(b738.systems.flaps.loadRelief.aboveKts);
   });
 
   it('the F-16 has no limit here (out of scope): null, so nothing is drawn or said', () => {
@@ -36,8 +54,9 @@ describe('speedLimitKts', () => {
   });
 
   it('the 737 on the default final (flaps 30, Vref + 5 = 155) is 20 kt inside its limit', () => {
-    expect(155 < speedLimitKts(b738, 30)).toBe(true);
-    expect(200 > speedLimitKts(b738, 30)).toBe(true);
+    expect(b738.vrefKts + 5).toBe(155);
+    expect(speedLimitKts(b738, 30) - (b738.vrefKts + 5)).toBe(20);
+    expect(b738.vrefKts + 5 + 50).toBeGreaterThan(speedLimitKts(b738, 30)); // the e2e's +50 kt
   });
 });
 

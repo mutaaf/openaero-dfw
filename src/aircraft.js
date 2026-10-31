@@ -98,10 +98,11 @@ export const AIRCRAFT_DATABASE = {
     // really cruises at. A buffet boundary is not modelled.
     transonic: { kappaA: 0.95, tOverC: 0.1289, sweepDeg: 25 },
     vneKts: 340, // VMO (FAA TCDS A16WE, 737-800): the nose-down trim stop's hands-off speed (trim.js, 0094)
-    // Flap placard speeds (KIAS) per flapDetentsDeg notch (0127; [0] is VMO's, unused): flaps 10 210,
-    // 30 175, 40 162. These are the widely published 737-800 values (crew study cards; no public
-    // Boeing FCOM), not a certified source; 14 CFR 25.1583 is the rule that a flight manual gives them.
-    vfeKtsByFlap: [null, 210, 175, 162],
+    // Flap placard speeds (0127), [flap °, KIAS]: 10 210, 15 200, 25 190, 30 175, 40 162. The model's
+    // lever has 10/30/40, but the flaps pass 15 and 25 in transit, so their placards apply on the way.
+    // These are the widely published 737-800 values (crew study cards; no public Boeing FCOM), not a
+    // certified source; 14 CFR 25.1583 is the rule that a flight manual gives them.
+    vfeKtsByFlapDeg: [[10, 210], [15, 200], [25, 190], [30, 175], [40, 162]],
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
     vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
     // The model's Vr at flaps 10, 65 t, fitted to its own lift curve: the speed from which a
@@ -184,7 +185,7 @@ export const AIRCRAFT_DATABASE = {
     // windmillCd: the idle prop's drag, from the POH's ~9:1 glide at 68 KIAS.
     engine: { type: 'piston-prop', thrustTableN: [[0, 2070], [20, 2100], [38, 2105], [50, 1960], [65, 1680], [80, 1250], [124, 0]], windmillCd: 0.0188, spoolTau: 0.3 },
     vneKts: 163, // never exceed, KIAS (POH Section 2): the nose-down trim stop's hands-off speed (trim.js, 0094)
-    vfeKtsByFlap: [null, 110, 85, 85], // flaps extended (0127, POH Section 2): 110 KIAS to 10°, 85 KIAS 10°-30°
+    vfeKtsByFlapDeg: [[10, 110], [30, 85]], // flaps extended (0127, POH Section 2): 110 KIAS to 10°, 85 KIAS 10°-30°
     vrefKts: 62,
     vrKts: 55,
     stallCleanKts: 48,

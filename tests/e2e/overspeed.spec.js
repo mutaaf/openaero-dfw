@@ -30,7 +30,8 @@ test('the 737 on the default final (Vref + 5, flaps 30) is inside its 175 kt lim
   // The same final 50 kt fast (~205 KIAS), flaps 30.
   await page.evaluate(() => window.openaeroDebugFinal('KDFW', '35C', 4, 50));
   await expect.poll(async () => (await snap(page)).overspeed, { timeout: 5_000 }).toBe(true);
-  await expect(page.locator('#calloutCaption')).toHaveText('overspeed', { timeout: 5_000 });
+  // Learner reads what to do (captions.js PLAIN).
+  await expect(page.locator('#calloutCaption')).toHaveText('overspeed · slow down', { timeout: 5_000 });
   // Held over the limit for a few seconds: still the one call, not one per frame or gust.
   await page.waitForTimeout(3_000);
   expect((await snap(page)).overspeed).toBe(true);

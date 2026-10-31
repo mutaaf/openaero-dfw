@@ -2032,15 +2032,15 @@ function drawSpeedBug(x, y) {
   hudCtx.textAlign = 'left';
 }
 
-// The speed limit for the flaps (0127, aero.js speedLimitKts): an amber tick at it and an amber
+// The speed limit for the flaps (0127, aero.js speedLimitKts): an orange tick at it and an orange
 // strip from it up the tape, inside the target band's strip; nothing when it is above the tape.
 const _limitBand = { y: 0, tick: false, top: 0, bot: 0, show: false };
 function drawSpeedLimit(x, y) {
   const b = speedLimitBand(y, sim.speedLimitKts, sim.iasKts, _limitBand);
   if (!b.show) return;
-  hudCtx.fillStyle = 'rgba(245, 158, 11, 0.85)';
+  hudCtx.fillStyle = 'rgba(249, 115, 22, 0.9)'; // orange: not the trim bug's amber
   hudCtx.fillRect(x - 7, b.top, 3, b.bot - b.top);
-  if (b.tick) hudCtx.fillRect(x - 16, b.y - 1, 16, 2);
+  if (b.tick) hudCtx.fillRect(x - 8, b.y - 1, 8, 2); // clear of the readout box (ends at x - 8)
 }
 
 // Pilot's trim (0094) works where the trim is the player's: not under an assist or a
@@ -2441,7 +2441,9 @@ function loadScenario(key, final = null) {
     const yaw = -mission.hdg * DEG_TO_RAD;
     const d = courseVector(mission.hdg);
     sim.pos.set(x, y, z);
-    sim.vel.set(d.x * mission.speedMps, 0, d.z * mission.speedMps);
+    // A tour's speed is the jets'; the Cessna starts at ~VNO (0.8 VNE), not past its VNE (0127).
+    const v = sim.spec.vneKts ? Math.min(mission.speedMps, 0.8 * sim.spec.vneKts * KTS_TO_MPS) : mission.speedMps;
+    sim.vel.set(d.x * v, 0, d.z * v);
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), yaw);
     sim.throttle = mission.throttle;
     sim.flapsIndex = 0;
