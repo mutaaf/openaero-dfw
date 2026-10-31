@@ -426,3 +426,39 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
     expect(fpm).toBeLessThanOrEqual(0);
   });
 });
+
+// Descent (ticket 0119), 65 t, ISA, clean, idle (throttle 0). EUROCONTROL Aircraft Performance
+// Database, B738, read 2026-10-31 (learningzone.eurocontrol.int/ilp/customs/ATCPFDB/details.aspx?ICAO=B738):
+//   Initial descent (to FL 240): Mach 0.78, ROD 800 ft/min
+//   Descent (to FL 100):         IAS 280 kt, ROD 3,500 ft/min
+//   Approach:                    IAS 250 kt, ROD 1,500 ft/min
+// The APD gives nominal rates for the speed schedule, not "at idle": the Mach 0.78 rate is a
+// shallow, thrust-managed descent, so idle must be at least as steep (a floor, not a match).
+// The 280 kt rate is the one a flight-planning table also treats as the descent rate. The
+// harness holds EAS (≈ CAS within a few kt at these levels) with pitch.
+function idleDescent(ft, kts, mach = null) {
+  const target = (x) => (mach ? easAtMach(x.pos.y * M_TO_FT, mach) / KTS_TO_MPS : kts);
+  const b = makeBody(b738, { kts: mach ? easAtMach(ft, mach) / KTS_TO_MPS : kts, altM: ft / M_TO_FT, gearDown: false, throttle: 0 });
+  const hold = speedHoldPilot(target);
+  fly(b, b738, 40, (x, dt) => { x.throttle = 0; hold(x, dt); });
+  let sum = 0, n = 0;
+  fly(b, b738, 30, (x, dt) => { x.throttle = 0; hold(x, dt); sum += vsFpm(x); n++; });
+  return { fpm: -sum / n, mach: b.mach };
+}
+
+describe('Boeing 737-800 descent (EUROCONTROL APD; 0119)', () => {
+  // Measured 2,908 fpm at idle, Mach 0.78, FL350 (APD's 800 fpm is the schedule's rate).
+  it('at idle on the APD Mach 0.78 initial descent it sinks at least the published 800 ft/min and holds the Mach', () => {
+    const { fpm, mach } = idleDescent(35000, null, 0.78);
+    expect(fpm).toBeGreaterThanOrEqual(800);
+    expect(Math.abs(mach - 0.78)).toBeLessThanOrEqual(0.01);
+    expect(mach).toBeLessThan(0.82); // below the published MMO-class limit while descending
+  });
+
+  // KNOWN GAP (0126): idle at 280 kt, FL170 (the middle of APD's FL240-FL100 descent) sinks
+  // ~1,800-1,900 ft/min, about half of APD's 3,500 (±20% = 2,800-4,200). Either the clean
+  // airframe's idle drag is low or the idle thrust (4% of static, not Mach-lapsed) is too high.
+  it.fails('KNOWN GAP (0126): idle at 280 kt, FL170, 65 t sinks at the APD descent rate, 3,500 ft/min (±20%)', () => {
+    within(idleDescent(17000, 280).fpm, 3500, 0.2);
+  });
+});
