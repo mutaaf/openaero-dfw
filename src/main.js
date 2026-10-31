@@ -1217,8 +1217,8 @@ function updateCoach(dt) {
     coachInput.kid = sim.assist === 'kid';
     coachInput.iasKts = sim.iasKts;
     coachInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
-    // Localizer dots from the antenna ~3.3 km past the threshold (close enough for advice).
-    coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + 3300, LOC_DOT_DEG) : 0;
+    // Localizer dots on the HUD bar's and the gate's antenna (0123).
+    coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + locPastThresholdM(sim.activeEnd), LOC_DOT_DEG) : 0;
     coachInput.gearLocked = gearLocked(sim);
     coachInput.flapsLanding = sim.flapsIndex >= 2 && sim.flapPos >= 1.999;
     coachInput.wet = sim.wetRunway;
@@ -1771,7 +1771,7 @@ function updateActiveRunway(dt) {
     const ap = Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
     sim.ilsLocDots = ilsDots(ap.crossM, ap.distM + locPastThresholdM(sim.activeEnd), LOC_DOT_DEG);
     sim.ilsGsDots = ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG);
-  }
+  } else sim.ilsLocDots = sim.ilsGsDots = 0;
 }
 
 // The localizer antenna's distance past a landing threshold (~300 m beyond the far end), as the
@@ -2008,20 +2008,23 @@ function renderHud() {
   // Fly-to bars: the localizer bar sits where the centreline is (left when you're right of
   // it), the glideslope bar where the path is (below when you're high). They read in dots
   // (0123, hudLayout.js ilsBarOffsetPx), the angle a real ILS needle shows and the stabilized
-  // gate judges, with a tick at each dot. The glideslope bar goes once past its antenna.
+  // gate judges, with a tick at each dot. The glideslope bar goes on the ground (a takeoff roll
+  // starts past the threshold, under the path: full-scale fly-up) and once past its antenna.
   sim.ilsLocBarPx = sim.ilsGsBarPx = null;
   if (sim.activeEnd && sim.approach.distM > -500 && sim.approach.distM < 20000) {
     const B = ILS_BOX_HALF;
     const locDev = sim.ilsLocBarPx = -ilsBarOffsetPx(sim.ilsLocDots);
-    const gs = sim.approach.distM > -AIM_POINT_M;
+    const gs = !sim.onGround && sim.approach.distM > -AIM_POINT_M;
     const gsDev = gs ? (sim.ilsGsBarPx = ilsBarOffsetPx(sim.ilsGsDots)) : 0;
 
     hudCtx.fillStyle = 'rgba(245, 158, 11, 0.8)';
     for (let k = -ILS_MAX_DOTS; k <= ILS_MAX_DOTS; k++) {
       if (!k) continue;
       const o = k * ILS_PX_PER_DOT;
-      hudCtx.fillRect(cx + o - 1.5, cy + B - 7, 3, 3); // localizer scale, along the bottom
-      if (gs) hudCtx.fillRect(cx + B - 7, cy + o - 1.5, 3, 3); // glideslope scale, down the right
+      // Upright marks along the bottom (localizer), flat ones down the right (glideslope): shaped
+      // across their scale so they don't read as pitch-ladder rungs, and apart at the corner.
+      hudCtx.fillRect(cx + o - 1, cy + B - 8, 2, 6);
+      if (gs) hudCtx.fillRect(cx + B - 8, cy + o - 1, 6, 2);
     }
     hudCtx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
     hudCtx.setLineDash(ILS_DASH);

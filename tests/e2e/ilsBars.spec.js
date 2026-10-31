@@ -59,3 +59,12 @@ test('the go-around drill starts one dot high: the glideslope bar sits on the fi
   expect(s.ilsGsBarPx).toBeLessThan(1.15 * PX_PER_DOT);
   expect(s.gsAmber).toBe(true);
 });
+
+test('on the takeoff roll there is no glideslope bar (it would read full-scale fly-up under the path)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await fly(page, 'kdfw_takeoff');
+  const s = await page.evaluate(() => window.openaeroDebug());
+  expect(s.mission).toBe('kdfw_takeoff');
+  expect(s.ilsGsBarPx).toBeNull();
+  expect(Math.abs(s.ilsLocBarPx)).toBeLessThan(6); // lined up on the centreline
+});
