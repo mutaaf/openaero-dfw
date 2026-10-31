@@ -1,8 +1,8 @@
 ---
 id: 0119
 title: B738 card: idle descent rate and speed schedule match EUROCONTROL's published descent
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: authenticity
 created: 2026-10-30

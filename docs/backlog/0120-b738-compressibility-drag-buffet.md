@@ -1,7 +1,7 @@
 ---
 id: 0120
 title: 737 compressibility drag and buffet: no level flight above the FL410 limit at 65 t
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity
