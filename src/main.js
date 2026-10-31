@@ -1690,7 +1690,8 @@ function integrateSubStep(dt) {
   sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
 
   // Warning alerts
-  const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapsIndex), sim.onGround);
+  // Keyed to where the flaps are, like the tape's band (0128): moving the lever doesn't move the wing.
+  const stallWarning = isStallWarning(sim.iasKts, stallWarningKts(spec, sim.flapPos ?? sim.flapsIndex), sim.onGround);
   const gpwsWarning = isGpwsWarning(sim.aglFt, sim.vsiFpm, sim.onGround);
   const gearWarning = !gpwsWarning && isGearWarning(sim.aglFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
@@ -1713,8 +1714,8 @@ function integrateSubStep(dt) {
   if (over && !sim.overspeed) audio.callout('overspeed');
   sim.overspeed = over;
   // The low-speed band (0128): the 1 g stall speed for where the flaps are (in transit too). Kid
-  // has none (its protection keeps it off the stall).
-  sim.stallKts = kid ? null : stallSpeedKts(spec, sim.flapPos ?? sim.flapsIndex);
+  // has none (its protection keeps it off the stall), nor the F-16 (fly-by-wire, no card for it).
+  sim.stallKts = kid || spec.pitchFbw ? null : stallSpeedKts(spec, sim.flapPos ?? sim.flapsIndex);
 }
 
 function updatePapi() {

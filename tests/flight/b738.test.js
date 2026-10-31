@@ -52,7 +52,7 @@ describe('Boeing 737-800', () => {
 
   // The speed tape's red band (0128) ends at stallSpeedKts: it must be where this airplane really
   // stalls. Flown at idle, wings level, slowing 1 kt/s until the wing passes its stall angle.
-  it('flown to the stall at each flap notch, it stalls within 3 kt of the speed tape\'s red band (stallSpeedKts)', () => {
+  it('flown to the stall at each flap notch, it stalls within 1 kt of the speed tape\'s red band (stallSpeedKts)', () => {
     for (const flaps of [0, FLAPS_10, FLAPS_30, FLAPS_40]) {
       const v0 = stallSpeedKts(b738, flaps) + 25;
       const b = makeBody(b738, { kts: v0, altM: 1500, flaps });
@@ -62,7 +62,7 @@ describe('Boeing 737-800', () => {
         return false;
       });
       expect(kts).not.toBeNull();
-      expect(Math.abs(kts - stallSpeedKts(b738, flaps))).toBeLessThanOrEqual(3);
+      expect(Math.abs(kts - stallSpeedKts(b738, flaps))).toBeLessThanOrEqual(1);
     }
   });
 

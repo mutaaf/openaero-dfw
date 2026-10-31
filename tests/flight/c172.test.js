@@ -15,7 +15,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
-import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
+import { stallAoaDeg, stallWarningKts, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
 import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
@@ -72,6 +72,12 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 
   it('stalls with full flaps near 48 KCAS (POH: 40 KIAS / 48 KCAS, ±10%)', () => {
     within(stallKts(3), 48, 0.10);
+  });
+
+  // The speed tape's red band (0128) is stallSpeedKts: flown, both models stall at it (JSBSim ~1.5 kt
+  // above clean, its own aerodynamics).
+  it('stalls within 2 kt of the speed tape\'s red band (stallSpeedKts) at every flap notch', () => {
+    for (const flaps of [0, 1, 2, 3]) expect(Math.abs(stallKts(flaps) - stallSpeedKts(c172, flaps))).toBeLessThanOrEqual(2);
   });
 
   // POH short-field technique: flaps 10, full power, rotate nose-high, lift off at 51 KIAS.
