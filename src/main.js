@@ -50,7 +50,7 @@ import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
-import { touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
+import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
   windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
@@ -1009,6 +1009,7 @@ function checkBounce(dt) {
   stepBounce(bounce, wheelFt, sim.onGround, dt);
   // Back on the runway after a bounce: not graded again, but a hard hit is still a crash.
   if (bounce.bounces && sim.onGround && !sim.wasOnGround) {
+    touchdownBuzz(); // a re-contact is felt too, a hard one hardest
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     const reason = recontactCrash(sim.lastAirVsi, _euler.z * RAD_TO_DEG);
     if (reason) {
@@ -1040,7 +1041,7 @@ function checkTouchdown(dt) {
   const touchedDown = sim.onGround && !sim.wasOnGround && sim.airborneTime > 3 && !sim.landingGraded;
   sim.wasOnGround = sim.onGround;
   if (!touchedDown) return;
-  hapt(touchdownPattern(sim.lastAirVsi, reducedMotion));
+  touchdownBuzz();
   sim.landingGraded = true;
   sim.airborneTime = 0;
   // The engine-failure takeoffs (0104) grade only a landing after the failure: no best without it.
@@ -1166,6 +1167,12 @@ const canBuzz = touchOnly && hapticsSupported(navigator);
 let hapticsOn = canBuzz && loadHaptics(safeStorage());
 const stallEdge = createAlertEdge(), pullEdge = createAlertEdge();
 const hapt = (p) => hapticsOn && buzz(navigator, p);
+// A later vibrate() cuts off a running pattern: no alert pulse for 0.5 s after a touchdown's.
+let touchBuzzT = -1;
+function touchdownBuzz() {
+  touchBuzzT = sim.simTime;
+  hapt(touchdownPattern(sim.lastAirVsi, reducedMotion, sim.assist === 'kid'));
+}
 function updateHapticsButton() {
   const txt = byId('txtHapticsState');
   txt.textContent = hapticsOn ? 'ON' : 'OFF';
@@ -1181,7 +1188,7 @@ if (canBuzz) {
     hapticsOn = !hapticsOn;
     saveHaptics(safeStorage(), hapticsOn);
     updateHapticsButton();
-    hapt([20]); // the toggle answers in kind
+    hapt(TICK); // the toggle answers in kind (turning it off is silent: hapticsOn is false)
   });
 }
 
@@ -1726,8 +1733,9 @@ function integrateSubStep(dt) {
   const gpwsWarning = isGpwsWarning(sim.raFt, sim.vsiFpm, sim.onGround);
   const gearWarning = !gpwsWarning && isGearWarning(sim.raFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
-  if (stallEdge(stallWarning, sim.simTime)) hapt(alertPattern('stall', reducedMotion));
-  if (pullEdge(gpwsWarning, sim.simTime)) hapt(alertPattern('pullup', reducedMotion));
+  const quiet = sim.simTime - touchBuzzT < 0.5;
+  if (stallEdge(stallWarning, sim.simTime) && !quiet) hapt(alertPattern('stall', reducedMotion));
+  if (pullEdge(gpwsWarning, sim.simTime) && !quiet) hapt(alertPattern('pullup', reducedMotion));
   const banner = byId('masterAlertBanner');
   // The rejected takeoff's warning (0107), with what to do, until the thrust is idle (Kid's plane
   // idles at once: 2 s): a phone held sideways shows alerts in the coach's slot, and the coach has the rest.

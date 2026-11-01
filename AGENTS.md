@@ -272,10 +272,10 @@ src/runwayLights.js lazy chunk: edge/centreline/threshold/end lights and ALSF-2/
 src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembered
 src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
                     windows, back up after a fast cool-down that backs off (pure, tested)
-src/haptics.js      phone haptics (0033): touchdownPattern by sink (landing.js's bands: < 240 fpm a 20 ms
-                    tick, < 600 60 ms, else [80,40,120]), stall/pull-up pulses once per onset (createAlertEdge,
+src/haptics.js      phone haptics (0033): touchdownPattern by sink (landing.js's bands: < 240 fpm a 40 ms
+                    tick, ≤ 600 80 ms, else [80,40,120]; Kid never the last; re-contacts too), stall/pull-up pulses once per onset (createAlertEdge,
                     3 s hold-off), feature-detected navigator.vibrate (Android; iOS has none). Reduced motion:
-                    no alert pulses, one short touchdown tick. "Haptics" toggle only on touch-only screens
+                    no alert pulses, one short touchdown tick. "Vibrate" toggle only on touch-only screens
                     with the API (main.js canBuzz); e2e haptics.mobile.spec.js stubs vibrate
 src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/results), feature-
                     detected and silent; hiding the tab pauses the sim + audio (ticket 0032)

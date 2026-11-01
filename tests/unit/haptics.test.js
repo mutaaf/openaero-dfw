@@ -12,7 +12,17 @@ const throwingStore = { getItem() { throw new Error('private'); }, setItem() { t
 
 describe('touchdownPattern', () => {
   it('a gentle touchdown is one short tick', () => {
-    expect(touchdownPattern(-120)).toEqual([20]);
+    expect(touchdownPattern(-120)).toEqual([40]);
+  });
+  it('the hard thump starts where the grader crashes (past 600 fpm), not at 600', () => {
+    expect(touchdownPattern(-600)).toEqual([80]);
+    expect(touchdownPattern(-601)).toEqual([80, 40, 120]);
+  });
+  it('a climbing touchdown is no sink (the grader reads 0)', () => {
+    expect(touchdownPattern(700)).toEqual([40]);
+  });
+  it('gentle (Kid) never gets the crash thump', () => {
+    expect(touchdownPattern(-900, false, true)).toEqual([80]);
   });
   it('gets longer and stronger with the sink rate (gentle < firm < hard)', () => {
     const g = patternMs(touchdownPattern(-150));
@@ -22,21 +32,20 @@ describe('touchdownPattern', () => {
     expect(f).toBeLessThan(h);
     expect(touchdownPattern(-700).length).toBeGreaterThan(1); // a hard one is a pattern, not a tick
   });
-  it('is monotonic over a sweep, in either sign convention', () => {
+  it('is monotonic in the sink over a sweep', () => {
     let last = 0;
     for (let s = 0; s <= 1500; s += 25) {
       const ms = patternMs(touchdownPattern(-s));
       expect(ms).toBeGreaterThanOrEqual(last);
-      expect(patternMs(touchdownPattern(s))).toBe(ms);
       last = ms;
     }
   });
   it('reduced motion keeps one short tick, whatever the sink', () => {
-    expect(touchdownPattern(-900, true)).toEqual([20]);
+    expect(touchdownPattern(-900, true)).toEqual([40]);
   });
   it('garbage in is a gentle tick, not a throw', () => {
-    expect(touchdownPattern(NaN)).toEqual([20]);
-    expect(touchdownPattern(undefined)).toEqual([20]);
+    expect(touchdownPattern(NaN)).toEqual([40]);
+    expect(touchdownPattern(undefined)).toEqual([40]);
   });
 });
 

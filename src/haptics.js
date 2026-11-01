@@ -5,11 +5,14 @@
 // Remembered as openaero_haptics_v1 = { v: 1, on, at }; on by default.
 export const HAPTICS_KEY = 'openaero_haptics_v1';
 
-// The sink bands follow landing.js's rate curve: full-ish marks to 240 fpm, a crash past 600.
-export function touchdownPattern(vsFpm, reduced = false) {
-  const sink = Math.abs(vsFpm) || 0;
-  if (reduced || sink < 240) return [20];
-  return sink < 600 ? [60] : [80, 40, 120];
+// The sink bands follow landing.js's rate curve and crash rule (sink = max(0, -vsFpm)): full-ish
+// marks to 240 fpm, a crash only past 600. 40 ms is the shortest a phone motor reliably spins up.
+// gentle (Kid): no crash thump, its crash is a "Boing!" and a try again.
+export const TICK = [40];
+export function touchdownPattern(vsFpm, reduced = false, gentle = false) {
+  const sink = Math.max(0, -vsFpm) || 0;
+  if (reduced || sink < 240) return TICK;
+  return sink <= 600 || gentle ? [80] : [80, 40, 120];
 }
 
 const ALERTS = { stall: [40, 60, 40, 60, 40], pullup: [120, 80, 120] };

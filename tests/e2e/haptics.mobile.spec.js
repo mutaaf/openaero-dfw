@@ -48,7 +48,7 @@ test('phone: one buzz at touchdown, scaled by the sink; the toggle is a 44 px bu
   await page.locator('#btnMenu').tap();
   const btn = page.locator('#btnHaptics');
   await expect(btn).toBeVisible();
-  await expect(btn).toContainText('Haptics: ON');
+  await expect(btn).toContainText('Vibrate: ON');
   const box = await btn.boundingBox();
   expect(box.height).toBeGreaterThanOrEqual(44);
   expect(box.width).toBeGreaterThanOrEqual(44);
@@ -61,7 +61,8 @@ test('phone: one buzz at touchdown, scaled by the sink; the toggle is a 44 px bu
   await page.waitForTimeout(500);
   const { vibes, sink } = await page.evaluate(() => ({ vibes: window.__vibes, sink: window.openaeroDebug().lastLanding.vsFpm }));
   expect(vibes).toHaveLength(1);
-  const expected = Math.abs(sink) < 240 ? [20] : Math.abs(sink) < 600 ? [60] : [80, 40, 120];
+  const down = Math.max(0, -sink);
+  const expected = down < 240 ? [40] : down <= 600 ? [80] : [80, 40, 120];
   expect(vibes[0]).toEqual(expected);
   expect(errors).toEqual([]);
 });
@@ -79,7 +80,7 @@ test('phone: the pull-up pulses once at its onset; off means no buzz, and it is 
   // Off: the next flight's warning stays silent, and the choice survives a reload.
   await page.locator('#btnMenu').tap();
   await page.locator('#btnHaptics').tap();
-  await expect(page.locator('#btnHaptics')).toContainText('Haptics: OFF');
+  await expect(page.locator('#btnHaptics')).toContainText('Vibrate: OFF');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_haptics_v1')))).toMatchObject({ v: 1, on: false });
   await startFlare(page);
   await page.evaluate(() => { window.__vibes.length = 0; });
@@ -87,7 +88,7 @@ test('phone: the pull-up pulses once at its onset; off means no buzz, and it is 
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => window.__vibes)).toEqual([]);
   await page.locator('#btnMenu').tap();
-  await expect(page.locator('#btnHaptics')).toContainText('Haptics: OFF');
+  await expect(page.locator('#btnHaptics')).toContainText('Vibrate: OFF');
   expect(errors).toEqual([]);
 });
 
