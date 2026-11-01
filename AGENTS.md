@@ -354,6 +354,10 @@ src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gest
 src/captions.js     callout captions (0117): #calloutCaption shows each spoken call's words for 1.2 s, in
                     the takeoff call's slot under the heading box (it wins it), left of the wind box; a queued
                     call joins the line; plainCaption gives Kid/Learner plain words (pure, tested)
+src/controlsSheet.js controls cheat sheet (0049, lazy): "?" or Controls (menu/toolbar) opens #controlsSheet,
+                    keyboard / gamepad / touch rows (touch first on a touch screen); pauses the flight while
+                    open unless it already was, owns the keyboard (Esc / "?" close, Tab trapped). Its rows are
+                    data a unit test holds to every key, pad button and touch control the code binds
 src/styles.css      Tailwind entry + ported custom HUD styles
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):
                     GET /openaero/api/metar?ids=KDFW,… → aviationweather.gov METARs,

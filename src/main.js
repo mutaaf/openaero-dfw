@@ -2926,6 +2926,15 @@ function setPaused(paused) {
   menuBtn.classList.toggle('text-red-400', sim.paused);
   menuBtn.classList.toggle('text-sky-300', !sim.paused);
 }
+// Controls cheat sheet (0049, a lazy chunk): pauses the flight while open, unless it already was.
+function showControls(from = document.activeElement) {
+  setHudMenu(false);
+  import('./controlsSheet.js').then((m) => m.openControls({
+    from, touch: touchOnly,
+    pause: () => (sim.paused ? null : (setPaused(true), () => sim.paused && setPaused(false))),
+  }));
+}
+byId('btnControls').addEventListener('click', (e) => showControls(e.currentTarget));
 byId('btnPause').addEventListener('click', () => {
   resultsPaused = false; // the player's own pause or resume: KEEP FLYING must not undo it
   setPaused(!sim.paused);
@@ -3216,6 +3225,7 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'KeyM') { byId('btnMouseYoke').click(); }
   else if (e.code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }
   else if (e.code === 'KeyZ') { byId('btnApMaster').click(); }
+  else if (e.key === '?') { showControls(); }
   else if (e.code === 'Space') {
     sim.elevInput = 0; sim.aileronInput = 0; sim.rudderInput = 0;
     sim.angVel.set(0, 0, 0);

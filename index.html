@@ -271,6 +271,7 @@
           Sound: <span id="txtAudioState" class="text-amber-400 font-bold">OFF</span>
         </button>
         <button id="btnPanelsHide" class="hud-btn hidden lg:inline-block px-2 py-0.5 rounded text-[11px] text-sky-200" title="Hide the panels for a clear view (H)">Clean view</button>
+        <button id="btnControls" class="hud-btn px-2 py-0.5 rounded text-[11px] text-sky-200" title="Keyboard, gamepad and touch controls (?)" aria-haspopup="dialog">Controls</button>
         <button id="btnPause" class="hud-btn px-2 py-0.5 rounded text-[11px] font-bold text-red-400">PAUSE</button>
         <button id="btnReset" class="hud-btn px-2 py-0.5 rounded text-[11px] text-amber-300">RESET</button>
       </div>
@@ -461,6 +462,17 @@
   <div id="keyHints" class="hidden pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-5 z-20 gap-3 px-3 py-1.5 rounded-xl text-[11px] font-mono text-slate-200 key-hints">
     <span><kbd>W</kbd><kbd>S</kbd> pitch</span><span><kbd>A</kbd><kbd>D</kbd> bank</span><span><kbd>Shift</kbd><kbd>Ctrl</kbd> power</span><span><kbd>[</kbd><kbd>]</kbd> trim (Pilot)</span>
     <span><kbd>G</kbd> gear</span><span><kbd>F</kbd> flaps</span><span><kbd>B</kbd> brakes</span><span><kbd>C</kbd> camera</span><span><kbd>H</kbd> panels</span>
+  </div>
+
+  <!-- Controls cheat sheet (0049): "?" or Controls; src/controlsSheet.js (lazy) fills it, pauses the flight while open -->
+  <div id="controlsSheet" role="dialog" aria-modal="true" aria-labelledby="txtControlsTitle" class="hidden absolute inset-0 z-[60] flex items-center justify-center bg-slate-950/80" style="padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left))">
+    <div id="controlsPanel" tabindex="-1" class="outline-none hud-glass max-w-4xl w-full max-h-full overflow-hidden rounded-2xl p-3 sm:p-4 flex flex-col gap-2 text-slate-200">
+      <div class="shrink-0 flex items-center justify-between gap-2">
+        <h2 id="txtControlsTitle" class="text-sm font-black text-white">Controls <span class="text-[11px] font-normal text-slate-300">· the flight is paused</span></h2>
+        <button id="btnCloseControls" class="hud-btn min-h-[44px] min-w-[44px] px-3 rounded-lg text-xs font-bold text-slate-200" aria-label="Close controls (Esc)">✕ CLOSE</button>
+      </div>
+      <div id="controlsBody" tabindex="0" class="flex-1 min-h-0 overflow-y-auto overscroll-contain grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-[12px]"></div>
+    </div>
   </div>
 
   <div id="mapCredits" class="imagery-credit">
