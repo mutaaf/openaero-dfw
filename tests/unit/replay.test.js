@@ -111,10 +111,15 @@ describe('replay cameras', () => {
   it('the tower stands behind and left of where the replay ends, 20 m over the ground', () => {
     const buf = createReplayBuffer(), b = body();
     fly(buf, b, 10); // northbound: left is west (-X), behind is south (+Z)
-    const t = towerSpot(buf, () => 7, SPEC);
+    const t = towerSpot(buf, () => 95, SPEC); // on the wheels: the aircraft 5 m over the ground
     expect(t.x).toBeCloseTo(-120, 3);
     expect(t.z).toBeCloseTo(-70 * 10 + 150, -1);
-    expect(t.y).toBe(27);
+    expect(t.y).toBe(115);
+    // Ended in the air (a drill's card at altitude): level with the aircraft, not 20 m off the ground.
+    const high = createReplayBuffer(), hb = body();
+    hb.pos.y = 1300;
+    fly(high, hb, 10);
+    expect(towerSpot(high, () => 7, SPEC).y).toBeCloseTo(1290, 6);
   });
 
   it('chase sits behind the aircraft and above it, looking at it; wing sits off the left tip', () => {

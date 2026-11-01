@@ -1161,7 +1161,7 @@ function poseAircraft(b) {
 }
 byId('btnReplay').addEventListener('click', () => {
   replaying = aircraftRoot && replayLib.startReplay({ buf: replayBuf, camera, heightAt: ground.heightAt, spec: sim.spec,
-    pose: poseAircraft, done: () => { replaying = null; poseAircraft(sim); } });
+    pose: poseAircraft, done: () => { replaying = null; camera.up.set(0, 1, 0); poseAircraft(sim); } });
 });
 byId('btnKeepRolling').addEventListener('click', () => {
   byId('resultsCard').classList.add('hidden');
@@ -3241,6 +3241,7 @@ function updateGamepad() {
   const p = pollGamepad();
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
+  if (replaying) { if (p.edges.length) replaying.stop(); return; } // any button ends the replay (0019), nothing else
   if (!controlsSheetEl.classList.contains('hidden')) return; // no pad button acts behind the controls sheet
   for (const b of p.edges) {
     if (b === BUTTON.A) byId('btnFlaps').click();

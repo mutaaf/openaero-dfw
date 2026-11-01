@@ -99,20 +99,21 @@ export function rotate(q, x, y, z, out) {
 }
 
 // A spot beside the end of the recording, as a tower or a spotter would stand: 150 m back
-// along the track and 120 m to its left, 20 m above the ground there. The track is the last
-// pose's nose direction, levelled (world frame: +X east, +Y up, -Z north; nose = body -Z).
+// along the heading and 120 m to its left, 20 m above the ground there, or level with the
+// aircraft less 10 m when it ended in the air (a drill's card at 4,500 ft). The heading is the
+// last pose's nose direction, levelled (world frame: +X east, +Y up, -Z north; nose = body -Z).
 export function towerSpot(buf, heightAt, spec, out = { x: 0, y: 0, z: 0 }) {
   const end = sampleReplay(buf, replayDuration(buf), createPose(spec));
   const f = rotate(end.quat, 0, 0, -1, { x: 0, y: 0, z: 0 });
   const h = Math.hypot(f.x, f.z) || 1, fx = f.x / h, fz = f.z / h; // left of the track: (fz, -fx)
   out.x = end.pos.x - fx * 150 + fz * 120;
   out.z = end.pos.z - fz * 150 - fx * 120;
-  out.y = heightAt(out.x, out.z) + 20;
+  out.y = Math.max(heightAt(out.x, out.z) + 20, end.pos.y - 10);
   return out;
 }
 
 // The camera for `cam` (REPLAY_CAMS index) looking at pose `p`: eye, look-at point and up,
-// into out = { eye, look, up } of {x, y, z}. Chase sits behind on the levelled track (it
+// into out = { eye, look, up } of {x, y, z}. Chase sits behind on the levelled heading (it
 // doesn't roll with the wings); the wing view is the in-flight left wing-tip camera.
 export function replayCamera(cam, p, tower, out) {
   const { eye, look, up } = out;

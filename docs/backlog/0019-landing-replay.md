@@ -16,7 +16,7 @@ A short replay makes the grade understandable and the S-grade landing shareable 
 ## What
 Record the last 30 s of `{pos, quat, throttle, gear, flaps}` at 20 Hz into a preallocated
 ring buffer (no per-frame allocation). "REPLAY" on the results card plays it back with the
-physics paused, cycling chase → tower → wing cameras; any input exits.
+physics paused, cycling chase → wing → tower cameras (built in that order so the touchdown is seen from beside the runway); any input exits.
 
 ## Acceptance criteria
 - [ ] Unit test: the ring buffer keeps exactly the last N samples and never allocates after construction
