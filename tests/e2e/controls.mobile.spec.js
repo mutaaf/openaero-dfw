@@ -37,6 +37,38 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
     await page.locator('#btnCloseControls').tap();
     await expect(sheet).toBeHidden();
     expect((await page.evaluate(() => window.openaeroDebug())).paused).toBe(false);
+
     expect(errors).toEqual([]);
   });
 }
+
+// A tap on the dimmed backdrop closes the sheet and goes no further (validation panel: closing on
+// pointerdown let the tap's click raise the gear behind it). An iPad held sideways (touch, 1180 wide)
+// leaves backdrop beside the panel.
+test('a tap on the backdrop closes the sheet without pressing the control behind it (0049)', async ({ page }) => {
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await stubTiles(page);
+  await page.goto(BASE);
+  await page.locator('#btnStartFlight').tap();
+  await expect(page.locator('#onboardingModal')).toBeHidden();
+  await page.locator('#btnMenu').tap();
+  await page.locator('#btnControls').tap();
+  const sheet = page.locator('#controlsSheet');
+  await expect(sheet).toBeVisible();
+  // Every press that lands anywhere, logged: under the old pointerdown close the tap's mousedown/click
+  // went to whatever was behind the sheet once it hid.
+  await page.evaluate(() => {
+    window.__hits = [];
+    for (const t of ['pointerdown', 'mousedown', 'click']) {
+      document.addEventListener(t, (e) => window.__hits.push(`${t}:${e.target.id || e.target.tagName}`), true);
+    }
+  });
+  const panel = await page.locator('#controlsPanel').boundingBox();
+  expect(panel.x + panel.width + 40, 'room to tap right of the panel').toBeLessThan(1180);
+  await page.touchscreen.tap(panel.x + panel.width + 30, panel.y + panel.height / 2);
+  await expect(sheet).toBeHidden();
+  await page.waitForTimeout(300);
+  const hits = await page.evaluate(() => window.__hits);
+  expect(hits.length).toBeGreaterThan(0);
+  expect(hits.filter((h) => !h.endsWith(':controlsSheet'))).toEqual([]);
+});

@@ -2927,16 +2927,19 @@ function setPaused(paused) {
   menuBtn.classList.toggle('text-sky-300', !sim.paused);
 }
 // Controls cheat sheet (0049, a lazy chunk): pauses the flight while open, unless it already was.
+// controlsPaused: the sheet's own pause, the one its close undoes (the player's PAUSE takes it over).
+const controlsSheetEl = byId('controlsSheet');
+let controlsPaused = false;
 function showControls(from = document.activeElement) {
   setHudMenu(false);
   import('./controlsSheet.js').then((m) => m.openControls({
     from, touch: touchOnly,
-    pause: () => (sim.paused ? null : (setPaused(true), () => sim.paused && setPaused(false))),
-  }));
+    pause: () => (sim.paused ? null : (setPaused(true), controlsPaused = true, () => controlsPaused && setPaused(controlsPaused = false))),
+  })).catch(() => showToast('Controls could not load: check the connection and try again'));
 }
 byId('btnControls').addEventListener('click', (e) => showControls(e.currentTarget));
 byId('btnPause').addEventListener('click', () => {
-  resultsPaused = false; // the player's own pause or resume: KEEP FLYING must not undo it
+  resultsPaused = controlsPaused = false; // the player's own pause or resume: KEEP FLYING must not undo it
   setPaused(!sim.paused);
   if (!sim.paused) setHudMenu(false); // on a phone, Resume puts the view back
 });
@@ -2966,7 +2969,10 @@ simCanvas.addEventListener('webglcontextlost', (e) => {
   // A phone usually loses the context in the background, after hiding paused the flight:
   // that pause was the system's, so RESUME FLIGHT may undo it. The player's own pause stays.
   // A second loss before the card is dismissed keeps the first one's answer.
-  if (gfxLostEl.classList.contains('hidden')) gfx.pausedIt = !sim.paused || gfx.hidPaused;
+  if (gfxLostEl.classList.contains('hidden')) gfx.pausedIt = !sim.paused || gfx.hidPaused || controlsPaused;
+  // The controls sheet steps aside for the card; its pause is now the card's (RESUME FLIGHT lifts it).
+  controlsPaused = false;
+  controlsSheetEl.classList.add('hidden');
   setPaused(true);
   gfx.lost = true;
   terrainLod?.reset();
@@ -3161,6 +3167,7 @@ function updateGamepad() {
   const p = pollGamepad();
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
+  if (!controlsSheetEl.classList.contains('hidden')) return; // no pad button acts behind the controls sheet
   for (const b of p.edges) {
     if (b === BUTTON.A) byId('btnFlaps').click();
     else if (b === BUTTON.B) byId('btnGear').click();
@@ -3225,7 +3232,7 @@ window.addEventListener('keydown', e => {
   else if (e.code === 'KeyM') { byId('btnMouseYoke').click(); }
   else if (e.code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }
   else if (e.code === 'KeyZ') { byId('btnApMaster').click(); }
-  else if (e.key === '?') { showControls(); }
+  else if (e.key === '?' && !e.repeat) { showControls(); }
   else if (e.code === 'Space') {
     sim.elevInput = 0; sim.aileronInput = 0; sim.rudderInput = 0;
     sim.angVel.set(0, 0, 0);

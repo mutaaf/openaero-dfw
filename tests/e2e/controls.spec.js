@@ -41,6 +41,17 @@ test('"?" opens the controls sheet over a paused flight; flight keys stay out; E
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   expect((await debug(page)).paused).toBe(false);
+  // Holding "?" (key repeat) opens it once, no flicker (panel finding).
+  await page.keyboard.down('Shift');
+  await page.keyboard.down('Slash');
+  await page.keyboard.down('Slash'); // a repeat
+  await page.keyboard.down('Slash');
+  await page.keyboard.up('Slash');
+  await page.keyboard.up('Shift');
+  await expect(sheet).toBeVisible();
+  expect((await debug(page)).paused).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
   // Escape closed the sheet, not the start screen behind nothing, and G flies again.
   await page.keyboard.press('g');
   await expect.poll(async () => (await debug(page)).gearDown).toBe(!gear);

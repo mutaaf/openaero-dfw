@@ -105,12 +105,15 @@ export function openControls({ from, touch, pause }) {
     filled = true;
     fill(touch);
     el('btnCloseControls').addEventListener('click', (e) => closeControls(e.detail === 0));
-    el('controlsSheet').addEventListener('pointerdown', (e) => { if (e.target === e.currentTarget) closeControls(false); });
+    // A tap on the dimmed backdrop closes it on click, not pointerdown: closing on pointerdown let the
+    // tap's click land on the control behind (GEAR, ☰ Menu).
+    el('controlsSheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeControls(false); });
     // While open the sheet owns the keyboard: no flight key, nor the start screen's Escape or Tab
     // trap, reaches anything behind it. Escape and "?" close it; Tab cycles inside.
     document.addEventListener('keydown', (e) => {
       if (!isOpen()) return;
       e.stopImmediatePropagation();
+      if (e.repeat) { e.preventDefault(); return; } // a held "?" must not flicker it
       if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); closeControls(); return; }
       if (e.key !== 'Tab') return;
       const panel = el('controlsPanel');
