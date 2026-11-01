@@ -1,12 +1,12 @@
 ---
 id: 0033
 title: Haptic feedback on the phone for touchdown, stall and GPWS pull-up
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-10-18
-pr:
+pr: 150
 ---
 
 ## Why
