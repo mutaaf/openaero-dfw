@@ -8,10 +8,10 @@ export const KEYBOARD = [
   { input: 'W or ↓', does: 'Nose down', codes: ['KeyW', 'ArrowDown'] },
   { input: 'S or ↑', does: 'Nose up', codes: ['KeyS', 'ArrowUp'] },
   { input: 'A or ←  /  D or →', does: 'Bank left / right', codes: ['KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight'] },
-  { input: 'Q / E', does: 'Rudder left / right', codes: ['KeyQ', 'KeyE'] },
+  { input: 'Q / E', does: 'Rudder: swing the nose left / right', codes: ['KeyQ', 'KeyE'] },
   { input: 'Shift / Ctrl (hold)', does: 'More power / less power', codes: ['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight'] },
-  { input: '[ / ]  (Num 7 / Num 1)', does: 'Trim nose down / up (Pilot)', codes: ['BracketLeft', 'BracketRight', 'Numpad7', 'Numpad1'] },
-  { input: 'Space', does: 'Center the controls', codes: ['Space'] },
+  { input: '[ / ]  (Num 7 / Num 1)', does: 'Trim (holds the nose where you set it) down / up (Pilot)', codes: ['BracketLeft', 'BracketRight', 'Numpad7', 'Numpad1'] },
+  { input: 'Space', does: 'Center the controls and stop any rotation (a sim helper)', codes: ['Space'] },
   { input: 'G', does: 'Gear up / down (in the air)', codes: ['KeyG'] },
   { input: 'F', does: 'Flaps: next notch', codes: ['KeyF'] },
   { input: 'B', does: 'Brakes on / off', codes: ['KeyB'] },
@@ -28,12 +28,12 @@ export const KEYBOARD = [
 ];
 
 export const GAMEPAD = [
-  { input: 'Left stick', does: 'Pitch and bank (back = nose up)' },
-  { input: 'LB / RB', does: 'Rudder left / right' },
+  { input: 'Left stick', does: 'Nose up / down and bank (back = nose up)' },
+  { input: 'LB / RB', does: 'Rudder: swing the nose left / right' },
   { input: 'RT / LT', does: 'More power / less power' },
-  { input: 'Right stick fwd / back', does: 'Trim nose down / up' },
+  { input: 'Right stick fwd / back', does: 'Trim (holds the nose where you set it) down / up' },
   { input: 'A', does: 'Flaps: next notch', buttons: ['A'] },
-  { input: 'B', does: 'Gear up / down', buttons: ['B'] },
+  { input: 'B', does: 'Gear up / down (in the air)', buttons: ['B'] },
   { input: 'X', does: 'Brakes on / off', buttons: ['X'] },
   { input: 'Y', does: 'Next camera view', buttons: ['Y'] },
   { input: 'Start', does: 'Pause / resume', buttons: ['START'] },
@@ -122,6 +122,8 @@ export function openControls({ from, touch, pause }) {
   }
   opener = from ?? null;
   resume = pause();
+  // On the start screen there is no flight to pause yet: don't say there is.
+  el('txtControlsPaused').classList.toggle('hidden', !el('onboardingModal').classList.contains('hidden'));
   el('controlsSheet').classList.remove('hidden');
   el('controlsPanel').focus({ preventScroll: true });
 }

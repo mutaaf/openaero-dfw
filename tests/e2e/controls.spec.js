@@ -19,6 +19,7 @@ test('"?" opens the controls sheet over a paused flight; flight keys stay out; E
   await expect(page.locator('#controlsBody dd', { hasText: 'Gear up / down' }).first()).toBeVisible();
   expect((await debug(page)).paused).toBe(true);
   await expect(page.locator('#btnPause')).toHaveText('RESUME');
+  await expect(page.locator('#txtControlsPaused')).toBeVisible();
 
   // A flight key does nothing behind the sheet; Tab stays inside it.
   const gear = (await debug(page)).gearDown;
@@ -65,6 +66,7 @@ test('"?" on the start screen opens it over the picker; Escape closes only the s
   await page.locator('#onboardingModal').waitFor({ state: 'visible' });
   await page.keyboard.press('Shift+Slash');
   await expect(page.locator('#controlsSheet')).toBeVisible();
+  await expect(page.locator('#txtControlsPaused')).toBeHidden(); // no flight under way to pause
   await page.keyboard.press('Escape');
   await expect(page.locator('#controlsSheet')).toBeHidden();
   await expect(page.locator('#onboardingModal')).toBeVisible();

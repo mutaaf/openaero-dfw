@@ -301,5 +301,5 @@ details[open] > summary::before { transform: rotate(90deg); }
 
 /* Controls cheat sheet (0049): input on the left, what it does on the right */
 .controls-list { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.6rem; margin: 0; }
-.controls-list dt { font: 700 11px/1.5 ui-monospace, monospace; color: #f1f5f9; white-space: nowrap; }
+.controls-list dt { font: 700 12px/1.5 ui-monospace, monospace; color: #f1f5f9; white-space: nowrap; }
 .controls-list dd { margin: 0; color: #cbd5e1; line-height: 1.5; }
