@@ -95,7 +95,7 @@ describe('replay ring buffer (ticket 0019)', () => {
 });
 
 describe('replay cameras', () => {
-  it('chase on the approach, the wing on short final, the tower for the last 7 s (the touchdown)', () => {
+  it('chase on the approach, the wing on short final, the side view for the last 7 s (the touchdown)', () => {
     expect(replayCam(25)).toBe(0);
     expect(replayCam(10)).toBe(1);
     expect(replayCam(7)).toBe(2);
@@ -108,7 +108,7 @@ describe('replay cameras', () => {
     expect(r.z).toBeCloseTo(0, 9);
   });
 
-  it('the tower stands behind and left of where the replay ends, 20 m over the ground', () => {
+  it('the side view stands behind and left of where the replay ends, 20 m over the ground', () => {
     const buf = createReplayBuffer(), b = body();
     fly(buf, b, 10); // northbound: left is west (-X), behind is south (+Z)
     const t = towerSpot(buf, () => 95, SPEC); // on the wheels: the aircraft 5 m over the ground

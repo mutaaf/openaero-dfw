@@ -19,9 +19,9 @@ ring buffer (no per-frame allocation). "REPLAY" on the results card plays it bac
 physics paused, cycling chase → wing → tower cameras (built in that order so the touchdown is seen from beside the runway); any input exits.
 
 ## Acceptance criteria
-- [ ] Unit test: the ring buffer keeps exactly the last N samples and never allocates after construction
-- [ ] e2e: after a graded landing, REPLAY plays (aircraft position changes while `paused`) and returns to the card
-- [ ] Frame time unchanged within the perf guard
+- [x] Unit test: the ring buffer keeps exactly the last N samples and never allocates after construction
+- [x] e2e: after a graded landing, REPLAY plays (aircraft position changes while `paused`) and returns to the card
+- [x] Frame time unchanged within the perf guard
 
 ## Test plan
 Vitest for the ring buffer; Playwright drives the flare challenge then REPLAY.

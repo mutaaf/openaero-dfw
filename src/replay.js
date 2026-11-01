@@ -1,13 +1,13 @@
 // Landing replay (0019, a lazy chunk fetched after boot). main.js records the last 30 s of
 // flight at 20 Hz of sim time into one preallocated ring buffer (no allocation after
 // construction); REPLAY on the results card plays it back with the physics paused, cycling
-// chase → wing → tower so the touchdown is always seen from beside the runway; any key or
+// chase → wing → side so the touchdown is always seen from beside the runway; any key or
 // tap goes back to the card. Pure buffer and camera maths (tests/unit/replay.test.js) plus
 // the small DOM player at the bottom.
 
 export const REPLAY_S = 30;
 export const REPLAY_HZ = 20;
-export const REPLAY_CAMS = ['Chase', 'Wing', 'Tower'];
+export const REPLAY_CAMS = ['Chase', 'Wing', 'Side'];
 // t, pos xyz, quat xyzw, throttle, gearPos, flapDeg, aileron, elevator, rudder
 const STRIDE = 14;
 
@@ -55,6 +55,7 @@ export function createPose(spec) {
   };
 }
 
+const mix = (d, a, b, k, f) => d[a + k] + (d[b + k] - d[a + k]) * f;
 // The pose `s` seconds into the recording, interpolated between samples (quaternion nlerp
 // on the short arc), written into `out` (createPose). Clamped to the recording's ends.
 export function sampleReplay(buf, s, out) {
@@ -72,19 +73,18 @@ export function sampleReplay(buf, s, out) {
   const a = at(buf, lo), b = at(buf, Math.min(lo + 1, buf.count - 1));
   const span = d[b] - d[a];
   const f = span > 0 ? Math.min(1, Math.max(0, (t - d[a]) / span)) : 0;
-  const mix = (k) => d[a + k] + (d[b + k] - d[a + k]) * f;
-  out.pos.x = mix(1); out.pos.y = mix(2); out.pos.z = mix(3);
+  out.pos.x = mix(d, a, b, 1, f); out.pos.y = mix(d, a, b, 2, f); out.pos.z = mix(d, a, b, 3, f);
   const sgn = d[a + 4] * d[b + 4] + d[a + 5] * d[b + 5] + d[a + 6] * d[b + 6] + d[a + 7] * d[b + 7] < 0 ? -1 : 1;
   let qx = d[a + 4] + (sgn * d[b + 4] - d[a + 4]) * f, qy = d[a + 5] + (sgn * d[b + 5] - d[a + 5]) * f;
   let qz = d[a + 6] + (sgn * d[b + 6] - d[a + 6]) * f, qw = d[a + 7] + (sgn * d[b + 7] - d[a + 7]) * f;
   const len = Math.hypot(qx, qy, qz, qw) || 1;
   out.quat.x = qx / len; out.quat.y = qy / len; out.quat.z = qz / len; out.quat.w = qw / len;
-  out.throttle = mix(8); out.gearPos = mix(9); out.flapDeg = mix(10);
-  out.aileronInput = mix(11); out.elevInput = mix(12); out.rudderInput = mix(13);
+  out.throttle = mix(d, a, b, 8, f); out.gearPos = mix(d, a, b, 9, f); out.flapDeg = mix(d, a, b, 10, f);
+  out.aileronInput = mix(d, a, b, 11, f); out.elevInput = mix(d, a, b, 12, f); out.rudderInput = mix(d, a, b, 13, f);
   return out;
 }
 
-// Which camera with `remainingS` of the replay left: the tower for the last 7 s (the flare,
+// Which camera with `remainingS` of the replay left: the side view for the last 7 s (the flare,
 // the touchdown and the second on the wheels before the card), the wing before that, the
 // chase for the approach.
 export const replayCam = (remainingS) => (remainingS <= 7 ? 2 : remainingS <= 13 ? 1 : 0);
@@ -98,7 +98,7 @@ export function rotate(q, x, y, z, out) {
   return out;
 }
 
-// A spot beside the end of the recording, as a tower or a spotter would stand: 150 m back
+// The side view: a spot beside the end of the recording, as a spotter would stand: 150 m back
 // along the heading and 120 m to its left, 20 m above the ground there, or level with the
 // aircraft less 10 m when it ended in the air (a drill's card at 4,500 ft). The heading is the
 // last pose's nose direction, levelled (world frame: +X east, +Y up, -Z north; nose = body -Z).
@@ -150,17 +150,30 @@ export function startReplay(o) {
   const tower = towerSpot(buf, heightAt, spec);
   const total = replayDuration(buf);
   let s = 0, cam = -1, open = true;
-  const onKey = (e) => { e.preventDefault(); e.stopImmediatePropagation(); stop(); };
-  const onTap = (e) => { e.preventDefault(); e.stopPropagation(); stop(); };
-  function stop() {
+  // A held key's repeats (the Enter that pressed REPLAY) don't end it; a fresh key does.
+  // Modifiers and browser shortcuts (a screenshot, zoom) pass through and don't end it; the first
+  // 0.4 s ignores input, so a double tap or a held key on REPLAY doesn't end it at once.
+  const t0 = performance.now(), early = () => performance.now() - t0 < 400;
+  const onKey = (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || /^(Shift|Control|Meta|Alt|AltGraph|CapsLock)$/.test(e.key)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (!e.repeat && !early()) stop();
+  };
+  // On the click, not the pointerdown: a tap's click lands on the bar, never on the card's
+  // buttons that come back under the finger (iOS hit-tests its synthetic click at touchend).
+  const onTap = (e) => { e.preventDefault(); e.stopPropagation(); if (!early()) stop(); };
+  // stop(false): a restart or a lost GPU ends it without bringing the card back or its focus.
+  function stop(toCard = true) {
     if (!open) return;
     open = false;
     removeEventListener('keydown', onKey, true);
-    bar.removeEventListener('pointerdown', onTap);
+    bar.removeEventListener('click', onTap);
     bar.classList.add('hidden');
     document.body.classList.remove('replaying');
-    card.classList.remove('hidden');
-    byId('btnReplay').focus({ preventScroll: true });
+    if (toCard) {
+      card.classList.remove('hidden');
+      byId('btnReplay').focus({ preventScroll: true });
+    }
     o.done();
   }
   function step(dt) {
@@ -176,13 +189,13 @@ export function startReplay(o) {
     camera.position.set(view.eye.x, Math.max(view.eye.y, floor), view.eye.z);
     camera.up.set(view.up.x, view.up.y, view.up.z);
     camera.lookAt(view.look.x, view.look.y, view.look.z);
-    if (s >= total) stop();
+    if (s >= total) stop(byId('gfxLost').classList.contains('hidden'));
   }
   card.classList.add('hidden');
   bar.classList.remove('hidden');
   document.body.classList.add('replaying');
   addEventListener('keydown', onKey, true);
-  bar.addEventListener('pointerdown', onTap);
+  bar.addEventListener('click', onTap);
   bar.focus({ preventScroll: true });
   const player = { step, stop, pose, get elapsed() { return s; }, total, get cam() { return REPLAY_CAMS[cam]; }, get open() { return open; } };
   if (/[?&]debug\b/.test(location.search)) window.openaeroReplay = player; // e2e

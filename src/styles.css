@@ -307,3 +307,4 @@ details[open] > summary::before { transform: rotate(90deg); }
 /* Landing replay (0019): the HUD, panels and controls make way; the imagery credits stay */
 .replaying :is(#hudCanvas, #phoneHeader, #eicasPanel, #stickPanel, #mapPanel, #touchDeck, #keyHints, #coach,
   #calloutCaption, #masterAlertBanner, #stallAlertBanner, #mouseFlightCrosshair) { visibility: hidden; }
+.replaying #mapCredits { z-index: 41; } /* over the replay bar: its links still open */

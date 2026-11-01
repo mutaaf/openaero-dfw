@@ -1149,6 +1149,7 @@ function flyAgain() {
   loadScenario(sim.missionKey);
 }
 byId('btnFlyAgain').addEventListener('click', () => {
+  byId('btnReplay').classList.add('hidden'); // no replay while an ad break is pending
   const brk = ads?.between();
   if (brk) brk.then(flyAgain); else flyAgain();
 });
@@ -2488,6 +2489,7 @@ function resetApFilters() {
 // `final` (?debug only, 0068): fly the default final to another runway end or distance.
 function loadScenario(key, final = null) {
   hapticsReset();
+  replaying?.stop(false); // a restart ends a replay without the old card (0019)
   if (replayBuf) replayLib.resetReplay(replayBuf);
   const mission = final ? { ...MISSIONS[0], ...final } : missionByKey(key, sim.dynamicMissions);
   // A mission flown in one airframe (the stall drill's Cessna) brings it; the next mission
@@ -3038,6 +3040,7 @@ const txtGfxLostTitle = byId('txtGfxLostTitle');
 const btnGfxResume = byId('btnGfxResume');
 const btnGfxReload = byId('btnGfxReload');
 simCanvas.addEventListener('webglcontextlost', (e) => {
+  replaying?.stop(false); // the Graphics paused dialog takes over (0019)
   e.preventDefault();
   if (gfx.lost) return;
   // A phone usually loses the context in the background, after hiding paused the flight:
@@ -3345,7 +3348,7 @@ function renderLoop(time) {
   }
 
   // Keep the screen awake while flying (released when paused, hidden, in a modal or on results).
-  wakeLock.sync(!idle && resultsCard.classList.contains('hidden'));
+  wakeLock.sync(!!replaying || (!idle && resultsCard.classList.contains('hidden')));
 
   updateGamepad();
   step6DofPhysics(dt);

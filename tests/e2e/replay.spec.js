@@ -30,12 +30,14 @@ test('REPLAY plays the landing back while paused and returns to the card', async
   const during = await page.evaluate(() => window.openaeroDebug());
   expect(during.paused).toBe(true);
   expect(during.pos).toEqual(before.pos); // the physics stood still
-  await expect(page.locator('#txtReplayCam')).toHaveText(/^(Chase|Wing|Tower)$/);
+  await expect(page.locator('#txtReplayCam')).toHaveText(/^(Chase|Wing|Side)$/);
   // The HUD makes way; the imagery credit stays.
   await expect(page.locator('#hudCanvas')).toBeHidden();
   await expect(page.locator('#mapCredits')).toBeVisible();
 
-  // Any key: back to the card, the flight where it was, still paused.
+  // A modifier alone doesn't end it; any other key: back to the card, the flight where it was, still paused.
+  await page.keyboard.press('Shift');
+  await expect(bar).toBeVisible();
   await page.keyboard.press('p');
   await expect(bar).toBeHidden();
   await expect(card).toBeVisible();
@@ -44,9 +46,9 @@ test('REPLAY plays the landing back while paused and returns to the card', async
   expect(after.pos).toEqual(before.pos);
   await expect(page.locator('#hudCanvas')).toBeVisible();
 
-  // Played to the end, it reaches the touchdown from the tower and comes back by itself.
+  // Played to the end, it reaches the touchdown from the side and comes back by itself.
   await page.click('#btnReplay');
-  await expect(page.locator('#txtReplayCam')).toHaveText('Tower', { timeout: 30_000 });
+  await expect(page.locator('#txtReplayCam')).toHaveText('Side', { timeout: 30_000 });
   await expect(card).toBeVisible({ timeout: 30_000 });
   await expect(bar).toBeHidden();
   expect(errors).toEqual([]);
