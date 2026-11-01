@@ -303,3 +303,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 .controls-list { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.6rem; margin: 0; }
 .controls-list dt { font: 700 12px/1.5 ui-monospace, monospace; color: #f1f5f9; white-space: nowrap; }
 .controls-list dd { margin: 0; color: #cbd5e1; line-height: 1.5; }
+
+/* Landing replay (0019): the HUD, panels and controls make way; the imagery credits stay */
+.replaying :is(#hudCanvas, #phoneHeader, #eicasPanel, #stickPanel, #mapPanel, #touchDeck, #keyHints, #coach,
+  #calloutCaption, #masterAlertBanner, #stallAlertBanner, #mouseFlightCrosshair) { visibility: hidden; }

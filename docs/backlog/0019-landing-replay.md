@@ -1,7 +1,7 @@
 ---
 id: 0019
 title: Replay your last landing from the tower and chase cameras
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel

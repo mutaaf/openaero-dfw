@@ -64,7 +64,12 @@
     <div class="grid grid-cols-2 gap-2">
       <button id="btnFlyAgain" class="hud-btn active rounded-xl min-h-[44px] text-xs font-bold">FLY AGAIN</button>
       <button id="btnKeepRolling" class="hud-btn rounded-xl min-h-[44px] text-xs">KEEP ROLLING</button>
+      <button id="btnReplay" class="hidden col-span-2 hud-btn rounded-xl min-h-[44px] text-xs">▶ REPLAY</button>
     </div>
+  </div>
+  <!-- Landing replay (0019, src/replay.js): over the whole view while it plays; any tap or key returns to the card -->
+  <div id="replayBar" class="hidden absolute inset-0 z-40 flex items-end justify-center cursor-pointer" style="padding-bottom: calc(max(1px, env(safe-area-inset-bottom)) + 2.25rem)" role="button" tabindex="-1" aria-label="Replay playing. Tap or press any key to go back to the results.">
+    <div class="hud-glass rounded-xl px-3 min-h-[44px] flex items-center gap-2 font-mono text-xs text-slate-200 pointer-events-none"><span class="text-red-400 font-bold">● REPLAY</span><span id="txtReplayCam" class="text-sky-300">Chase</span><span class="text-slate-300">· tap or press a key to go back</span></div>
   </div>
 
   <!-- Lost WebGL context (ticket 0034): the browser took the GPU back; the sim waits here -->
