@@ -223,6 +223,8 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 // its own chunk, loaded right after boot; until then the sky is the plain haze colour.
 let skyDome = null;
 let runwayLights = null;
+let windsocks = null; // windsock.js (0027), lazy
+let _sockT = 0;
 
 camera = new THREE.PerspectiveCamera(cameraFovDeg(window.innerWidth, window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 95000);
 
@@ -407,6 +409,12 @@ function buildRunways() {
     runwayLights = createRunwayLights({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, reducedMotion });
     scene.add(runwayLights.points);
   }).catch((err) => console.warn('Runway lights unavailable:', err.message));
+  // A wind cone by every runway end's touchdown zone, in its field's METAR wind (0027).
+  import('./windsock.js').then(({ createWindsocks }) => {
+    windsocks = createWindsocks({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, gustAt: gustFactor, surfaceFactor: surfaceWindFactor });
+    scene.add(windsocks.group);
+    if (debugOverlay) window.openaeroWindsocks = windsocks; // e2e: hide them for a control frame
+  }).catch((err) => console.warn('Windsocks unavailable:', err.message));
 }
 
 function buildSatelliteTerrain() {
@@ -553,6 +561,7 @@ async function loadDem() {
     terrainLod.redrape();
     seatLandmarks();
     runwayLights?.reseat();
+    windsocks?.reseat();
   } catch (err) {
     console.warn('Terrain elevation unavailable, flying on flat ground:', err.message);
   }
@@ -3347,6 +3356,14 @@ function updateSkyAndLights(t) {
     runwayLights.update(t, renderer.getPixelRatio(), night, camera.position);
   }
   if (papiLamps) papiLamps.material.size = 5 + 4 * night;
+  // On the sim's clock (frozen when paused), the flown field in the wind the aircraft feels.
+  if (windsocks) {
+    windsocks.update(sim.simTime, sim.simTime - _sockT, sockWx, camera.position, night, nightUniforms.uGroundTint.value);
+    _sockT = sim.simTime;
+  }
+}
+function sockWx(icao) {
+  return icao === (sim.activeEnd?.airport ?? 'KDFW') ? sim.wx : sim.wxByIcao[icao] || sim.wx;
 }
 
 // ?debug: a one-line usage readout of the Google session (to verify the free tier holds).
@@ -3456,6 +3473,7 @@ window.openaeroDebug = () => {
     cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,
     cloudLayers: (sim.wx.cloudLayers || []).length,
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
+    windsocks: windsocks ? windsocks.debug() : null,
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
     goAround: sim.goAround ? { ...sim.goAround } : null,
