@@ -61,10 +61,10 @@
     <!-- Where the wheels touched (0088): runway strip drawn by src/touchdownStrip.js -->
     <canvas id="touchdownStrip" class="hidden block w-full h-6 mt-2" role="img" aria-label=""></canvas>
     <ul id="resultsFactors" class="flex flex-col gap-1.5 pt-2 pb-3 text-[11px]"></ul>
-    <div class="grid grid-cols-2 gap-2">
+    <div class="grid grid-flow-col auto-cols-fr gap-2">
       <button id="btnFlyAgain" class="hud-btn active rounded-xl min-h-[44px] text-xs font-bold">FLY AGAIN</button>
       <button id="btnKeepRolling" class="hud-btn rounded-xl min-h-[44px] text-xs">KEEP ROLLING</button>
-      <button id="btnReplay" class="hidden col-span-2 hud-btn rounded-xl min-h-[44px] text-xs" aria-label="Replay the landing">▶ REPLAY</button>
+      <button id="btnReplay" class="hidden hud-btn rounded-xl min-h-[44px] text-xs" aria-label="Replay the landing">▶ REPLAY</button>
     </div>
   </div>
   <!-- Landing replay (0019, src/replay.js): over the whole view while it plays; any tap or key returns to the card -->
