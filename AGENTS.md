@@ -275,6 +275,12 @@ src/windsock.js     wind cones (0027, lazy chunk after boot): one beside every r
                     and swung there as a damped pendulum on the sim clock; gusts and the log-law thinning are
                     weather.js's, passed in. Two InstancedMesh draws; a minimum 0.7° on screen (≤ 7x) at range;
                     lit at night. ?debug: openaeroDebug().windsocks, window.openaeroWindsocks
+src/replay.js       landing replay (0019, lazy chunk after boot): main.js records pos, quat, throttle, gear, flaps and
+                    the stick into one preallocated ring buffer, the last 30 s at 20 Hz of sim time (reset by loadScenario);
+                    ▶ REPLAY on the results card plays it back with the physics paused (main.js renderLoop calls its step
+                    instead of updateCamera; the aircraft is posed from the recording, sim untouched): chase, then the
+                    wing, then Side: a spot beside the end of the track (level with it if it ended aloft) for the last 7 s; any key or tap (#replayBar) returns
+                    to the card. The HUD and panels hide (body.replaying), the imagery credits stay
 src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembered
 src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
                     windows, back up after a fast cool-down that backs off (pure, tested)
@@ -432,7 +438,7 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
 `loadDrill` for the drills' lazy chunks, `startDrills`, and the ?debug Google usage line and
 snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A lazy chunk that
 imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's

@@ -224,6 +224,8 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 let skyDome = null;
 let runwayLights = null;
 let windsocks = null; // windsock.js (0027), lazy
+// Landing replay (0019, lazy): the last 30 s at 20 Hz of sim time, REPLAY on the results card.
+let replayLib = null, replayBuf = null, replaying = null;
 let _sockT = 0;
 
 camera = new THREE.PerspectiveCamera(cameraFovDeg(window.innerWidth, window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 95000);
@@ -415,6 +417,7 @@ function buildRunways() {
     scene.add(windsocks.group);
     if (debugOverlay) window.openaeroWindsocks = windsocks; // e2e: hide them for a control frame
   }).catch((err) => console.warn('Windsocks unavailable:', err.message));
+  import('./replay.js').then((m) => { replayLib = m; replayBuf = m.createReplayBuffer(); }).catch(() => {});
 }
 
 function buildSatelliteTerrain() {
@@ -1129,6 +1132,7 @@ function showResults(result, best, end, gate) {
     // airplane on unwatched into the grass behind it (0106). KEEP ROLLING resumes it.
     if (!sim.paused) { resultsPaused = true; setPaused(true); }
     m.showResults(sim, result, best, end, gate);
+    byId('btnReplay').classList.toggle('hidden', !(replayBuf && replayLib.replayDuration(replayBuf) > 2));
   }).catch(() => showToast(`${result.title ?? 'Landing'}: ${result.grade} · ${result.score}`));
 }
 
@@ -1145,8 +1149,20 @@ function flyAgain() {
   loadScenario(sim.missionKey);
 }
 byId('btnFlyAgain').addEventListener('click', () => {
+  byId('btnReplay').classList.add('hidden'); // no replay while an ad break is pending
   const brk = ads?.between();
   if (brk) brk.then(flyAgain); else flyAgain();
+});
+// The replay poses the aircraft from its recording (a pose with sim's fields), then sim's own.
+function poseAircraft(b) {
+  aircraftRoot.position.copy(b.pos);
+  aircraftRoot.quaternion.copy(b.quat);
+  if (surfaces && animRefs.parts) surfaces.poseParts(animRefs.parts, sim.spec, b, 0);
+  animRefs.model?.update(b);
+}
+byId('btnReplay').addEventListener('click', () => {
+  replaying = aircraftRoot && replayLib.startReplay({ buf: replayBuf, camera, heightAt: ground.heightAt, spec: sim.spec,
+    pose: poseAircraft, done: () => { replaying = null; camera.up.set(0, 1, 0); poseAircraft(sim); } });
 });
 byId('btnKeepRolling').addEventListener('click', () => {
   byId('resultsCard').classList.add('hidden');
@@ -1576,6 +1592,7 @@ function step6DofPhysics(dt) {
     aircraftRoot.position.copy(sim.pos);
     aircraftRoot.quaternion.copy(sim.quat);
   }
+  if (replayBuf) replayLib.recordReplay(replayBuf, sim);
 
   // Secondary visual animations
   // Control surfaces, gear swing and prop/fans (0063): from the state the physics just used.
@@ -2472,6 +2489,8 @@ function resetApFilters() {
 // `final` (?debug only, 0068): fly the default final to another runway end or distance.
 function loadScenario(key, final = null) {
   hapticsReset();
+  replaying?.stop(false); // a restart ends a replay without the old card (0019)
+  if (replayBuf) replayLib.resetReplay(replayBuf);
   const mission = final ? { ...MISSIONS[0], ...final } : missionByKey(key, sim.dynamicMissions);
   // A mission flown in one airframe (the stall drill's Cessna) brings it; the next mission
   // without one gives yours back.
@@ -3021,6 +3040,7 @@ const txtGfxLostTitle = byId('txtGfxLostTitle');
 const btnGfxResume = byId('btnGfxResume');
 const btnGfxReload = byId('btnGfxReload');
 simCanvas.addEventListener('webglcontextlost', (e) => {
+  replaying?.stop(false); // the Graphics paused dialog takes over (0019)
   e.preventDefault();
   if (gfx.lost) return;
   // A phone usually loses the context in the background, after hiding paused the flight:
@@ -3224,6 +3244,7 @@ function updateGamepad() {
   const p = pollGamepad();
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
+  if (replaying) { if (p.edges.length) replaying.stop(); return; } // any button ends the replay (0019), nothing else
   if (!controlsSheetEl.classList.contains('hidden')) return; // no pad button acts behind the controls sheet
   for (const b of p.edges) {
     if (b === BUTTON.A) byId('btnFlaps').click();
@@ -3327,13 +3348,13 @@ function renderLoop(time) {
   }
 
   // Keep the screen awake while flying (released when paused, hidden, in a modal or on results).
-  wakeLock.sync(!idle && resultsCard.classList.contains('hidden'));
+  wakeLock.sync(!!replaying || (!idle && resultsCard.classList.contains('hidden')));
 
   updateGamepad();
   step6DofPhysics(dt);
   if (!sim.paused) updateCoach(dt);
   syncWeatherUI(dt);
-  updateCamera();
+  if (replaying) replaying.step(dt); else updateCamera();
   updateSkyAndLights(time / 1000);
   if (!gfx.lost) terrainLod.update(dt, camera);
   photoreal.update(dt);
