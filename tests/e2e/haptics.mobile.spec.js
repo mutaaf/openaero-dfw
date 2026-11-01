@@ -2,11 +2,15 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0033 on a phone (390x844, touch): haptics. navigator.vibrate is stubbed to record
-// every pattern; the real API is Android-only, so the game must also run clean without it.
+// every pattern (a vibrate(0) stop is counted apart); the real API is Android-only, so the game must also run clean without it.
 const recordVibrate = () => {
   window.__vibes = [];
   Object.defineProperty(Navigator.prototype, 'vibrate', {
-    configurable: true, value: (p) => { window.__vibes.push(Array.isArray(p) ? p : [p]); return true; },
+    configurable: true, value: (p) => {
+      const q = Array.isArray(p) ? p : [p];
+      if (q.some((ms) => ms > 0)) window.__vibes.push(q); else window.__stops = (window.__stops ?? 0) + 1;
+      return true;
+    },
   });
 };
 
@@ -14,6 +18,14 @@ async function startFlare(page) {
   await stubTiles(page);
   await page.goto(`${BASE}?debug&mission=kdfw_35c_flare`);
   await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  // Behind the start screen the boot flight runs, but nothing buzzes there.
+  if (await page.evaluate(() => Array.isArray(window.__vibes))) {
+    await page.evaluate(() => { window.openaeroDebugHop(-12); });
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => window.__vibes)).toEqual([]);
+    await page.evaluate(() => { window.openaeroDebugHop(6); }); // out of the dive before the flight starts
+    await page.waitForTimeout(300);
+  }
   await page.locator('#btnStartFlight').tap();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
 }

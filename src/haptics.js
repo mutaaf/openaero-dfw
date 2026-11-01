@@ -35,8 +35,9 @@ export function createAlertEdge(holdS = 3) {
 
 export const hapticsSupported = (nav) => typeof nav?.vibrate === 'function';
 
+// Chrome refuses vibrate() before the first tap and logs that as a console error: wait for one.
 export function buzz(nav, pattern) {
-  if (!pattern || !hapticsSupported(nav)) return false;
+  if (!pattern || !hapticsSupported(nav) || nav.userActivation?.hasBeenActive === false) return false;
   try { return nav.vibrate(pattern) !== false; } catch { return false; }
 }
 

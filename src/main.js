@@ -1165,8 +1165,14 @@ const touchOnly = window.matchMedia?.('(hover: none) and (pointer: coarse)').mat
 // the menu. Touchdown buzzes by its sink; the stall and pull-up warnings pulse once at onset.
 const canBuzz = touchOnly && hapticsSupported(navigator);
 let hapticsOn = canBuzz && loadHaptics(safeStorage());
-const stallEdge = createAlertEdge(), pullEdge = createAlertEdge();
-const hapt = (p) => hapticsOn && buzz(navigator, p);
+let stallEdge = createAlertEdge(), pullEdge = createAlertEdge();
+// Only in a flight the player is flying: not behind the start screen or the Missions picker.
+const hapt = (p) => hapticsOn && cockpitEntered && !modalOpen() && buzz(navigator, p);
+// A new flight or a pause stops a pattern still running, and re-arms the warnings' onsets.
+function hapticsReset() {
+  if (hapticsOn) buzz(navigator, [0]);
+  stallEdge = createAlertEdge(); pullEdge = createAlertEdge();
+}
 // A later vibrate() cuts off a running pattern: no alert pulse for 0.5 s after a touchdown's.
 let touchBuzzT = -1;
 function touchdownBuzz() {
@@ -2453,6 +2459,7 @@ function resetApFilters() {
 
 // `final` (?debug only, 0068): fly the default final to another runway end or distance.
 function loadScenario(key, final = null) {
+  hapticsReset();
   const mission = final ? { ...MISSIONS[0], ...final } : missionByKey(key, sim.dynamicMissions);
   // A mission flown in one airframe (the stall drill's Cessna) brings it; the next mission
   // without one gives yours back.
@@ -2787,6 +2794,7 @@ function openModal(opener) {
 // keeps focus, so a flight key can't land on a HUD button.
 function closeModal(restoreFocus = false) {
   cockpitEntered = true; // ENTER COCKPIT, ✕ or Esc: the flight is under way
+  hapticsReset(); // an onset behind the start screen was not felt: re-arm it
   onboardingModal.classList.add('hidden');
   // On phones the Missions button lives in the folded menu: fall back to ☰ Menu.
   const back = restoreFocus && [modalOpener, byId('btnMenu')].find((el) => el?.offsetParent);
@@ -2950,6 +2958,7 @@ byId('btnMouseYoke').addEventListener('click', () => {
 byId('btnTimeOfDay').addEventListener('click', toggleTimeOfDay);
 
 function setPaused(paused) {
+  if (paused && hapticsOn) buzz(navigator, [0]);
   if (!paused && gfx.lost) return; // nothing to fly by until the GPU is back (0034)
   gfx.hidPaused = false;
   sim.paused = paused;

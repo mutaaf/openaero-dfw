@@ -102,6 +102,14 @@ describe('buzz', () => {
     expect(nav.vibrate).not.toHaveBeenCalled();
     expect(buzz({ vibrate() { throw new Error('blocked'); } }, [20])).toBe(false);
   });
+  it('before the first tap (userActivation not yet active) it does not call: Chrome logs an error', () => {
+    const nav = { vibrate: vi.fn(), userActivation: { hasBeenActive: false } };
+    expect(buzz(nav, [40])).toBe(false);
+    expect(nav.vibrate).not.toHaveBeenCalled();
+    nav.userActivation.hasBeenActive = true;
+    expect(buzz(nav, [40])).toBe(true);
+    expect(nav.vibrate).toHaveBeenCalledOnce();
+  });
   it('hapticsSupported feature-detects', () => {
     expect(hapticsSupported({ vibrate() {} })).toBe(true);
     expect(hapticsSupported({})).toBe(false);
