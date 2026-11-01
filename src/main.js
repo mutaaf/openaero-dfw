@@ -411,7 +411,7 @@ function buildRunways() {
   }).catch((err) => console.warn('Runway lights unavailable:', err.message));
   // A wind cone by every runway end's touchdown zone, in its field's METAR wind (0027).
   import('./windsock.js').then(({ createWindsocks }) => {
-    windsocks = createWindsocks({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, gustAt: gustFactor, surfaceFactor: surfaceWindFactor });
+    windsocks = createWindsocks({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, gustAt: gustFactor, surfaceFactor: surfaceWindFactor, reducedMotion });
     scene.add(windsocks.group);
     if (debugOverlay) window.openaeroWindsocks = windsocks; // e2e: hide them for a control frame
   }).catch((err) => console.warn('Windsocks unavailable:', err.message));

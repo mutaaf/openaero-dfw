@@ -21,17 +21,19 @@ export const SOCK = { lengthM: 12 * FT, throatM: 0.9, tailM: 0.45, mastM: 6 };
 export const FULL_KTS = 15;   // straight out (AC 150/5345-27)
 export const RESPONSE_KTS = 3; // starts to lift
 // Drag/weight ratio of the cone at FULL_KTS: tan(hang) = K (V / FULL)². Normalised by atan(K),
-// so 15 kt is exactly 90°; K = 12 puts 3 kt at ~24° off the mast, 5 kt ~49°, 10 kt ~80°.
-const K = 12;
+// so 15 kt at the cone is exactly 90°. K is our tuned choice (the AC gives only the two speeds):
+// 4 keeps the angle close to the pilot's "3 kt a band" reading: 3 kt ~11°, 6 kt ~39°, 10 kt ~72°.
+const K = 4;
 const ATAN_K = Math.atan(K);
 // The pendulum: ~0.5 Hz, under-damped like a real cone in a gust.
 const OMEGA = 3.2;
 const ZETA = 0.45;
-// Siting: about where the FAA puts a supplemental wind cone, ~1,000 ft in from the landing
-// threshold and ~400 ft to the pilot's left, outside the runway's safety area; moved to the right
+// Siting (wind cones: FAA AC 150/5340-30, approximated here): about where a supplemental cone goes, ~1,000 ft in from the landing
+// threshold and ~300 ft to the pilot's left, in the infield between the runway and its parallel
+// taxiway, outside the runway's safety area; moved to the right
 // or further out when a parallel runway is there.
 const SITE_ALONG_M = 1000 * FT;
-const SITE_OFF_M = 400 * FT;
+const SITE_OFF_M = 300 * FT;
 const CLEAR_M = 45; // from any runway's edge
 
 // The cone's angle off the mast (0 = hanging limp, 90 = straight out) in a steady wind.
@@ -45,14 +47,15 @@ export function hangDeg(kts) {
 // (downwind: the METAR gives where the wind comes from), null when there is no direction
 // (calm or VRB: it keeps the way it was). extensionDeg is hangDeg of the gusting wind, plus a
 // small flutter in the yaw that grows with the wind (the fabric's shedding), never above 3°.
-export function windsockPose(windDirDeg, speedKt, gustKt, t, gustAt = null, out = { yawDeg: 0, extensionDeg: 0 }) {
+export function windsockPose(windDirDeg, speedKt, gustKt, t, gustAt = null, out = { yawDeg: 0, extensionDeg: 0 }, still = false) {
   const v = gustAt ? gustAt(t, speedKt, gustKt) : speedKt;
   out.extensionDeg = hangDeg(v);
   if (windDirDeg === null || windDirDeg === undefined || !(v > 0.5)) {
     out.yawDeg = null;
     return out;
   }
-  const flutter = Math.min(3, 0.15 * v) * Math.sin(t * (2 + 0.25 * v) + windDirDeg);
+  // A fixed rate from the steady wind: a gusting rate times a growing t would alias to noise.
+  const flutter = still ? 0 : Math.min(3, 0.15 * v) * Math.sin(t * (2 + 0.25 * speedKt) + windDirDeg);
   out.yawDeg = (((windDirDeg + 180 + flutter) % 360) + 360) % 360;
   return out;
 }
@@ -67,7 +70,10 @@ export function stepWindsock(st, i, pose, dt) {
   } else st.yawRate[i] -= c * st.yawRate[i] * dt;
   st.yaw[i] = (((st.yaw[i] + st.yawRate[i] * dt) % 360) + 360) % 360;
   st.extRate[i] += (k * (pose.extensionDeg - st.ext[i]) - c * st.extRate[i]) * dt;
-  st.ext[i] = Math.max(0, Math.min(95, st.ext[i] + st.extRate[i] * dt));
+  const e = st.ext[i] + st.extRate[i] * dt;
+  const held = Math.max(0, Math.min(95, e));
+  st.ext[i] = held;
+  if (held !== e) st.extRate[i] = 0; // at a stop, not sticking to it
 }
 
 export function createWindsockState(n) {
@@ -123,7 +129,7 @@ function sockGeometry() {
 }
 
 // Builds the meshes. update() is called once a frame with the per-field weather.
-export function createWindsocks({ runways, endById, heightAt, gustAt, surfaceFactor }) {
+export function createWindsocks({ runways, endById, heightAt, gustAt, surfaceFactor, reducedMotion = false }) {
   const sites = windsockSites(runways, endById);
   const n = sites.length;
   const st = createWindsockState(n);
@@ -152,9 +158,9 @@ export function createWindsocks({ runways, endById, heightAt, gustAt, surfaceFac
   const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _base = new THREE.Color(1, 1, 1);
   const sockFactor = surfaceFactor ? surfaceFactor(SOCK.mastM) : 1;
   // A 12 ft cone is ~6 arcmin from a 1 NM final, plain to the eye but a pixel on a 720p screen:
-  // like the lights, it keeps a minimum on-screen size at range: 0.5°, at most 5x life size (the eye
-  // resolves ~1 arcmin, a 720p pixel at 62° is ~5).
-  const MIN_RAD = 0.5 * DEG, MAX_SCALE = 5, RANGE_M = 12000;
+  // like the lights, it keeps a minimum on-screen size at range: 0.7° (~8 px at 720p), at most 7x life
+  // size (the eye resolves ~1 arcmin, a 720p pixel at 62° is ~5), faded out over its last km of range.
+  const MIN_RAD = 0.7 * DEG, MAX_SCALE = 7, RANGE_M = 12000;
   const state = { count: n, sites, st, baseY, scale: new Float32Array(n) };
 
   function update(t, dtIn, wxFor, cameraPos, night, tint) {
@@ -166,7 +172,7 @@ export function createWindsocks({ runways, endById, heightAt, gustAt, surfaceFac
       const kts = (wx?.windKts || 0) * sockFactor;
       const gust = (wx?.gustKts || 0) * sockFactor;
       for (let k = 0; k < steps; k++) {
-        windsockPose(wx?.windDirDeg ?? null, kts, gust, primed ? t - (steps - 1 - k) * h : t, gustAt, pose);
+        windsockPose(wx?.windDirDeg ?? null, kts, gust, primed ? t - (steps - 1 - k) * h : t, gustAt, pose, reducedMotion);
         if (!primed && k === 0) {
           st.yaw[i] = pose.yawDeg ?? 0;
           st.ext[i] = pose.extensionDeg;
@@ -175,7 +181,8 @@ export function createWindsocks({ runways, endById, heightAt, gustAt, surfaceFac
       }
       const x = sites[i].x, z = sites[i].z, y = baseY[i];
       const dist = Math.hypot(x - cameraPos.x, y - cameraPos.y, z - cameraPos.z);
-      const sc = dist > RANGE_M ? 0 : Math.min(MAX_SCALE, Math.max(1, (dist * MIN_RAD) / SOCK.lengthM));
+      const fade = Math.max(0, Math.min(1, (RANGE_M - dist) / 1000));
+      const sc = fade * Math.min(MAX_SCALE, Math.max(1, (dist * MIN_RAD) / SOCK.lengthM));
       state.scale[i] = sc;
       _s.set(sc, sc, sc);
       _m.compose(_p.set(x, y, z), _q.identity(), _s);
@@ -193,7 +200,9 @@ export function createWindsocks({ runways, endById, heightAt, gustAt, surfaceFac
     const lit = 0.85 * night;
     _base.setRGB(Math.max(tint.r, lit), Math.max(tint.g, lit), Math.max(tint.b, lit));
     sockMat.color.copy(_base);
-    mastMat.color.setHex(0x6b6f73).multiply(_base);
+    // The cone is floodlit, not the mast: it keeps the daylight, plus a little spill.
+    const spill = 0.25 * night;
+    mastMat.color.setHex(0x6b6f73).multiply(_base.setRGB(Math.max(tint.r, spill), Math.max(tint.g, spill), Math.max(tint.b, spill)));
   }
 
   // ?debug: where each sock is and how it hangs (allocates; not per frame).

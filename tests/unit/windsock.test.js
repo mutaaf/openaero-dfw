@@ -24,10 +24,16 @@ describe('windsock pose (ticket 0027)', () => {
       last = e;
     }
     expect(hangDeg(0)).toBe(0);
-    expect(hangDeg(2)).toBeLessThan(15);           // under 3 kt: barely off the mast
-    expect(hangDeg(3)).toBeGreaterThan(15);        // responds at 3 kt
+    expect(hangDeg(2)).toBeLessThan(8);            // under 3 kt: barely off the mast
+    expect(hangDeg(3)).toBeGreaterThan(8);         // responds at 3 kt
+    expect(hangDeg(6)).toBeGreaterThan(30);        // near the "3 kt a band" reading, not saturated early
+    expect(hangDeg(10)).toBeLessThan(80);
     expect(hangDeg(FULL_KTS)).toBeCloseTo(90, 6);  // straight out at 15 kt
     expect(hangDeg(25)).toBeCloseTo(90, 6);
+  });
+
+  it('does not flutter with reduced motion', () => {
+    for (const t of [0, 0.7, 3.1]) expect(windsockPose(250, 12, 0, t, null, undefined, true).yawDeg).toBe(70);
   });
 
   it('has no bearing in a calm or variable wind (it keeps the way it hangs)', () => {
@@ -91,14 +97,14 @@ describe('windsock sites', () => {
     }
   });
 
-  it('sites the 35C sock ~1,000 ft past the threshold, ~400 ft to the left, visible from the final', () => {
+  it('sites the 35C sock ~1,000 ft past the threshold, ~300 ft to the left, visible from the final', () => {
     const e = runwayEnd('KDFW', '35C');
     const s = sites.find((o) => o.end === e.id);
     const c = courseVector(e.hdgT);
     const dx = s.x - e.thrX, dz = s.z - e.thrZ;
     expect(dx * c.x + dz * c.z).toBeCloseTo(1000 * FT, 0);
     const right = dx * -c.z + dz * c.x; // + = right of the landing direction
-    expect(right).toBeCloseTo(-400 * FT, 0);
+    expect(right).toBeCloseTo(-300 * FT, 0);
   });
 });
 
@@ -127,13 +133,13 @@ describe('windsock meshes', () => {
     const arr = w.socks?.instanceMatrix?.array;
     for (let k = 1; k < 30; k++) w.update(k / 60, 1 / 60, wxFor, cam, 1, { r: 0.1, g: 0.1, b: 0.1 });
     expect(w.socks?.instanceMatrix?.array).toBe(arr);
-    // A sock 2 km away is drawn larger than life; one 300 m away at its real size.
+    // A sock 2 km away is drawn larger than life; one 200 m away at its real size.
     const e = runwayEnd('KDFW', '35C');
     const i = w.state.sites.findIndex((s) => s.end === e.id);
     const s = w.state.sites[i];
     w.update(1, 1 / 60, wxFor, { x: s.x, y: 100, z: s.z + 2000 }, 0, { r: 1, g: 1, b: 1 });
     expect(w.state.scale[i]).toBeGreaterThan(2);
-    w.update(1.1, 1 / 60, wxFor, { x: s.x, y: 30, z: s.z + 300 }, 0, { r: 1, g: 1, b: 1 });
+    w.update(1.1, 1 / 60, wxFor, { x: s.x, y: 30, z: s.z + 200 }, 0, { r: 1, g: 1, b: 1 });
     expect(w.state.scale[i]).toBe(1);
   });
 });

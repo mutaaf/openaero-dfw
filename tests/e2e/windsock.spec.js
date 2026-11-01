@@ -11,8 +11,8 @@ const angleDiff = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
 
 test.beforeEach(async ({ page }) => {
   await stubTiles(page);
-  // DFW from the west at 18 kt (straight out), Love Field from the east at 4 kt (half up).
-  await stubMetar(page, [metar('KDFW', 270, 18), metar('KDAL', 90, 4)]);
+  // DFW from the west at 18 kt (straight out), Love Field from the east at 7 kt (partly up).
+  await stubMetar(page, [metar('KDFW', 270, 18), metar('KDAL', 90, 7)]);
 });
 
 async function cockpit(page) {
@@ -37,7 +37,7 @@ test('every airport has wind cones on its own ground, each in its own field\'s w
     expect(socks.filter((s) => s.airport === icao).length, icao).toBeGreaterThanOrEqual(2);
   }
   for (const s of socks) expect(Math.abs(s.y - s.groundY), s.end).toBeLessThan(0.05);
-  // Love Field's own METAR: from 090 at 4 kt, a cone streaming west, partly lifted.
+  // Love Field's own METAR: from 090 at 7 kt, a cone streaming west, partly lifted.
   for (const s of socks.filter((o) => o.airport === 'KDAL')) {
     expect(angleDiff(s.yawDeg, 270), s.end).toBeLessThan(8);
     expect(s.extensionDeg, s.end).toBeGreaterThan(20);
@@ -52,6 +52,9 @@ test.describe('from the final', () => {
   test('the 35C cone is picked out from 1 NM at 1280x720 (orange pixels with it, none without)', async ({ page }, info) => {
     const errors = collectErrors(page);
     await cockpit(page);
+    // Pixel tests pin Noon (LESSONS 2026-10-18).
+    for (let i = 0; i < 5 && (await page.evaluate(() => window.openaeroDebug().sun.mode)) !== 'Noon'; i++) await page.click('#btnTimeOfDay');
+    expect(await page.evaluate(() => window.openaeroDebug().sun.mode)).toBe('Noon');
     await page.evaluate(() => window.openaeroDebugFinal('KDFW', '35C', 1));
     await page.click('#btnPause'); // the same frame twice, with and without the cones
     await expect.poll(() => page.evaluate(() => window.openaeroDebug().paused)).toBe(true);
@@ -61,7 +64,8 @@ test.describe('from the final', () => {
     await page.addStyleTag({ content: 'body * { visibility: hidden !important; } #simCanvas { visibility: visible !important; }' });
     const frame = async (on) => {
       await page.evaluate((v) => { window.openaeroWindsocks.group.visible = v; }, on);
-      await page.waitForTimeout(300);
+      // Real frames, not wall time: a SwiftShader frame on CI can take > 250 ms.
+      for (let k = 0; k < 3; k++) await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
       return (await page.locator('#simCanvas').screenshot()).toString('base64');
     };
     const a = await frame(true), b = await frame(false), b2 = await frame(false);
@@ -88,7 +92,7 @@ test.describe('from the final', () => {
     const withSock = await count(a, b);
     const without = await count(b2, b); // the noise floor: two frames without
     console.log(`orange pixels: with ${withSock}, without ${without}`);
-    expect(withSock).toBeGreaterThan(without + 5); // measured 13-26 with, 0 without
+    expect(withSock).toBeGreaterThan(without + 5); // measured 13-26 with (0.5°), 0 without
     expect(errors).toEqual([]);
   });
 });

@@ -270,10 +270,10 @@ src/nightGround.js  shader patch on the ground's MeshBasicMaterials (terrainLod,
 src/runwayLights.js lazy chunk: edge/centreline/threshold/end lights and ALSF-2/MALSR approach
                     lights with sequenced flashers, one Points draw (layout pure, tested)
 src/windsock.js     wind cones (0027, lazy chunk after boot): one beside every runway end's touchdown zone
-                    (~1,000 ft in, ~400 ft left, clear of every runway), streaming downwind in its own field's
-                    METAR (the flown field: sim.wx), lifted by drag ∝ V² to straight out at 15 kt (AC 150/5345-27)
+                    (~1,000 ft in, ~300 ft left, clear of every runway), streaming downwind in its own field's
+                    METAR (the flown field: sim.wx), lifted by drag ∝ V² to straight out at 15 kt at the cone (AC 150/5345-27)
                     and swung there as a damped pendulum on the sim clock; gusts and the log-law thinning are
-                    weather.js's, passed in. Two InstancedMesh draws; a minimum 0.5° on screen (≤ 5x) at range;
+                    weather.js's, passed in. Two InstancedMesh draws; a minimum 0.7° on screen (≤ 7x) at range;
                     lit at night. ?debug: openaeroDebug().windsocks, window.openaeroWindsocks
 src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembered
 src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
