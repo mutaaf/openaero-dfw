@@ -135,3 +135,28 @@ export const recordVibrate = () => {
     },
   });
 };
+
+// Ticket 0091's scripted bounce: a 3 m/s hop armed in the physics, fired after 0.4 s of sim
+// time on the wheels (?debug openaeroDebugHop). A hop timed in wall-clock time from the test or
+// a rAF landed anywhere along the derotation on a slow runner (the nose comes down ~8°/s), and
+// its height swung across the 2 ft bounce line (main red on 0e3cbd9). The autopilot lets go at
+// the touchdown, as a pilot would; resolves once the wheels are off again.
+export async function scriptedBounce(page) {
+  await page.evaluate(() => new Promise((done) => {
+    window.openaeroDebugHop(3, 0.4);
+    let landed = false;
+    const tick = () => {
+      const d = window.openaeroDebug();
+      if (d.lastLanding && !landed) {
+        landed = true;
+        for (const id of ['btnApApr', 'btnApMaster']) {
+          const b = document.getElementById(id);
+          if (b.classList.contains('active')) b.click();
+        }
+      }
+      if (landed && !d.onGround) { done(); return; }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }));
+}

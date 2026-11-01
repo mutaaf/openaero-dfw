@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, collectErrors, scriptedBounce } from './helpers.js';
 
 // Ticket 0091: a bounced landing is noticed, coached and graded. The ILS autoland flies the
 // flare challenge to touchdown, then the ?debug hook throws the airplane back off the runway
@@ -15,24 +15,8 @@ test('a bounce after the touchdown is coached, then caps the grade on the result
   await page.click('#btnApApr');
   const snap = () => page.evaluate(() => window.openaeroDebug());
   // 0.4 s after the touchdown, hands on (the coach is quiet under the autopilot), then up: the
-  // wheels leave the runway for well over 0.3 s. Timed in the page: the card comes up 1 s after
-  // the wheels settle and pauses the rollout (0106), and a hop sent from the test under CI's load
-  // could arrive after it (at the touchdown itself it is a big bounce).
-  await page.evaluate(() => new Promise((done) => {
-    let t0 = null;
-    const hop = () => {
-      if (window.openaeroDebug().lastLanding) t0 ??= performance.now();
-      if (t0 === null || performance.now() - t0 < 400) { requestAnimationFrame(hop); return; }
-      for (const id of ['btnApApr', 'btnApMaster']) {
-        const b = document.getElementById(id);
-        if (b.classList.contains('active')) b.click();
-      }
-      window.openaeroDebugHop(3);
-      done();
-    };
-    hop();
-  }));
-  await expect.poll(async () => (await snap()).onGround, { timeout: 5_000, intervals: [50] }).toBe(false);
+  // wheels leave the runway for well over 0.3 s (helpers.js scriptedBounce, timed in sim time).
+  await scriptedBounce(page);
   await expect(page.locator('#txtCoach')).toHaveText(/Bounced: hold the attitude/, { timeout: 5_000 }); // a slight bounce
   await expect(page.locator('#resultsCard')).toBeHidden(); // not over the bounce
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 30_000 });

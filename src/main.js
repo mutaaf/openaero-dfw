@@ -1004,6 +1004,7 @@ let softResetAt = null; // Kid soft landing: sim time at which the mission resta
 // and a go-around after it drops the landing (the right call, not a grade).
 const bounce = createBounceTracker();
 let pendingLanding = null;
+let debugHop = null; // ?debug: an armed scripted bounce (openaeroDebugHop)
 function checkBounce(dt) {
   const wheelFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
   stepBounce(bounce, wheelFt, sim.onGround, dt);
@@ -1605,6 +1606,8 @@ function checkTakeoffCallouts() {
 
 function integrateSubStep(dt) {
   sim.groundY = ground.heightAt(sim.pos.x, sim.pos.z);
+  // ?debug: an armed hop fires after that much sim time on the wheels, whatever the frame rate.
+  if (debugHop && sim.onGround && (debugHop.s -= dt) <= 0) { sim.vel.y = debugHop.mps; debugHop = null; }
   const spec = sim.spec;
 
   // Pilot Input Controls: touch/drag stick > gamepad > keyboard (input.js)
@@ -3370,8 +3373,10 @@ if (debugOverlay) {
   // fastKts (0127): that much over the final's speed, flaps and all (an overspeed on the final).
   window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0) => runwayEnd(airport, rwy)
     && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts });
-  // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce.
-  window.openaeroDebugHop = (mps) => { sim.vel.y = mps; };
+  // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce;
+  // with onGroundS, armed: it fires in the physics after that long on the wheels (sim time), so
+  // a slow frame can't move it along the derotation (the nose comes down ~8°/s after touchdown).
+  window.openaeroDebugHop = (mps, onGroundS) => { if (onGroundS == null) sim.vel.y = mps; else debugHop = { mps, s: onGroundS }; };
   // ?debug (tests, 0117): put words on the caption line as audio.js would.
   window.openaeroDebugCaption = sayCaption;
   // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.

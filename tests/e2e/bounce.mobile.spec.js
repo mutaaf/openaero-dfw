@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, collectErrors, scriptedBounce } from './helpers.js';
 
 // Ticket 0091 on a phone (390x844, touch): the bounce prompt and the results card with its
 // "Bounced once" line, the next-time tip (0061) and the runway strip (0088) fit the screen without a scroll, upright
@@ -13,22 +13,7 @@ test('phone: the bounce prompt and the capped results card fit 390x844', async (
   await page.locator('#btnStartFlight').tap();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   await page.evaluate(() => document.getElementById('btnApApr').click());
-  // Hop 0.4 s after the touchdown, timed in the page: the card pauses the rollout 1 s after the
-  // wheels settle (0106), and a hop sent from the test under load could come after it.
-  await page.evaluate(() => new Promise((done) => {
-    let t0 = null;
-    const hop = () => {
-      if (window.openaeroDebug().lastLanding) t0 ??= performance.now();
-      if (t0 === null || performance.now() - t0 < 400) { requestAnimationFrame(hop); return; }
-      for (const id of ['btnApApr', 'btnApMaster']) {
-        const b = document.getElementById(id);
-        if (b.classList.contains('active')) b.click();
-      }
-      window.openaeroDebugHop(3);
-      done();
-    };
-    hop();
-  }));
+  await scriptedBounce(page); // 0.4 s (sim time) after the touchdown, a 3 m/s hop
   // The prompt shows only while the wheels are up (well under a second on a 3 m/s hop): read
   // its box in the same frame its text says bounce, or a slow runner sees it already gone.
   const c = await (await page.waitForFunction(() => {
