@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { BASE, stubTiles, stubMetar, collectErrors, TEST_METAR } from './helpers.js';
+import { BASE, stubTiles, stubMetar, collectErrors, TEST_METAR, recordVibrate } from './helpers.js';
 
 // Ticket 0042: assist levels Kid · Learner · Pilot over the same physics.
 test.beforeEach(async ({ page }) => { await stubTiles(page); });
@@ -173,6 +173,7 @@ test.describe('Kid on a phone', () => {
   test('touch only: Kid flies the default final down to a graded landing, no crash', async ({ page }) => {
     test.setTimeout(240_000);
     const errors = collectErrors(page);
+    await page.addInitScript(recordVibrate); // 0033: the touchdown buzz
     await page.goto(BASE);
     const kid = page.locator('.btnAssist[data-assist="kid"]');
     await kid.scrollIntoViewIfNeeded();
@@ -206,6 +207,10 @@ test.describe('Kid on a phone', () => {
     const best = await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_best')));
     expect(best.missions['kdfw_35c_final@kid'].grade).toBe(grade);
     expect(best.missions.kdfw_35c_final).toBeUndefined(); // Pilot's best is untouched
+    // 0033: the touchdown buzzed (a 40 ms tick or 80 ms firm; Kid never gets the crash thump).
+    const vibes = await page.evaluate(() => window.__vibes);
+    expect(vibes.length).toBeGreaterThanOrEqual(1);
+    for (const v of vibes) expect([[40], [80]]).toContainEqual(v);
     expect(errors).toEqual([]);
   });
 });

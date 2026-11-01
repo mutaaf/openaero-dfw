@@ -6,9 +6,12 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true
 test('phone: boots, starts a flight, renders, no errors, no page scroll', async ({ page }) => {
   await stubTiles(page);
   const errors = collectErrors(page);
+  // As on an iPhone, no Vibration API (0033): no Vibrate toggle, and nothing throws.
+  await page.addInitScript(() => { delete Navigator.prototype.vibrate; });
   await page.goto(BASE);
   await page.locator('#btnStartFlight').click();
   await expect(page.locator('#onboardingModal')).toBeHidden();
+  await expect(page.locator('#btnHaptics')).toBeHidden();
   // Poll: under parallel load SwiftShader can take a few seconds to draw the first frames.
   await expect.poll(() => distinctColours(page, '#simCanvas'), { timeout: 15_000 }).toBeGreaterThan(3);
   const scroll = await page.evaluate(() => ({

@@ -121,3 +121,17 @@ export async function lowContrastLabels(page, rootSel, { backdrop = null } = {})
     return bad;
   }, { rootSel, backdrop });
 }
+
+// 0033: an init script that replaces navigator.vibrate with a recorder: window.__vibes gets every
+// pattern, a vibrate(0) stop is only counted (window.__stops).
+export const recordVibrate = () => {
+  window.__vibes = [];
+  Object.defineProperty(Navigator.prototype, 'vibrate', {
+    configurable: true,
+    value: (p) => {
+      const q = Array.isArray(p) ? p : [p];
+      if (q.some((ms) => ms > 0)) window.__vibes.push(q); else window.__stops = (window.__stops ?? 0) + 1;
+      return true;
+    },
+  });
+};
