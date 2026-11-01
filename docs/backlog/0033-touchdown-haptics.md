@@ -1,12 +1,12 @@
 ---
 id: 0033
 title: Haptic feedback on the phone for touchdown, stall and GPWS pull-up
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-10-18
-pr:
+pr: 150
 ---
 
 ## Why
@@ -22,8 +22,8 @@ New pure module `src/haptics.js`: `touchdownPattern(sinkFpm)` (e.g. 20 ms gentle
 feature-detects and try/catches. Wire into main.js at touchdown (where the landing grade is
 computed) and at the stall/GPWS pull-up edge (once per alert onset, not per frame). Respect
 `prefers-reduced-motion` (skip alerts, keep a single short touchdown tick) and add a
-persisted-free "Haptics" toggle only on touch devices, in the existing menu (store with
-`openaero_haptics` `{v:1,on}` and tolerate throwing storage).
+remembered "Vibrate" toggle only on touch devices, in the existing menu (store with
+`openaero_haptics_v1` `{v:1,on,at}` and tolerate throwing storage).
 
 ## Acceptance criteria
 - [ ] `touchdownPattern` returns longer/stronger patterns for higher sink rates (unit-tested)
