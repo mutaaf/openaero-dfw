@@ -12,7 +12,7 @@ import { trimThrottle } from '../../src/flightModel.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
-import { runwayEnd, approachGeometry, approachSpawn } from '../../src/airports.js';
+import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src/airports.js';
 import { assistConfig, createAssistState, shapeControls, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
 import { missionByKey } from '../../src/missions.js';
 import { makeBody, fly, attitude } from './harness.js';
@@ -48,10 +48,12 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   const cfg = assistConfig('kid'), ast = createAssistState();
   const s = {}, out = {}, conf = { gearDown: true, flapsIndex: 2 }, at = { trim: 0 };
   let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
+  const papi = [0, 0, 0, 0, 0]; // samples by white lamps (main.js updatePapi: the CG to the box), 200 ft up and higher
   fly(b, spec, 240, (x, dt) => {
     const ap = approachGeometry(end, x.pos);
     const wheelM = x.pos.y - spec.gearHeight;
     if (thrFt === null && ap.distM <= 0) thrFt = wheelM * M_TO_FT;
+    if (wheelM * M_TO_FT > 200 && ap.distM > 0) papi[papiWhite(end, x.pos, ap.distM)]++;
     minVs = Math.min(minVs, x.vel.y);
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
@@ -84,7 +86,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t };
     return true;
   });
-  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60 };
+  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi };
 }
 
 const log = (ac, key, name, { td, thrFt }) => console.log(`[${ac} kid final] ${key} ${name}: threshold ${thrFt?.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, ${td && td.t.toFixed(0)} s`);
@@ -107,6 +109,22 @@ describe('Kid hands off on a straight-in final in the Cessna lands in the touchd
       expectLanded(r);
       expect(r.td.pastThrM).toBeLessThan(600); // landing.js touchdown zone (full marks)
       expect(r.td.vsFpm).toBeGreaterThan(-240); // landing.js: rate scores 75+ under 240 fpm
+    });
+  }
+});
+
+// Ticket 0131: the PAPI's on-path band is the glide path +-10' (AC 150/5340-30J Table 7-2), half
+// as wide again as before on the low side; Kid's guide flies the 3° path, so the coach's "two white,
+// two red" must be what the box shows all the way down to 200 ft.
+describe('Kid hands off down a final reads two white, two red on the PAPI (ticket 0131)', () => {
+  for (const [ac, key] of [['c172', 'kads_16_final'], ['c172', 'kftw_16_final'], ['b738', 'kdfw_35c_final']]) {
+    it(`${ac} ${key}, calm: 2 white in at least 95% of the samples above 200 ft, never 0 or 4`, () => {
+      const { papi } = flyKidFinal(ac, key);
+      const n = papi.reduce((a, b) => a + b, 0);
+      console.log(`[${ac} kid final] ${key} PAPI white 0-4: ${papi.join(' / ')}`);
+      expect(n).toBeGreaterThan(100);
+      expect(papi[2] / n).toBeGreaterThan(0.95);
+      expect(papi[0] + papi[4]).toBe(0);
     });
   }
 });

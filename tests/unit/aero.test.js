@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient, waveDragCd, dragDivergenceMach,
-  inducedDragK, headingError, headingFromYaw, papiWhiteLights, gpwsCalloutIndex, gpwsRearm,
+  inducedDragK, headingError, headingFromYaw, papiWhiteLights, PAPI_SETTING_OFFSETS_DEG, gpwsCalloutIndex, gpwsRearm,
   GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, takeoffCalloutIndex, TAKEOFF_CALLOUTS,
   TAKEOFF_CALLOUT_HUD_PLAIN,
 } from '../../src/aero.js';
@@ -144,6 +144,26 @@ describe('PAPI', () => {
     expect(papiWhiteLights(3.2)).toBe(3);
     expect(papiWhiteLights(2.6)).toBe(1);
     expect(papiWhiteLights(2.0)).toBe(0);
+  });
+  // Ticket 0131: AC 150/5340-30J Table 7-2 aims a 4-box PAPI's units at the glide path G
+  // +30', +10', -10', -30' (standard installation), so two white / two red is G +-10'.
+  it('turns at the AC 150/5340-30J setting angles around a 3.0° path', () => {
+    expect(PAPI_SETTING_OFFSETS_DEG).toEqual([-30 / 60, -10 / 60, 10 / 60, 30 / 60]);
+    for (const [deg, white] of [[3.0, 2], [2.84, 2], [3.16, 2], [2.82, 1], [3.18, 3], [2.51, 1], [3.49, 3],
+      [2.49, 0], [3.51, 4], [0, 0], [-1, 0], [10, 4]]) {
+      expect(papiWhiteLights(deg), `${deg}°`).toBe(white);
+      expect(papiWhiteLights(deg, 3), `${deg}° (G 3.0)`).toBe(white);
+    }
+  });
+  it('is symmetric about the path: the on-path band is +-10 arc-minutes', () => {
+    for (const d of [0.1, 0.16, 0.18, 0.3, 0.49, 0.51, 1]) {
+      expect(papiWhiteLights(3 + d) + papiWhiteLights(3 - d), `+-${d}°`).toBe(4);
+    }
+  });
+  it('moves the same offsets with the glide path angle (G = 3.2°)', () => {
+    for (const [deg, white] of [[3.2, 2], [3.04, 2], [3.36, 2], [3.02, 1], [3.38, 3], [2.69, 0], [2.71, 1], [3.69, 3], [3.71, 4]]) {
+      expect(papiWhiteLights(deg, 3.2), `${deg}° (G 3.2)`).toBe(white);
+    }
   });
 });
 

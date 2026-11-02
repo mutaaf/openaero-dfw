@@ -13,7 +13,7 @@ import { magHeadingText } from './magvar.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
-  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES, runwayFactsText,
+  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES, papiWhite, runwayFactsText,
 } from './airports.js';
 import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions, missionSun } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
@@ -33,7 +33,7 @@ import { createLazyPhotoreal, photorealAllowed } from './photorealLazy.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './terrain.js';
 import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './atmosphere.js';
 import {
-  headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
+  headingError, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
   takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN, speedLimitKts, overspeedStep, stallSpeedKts,
 } from './aero.js';
@@ -1826,8 +1826,7 @@ function updatePapi() {
   const col = papiLamps.geometry.attributes.color.array;
   RUNWAY_ENDS.forEach((e, ei) => {
     const g = approachGeometry(e, sim.pos);
-    const distToPapi = Math.max(10, g.distM + AIM_POINT_M);
-    const white = g.distM > -AIM_POINT_M ? papiWhiteLights(Math.atan2(sim.pos.y - e.thrY, distToPapi) * RAD_TO_DEG) : 0;
+    const white = g.distM > -AIM_POINT_M ? papiWhite(e, sim.pos, g.distM) : 0;
     // Lamps are numbered outward from the runway; the inboard lamps turn red first.
     for (let i = 0; i < 4; i++) {
       const k = (ei * 4 + i) * 3;
@@ -1841,7 +1840,7 @@ function updatePapi() {
   sim.papiWhite = null;
   if (!sim.activeEnd) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
   const ap = sim.approach;
-  const numWhite = papiWhiteLights(Math.atan2(sim.pos.y - sim.activeEnd.thrY, Math.max(10, ap.distM + AIM_POINT_M)) * RAD_TO_DEG);
+  const numWhite = papiWhite(sim.activeEnd, sim.pos, ap.distM);
   sim.papiWhite = numWhite;
   if (numWhite === 2) {
     txt.textContent = 'ON GLIDESLOPE';
@@ -3481,6 +3480,8 @@ window.openaeroDebug = () => {
     speedLimitKts: sim.speedLimitKts ?? null,
     overspeed: !!sim.overspeed,
     stallKts: sim.stallKts ?? null,
+    // The PAPI (0131): the white lamps the HUD/coach read, and the active end's 3D lamps that are white.
+    papiWhite: sim.papiWhite, papiLampsWhite: papiLamps && sim.activeEnd ? [0, 1, 2, 3].filter((i) => papiLamps.geometry.attributes.color.array[(RUNWAY_ENDS.indexOf(sim.activeEnd) * 4 + i) * 3 + 1] > 0.5).length : null,
     ilsLocDots: sim.ilsLocDots, ilsGsDots: sim.ilsGsDots, ilsLocBarPx: sim.ilsLocBarPx, ilsGsBarPx: sim.ilsGsBarPx,
     inputSource: sim.inputSource,
     simTime: sim.simTime,

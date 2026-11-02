@@ -7,6 +7,7 @@ import { latLonToSimMeters } from './geo.js';
 import { DEG_TO_RAD, NM_TO_M } from './constants.js';
 import { ftMslToY } from './terrain.js';
 import { magHeadingText } from './magvar.js';
+import { papiWhiteLights } from './aero.js';
 
 const FT = 0.3048;
 export const GLIDE_DEG = 3.0;
@@ -150,6 +151,13 @@ export function approachGeometry(end, pos) {
   const distM = -along;
   const pathH = (distM + AIM_POINT_M) * Math.tan(GLIDE_DEG * DEG_TO_RAD);
   return { distM, crossM: cross, heightAbovePathM: pos.y - (end.thrY ?? 0) - pathH, pathHeightM: pathH };
+}
+
+// White lamps on an end's PAPI from pos (distM = approachGeometry's): the slope from its threshold
+// height to the box at the aim point, against the path approachGeometry flies (GLIDE_DEG; no
+// runway here has a published angle other than 3°, 0131). The HUD, the coach and the 3D lamps all read this.
+export function papiWhite(end, pos, distM) {
+  return papiWhiteLights(Math.atan2(pos.y - (end.thrY ?? 0), Math.max(10, distM + AIM_POINT_M)) / DEG_TO_RAD, GLIDE_DEG);
 }
 
 // The runway end you are flying to: in front of you (before the threshold, up to 30 km),
