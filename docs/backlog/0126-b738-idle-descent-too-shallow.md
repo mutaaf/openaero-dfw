@@ -1,7 +1,7 @@
 ---
 id: 0126
 title: 737 idle descent at 280 kt sinks ~1,850 ft/min, about half of EUROCONTROL's 3,500
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity

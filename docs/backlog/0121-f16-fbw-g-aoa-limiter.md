@@ -1,7 +1,7 @@
 ---
 id: 0121
 title: F-16 fly-by-wire limits a full pull to 9 g and 25° AoA
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
