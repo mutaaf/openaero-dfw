@@ -1,8 +1,8 @@
 ---
 id: 0125
 title: The results card's FLY AGAIN / KEEP ROLLING stay in view on a phone held sideways in Safari
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: S
 lens: player-feel
 created: 2026-10-31
