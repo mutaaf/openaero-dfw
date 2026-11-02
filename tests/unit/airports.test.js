@@ -132,7 +132,7 @@ describe('runway ends agree with the published length', () => {
       expect(Math.abs(g.lengthM - r.lengthFt * 0.3048), g.name).toBeLessThan(30);
     }
   });
-  it('KAFW: the FAA record\'s ends (16L/16R extended north) and 34L\'s 716 ft displaced threshold', () => {
+  it('KAFW: the FAA record\'s four ends and 34L\'s 716 ft displaced threshold', () => {
     // FAA airport record (5010) for KAFW, via AirNav, 2026-11-02: 16L 33-00.325685N 097-19.291575W,
     // 16R 33-00.308878N 097-19.407327W; 34L threshold displaced 716 ft (LDA 10,409 ft).
     const p16L = latLonToSimMeters(33 + 0.325685 / 60, -(97 + 19.291575 / 60));

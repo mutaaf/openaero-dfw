@@ -2,8 +2,8 @@
 // Data: OurAirports runways.csv (public domain), fetched 2026-10-16 from
 // https://davidmegginson.github.io/ourairports-data/runways.csv. Lat/lon are the physical
 // runway ends; displaced thresholds move the landing threshold down the runway.
-// KAFW (ticket 0124): OurAirports still has the ends from before Alliance's runways were
-// lengthened north, ~420 m short of their own 11,000 / 11,125 ft. Its four ends and 34L's 716 ft
+// KAFW (ticket 0124): OurAirports still has older ends for Alliance's runways, 2,933 m and 2,526 m
+// apart: ~420 m (16L/34R) and ~865 m (16R/34L) short of their own 11,000 / 11,125 ft. Its four ends and 34L's 716 ft
 // displaced threshold are the FAA airport record (Form 5010, as published by
 // https://www.airnav.com/airport/KAFW, read 2026-11-02): 16L 33-00.325685N 097-19.291575W,
 // 34R 32-58.538248N 097-18.925727W, 16R 33-00.308878N 097-19.407327W, 34L 32-58.501110N 097-19.037282W.
@@ -82,7 +82,8 @@ function buildEnd(rwy, end, other) {
   const p = latLonToSimMeters(end.lat, end.lon);
   const d = courseVector(end.hdgT);
   const disp = end.displacedFt * FT;
-  // Threshold height (sim Y): on the runway plane between the two surveyed ends.
+  // Threshold height (sim Y): on the runway plane between the two surveyed ends (interpolated,
+  // not a published displaced-threshold elevation: KAFW 34L's 669 ft is this line's).
   const t = disp / (rwy.lengthFt * FT);
   const thrElevFt = end.elevFt + (other.elevFt - end.elevFt) * t;
   const thrY = ftMslToY(thrElevFt);
