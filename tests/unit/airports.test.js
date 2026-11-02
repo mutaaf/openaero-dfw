@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { RUNWAY_DATA, runwayFactsText, RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, approachGeometry, selectActiveRunway, approachSpawn, GLIDE_DEG, AIM_POINT_M } from '../../src/airports.js';
+import { RUNWAY_DATA, runwayFactsText, RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, approachGeometry, selectActiveRunway, approachSpawn, GLIDE_DEG, AIM_POINT_M, papiWhite } from '../../src/airports.js';
 import { latLonToSimMeters } from '../../src/geo.js';
+import { papiWhiteLights } from '../../src/aero.js';
 import { MAG_VAR_DEG } from '../../src/magvar.js';
 
 describe('runway data (OurAirports)', () => {
@@ -169,5 +170,46 @@ describe('runwayFactsText', () => {
   });
   it('no runway, no line', () => {
     expect(runwayFactsText(null)).toBe('');
+  });
+});
+
+// Ticket 0131: one PAPI reading for the HUD text, the coach and the 3D lamps, aimed at the path
+// approachGeometry flies (GLIDE_DEG to the aim point, where the PAPI stands).
+describe('papiWhite', () => {
+  it('reads two white, two red on every runway end\'s 3° path from 10 NM to the threshold', () => {
+    for (const e of RUNWAY_ENDS) {
+      for (const nm of [10, 4, 1, 0.3, 0.05]) {
+        const { pos } = approachSpawn(e, nm);
+        expect(papiWhite(e, pos, approachGeometry(e, pos).distM), `${e.id} ${nm} NM`).toBe(2);
+      }
+    }
+  });
+  it('is the setting angles of the slope to the PAPI box (papiWhiteLights at GLIDE_DEG)', () => {
+    const e = runwayEnd('KDFW', '35C');
+    for (const nm of [6, 2, 0.5]) {
+      for (const dDeg of [-0.6, -0.4, -0.2, -0.1, 0.1, 0.2, 0.4, 0.6]) {
+        const { pos } = approachSpawn(e, nm);
+        const distM = approachGeometry(e, pos).distM;
+        pos.y = e.thrY + (distM + AIM_POINT_M) * Math.tan((GLIDE_DEG + dDeg) * Math.PI / 180);
+        expect(papiWhite(e, pos, distM), `${nm} NM ${dDeg}°`).toBe(papiWhiteLights(GLIDE_DEG + dDeg, GLIDE_DEG));
+      }
+    }
+  });
+  it('tells the AC bands from the old 2.8-3.1° ones on a real final: 3.12° and 2.85° are on the path', () => {
+    const e = runwayEnd('KADS', '16');
+    for (const [deg, white] of [[3.12, 2], [2.85, 2], [3.2, 3], [2.81, 1]]) {
+      const { pos } = approachSpawn(e, 1);
+      const distM = approachGeometry(e, pos).distM;
+      pos.y = e.thrY + (distM + AIM_POINT_M) * Math.tan(deg * Math.PI / 180);
+      expect(papiWhite(e, pos, distM), `${deg}°`).toBe(white); // the old thresholds gave 3, 2, 3, 1
+    }
+  });
+  it('reads nothing once past the box (a float or the rollout is not "high", 0131)', () => {
+    const e = runwayEnd('KDFW', '35C');
+    const { pos } = approachSpawn(e, 0);
+    pos.y = e.thrY + 10; // floating 10 m up
+    expect(papiWhite(e, pos, -AIM_POINT_M + 1)).not.toBeNull();
+    expect(papiWhite(e, pos, -AIM_POINT_M)).toBeNull();
+    expect(papiWhite(e, pos, -1500)).toBeNull();
   });
 });

@@ -140,7 +140,8 @@ src/main.js         renderer + scene build, 6-DOF integrator, camera, HUD/radar 
 src/constants.js    units, KDFW origin, field elevation
 src/aircraft.js     aircraft database (mass, wing, lift/drag, thrust, V-speeds, damping)
 src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
-                    thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns; runwayFactsText
+                    thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns; papiWhite (0131: the one
+                    PAPI reading for the HUD, coach and 3D lamps, aero.js papiWhiteLights at AC 150/5340-30J's G ±10'/±30'); runwayFactsText
                     (0114): the start screen's chart line (ident, length x width, °M, threshold ft MSL)
 src/missions.js     mission catalogue (approaches by runway end, tours by spawn, a blurb each;
                     groupMissions() builds the start-screen picker, ticket 0029) + the dynamic
@@ -445,7 +446,7 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-02 (0060): 200.42 kB (the night/dusk missions' entries and missionSun's wiring). 2026-11-02 (0130): 200.60 kB (the coach card's slot check, placeCoach, +0.18 kB). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-02 (0060): 200.42 kB (the night/dusk missions' entries and missionSun's wiring). 2026-11-02 (0130): 200.60 kB (the coach card's slot check, placeCoach, +0.18 kB). 2026-11-02 (0131): 200.72 kB (the ?debug PAPI fields; the HUD and 3D lamps share airports.js papiWhite). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
 `loadDrill` for the drills' lazy chunks, `startDrills`, and the ?debug Google usage line and
 snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A lazy chunk that
 imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's
