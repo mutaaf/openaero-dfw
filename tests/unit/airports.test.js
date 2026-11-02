@@ -143,8 +143,9 @@ describe('runway ends agree with the published length', () => {
     const e34L = runwayEnd('KAFW', '34L');
     expect(e34L.displacedM).toBeCloseTo(716 * 0.3048, 3);
     expect(Math.hypot(e34L.thrX - e34L.endX, e34L.thrZ - e34L.endZ)).toBeCloseTo(716 * 0.3048, 1);
-    // The facts line names its source: FAA for Alliance, OurAirports everywhere else.
-    for (const e of RUNWAY_ENDS) expect(e.src, e.id).toBe(e.airport === 'KAFW' ? 'FAA' : 'OurAirports');
+    // The facts line names its source: the FAA's ends for Alliance (its °M is WMM-2025's and the
+    // THR is interpolated, as everywhere), OurAirports everywhere else.
+    for (const e of RUNWAY_ENDS) expect(e.src, e.id).toBe(e.airport === 'KAFW' ? 'FAA ends' : 'OurAirports');
   });
 });
 

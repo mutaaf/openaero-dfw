@@ -1536,8 +1536,9 @@ function syncDensityAltitude() {
   const hint = d.thin ? THIN_AIR[kind] || THIN_AIR.other : '';
   const text = `Density altitude ${d.where}: ${d.ft} (${d.src}).`;
   const facts = runwayFactsText(sim.activeEnd);
-  if (text + hint + facts === daShown) return;
-  daShown = text + hint + facts;
+  const key = text + hint + facts + sim.activeEnd?.src;
+  if (key === daShown) return;
+  daShown = key;
   const factsEl = byId('txtRunwayFacts');
   byId('txtRunwayFactsLine').textContent = facts;
   if (facts) byId('txtRunwayFactsSrc').textContent = `(${sim.activeEnd.src})`;

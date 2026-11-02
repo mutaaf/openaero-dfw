@@ -5,7 +5,7 @@
 // KAFW (ticket 0124): OurAirports still has older ends for Alliance's runways, 2,933 m and 2,526 m
 // apart: ~420 m (16L/34R) and ~865 m (16R/34L) short of their own 11,000 / 11,125 ft. Its four ends and 34L's 716 ft
 // displaced threshold are the FAA airport record (Form 5010, as published by
-// https://www.airnav.com/airport/KAFW, read 2026-11-02): 16L 33-00.325685N 097-19.291575W,
+// https://www.airnav.com/airport/KAFW, FAA information effective 2026-10-29, read 2026-11-02): 16L 33-00.325685N 097-19.291575W,
 // 34R 32-58.538248N 097-18.925727W, 16R 33-00.308878N 097-19.407327W, 34L 32-58.501110N 097-19.037282W.
 // Pure module: no THREE, no DOM. Tested in tests/unit/airports.test.js.
 import { latLonToSimMeters } from './geo.js';
@@ -55,10 +55,10 @@ export const RUNWAY_DATA = [
   { airport: 'KADS', lengthFt: 7203, widthFt: 100,
     le: { ident: '16', lat: 32.977798, lon: -96.840500, elevFt: 633, hdgT: 160.0, displacedFt: 979 },
     he: { ident: '34', lat: 32.959301, lon: -96.832397, elevFt: 639, hdgT: 340.0, displacedFt: 0 } },
-  { airport: 'KAFW', lengthFt: 11000, widthFt: 150, src: 'FAA',
+  { airport: 'KAFW', lengthFt: 11000, widthFt: 150, src: 'FAA ends',
     le: { ident: '16L', lat: 33.005428, lon: -97.321526, elevFt: 723, hdgT: 170.3, displacedFt: 0 },
     he: { ident: '34R', lat: 32.975637, lon: -97.315429, elevFt: 664, hdgT: 350.3, displacedFt: 0 } },
-  { airport: 'KAFW', lengthFt: 11125, widthFt: 150, src: 'FAA',
+  { airport: 'KAFW', lengthFt: 11125, widthFt: 150, src: 'FAA ends',
     le: { ident: '16R', lat: 33.005148, lon: -97.323455, elevFt: 721, hdgT: 170.3, displacedFt: 0 },
     he: { ident: '34L', lat: 32.975019, lon: -97.317288, elevFt: 665, hdgT: 350.3, displacedFt: 716 } },
   { airport: 'KFTW', lengthFt: 7502, widthFt: 150,
