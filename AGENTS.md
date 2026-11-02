@@ -298,7 +298,10 @@ src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/resul
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
                     phone's top bar in landscape) and the camera FOV (62° vertical in
                     landscape; portrait opens towards 60° across, capped at 80° vertical:
-                    an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the wind box
+                    an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the coach card's slot (0130:
+                    coachOverHud; over the tapes, SPD label or 12% under the horizon on a short upright
+                    screen or the iPad held sideways, main.js placeCoach moves #coach under the top bar,
+                    .coach-top, for the rest of the flight; .coach-tight if it would reach the heading box) + the wind box
                     (0075): over the altitude tape, its text (source, arrow, speed, XW/HW
                     vs the active runway under 1,500 ft) refreshed once a second; fixed1
                     (the AoA badge's one decimal, never "-0.0", 2026-10-31)
@@ -442,7 +445,7 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-02 (0060): 200.42 kB (the night/dusk missions' entries and missionSun's wiring). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-02 (0060): 200.42 kB (the night/dusk missions' entries and missionSun's wiring). 2026-11-02 (0130): 200.60 kB (the coach card's slot check, placeCoach, +0.18 kB). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
 `loadDrill` for the drills' lazy chunks, `startDrills`, and the ?debug Google usage line and
 snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A lazy chunk that
 imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's

@@ -54,7 +54,7 @@ import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSup
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
   windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
-  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF,
+  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { radioAltitudeM } from './gear.js';
@@ -1325,6 +1325,7 @@ function updateCoach(dt) {
   coachShown = key;
   byId('coach').classList.toggle('hidden', key === null);
   byId('btnTakeover').classList.toggle('hidden', !caption);
+  byId('coach').classList.toggle('coach-ap', !!caption); // the top slot's corner holds Your turn too (0130)
   if (key === null) return;
   byId('txtCoachLabel').textContent = caption ? 'Autopilot' : 'Coach';
   const skip = byId('btnCoachSkip');
@@ -1336,6 +1337,7 @@ function updateCoach(dt) {
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
     const text = tutorLib.TUTOR_TEXT[caption](tutorVals);
     byId('txtCoach').textContent = text;
+    placeCoach();
     // The GPWS callouts own the last 100 ft; the tutor speaks above them.
     if (sim.aglFt > 100 || caption === 'rollout') audio.teach(text);
     return;
@@ -1346,12 +1348,33 @@ function updateCoach(dt) {
   coachVals.touch = touchOnly;
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   byId('txtCoach').textContent = text;
+  placeCoach();
   // Spoken too when sound is on; the GPWS callouts own the last 100 ft.
   if (sim.aglFt > 100 || sim.onGround) audio.teach(text);
   if (!coachMarked) {
     coachMarked = true;
     try { markCoachSeen(window.localStorage); } catch { /* storage unavailable */ }
   }
+}
+
+// The coach card's CSS slot is over the touch deck; on a short screen held upright that is on the
+// speed tape, its SPD label and the runway under the horizon (0130): there it goes up under the top
+// bar (.coach-top) and stays there for the flight (a wrapped bounce prompt must not make it jump),
+// with smaller words (.coach-tight) if a long one would still reach the heading box. Measured when
+// the words change and on resize, never per frame.
+let coachTopHeld = false;
+function placeCoach(resized = false) {
+  const el = byId('coach');
+  if (resized) coachTopHeld = false;
+  if (el.classList.contains('hidden')) return;
+  if (!coachTopHeld) {
+    el.classList.remove('coach-top');
+    const r = el.getBoundingClientRect();
+    coachTopHeld = coachOverHud(window.innerHeight, r.top, r.bottom);
+    el.classList.toggle('coach-top', coachTopHeld);
+  }
+  el.classList.remove('coach-tight');
+  if (coachTopHeld && el.getBoundingClientRect().bottom > headingBoxTop(window.innerHeight / 2) - 2) el.classList.add('coach-tight');
 }
 
 // Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
@@ -2491,6 +2514,7 @@ function resetApFilters() {
 
 // `final` (?debug only, 0068): fly the default final to another runway end or distance.
 function loadScenario(key, final = null) {
+  coachTopHeld = false;
   hapticsReset();
   replaying?.stop(false); // a restart ends a replay without the old card (0019)
   if (replayBuf) replayLib.resetReplay(replayBuf);
@@ -2817,6 +2841,7 @@ function handleResize() {
   const mapRect = mapCanvas.parentElement.getBoundingClientRect();
   mapCanvas.width = Math.max(120, Math.floor(mapRect.width));
   mapCanvas.height = Math.max(80, Math.floor(mapRect.height));
+  placeCoach(true);
 }
 
 window.addEventListener('resize', handleResize);

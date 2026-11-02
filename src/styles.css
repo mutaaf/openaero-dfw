@@ -115,6 +115,23 @@ input[type=range] { accent-color: #38bdf8; }
    above the stick panel on desktop; always below the horizon. */
 #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
 @media (min-width: 1024px) { #coach { bottom: 10rem; } }
+/* A short screen held upright (0130, hudLayout.js coachOverHud): that slot is on the speed tape and
+   the runway, so the card goes up into the sky under the top bar's 44 px row (COACH_TOP_SLOT). */
+body #coach.coach-top, body.view-clean #coach.coach-top { top: calc(max(0.5rem, env(safe-area-inset-top)) + 3.125rem); bottom: auto; }
+/* Up there the words run on across the whole card under the buttons' corner (a Kid autopilot tip
+   is seven lines in the usual row's narrow column): a floated spacer holds the corner, the buttons
+   sit in it (DOM order, so Tab and screen readers still meet the words first). Smaller words
+   (.coach-tight) if they would still reach the heading box. */
+body #coach.coach-top:not(.hidden) { display: block; line-height: 1rem; padding-right: 0.25rem; }
+#coach.coach-top::before { content: ''; float: right; width: 3rem; height: 44px; }
+#coach.coach-top.coach-ap::before { width: 8.75rem; }
+#coach.coach-top #btnCoachSkip { position: absolute; top: 0.25rem; right: 0.25rem; }
+#coach.coach-top #btnTakeover { position: absolute; top: 0.25rem; right: 3.25rem; width: 5.25rem; }
+#coach.coach-top #txtCoachLabel { margin-right: 0.375rem; }
+#coach.coach-top::after { content: ''; display: block; clear: both; }
+body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
+#coach.coach-tight #txtCoach, .assist-kid #coach.coach-tight #txtCoach { font-size: 11px; line-height: 0.875rem; }
+#masterAlertBanner:not(.hidden) ~ #coach.coach-top, #stallAlertBanner:not(.hidden) ~ #coach.coach-top { visibility: hidden; }
 
 /* Phone/tablet (below lg): the top HUD is one row (☰ Menu + telemetry strip); brand,
    missions, camera, sound, pause, reset and the weather line open as a sheet under it. */

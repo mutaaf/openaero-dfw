@@ -1,12 +1,12 @@
 ---
 id: 0130
 title: On a phone held upright the coach card no longer covers the speed tape or the runway
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: accessibility
 created: 2026-11-02
-pr:
+pr: 160
 ---
 
 ## Why
