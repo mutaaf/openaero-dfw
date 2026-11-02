@@ -1358,13 +1358,22 @@ function updateCoach(dt) {
 
 // The coach card's CSS slot is over the touch deck; on a short screen held upright that is on the
 // speed tape, its SPD label and the runway under the horizon (0130): there it goes up under the top
-// bar (.coach-top). Measured when the words change and on resize, never per frame.
-function placeCoach() {
+// bar (.coach-top) and stays there for the flight (a wrapped bounce prompt must not make it jump),
+// with smaller words (.coach-tight) if a long one would still reach the heading box. Measured when
+// the words change and on resize, never per frame.
+let coachTopHeld = false;
+function placeCoach(resized = false) {
   const el = byId('coach');
-  el.classList.remove('coach-top');
+  if (resized) coachTopHeld = false;
   if (el.classList.contains('hidden')) return;
-  const r = el.getBoundingClientRect();
-  el.classList.toggle('coach-top', coachOverHud(window.innerHeight, r.top, r.bottom));
+  if (!coachTopHeld) {
+    el.classList.remove('coach-top');
+    const r = el.getBoundingClientRect();
+    coachTopHeld = coachOverHud(window.innerHeight, r.top, r.bottom);
+    el.classList.toggle('coach-top', coachTopHeld);
+  }
+  el.classList.remove('coach-tight');
+  if (coachTopHeld && el.getBoundingClientRect().bottom > headingBoxTop(window.innerHeight / 2) - 2) el.classList.add('coach-tight');
 }
 
 // Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
@@ -2504,6 +2513,7 @@ function resetApFilters() {
 
 // `final` (?debug only, 0068): fly the default final to another runway end or distance.
 function loadScenario(key, final = null) {
+  coachTopHeld = false;
   hapticsReset();
   replaying?.stop(false); // a restart ends a replay without the old card (0019)
   if (replayBuf) replayLib.resetReplay(replayBuf);
@@ -2830,7 +2840,7 @@ function handleResize() {
   const mapRect = mapCanvas.parentElement.getBoundingClientRect();
   mapCanvas.width = Math.max(120, Math.floor(mapRect.width));
   mapCanvas.height = Math.max(80, Math.floor(mapRect.height));
-  placeCoach();
+  placeCoach(true);
 }
 
 window.addEventListener('resize', handleResize);

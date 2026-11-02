@@ -39,9 +39,9 @@
   <!-- First-flight coach (src/coach.js): above the phone touch deck / desktop stick panel, below the horizon -->
   <div id="coach" class="hidden pointer-events-none absolute inset-x-3 z-30 mx-auto max-w-sm hud-glass rounded-xl pl-3 pr-1 py-1 flex items-center gap-2 font-mono border-amber-300/50" role="status" aria-live="polite">
     <span id="txtCoachLabel" class="text-[9px] font-bold uppercase tracking-widest text-amber-300">Coach</span>
-    <span id="txtCoach" class="flex-1 text-xs font-bold text-slate-100"></span>
-    <button id="btnTakeover" class="hidden pointer-events-auto hud-btn active-amber rounded-lg min-h-[44px] min-w-[44px] px-2 text-[11px] font-bold whitespace-nowrap" aria-label="Your turn: take control from the autopilot">Your turn</button>
     <button id="btnCoachSkip" class="pointer-events-auto hud-btn rounded-lg min-h-[44px] min-w-[44px] px-2 text-[11px] text-slate-300" aria-label="Skip the coach">Skip</button>
+    <button id="btnTakeover" class="hidden pointer-events-auto hud-btn active-amber rounded-lg min-h-[44px] min-w-[44px] px-2 text-[11px] font-bold whitespace-nowrap" aria-label="Your turn: take control from the autopilot">Your turn</button>
+    <span id="txtCoach" class="flex-1 text-xs font-bold text-slate-100"></span>
   </div>
   <!-- Captions for the spoken callouts (0117, src/captions.js): the takeoff call's slot under the heading box, between the tapes -->
   <div id="calloutCaption" class="hidden pointer-events-none absolute left-1/2 -translate-x-1/2 z-20 px-2 py-0.5 rounded-md bg-slate-950/85 text-white font-mono font-bold text-[13px] leading-4 uppercase text-center"></div>

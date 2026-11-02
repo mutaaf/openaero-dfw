@@ -67,5 +67,23 @@ test('the coach card clears the tapes, the SPD label and the runway at every siz
   });
   await expect(page.locator('#coach')).toHaveClass(/coach-top/);
   expectClear(await boxes(page), '390x844 Kid');
+
+  // The autopilot tutor's card (Your turn + Hide) with Kid's longest tip on the short phones: up
+  // there the words run on under the buttons and stay above the heading box (cy - 145).
+  for (const [w, h] of [[390, 664], [375, 548]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.evaluate(() => {
+      document.getElementById('btnTakeover').classList.remove('hidden');
+      document.getElementById('txtCoachLabel').textContent = 'Autopilot';
+      document.getElementById('txtCoach').textContent = 'On the glidepath: two white, two red on the PAPI lights by the runway';
+      window.dispatchEvent(new Event('resize'));
+    });
+    await expect(page.locator('#coach')).toHaveClass(/coach-top/);
+    const b = await boxes(page);
+    expectClear(b, `${w}x${h} Kid tutor`);
+    expect(b.coach.b, `${w}x${h} Kid tutor: above the heading box`).toBeLessThanOrEqual(Math.max(h / 2 - 145, 72));
+    const take = await page.locator('#btnTakeover').boundingBox();
+    expect(take.width >= 44 && take.height >= 44, `${w}x${h}: Your turn 44 px`).toBe(true);
+  }
   expect(errors).toEqual([]);
 });
