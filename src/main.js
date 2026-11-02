@@ -15,7 +15,7 @@ import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES, runwayFactsText,
 } from './airports.js';
-import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
+import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions, missionSun } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
 import { gradeLanding, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S, GRADE_COLOURS } from './landing.js';
 import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
@@ -410,6 +410,7 @@ function buildRunways() {
   import('./runwayLights.js').then(({ createRunwayLights }) => {
     runwayLights = createRunwayLights({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, reducedMotion });
     scene.add(runwayLights.points);
+    if (debugOverlay) window.openaeroRunwayLights = runwayLights; // e2e: switch them off for a control frame
   }).catch((err) => console.warn('Runway lights unavailable:', err.message));
   // A wind cone by every runway end's touchdown zone, in its field's METAR wind (0027).
   import('./windsock.js').then(({ createWindsocks }) => {
@@ -922,6 +923,7 @@ function startGoAroundDrill(mission) {
 // once it climbs away (or fails). stallDrill.js is a lazy chunk, loaded with the drill.
 let stallLib = null;
 let aircraftBeforeMission = null; // yours, while a mission flies its own airframe (the drill's)
+let sunBeforeMission = null; // your When? choice, while a night or dusk mission flies its own (0060)
 const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0, iasKts: 0, warnKts: 0 };
 let stallPullIn = 0; // the player's back stick this sub-step, before the assists
 let drillCoach = false; // the drill is always coached (its only instructions) until Skip
@@ -2497,6 +2499,10 @@ function loadScenario(key, final = null) {
   if (mission.aircraft) {
     if (mission.aircraft !== sim.aircraftKey) { aircraftBeforeMission ??= sim.aircraftKey; setAircraft(mission.aircraft); }
   } else if (aircraftBeforeMission) { setAircraft(aircraftBeforeMission); aircraftBeforeMission = null; }
+  // A night or dusk mission flies its own sky; the next mission without one gives your When? back.
+  const sky = missionSun(mission, sim.timeOfDayMode, sunBeforeMission);
+  sunBeforeMission = sky.before;
+  if (sky.mode !== sim.timeOfDayMode) { sim.timeOfDayMode = sky.mode; applySun(); }
   sim.missionKey = mission.key;
   let trimAlpha = null;
   sim.loadedMission = mission;
@@ -2662,7 +2668,7 @@ function skyCaption(mode) {
   return `${when} · ${light} · ${moon}`;
 }
 for (const btn of document.querySelectorAll('#timePicker .btnTime')) {
-  btn.addEventListener('click', () => { sim.timeOfDayMode = Number(btn.dataset.time); applySun(); });
+  btn.addEventListener('click', () => { sim.timeOfDayMode = Number(btn.dataset.time); sunBeforeMission = null; applySun(); });
 }
 
 // Clean view (desktop): panels folded away, the world fills the screen (H toggles).
@@ -2676,6 +2682,7 @@ byId('btnPanelsHide').addEventListener('click', () => setCleanView(true));
 
 function toggleTimeOfDay() {
   sim.timeOfDayMode = (sim.timeOfDayMode + 1) % TIME_MODES.length;
+  sunBeforeMission = null; // your choice now
   applySun();
 }
 

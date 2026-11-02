@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { stubTiles, collectErrors, enterCockpit, FULL_RES } from './helpers.js';
+import { BASE, stubTiles, collectErrors, enterCockpit, FULL_RES } from './helpers.js';
 
 test.use(FULL_RES);
 
@@ -75,4 +75,50 @@ test('the runway and approach lights show from the 4 NM final at night (ticket 0
   // Measured 2026-10-19 at 1280x720: ~850 bright pixels with the lights, ~130 from the
   // PAPIs alone without them.
   await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 15_000 }).toBeGreaterThan(450);
+});
+
+// Ticket 0060: night and dusk missions bring their own sky for their run, then give the
+// player's When? choice back.
+const pressed = (page, label) => page.locator('#timePicker .btnTime', { hasText: label });
+
+test('the KDFW 35C night ILS flies at night with the lights showing, and the next mission gives When? back (0060)', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto(`${BASE}?debug`);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  // The player's own choice first: Dusk.
+  await pressed(page, 'Dusk').click();
+  await page.locator('#missionList .btnMission[data-scenario="kdfw_35c_night"]').click();
+  await expect.poll(async () => (await snap(page)).sun.mode).toBe('Night');
+  await expect(pressed(page, 'Night')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#btnStartFlight').click();
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
+  expect((await snap(page)).mission).toBe('kdfw_35c_night');
+  await expect.poll(async () => (await snap(page)).sky.runwayLights, { timeout: 15_000 }).toBeGreaterThan(5000);
+  // Same threshold as the 0011 test (~850 lit vs ~130 from the PAPIs alone at 1280x720),
+  // and the control: with the runway lights' materials off, the count drops below it.
+  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 15_000 }).toBeGreaterThan(450);
+  await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = false; }); });
+  await page.waitForTimeout(300);
+  expect((await band(page, 0.5, 0.62)).bright).toBeLessThan(450);
+  await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = true; }); });
+
+  // The next mission without a sky of its own gives the player's Dusk back.
+  await page.locator('#btnOpenMissions').click();
+  await page.locator('#missionList .btnMission[data-scenario="kdfw_35c_final"]').click();
+  await expect.poll(async () => (await snap(page)).sun.mode).toBe('Dusk');
+  await expect(pressed(page, 'Dusk')).toHaveAttribute('aria-pressed', 'true');
+  expect(errors).toEqual([]);
+});
+
+test('the KDAL 31R dusk final flies at dusk; a When? pick during it is the player\'s to keep (0060)', async ({ page }) => {
+  await page.goto(BASE);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  await page.locator('#missionList .btnMission[data-scenario="kdal_31r_dusk"]').click();
+  await expect.poll(async () => (await snap(page)).sun.mode).toBe('Dusk');
+  await expect(pressed(page, 'Dusk')).toHaveAttribute('aria-pressed', 'true');
+  // The player picks Day while on it: that is theirs now, the next mission keeps it.
+  await pressed(page, 'Day').click();
+  await page.locator('#missionList .btnMission[data-scenario="kdal_31r_final"]').click();
+  await expect.poll(async () => (await snap(page)).mission).toBe('kdal_31r_final');
+  expect((await snap(page)).sun.mode).toBe('Noon');
 });
