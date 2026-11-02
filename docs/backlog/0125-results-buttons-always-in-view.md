@@ -1,12 +1,12 @@
 ---
 id: 0125
 title: The results card's FLY AGAIN / KEEP ROLLING stay in view on a phone held sideways in Safari
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-31
-pr:
+pr: 159
 ---
 
 ## Why
@@ -23,9 +23,9 @@ or a flex column whose middle scrolls), so the buttons are always in view and th
 scrolls if it must.
 
 ## Acceptance criteria
-- [ ] At 844x340, 667x325 and 568x320, with the crosswind card's six factors, reason, tip and
+- [x] At 844x340, 667x325 and 568x320, with the crosswind card's six factors, reason, tip and
       gate line, FLY AGAIN and KEEP ROLLING are fully inside the viewport and ≥ 44 px tall
-- [ ] No change at 390x844 or 1280x720
+- [x] No change at 390x844 or 1280x720
 
 ## Test plan
 tests/e2e/bounce.mobile.spec.js (or a new results.mobile spec): fill the card's lines as the
