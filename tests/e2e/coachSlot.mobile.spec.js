@@ -70,20 +70,35 @@ test('the coach card clears the tapes, the SPD label and the runway at every siz
 
   // The autopilot tutor's card (Your turn + Hide) with Kid's longest tip on the short phones: up
   // there the words run on under the buttons and stay above the heading box (cy - 145).
-  for (const [w, h] of [[390, 664], [375, 548]]) {
+  // Learner's three-line tip too (its words are already the small size).
+  const TIPS = [[true, 'On the glidepath: two white, two red on the PAPI lights by the runway'],
+    [false, 'Turning to line up with the runway: watch the stick lean and the wings bank']];
+  for (const [w, h] of [[390, 664], [375, 548]]) for (const [kid, tip] of TIPS) {
     await page.setViewportSize({ width: w, height: h });
-    await page.evaluate(() => {
+    await page.evaluate(([kid, tip]) => {
+      document.body.classList.toggle('assist-kid', kid);
       document.getElementById('btnTakeover').classList.remove('hidden');
+      document.getElementById('coach').classList.add('coach-ap');
       document.getElementById('txtCoachLabel').textContent = 'Autopilot';
-      document.getElementById('txtCoach').textContent = 'On the glidepath: two white, two red on the PAPI lights by the runway';
+      document.getElementById('txtCoach').textContent = tip;
       window.dispatchEvent(new Event('resize'));
-    });
+    }, [kid, tip]);
     await expect(page.locator('#coach')).toHaveClass(/coach-top/);
     const b = await boxes(page);
-    expectClear(b, `${w}x${h} Kid tutor`);
-    expect(b.coach.b, `${w}x${h} Kid tutor: above the heading box`).toBeLessThanOrEqual(Math.max(h / 2 - 145, 72));
+    expectClear(b, `${w}x${h} ${kid ? 'Kid' : 'Learner'} tutor`);
+    expect(b.coach.b, `${w}x${h} ${kid ? 'Kid' : 'Learner'} tutor: above the heading box`).toBeLessThanOrEqual(Math.max(h / 2 - 145, 72));
     const take = await page.locator('#btnTakeover').boundingBox();
     expect(take.width >= 44 && take.height >= 44, `${w}x${h}: Your turn 44 px`).toBe(true);
+    // The buttons don't sit on each other or on the words.
+    const hits = await page.evaluate(() => {
+      const r = (id) => document.getElementById(id).getBoundingClientRect();
+      const t = r('btnTakeover'), s = r('btnCoachSkip');
+      const range = document.createRange(); range.selectNodeContents(document.getElementById('txtCoach'));
+      const lines = [...range.getClientRects()];
+      const meet = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      return { buttons: meet(t, s), words: lines.some((l) => meet(l, t) || meet(l, s)) };
+    });
+    expect(hits, `${w}x${h} ${kid ? 'Kid' : 'Learner'} tutor`).toEqual({ buttons: false, words: false });
   }
   expect(errors).toEqual([]);
 });

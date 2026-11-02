@@ -1325,6 +1325,7 @@ function updateCoach(dt) {
   coachShown = key;
   byId('coach').classList.toggle('hidden', key === null);
   byId('btnTakeover').classList.toggle('hidden', !caption);
+  byId('coach').classList.toggle('coach-ap', !!caption); // the top slot's corner holds Your turn too (0130)
   if (key === null) return;
   byId('txtCoachLabel').textContent = caption ? 'Autopilot' : 'Coach';
   const skip = byId('btnCoachSkip');
