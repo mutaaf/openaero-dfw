@@ -14,8 +14,7 @@ Scout screenshots of the default 4 NM final (all three layouts) show two altitud
 shape and no label on the one that matters most: the top bar reads "AGL FT 1072" while the right
 tape box beside it reads "1546" (390x844: 1092 vs 1569). A first-timer, or a pilot, sees two
 altitudes 470 ft apart on one screen and reads it as a bug. They are different things (the tape is
-the altitude above sea level; the bar is the height above the terrain under the airplane, ~470 ft MSL there; the first is
-ground). A real PFD labels what it shows, and the radar-altimeter reading is a separate, boxed
+the altitude above sea level; the bar is the height above the terrain under the airplane, which is ~470 ft MSL there). A real PFD labels what it shows, and the radar-altimeter reading is a separate, boxed
 number (FAA AC 120-29A / Airplane Flying Handbook ch. 5: indicated altitude is MSL; radio altitude
 is height above terrain). The off-screen panel already says "ALT (MSL)" and "RADAR AGL"
 (`index.html` `#txtAltMsl`, `#txtAltAgl`); the HUD itself never does.
