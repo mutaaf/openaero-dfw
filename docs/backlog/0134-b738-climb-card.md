@@ -30,10 +30,10 @@ cannot be read as text from the sandbox, say so in the PR, add no uncited number
 `proposal/` PR with the question instead.
 
 ## Acceptance criteria
-- [ ] A card quotes the APD climb figures with the URL and the date read
-- [ ] The climb rate at the published schedule is within ±20% of the band, or a known-gap card with
+- [x] A card quotes the APD climb figures with the URL and the date read
+- [x] The climb rate at the published schedule is within ±20% of the band, or a known-gap card with
       a new ticket exists
-- [ ] No existing 737 card regresses; the 65 t mass and the harness helpers are the ones the other
+- [x] No existing 737 card regresses; the 65 t mass and the harness helpers are the ones the other
       737 cards use
 
 ## Test plan
