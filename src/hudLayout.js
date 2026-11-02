@@ -158,3 +158,19 @@ export function windReadout(wx, comps, out = {}) {
   }
   return out;
 }
+
+// The coach card (0130). Its CSS slot sits just over the touch deck; on a short screen held
+// upright (Safari with its bars, ~390x664; an iPhone SE, 375x548) that is over the speed tape's
+// low end, the SPD target label (baseline cy + 106) and the ground just under the horizon, where
+// the runway and the PAPI are on a final. coachClearBottom is where that ends: the tapes, the
+// label's descent, and 12% of the height under the level horizon (cy). coachOverHud says a card
+// spanning top..bottom crosses that band (from the tapes' top down); main.js then moves it to
+// COACH_TOP_SLOT, the sky under the top bar (its 44 px row starts 8 px down; styles.css).
+export const COACH_TOP_SLOT = 58;
+export function coachClearBottom(h) {
+  const cy = h / 2;
+  return Math.max(cy + 110, cy + h * 0.12);
+}
+export function coachOverHud(h, top, bottom) {
+  return bottom > h / 2 + TAPE_TOP && top < coachClearBottom(h);
+}
