@@ -545,24 +545,28 @@ describe('Boeing 737-800 climb (EUROCONTROL APD; 0134)', () => {
   const cas290 = (ft) => machAtCas(ft, 290);
   const low = () => climb(8000, cas290, [10000, 15000, 24000]);
 
-  // Measured 2,370 fpm at 65 t (+19%): inside the band, at its top edge.
+  // Measured ~2,375 fpm at 65 t (+19%): inside the band, ~1% from its top edge, so a drag or
+  // thrust change that speeds the low climb up will tip it (that is the card doing its job).
   it('at 290 KCAS on full thrust it climbs from FL150 to FL240 within ±20% of the APD nominal rate, 2,000 ft/min', () => {
     const { fpm, at } = low();
     within(fpm[1], 2000, 0.2);
     for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3); // flown on the schedule
   });
 
-  // Measured 1,556 fpm at 65 t (+4%), from 2,619 fpm passing FL240 to 1,070 at FL350.
-  it('at Mach 0.78 on full thrust it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
-    const { fpm, at } = climb(22000, () => 0.78, [24000, 35000]);
+  // The Mach climb on the schedule a crew flies: 290 KCAS until that is Mach 0.78 (~FL309), then
+  // Mach 0.78 (holding Mach 0.78 from FL240 would be ~335 KCAS there, near the 340 kt VMO).
+  // Measured ~1,350 fpm FL240-FL350 at 65 t (-10%), ~1,070 fpm passing FL350.
+  it('on 290 KCAS then Mach 0.78, full thrust, it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
+    const { fpm, at } = climb(22000, (ft) => Math.min(cas290(ft), 0.78), [24000, 35000]);
     within(fpm[0], 1500, 0.2);
-    for (const p of at) expect(Math.abs(p.mach - 0.78)).toBeLessThanOrEqual(0.01);
+    for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3);
+    expect(Math.abs(at[1].mach - 0.78)).toBeLessThanOrEqual(0.01);
   });
 
-  // KNOWN GAP (0135): from FL100 to FL150 at 290 KCAS the model climbs ~3,450 fpm, 73% above
+  // KNOWN GAP (0135): from FL100 to FL150 at 290 KCAS the model climbs ~3,400 fpm, ~70% above
   // APD's 2,000 (±20% = 1,600-2,400). The low end of the climb is where full throttle is
   // takeoff thrust (240 kN static, σ^0.94; only FL350 is anchored to CFM's max climb thrust,
-  // 0116) and where the APD's unstated mass matters most.
+  // 0116); mass does not explain it (at 79 t, the TCDS take-off mass, it is still ~2,590, +29%).
   it.fails('KNOWN GAP (0135): at 290 KCAS on full thrust it climbs from FL100 to FL150 within ±20% of the APD nominal rate, 2,000 ft/min', () => {
     within(low().fpm[0], 2000, 0.2);
   });
