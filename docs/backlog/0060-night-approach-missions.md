@@ -30,7 +30,8 @@ own sun preset (Night / Dusk) for that run only, without overwriting the player'
 - [x] No frame-time regression; works at 390x844 and 1280x720
 
 Built note (2026-11-02): the Dusk preset puts the sun 2.5° up, before sunset, so the runway
-lights (on from nightness > 0.02, sun below ~+1.6°, as US fields light up from sunset) stay off
+lights (on from nightness > 0.02, the sun below ~+0.8°; FAA JO 7110.65 §3-4 runs them sunset to
+sunrise) stay off
 on the dusk final; the lit-pixel test with its lights-off control is the night mission's. The dusk
 mission's blurb promises the sky, not the lights.
 

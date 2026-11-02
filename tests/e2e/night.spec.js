@@ -98,8 +98,7 @@ test('the KDFW 35C night ILS flies at night with the lights showing, and the nex
   // and the control: with the runway lights' materials off, the count drops below it.
   await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 15_000 }).toBeGreaterThan(450);
   await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = false; }); });
-  await page.waitForTimeout(300);
-  expect((await band(page, 0.5, 0.62)).bright).toBeLessThan(450);
+  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 10_000 }).toBeLessThan(450);
   await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = true; }); });
 
   // The next mission without a sky of its own gives the player's Dusk back.
@@ -118,6 +117,10 @@ test('the KDAL 31R dusk final flies at dusk; a When? pick during it is the playe
   await expect(pressed(page, 'Dusk')).toHaveAttribute('aria-pressed', 'true');
   // The player picks Day while on it: that is theirs now, the next mission keeps it.
   await pressed(page, 'Day').click();
+  // A reload of the same mission (the METAR refresh, an assist change, FLY AGAIN) keeps it.
+  await page.evaluate(() => document.querySelector('#selScenario').dispatchEvent(new Event('change')));
+  expect((await snap(page)).sun.mode).toBe('Noon');
+  await expect(pressed(page, 'Day')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#missionList .btnMission[data-scenario="kdal_31r_final"]').click();
   await expect.poll(async () => (await snap(page)).mission).toBe('kdal_31r_final');
   expect((await snap(page)).sun.mode).toBe('Noon');

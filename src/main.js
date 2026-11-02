@@ -924,6 +924,7 @@ function startGoAroundDrill(mission) {
 let stallLib = null;
 let aircraftBeforeMission = null; // yours, while a mission flies its own airframe (the drill's)
 let sunBeforeMission = null; // your When? choice, while a night or dusk mission flies its own (0060)
+let sunPickedFor = null; // the mission you picked a When? on: its reloads (METAR, assist, FLY AGAIN) keep your pick
 const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0, iasKts: 0, warnKts: 0 };
 let stallPullIn = 0; // the player's back stick this sub-step, before the assists
 let drillCoach = false; // the drill is always coached (its only instructions) until Skip
@@ -2500,9 +2501,12 @@ function loadScenario(key, final = null) {
     if (mission.aircraft !== sim.aircraftKey) { aircraftBeforeMission ??= sim.aircraftKey; setAircraft(mission.aircraft); }
   } else if (aircraftBeforeMission) { setAircraft(aircraftBeforeMission); aircraftBeforeMission = null; }
   // A night or dusk mission flies its own sky; the next mission without one gives your When? back.
-  const sky = missionSun(mission, sim.timeOfDayMode, sunBeforeMission);
-  sunBeforeMission = sky.before;
-  if (sky.mode !== sim.timeOfDayMode) { sim.timeOfDayMode = sky.mode; applySun(); }
+  if (mission.key !== sunPickedFor) {
+    sunPickedFor = null;
+    const sky = missionSun(mission, sim.timeOfDayMode, sunBeforeMission);
+    sunBeforeMission = sky.before;
+    if (sky.mode !== sim.timeOfDayMode) { sim.timeOfDayMode = sky.mode; applySun(); }
+  }
   sim.missionKey = mission.key;
   let trimAlpha = null;
   sim.loadedMission = mission;
@@ -2668,7 +2672,7 @@ function skyCaption(mode) {
   return `${when} · ${light} · ${moon}`;
 }
 for (const btn of document.querySelectorAll('#timePicker .btnTime')) {
-  btn.addEventListener('click', () => { sim.timeOfDayMode = Number(btn.dataset.time); sunBeforeMission = null; applySun(); });
+  btn.addEventListener('click', () => { sim.timeOfDayMode = Number(btn.dataset.time); sunBeforeMission = null; sunPickedFor = sim.missionKey; applySun(); });
 }
 
 // Clean view (desktop): panels folded away, the world fills the screen (H toggles).
@@ -2682,7 +2686,8 @@ byId('btnPanelsHide').addEventListener('click', () => setCleanView(true));
 
 function toggleTimeOfDay() {
   sim.timeOfDayMode = (sim.timeOfDayMode + 1) % TIME_MODES.length;
-  sunBeforeMission = null; // your choice now
+  sunBeforeMission = null; // your choice now, kept through this mission's reloads
+  sunPickedFor = sim.missionKey;
   applySun();
 }
 
