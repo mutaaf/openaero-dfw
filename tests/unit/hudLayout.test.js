@@ -256,3 +256,34 @@ describe('ilsBarOffsetPx (0123)', () => {
     expect(loc(1 * nm + 3300)).toBeGreaterThan(loc(4 * nm + 3300) * 1.8);
   });
 });
+
+// Ticket 0132: the altitude tape's readout is MSL; a caption under its box says so, clear of the
+// box's digits, the tape's ticks and its scale numbers, the speed tape and the wind box.
+import { altCaptionRect, ALT_CAPTION, ALT_TAPE_X, SPEED_TAPE_X, ALT_BOX } from '../../src/hudLayout.js';
+describe('altCaptionRect (0132)', () => {
+  const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  it('says MSL', () => expect(ALT_CAPTION).toBe('MSL'));
+  for (const [w, h] of [[1280, 720], [390, 844], [844, 390], [820, 1180], [375, 548]]) {
+    it(`${w}x${h}: under the readout box, off the ticks, the speed tape and the wind box, on screen`, () => {
+      const cx = w / 2, cy = h / 2;
+      const r = altCaptionRect(cx, cy, {});
+      const x = cx + ALT_TAPE_X;
+      const box = { x: x + ALT_BOX.dx, y: cy - ALT_BOX.h / 2, w: ALT_BOX.w, h: ALT_BOX.h };
+      expect(overlaps(r, box), 'readout box').toBe(false);
+      expect(r.y).toBeGreaterThan(box.y + box.h); // just under it
+      expect(r.y - (box.y + box.h)).toBeLessThanOrEqual(4);
+      expect(r.x, 'past the major ticks (9 px)').toBeGreaterThan(x + 9);
+      expect(r.x + r.w).toBeLessThanOrEqual(box.x + box.w); // inside the tape's column
+      expect(r.x + r.w).toBeLessThanOrEqual(w);
+      expect(r.y + r.h).toBeLessThanOrEqual(cy - TAPE_TOP);
+      expect(r.w).toBeGreaterThanOrEqual(24); // three 11 px glyphs and a margin
+      const speed = { x: cx + SPEED_TAPE_X - 60, y: cy + TAPE_TOP, w: 60, h: -2 * TAPE_TOP };
+      expect(overlaps(r, speed), 'speed tape').toBe(false);
+      expect(overlaps(r, windBoxRect(w, h)), 'wind box').toBe(false);
+    });
+  }
+  it('writes into out (no allocation per frame)', () => {
+    const out = {};
+    expect(altCaptionRect(640, 360, out)).toBe(out);
+  });
+});

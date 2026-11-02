@@ -53,7 +53,7 @@ import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
+  windBoxRect, altCaptionRect, ALT_CAPTION, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
   ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
@@ -1946,7 +1946,8 @@ function updateCamera() {
 
 // One HUD tape: a vertical scale whose inner edge is at x (side −1 = scale to the left of
 // it, +1 = to the right), centred on y, scrolling so `value` sits at the readout.
-function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false) {
+// clearBelow: how far under the readout the scale's numbers stay out (the altitude tape's MSL tab).
+function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false, clearBelow = 16) {
   const half = 90;
   hudCtx.save();
   hudCtx.beginPath();
@@ -1968,7 +1969,7 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false) {
     const ty = y - (v - value) * pxPerUnit;
     const isMajor = v % major === 0;
     hudCtx.moveTo(x, ty); hudCtx.lineTo(x + side * (isMajor ? 9 : 5), ty);
-    if (isMajor && Math.abs(ty - y) > 16) hudCtx.fillText(`${v}`, x + side * 12, ty + 3.5);
+    if (isMajor && (ty < y - 16 || ty > y + clearBelow)) hudCtx.fillText(`${v}`, x + side * 12, ty + 3.5);
   }
   hudCtx.stroke();
   hudCtx.restore();
@@ -1986,6 +1987,22 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false) {
   hudCtx.font = 'bold 13px monospace';
   hudCtx.textAlign = 'center';
   hudCtx.fillText(`${Math.round(value)}`, bx + bw / 2, y + 4.5);
+  hudCtx.textAlign = 'left';
+}
+
+// "MSL" under the altitude readout (0132, hudLayout.js altCaptionRect): the tape is the CG's height
+// above sea level, the top bar's AGL the main wheels' radio altitude (sim.raFt). An opaque-enough tab keeps 4.5:1 over bright imagery.
+const _altCap = altCaptionRect(0, 0, {});
+// The scale's numbers (text ty - 4 … ty + 3.5) stay off the tab's rows.
+const ALT_CAPTION_CLEAR = ALT_BOX.h / 2 + 2 + ALT_CAPTION_H + 4;
+function drawAltCaption(cx, cy) {
+  const r = altCaptionRect(cx, cy, _altCap);
+  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+  hudCtx.fillRect(r.x, r.y, r.w, r.h);
+  hudCtx.fillStyle = '#e0f2fe';
+  hudCtx.font = 'bold 11px monospace';
+  hudCtx.textAlign = 'center';
+  hudCtx.fillText(ALT_CAPTION, r.x + r.w / 2, r.y + r.h - 2.5);
   hudCtx.textAlign = 'left';
 }
 
@@ -2075,7 +2092,8 @@ function renderHud() {
   // Speed and altitude tapes: see-through scales that scroll past a boxed readout, so
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
   drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
-  drawTape(cx + 130, cy, 1, sim.mslFt, 0.2, 100, 500);
+  drawTape(cx + ALT_TAPE_X, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
+  drawAltCaption(cx, cy);
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
   if (sim.stallKts && !sim.onGround) drawStallBand(cx - 131, cy);
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
@@ -3493,6 +3511,7 @@ window.openaeroDebug = () => {
     activeRunway: sim.activeEnd?.id ?? null,
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
+    hudAltCaption: { text: ALT_CAPTION, ..._altCap }, // the altitude tape's MSL tab (0132), canvas px
     runwayScreen: sim.activeEnd ? runwayScreen(sim.activeEnd) : null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
     pitchDeg: _euler.x * RAD_TO_DEG,
