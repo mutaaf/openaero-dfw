@@ -1,7 +1,7 @@
 ---
 id: 0132
 title: The altitude tape says MSL and the top bar says AGL, so the two numbers stop looking like a bug
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
