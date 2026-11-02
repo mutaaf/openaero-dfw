@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { engineThrust } from '../../src/engine.js';
-import { airAt } from '../../src/atmosphere.js';
+import { airAt, ISA_P0 } from '../../src/atmosphere.js';
 import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
@@ -498,5 +498,72 @@ describe('Boeing 737-800 descent (EUROCONTROL APD; 0119)', () => {
   // airframe's idle drag is low or the idle thrust (4% of static, not Mach-lapsed) is too high.
   it.fails('KNOWN GAP (0126): idle at 280 kt, FL170, 65 t sinks at the APD descent rate, 3,500 ft/min (±20%)', () => {
     within(idleDescent(17000, 280).fpm, 3500, 0.2);
+  });
+});
+
+// Climb (ticket 0134), 65 t, ISA, clean, full throttle (the sim's max climb thrust up high,
+// 0116). EUROCONTROL Aircraft Performance Database, B738, performance table, read 2026-11-02
+// (learningzone.eurocontrol.int/ilp/customs/ATCPFDB/details.aspx?ICAO=B738):
+//   Initial climb (to 5,000 ft): IAS 165 kt,  ROC 3,000 ft/min
+//   Climb (to FL 150):           IAS 290 kt,  ROC 2,000 ft/min
+//   Climb (to FL 240):           IAS 290 kt,  ROC 2,000 ft/min
+//   Mach climb:                  Mach 0.78,   ROC 1,500 ft/min
+// The APD gives nominal rates for the schedule, at no stated mass (65 t is mid weight); a
+// card asks the mean rate between two levels to sit within ±20% of the band's. The harness
+// holds EAS, so 290 KCAS is converted to EAS at each height (ISA, compressible: 290 KCAS is
+// ~287 KEAS at FL100, ~281 at FL240) and the Mach climb holds Mach 0.78's EAS as it climbs.
+// No 250 kt leg: the cards start above FL100.
+const A0_MPS = 340.294; // ISA sea-level speed of sound
+const machAtCas = (ft, kcas) => {
+  const air = airAt(ft / M_TO_FT);
+  const v = (kcas * KTS_TO_MPS) / A0_MPS;
+  const qc = ISA_P0 * (Math.pow(1 + 0.2 * v * v, 3.5) - 1); // impact pressure (subsonic)
+  return Math.sqrt(5 * (Math.pow(qc / air.pressurePa + 1, 2 / 7) - 1));
+};
+
+// Full throttle from `fromFt`, holding the schedule's EAS (`machAt(ft)`) with pitch; returns
+// the mean climb rate (fpm) between each pair of `levels` (ft) and the Mach and indicated
+// speed (EAS) error as it passes each level.
+function climb(fromFt, machAt, levels) {
+  const keas = (ft) => easAtMach(ft, machAt(ft)) / KTS_TO_MPS;
+  const b = makeBody(b738, { kts: keas(fromFt), altM: fromFt / M_TO_FT, gearDown: false, throttle: 1 });
+  const hold = speedHoldPilot((x) => keas(x.pos.y * M_TO_FT));
+  const at = [];
+  const top = levels[levels.length - 1];
+  fly(b, b738, 1500, (x, dt) => { x.throttle = 1; hold(x, dt); }, (x) => {
+    const ft = x.pos.y * M_TO_FT;
+    if (at.length < levels.length && ft >= levels[at.length]) at.push({ t: x.t, mach: x.mach, ktsErr: x.iasKts - keas(ft) });
+    return ft >= top;
+  });
+  expect(at.length).toBe(levels.length); // it got there
+  const fpm = levels.slice(1).map((ft, i) => ((ft - levels[i]) / (at[i + 1].t - at[i].t)) * 60);
+  return { fpm, at };
+}
+
+describe('Boeing 737-800 climb (EUROCONTROL APD; 0134)', () => {
+  // 290 KCAS from 8,000 ft (2,000 ft to settle), measured FL100-FL150 and FL150-FL240.
+  const cas290 = (ft) => machAtCas(ft, 290);
+  const low = () => climb(8000, cas290, [10000, 15000, 24000]);
+
+  // Measured 2,370 fpm at 65 t (+19%): inside the band, at its top edge.
+  it('at 290 KCAS on full thrust it climbs from FL150 to FL240 at the APD rate, 2,000 ft/min (±20%)', () => {
+    const { fpm, at } = low();
+    within(fpm[1], 2000, 0.2);
+    for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3); // flown on the schedule
+  });
+
+  // Measured 1,556 fpm at 65 t (+4%), from 2,619 fpm passing FL240 to 1,070 at FL350.
+  it('at Mach 0.78 on full thrust it climbs from FL240 to FL350 at the APD Mach-climb rate, 1,500 ft/min (±20%)', () => {
+    const { fpm, at } = climb(22000, () => 0.78, [24000, 35000]);
+    within(fpm[0], 1500, 0.2);
+    for (const p of at) expect(Math.abs(p.mach - 0.78)).toBeLessThanOrEqual(0.01);
+  });
+
+  // KNOWN GAP (0135): from FL100 to FL150 at 290 KCAS the model climbs ~3,450 fpm, 73% above
+  // APD's 2,000 (±20% = 1,600-2,400). The low end of the climb is where full throttle is
+  // takeoff thrust (240 kN static, σ^0.94; only FL350 is anchored to CFM's max climb thrust,
+  // 0116) and where the APD's unstated mass matters most.
+  it.fails('KNOWN GAP (0135): at 290 KCAS on full thrust it climbs from FL100 to FL150 at the APD rate, 2,000 ft/min (±20%)', () => {
+    within(low().fpm[0], 2000, 0.2);
   });
 });

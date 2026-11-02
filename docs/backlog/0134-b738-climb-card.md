@@ -1,12 +1,12 @@
 ---
 id: 0134
 title: B738 card: the climb from 10,000 ft to the cruise level matches the published climb schedule and rate
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-02
-pr:
+pr: 167
 ---
 
 ## Why
