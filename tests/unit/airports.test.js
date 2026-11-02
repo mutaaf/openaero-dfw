@@ -110,6 +110,45 @@ describe('missions', () => {
   });
 });
 
+// Ticket 0124: the ends drawn and graded (RUNWAYS_GEOM, the results strip, "off the runway") and
+// the length the start screen prints (lengthFt) are the same runway.
+describe('runway ends agree with the published length', () => {
+  const R = 6371008.8;
+  const rad = Math.PI / 180;
+  const haversineM = (a, b) => {
+    const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  it('every runway: end-to-end distance within 30 m of lengthFt', () => {
+    for (const r of RUNWAY_DATA) {
+      const name = `${r.airport} ${r.le.ident}/${r.he.ident}`;
+      expect(Math.abs(haversineM(r.le, r.he) - r.lengthFt * 0.3048), name).toBeLessThan(30);
+    }
+  });
+  it('the runway drawn (RUNWAYS_GEOM) is as long as the chart, within 30 m', () => {
+    for (const g of RUNWAYS_GEOM) {
+      const r = RUNWAY_DATA.find((d) => `${d.airport} ${d.le.ident}/${d.he.ident}` === g.name);
+      expect(Math.abs(g.lengthM - r.lengthFt * 0.3048), g.name).toBeLessThan(30);
+    }
+  });
+  it('KAFW: the FAA record\'s four ends and 34L\'s 716 ft displaced threshold', () => {
+    // FAA airport record (5010) for KAFW, via AirNav, 2026-11-02: 16L 33-00.325685N 097-19.291575W,
+    // 16R 33-00.308878N 097-19.407327W; 34L threshold displaced 716 ft (LDA 10,409 ft).
+    const p16L = latLonToSimMeters(33 + 0.325685 / 60, -(97 + 19.291575 / 60));
+    const p16R = latLonToSimMeters(33 + 0.308878 / 60, -(97 + 19.407327 / 60));
+    const e16L = runwayEnd('KAFW', '16L'), e16R = runwayEnd('KAFW', '16R');
+    expect(Math.hypot(e16L.endX - p16L.x, e16L.endZ - p16L.z)).toBeLessThan(5);
+    expect(Math.hypot(e16R.endX - p16R.x, e16R.endZ - p16R.z)).toBeLessThan(5);
+    const e34L = runwayEnd('KAFW', '34L');
+    expect(e34L.displacedM).toBeCloseTo(716 * 0.3048, 3);
+    expect(Math.hypot(e34L.thrX - e34L.endX, e34L.thrZ - e34L.endZ)).toBeCloseTo(716 * 0.3048, 1);
+    // The facts line names its source: the FAA's ends for Alliance (its °M is WMM-2025's and the
+    // THR is interpolated, as everywhere), OurAirports everywhere else.
+    for (const e of RUNWAY_ENDS) expect(e.src, e.id).toBe(e.airport === 'KAFW' ? 'FAA ends' : 'OurAirports');
+  });
+});
+
 describe('real field elevations', () => {
   const FT = 0.3048;
   it('thresholds sit at their surveyed height relative to KDFW (606 ft = y 0)', () => {

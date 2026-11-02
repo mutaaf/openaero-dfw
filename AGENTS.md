@@ -139,7 +139,7 @@ src/main.js         renderer + scene build, 6-DOF integrator, camera, HUD/radar 
                     the Keeper carves it into modules, no behavior change per PR.
 src/constants.js    units, KDFW origin, field elevation
 src/aircraft.js     aircraft database (mass, wing, lift/drag, thrust, V-speeds, damping)
-src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
+src/airports.js     real runways (OurAirports; KAFW's ends from the FAA record, 0124, end.src) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
                     thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns; papiWhite (0131: the one
                     PAPI reading for the HUD, coach and 3D lamps, aero.js papiWhiteLights at AC 150/5340-30J's G ±10'/±30'); runwayFactsText
                     (0114): the start screen's chart line (ident, length x width, °M, threshold ft MSL)

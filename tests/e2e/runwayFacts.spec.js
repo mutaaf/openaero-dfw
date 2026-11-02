@@ -41,6 +41,11 @@ test('another runway follows the pick, and a drill with no runway shows no line'
   // Addison 16's threshold is displaced 979 ft down a rising runway: 634 ft, not the end's 633.
   await page.locator('#missionList .btnMission[data-scenario="kads_16_final"]').click();
   await expect(page.locator('#txtRunwayFacts')).toHaveText(/^RWY 16: 7,203 × 100 ft · 15[78]°M · THR 634 ft \(OurAirports\)$/);
+  // Alliance's ends are the FAA record's (0124): 34L's threshold is displaced 716 ft up the slope.
+  await page.locator('#missionList .btnMission[data-scenario="kafw_34l_final"]').click();
+  await expect(page.locator('#txtRunwayFacts')).toHaveText(/^RWY 34L: 11,125 × 150 ft · 34[78]°M · THR 669 ft \(FAA ends\)$/);
+  await page.locator('#missionList .btnMission[data-scenario="kads_16_final"]').click();
+  await expect(page.locator('#txtRunwayFacts')).toHaveText(/\(OurAirports\)$/);
   await page.locator('#missionList .btnMission[data-scenario="deadstick_kads_16"]').click();
   await expect(page.locator('#txtDensityAlt')).toContainText('Density altitude DFW area:');
   await expect(page.locator('#txtRunwayFacts')).toBeHidden();
