@@ -308,3 +308,10 @@ details[open] > summary::before { transform: rotate(90deg); }
 .replaying :is(#hudCanvas, #phoneHeader, #eicasPanel, #stickPanel, #mapPanel, #touchDeck, #keyHints, #coach,
   #calloutCaption, #masterAlertBanner, #stallAlertBanner, #mouseFlightCrosshair) { visibility: hidden; }
 .replaying #mapCredits { z-index: 41; } /* over the replay bar: its links still open */
+/* The results card's scrolling middle (0125): a fade at its foot while there is more below it
+   (results.js toggles .more; iOS hides the scrollbar until you scroll). */
+#resultsBody.more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.75rem), transparent);
+}
+#resultsBody:focus-visible { outline: 2px solid #38bdf8; outline-offset: -2px; }

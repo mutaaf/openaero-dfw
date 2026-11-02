@@ -5,9 +5,10 @@ import { BASE, stubTiles, collectErrors } from './helpers.js';
 // loaded results card (the crosswind card's six factors, the reason, the next-time tip, the gate
 // line and the best line) must keep FLY AGAIN and KEEP ROLLING in view: the button row sits
 // outside the card's scrolling middle, and the factor list scrolls if it must.
+// The grader's own strings (src/landing.js gradeLanding), at their longest.
 const FACTORS = [
-  ['Touchdown rate', '310 fpm', 72], ['Centreline', '4.1 m left', 64], ['Touchdown zone', '420 m in', 90],
-  ['Flare', 'held 3.2 s', 81], ['Speed', '+6 kt', 77], ['Crosswind', '12 kt, de-crabbed 3°', 58],
+  ['Touchdown rate', '310 fpm', 72], ['Centreline', '4.1 m left', 64], ['Touchdown zone', '420 m past threshold', 90],
+  ['Flare', '3.2° pitch, 1.4° bank', 81], ['Speed', '71 kt (Vref 65)', 77], ['Crab / de-crab', '3.1° drift (not scored)', 58],
 ];
 
 async function fillCard(page) {
@@ -54,6 +55,14 @@ async function expectButtonsInView(page, w, h) {
   }
 }
 
+// results.js (a lazy chunk fetched after boot) marks the fade on the body's scroll and on resize;
+// the card here is filled by hand, so nudge it with a scroll event until the chunk is listening.
+async function expectMore(page, more) {
+  const body = page.locator('#resultsBody');
+  await expect.poll(() => body.evaluate((el) => { el.dispatchEvent(new Event('scroll')); return el.classList.contains('more'); }),
+    { timeout: 10_000 }).toBe(more);
+}
+
 test('results card: FLY AGAIN and KEEP ROLLING stay in view on a short phone held sideways (0125)', async ({ page }) => {
   test.setTimeout(60_000);
   const errors = collectErrors(page);
@@ -66,17 +75,31 @@ test('results card: FLY AGAIN and KEEP ROLLING stay in view on a short phone hel
   for (const [w, h] of [[844, 340], [667, 325], [568, 320]]) {
     await page.setViewportSize({ width: w, height: h });
     await expectButtonsInView(page, w, h);
-    // The middle scrolls instead: the last factor can be reached.
+    // The middle scrolls instead, and says so: a fade at its foot while there is more below.
+    const overflow = await page.locator('#resultsBody').evaluate((el) => el.scrollHeight - el.clientHeight);
+    if (w === 568) expect(overflow, 'the SE card overflows').toBeGreaterThan(20);
+    await expectMore(page, overflow > 2);
+    // The last factor can be reached.
     await page.locator('#resultsFactors li').last().scrollIntoViewIfNeeded();
     await expect(page.locator('#resultsFactors li').last()).toBeInViewport({ ratio: 1 });
     await expectButtonsInView(page, w, h);
+    await page.locator('#resultsBody').evaluate((el) => { el.scrollTop = el.scrollHeight; });
+    await expectMore(page, false); // scrolled to its end: no fade
     await page.screenshot({ path: test.info().outputPath(`results-${w}x${h}.png`) });
+    await page.locator('#resultsBody').evaluate((el) => { el.scrollTop = 0; });
   }
+  // A keyboard path: the scrolling middle takes focus and the arrow keys scroll it.
+  await page.setViewportSize({ width: 568, height: 320 });
+  await expect(page.locator('#resultsBody')).toHaveAttribute('tabindex', '0');
+  await page.locator('#resultsBody').focus();
+  await page.keyboard.press('End');
+  await expect.poll(() => page.locator('#resultsBody').evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   // Upright and on a laptop the full card shows without any scroll at all.
   for (const [w, h] of [[390, 844], [1280, 720]]) {
     await page.setViewportSize({ width: w, height: h });
     await expectButtonsInView(page, w, h);
     expect(await page.locator('#resultsBody').evaluate((el) => el.scrollHeight - el.clientHeight), `${w}x${h} no scroll`).toBeLessThanOrEqual(0);
+    await expectMore(page, false);
     await page.screenshot({ path: test.info().outputPath(`results-${w}x${h}.png`) });
   }
   expect(errors).toEqual([]);
