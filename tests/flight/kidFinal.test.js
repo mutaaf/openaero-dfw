@@ -115,7 +115,8 @@ describe('Kid hands off on a straight-in final in the Cessna lands in the touchd
 
 // Ticket 0131: the PAPI's on-path band is the glide path +-10' (AC 150/5340-30J Table 7-2), symmetric
 // now: a little tighter below the path, wider above it (was 2.8-3.1°); Kid's guide flies the 3° path, so the coach's "two white,
-// two red" must be what the box shows all the way down to 200 ft.
+// two red" must be what the box shows all the way down to 200 ft. A regression guard: Kid holds the
+// path within ~0.1°, inside the old band too; aero.test.js and airports.test.js pin the angles.
 describe('Kid hands off down a final reads two white, two red on the PAPI (ticket 0131)', () => {
   for (const [ac, key] of [['c172', 'kads_16_final'], ['c172', 'kftw_16_final'], ['b738', 'kdfw_35c_final']]) {
     it(`${ac} ${key}, calm: 2 white in at least 95% of the samples above 200 ft, never 0 or 4`, () => {

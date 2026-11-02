@@ -195,6 +195,15 @@ describe('papiWhite', () => {
       }
     }
   });
+  it('tells the AC bands from the old 2.8-3.1° ones on a real final: 3.12° and 2.85° are on the path', () => {
+    const e = runwayEnd('KADS', '16');
+    for (const [deg, white] of [[3.12, 2], [2.85, 2], [3.2, 3], [2.81, 1]]) {
+      const { pos } = approachSpawn(e, 1);
+      const distM = approachGeometry(e, pos).distM;
+      pos.y = e.thrY + (distM + AIM_POINT_M) * Math.tan(deg * Math.PI / 180);
+      expect(papiWhite(e, pos, distM), `${deg}°`).toBe(white); // the old thresholds gave 3, 2, 3, 1
+    }
+  });
   it('reads nothing once past the box (a float or the rollout is not "high", 0131)', () => {
     const e = runwayEnd('KDFW', '35C');
     const { pos } = approachSpawn(e, 0);
