@@ -46,8 +46,8 @@
   <!-- Captions for the spoken callouts (0117, src/captions.js): the takeoff call's slot under the heading box, between the tapes -->
   <div id="calloutCaption" class="hidden pointer-events-none absolute left-1/2 -translate-x-1/2 z-20 px-2 py-0.5 rounded-md bg-slate-950/85 text-white font-mono font-bold text-[13px] leading-4 uppercase text-center"></div>
   <!-- Landing results card (src/landing.js grades every touchdown) -->
-  <div id="resultsCard" class="hidden absolute inset-x-3 top-1/2 -translate-y-1/2 z-40 mx-auto max-w-sm max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] overflow-y-auto overscroll-contain hud-glass rounded-2xl p-4 font-mono text-slate-200 border-emerald-400/50 shadow-2xl" role="dialog" aria-labelledby="txtGrade" aria-live="polite">
-    <div class="flex items-center gap-4 border-b border-slate-700/80 pb-3">
+  <div id="resultsCard" class="hidden absolute inset-x-3 top-1/2 -translate-y-1/2 z-40 mx-auto max-w-sm max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] flex flex-col overflow-hidden hud-glass rounded-2xl p-4 font-mono text-slate-200 border-emerald-400/50 shadow-2xl" role="dialog" aria-labelledby="txtGrade" aria-live="polite">
+    <div class="shrink-0 flex items-center gap-4 border-b border-slate-700/80 pb-3">
       <div id="txtGrade" class="text-5xl font-black text-emerald-300 w-20 text-center">A</div>
       <div class="flex-1">
         <div id="txtResultTitle" class="text-[10px] uppercase tracking-widest text-slate-400">Landing grade</div>
@@ -55,13 +55,16 @@
         <div id="txtBest" class="text-[11px] text-amber-300"></div>
       </div>
     </div>
-    <div id="txtGradeReason" class="hidden text-xs text-red-300 pt-2"></div>
-    <div id="tipRow" class="hidden text-xs pt-2"><span class="text-[10px] uppercase tracking-widest text-slate-400">Next time</span> <span id="txtTip" class="text-sky-200"></span></div>
-    <div id="txtStabilized" class="hidden text-[11px] font-bold pt-2 text-amber-300"></div>
-    <!-- Where the wheels touched (0088): runway strip drawn by src/touchdownStrip.js -->
-    <canvas id="touchdownStrip" class="hidden block w-full h-6 mt-2" role="img" aria-label=""></canvas>
-    <ul id="resultsFactors" class="flex flex-col gap-1.5 pt-2 pb-3 text-[11px]"></ul>
-    <div class="grid grid-flow-col auto-cols-fr gap-2">
+    <!-- The middle scrolls if it must; the grade above and the buttons below stay in view (0125: Safari held sideways is ~340 px tall) -->
+    <div id="resultsBody" class="flex-initial min-h-0 overflow-y-auto overscroll-contain">
+      <div id="txtGradeReason" class="hidden text-xs text-red-300 pt-2"></div>
+      <div id="tipRow" class="hidden text-xs pt-2"><span class="text-[10px] uppercase tracking-widest text-slate-400">Next time</span> <span id="txtTip" class="text-sky-200"></span></div>
+      <div id="txtStabilized" class="hidden text-[11px] font-bold pt-2 text-amber-300"></div>
+      <!-- Where the wheels touched (0088): runway strip drawn by src/touchdownStrip.js -->
+      <canvas id="touchdownStrip" class="hidden block w-full h-6 mt-2" role="img" aria-label=""></canvas>
+      <ul id="resultsFactors" class="flex flex-col gap-1.5 pt-2 pb-3 text-[11px]"></ul>
+    </div>
+    <div class="shrink-0 grid grid-flow-col auto-cols-fr gap-2">
       <button id="btnFlyAgain" class="hud-btn active rounded-xl min-h-[44px] text-xs font-bold">FLY AGAIN</button>
       <button id="btnKeepRolling" class="hud-btn rounded-xl min-h-[44px] text-xs">KEEP ROLLING</button>
       <button id="btnReplay" class="hidden hud-btn rounded-xl min-h-[44px] text-xs" aria-label="Replay the landing">▶ REPLAY</button>

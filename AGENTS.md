@@ -160,6 +160,8 @@ src/results.js      the results card (lazy chunk, prefetched after boot, retried
                     (0088, src/touchdownStrip.js, in the same chunk) draws gradeLanding's `touchdown`
                     (along/across, runway length/width, the end's displaced pavement): the aiming point at
                     airports.js AIM_POINT_M, the green band at landing.js ZONE_FULL_M (the zone's full marks)
+                    The card is a flex column (0125): the grade and the button row stay put, #resultsBody
+                    (reason, tip, gate, strip, factors) scrolls if the screen is short (Safari sideways ~340 px)
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
