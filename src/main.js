@@ -1540,6 +1540,7 @@ function syncDensityAltitude() {
   daShown = text + hint + facts;
   const factsEl = byId('txtRunwayFacts');
   byId('txtRunwayFactsLine').textContent = facts;
+  if (facts) byId('txtRunwayFactsSrc').textContent = `(${sim.activeEnd.src})`;
   factsEl.classList.toggle('hidden', !facts);
   byId('txtDaValue').textContent = text;
   const el = byId('txtThinAir');

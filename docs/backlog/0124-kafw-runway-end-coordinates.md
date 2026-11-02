@@ -1,12 +1,12 @@
 ---
 id: 0124
 title: Alliance's runway ends match their published lengths (and short runways get a 400 ft aim point)
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-10-31
-pr:
+pr: 163
 ---
 
 ## Why
