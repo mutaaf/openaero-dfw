@@ -1,7 +1,7 @@
 ---
 id: 0089
 title: Colour-blind and low-vision pass on the PAPI and HUD cues
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: accessibility
