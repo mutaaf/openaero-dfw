@@ -161,15 +161,18 @@ export function windReadout(wx, comps, out = {}) {
 
 // The coach card (0130). Its CSS slot sits just over the touch deck; on a short screen held
 // upright (Safari with its bars, ~390x664; an iPhone SE, 375x548) that is over the speed tape's
-// low end, the SPD target label (baseline cy + 106) and the ground just under the horizon, where
-// the runway and the PAPI are on a final. coachClearBottom is where that ends: the tapes, the
-// label's descent, and 12% of the height under the level horizon (cy). coachOverHud says a card
-// spanning top..bottom crosses that band (from the tapes' top down); main.js then moves it to
-// COACH_TOP_SLOT, the sky under the top bar (its 44 px row starts 8 px down; styles.css).
+// low end, the SPD target label (baseline cy + 106), the stabilized-gate verdict (main.js
+// drawGateVerdict: cy + 76 to cy + 132 with two lines) and the ground just under the horizon, where
+// the runway and the PAPI are on a final (12% of the height is ~11° under the level horizon, cy, at
+// the portrait FOV cap). coachClearBottom is where that ends; coachOverHud says a card spanning
+// top..bottom crosses that band (from the tapes' top down); main.js then moves it to
+// COACH_TOP_SLOT, the sky under the top bar (its 44 px row starts 8 px down, or under the status
+// bar's inset when installed: styles.css adds env(safe-area-inset-top), this is the inset-0 case).
 export const COACH_TOP_SLOT = 58;
+export const GATE_VERDICT_BOTTOM = 132;
 export function coachClearBottom(h) {
   const cy = h / 2;
-  return Math.max(cy + 110, cy + h * 0.12);
+  return Math.max(cy + GATE_VERDICT_BOTTOM, cy + h * 0.12);
 }
 export function coachOverHud(h, top, bottom) {
   return bottom > h / 2 + TAPE_TOP && top < coachClearBottom(h);

@@ -2,12 +2,12 @@ import { test, expect } from './fixtures.js';
 import { stubTiles, collectErrors, enterCockpit } from './helpers.js';
 
 // Ticket 0130: the coach card never sits on the speed or altitude tape (cy ± 90 px), the SPD target
-// label under the speed tape (baseline cy + 106) or the ground from the horizon down 12% of the
+// label under the speed tape (baseline cy + 106), the stabilized-gate verdict (to cy + 132) or the ground from the horizon down 12% of the
 // height (the runway and the PAPI on a final). Its slot over the touch deck clears them on a tall
 // phone; on a short one held upright (Safari with its bars, 390x664; an iPhone SE, 375x548) it goes
 // up under the top bar. Skip stays a 44 px target with nothing over it. One flight, resized, so the
 // spec costs one boot on CI.
-const SIZES = [[390, 664], [375, 548], [390, 844], [820, 1180], [844, 390]];
+const SIZES = [[390, 664], [375, 548], [390, 844], [820, 1180], [1180, 820], [844, 390]];
 
 async function boxes(page) {
   return page.evaluate(() => {
@@ -25,8 +25,10 @@ function expectClear({ coach, skip, skipHit, deck, w, h }, label) {
   const cx = w / 2, cy = h / 2;
   const meets = (a, b) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
   const keepOut = {
-    'speed tape': { l: cx - 175, r: cx - 131, t: cy - 90, b: cy + 90 },
-    'altitude tape': { l: cx + 130, r: cx + 186, t: cy - 90, b: cy + 90 },
+    // As drawn (main.js drawTape): the speed strip x - 60 … x at cx - 131, the altitude readout to cx + 194.
+    'speed tape': { l: cx - 191, r: cx - 131, t: cy - 90, b: cy + 90 },
+    'altitude tape': { l: cx + 130, r: cx + 194, t: cy - 90, b: cy + 90 },
+    'gate verdict': { l: cx - 120, r: cx + 120, t: cy + 76, b: cy + 132 },
     'SPD label': { l: cx - 131 - 60, r: cx - 131, t: cy + 106 - 10, b: cy + 106 + 3 },
     'horizon band': { l: 0, r: w, t: cy, b: cy + 0.12 * h },
   };

@@ -10,25 +10,31 @@ const CARD_H = 54;
 const slot = (h) => ({ top: h - 232 - CARD_H, bottom: h - 232 });
 
 describe('coachClearBottom', () => {
-  it('is below the tapes, the SPD label and 12% of the height under the horizon', () => {
+  it('is below the tapes, the SPD label, the gate verdict and 12% of the height under the horizon', () => {
     for (const h of [548, 664, 720, 844, 1180]) {
       const cy = h / 2;
       expect(coachClearBottom(h)).toBeGreaterThanOrEqual(cy - TAPE_TOP);
       expect(coachClearBottom(h)).toBeGreaterThanOrEqual(cy + 106 + 3); // the label's descent
+      expect(coachClearBottom(h)).toBeGreaterThanOrEqual(cy + 76 + 24 + 2 * 16); // a two-line gate verdict
       expect(coachClearBottom(h)).toBeGreaterThanOrEqual(cy + 0.12 * h);
     }
   });
 });
 
 describe('coachOverHud', () => {
-  it('keeps the CSS slot where it already clears: 390x844, the iPad both ways, desktop 1280x720', () => {
+  it('keeps the CSS slot where it already clears: 390x844, the iPad upright, desktop 1280x720', () => {
     expect(coachOverHud(844, 558, 612)).toBe(false);
     expect(coachOverHud(1180, 894, 948)).toBe(false);
-    expect(coachOverHud(820, 534, 588)).toBe(false);
     expect(coachOverHud(720, 594, 648)).toBe(false);
     // A phone held sideways puts the card in the top bar, above the tapes (styles.css).
     expect(coachOverHud(390, 8, 62)).toBe(false);
     expect(coachOverHud(320, 8, 62)).toBe(false);
+  });
+
+  it('flags the iPad held sideways: its slot (534..588) sits on a two-line gate verdict (to 542)', () => {
+    expect(coachOverHud(820, 534, 588)).toBe(true);
+    // A tall Android phone (412x823) put a two-line verdict under the card's top by ~6 px.
+    expect(coachOverHud(823, 823 - 286, 823 - 232)).toBe(true);
   });
 
   it('flags the slot on a short phone held upright (Safari with its bars, iPhone SE)', () => {
