@@ -1,12 +1,12 @@
 ---
 id: 0131
 title: PAPI colour bands follow the published setting angles, around each runway's own glidepath
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-02
-pr:
+pr: 161
 ---
 
 ## Why
