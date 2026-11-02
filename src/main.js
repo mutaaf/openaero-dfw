@@ -1990,8 +1990,8 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false, clea
   hudCtx.textAlign = 'left';
 }
 
-// "MSL" under the altitude readout (0132, hudLayout.js altCaptionRect): the tape is above sea
-// level, the top bar's AGL above the ground. An opaque-enough tab keeps 4.5:1 over bright imagery.
+// "MSL" under the altitude readout (0132, hudLayout.js altCaptionRect): the tape is the CG's height
+// above sea level, the top bar's AGL the main wheels' radio altitude (sim.raFt). An opaque-enough tab keeps 4.5:1 over bright imagery.
 const _altCap = altCaptionRect(0, 0, {});
 // The scale's numbers (text ty - 4 … ty + 3.5) stay off the tab's rows.
 const ALT_CAPTION_CLEAR = ALT_BOX.h / 2 + 2 + ALT_CAPTION_H + 4;
@@ -2000,7 +2000,7 @@ function drawAltCaption(cx, cy) {
   hudCtx.fillStyle = 'rgba(2, 6, 23, 0.85)';
   hudCtx.fillRect(r.x, r.y, r.w, r.h);
   hudCtx.fillStyle = '#e0f2fe';
-  hudCtx.font = 'bold 10px monospace';
+  hudCtx.font = 'bold 11px monospace';
   hudCtx.textAlign = 'center';
   hudCtx.fillText(ALT_CAPTION, r.x + r.w / 2, r.y + r.h - 2.5);
   hudCtx.textAlign = 'left';

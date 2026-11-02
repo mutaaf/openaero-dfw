@@ -276,7 +276,7 @@ describe('altCaptionRect (0132)', () => {
       expect(r.x + r.w).toBeLessThanOrEqual(box.x + box.w); // inside the tape's column
       expect(r.x + r.w).toBeLessThanOrEqual(w);
       expect(r.y + r.h).toBeLessThanOrEqual(cy - TAPE_TOP);
-      expect(r.w).toBeGreaterThanOrEqual(24); // three 10 px glyphs and a margin
+      expect(r.w).toBeGreaterThanOrEqual(24); // three 11 px glyphs and a margin
       const speed = { x: cx + SPEED_TAPE_X - 60, y: cy + TAPE_TOP, w: 60, h: -2 * TAPE_TOP };
       expect(overlaps(r, speed), 'speed tape').toBe(false);
       expect(overlaps(r, windBoxRect(w, h)), 'wind box').toBe(false);

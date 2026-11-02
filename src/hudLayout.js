@@ -21,13 +21,14 @@ export const ALT_TAPE_X = 130;
 export const ALT_BOX = { dx: 8, w: 56, h: 22 };
 // The altitude tape reads above sea level (0132): "MSL" in a small tab just under its readout box,
 // right of the major ticks (9 px), where drawTape leaves out the scale's numbers. The top bar's
-// AGL is the height above the ground under the airplane. Writes into `out`.
+// AGL is the main wheels' radio altitude (0122). Whole pixels, so the tab's edges stay sharp
+// when cy is a half pixel (an odd height). Writes into `out`.
 export const ALT_CAPTION = 'MSL';
 export const ALT_CAPTION_W = 26;
-export const ALT_CAPTION_H = 12;
+export const ALT_CAPTION_H = 13;
 export function altCaptionRect(cx, cy, out) {
-  out.x = cx + ALT_TAPE_X + 12;
-  out.y = cy + ALT_BOX.h / 2 + 2;
+  out.x = Math.round(cx + ALT_TAPE_X + 12);
+  out.y = Math.round(cy + ALT_BOX.h / 2 + 2);
   out.w = ALT_CAPTION_W;
   out.h = ALT_CAPTION_H;
   return out;
