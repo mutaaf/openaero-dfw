@@ -1826,7 +1826,7 @@ function updatePapi() {
   const col = papiLamps.geometry.attributes.color.array;
   RUNWAY_ENDS.forEach((e, ei) => {
     const g = approachGeometry(e, sim.pos);
-    const white = g.distM > -AIM_POINT_M ? papiWhite(e, sim.pos, g.distM) : 0;
+    const white = papiWhite(e, sim.pos, g.distM) ?? 0; // past the box: dark from behind
     // Lamps are numbered outward from the runway; the inboard lamps turn red first.
     for (let i = 0; i < 4; i++) {
       const k = (ei * 4 + i) * 3;
@@ -1842,6 +1842,7 @@ function updatePapi() {
   const ap = sim.approach;
   const numWhite = papiWhite(sim.activeEnd, sim.pos, ap.distM);
   sim.papiWhite = numWhite;
+  if (numWhite === null) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
   if (numWhite === 2) {
     txt.textContent = 'ON GLIDESLOPE';
     txt.className = 'text-emerald-400 font-bold ml-1';

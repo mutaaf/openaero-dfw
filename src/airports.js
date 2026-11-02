@@ -154,9 +154,11 @@ export function approachGeometry(end, pos) {
 }
 
 // White lamps on an end's PAPI from pos (distM = approachGeometry's): the slope from its threshold
-// height to the box at the aim point, against the path approachGeometry flies (GLIDE_DEG; no
-// runway here has a published angle other than 3°, 0131). The HUD, the coach and the 3D lamps all read this.
+// height to the box at the aim point, at GLIDE_DEG (airports.js carries no per-runway glide angle:
+// every end flies the 3° path approachGeometry flies, 0131). null once past the box (its lights
+// face the approach; a float or the rollout must not read "high"). The HUD, coach and 3D lamps read this.
 export function papiWhite(end, pos, distM) {
+  if (distM <= -AIM_POINT_M) return null;
   return papiWhiteLights(Math.atan2(pos.y - (end.thrY ?? 0), Math.max(10, distM + AIM_POINT_M)) / DEG_TO_RAD, GLIDE_DEG);
 }
 

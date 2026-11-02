@@ -195,4 +195,12 @@ describe('papiWhite', () => {
       }
     }
   });
+  it('reads nothing once past the box (a float or the rollout is not "high", 0131)', () => {
+    const e = runwayEnd('KDFW', '35C');
+    const { pos } = approachSpawn(e, 0);
+    pos.y = e.thrY + 10; // floating 10 m up
+    expect(papiWhite(e, pos, -AIM_POINT_M + 1)).not.toBeNull();
+    expect(papiWhite(e, pos, -AIM_POINT_M)).toBeNull();
+    expect(papiWhite(e, pos, -1500)).toBeNull();
+  });
 });

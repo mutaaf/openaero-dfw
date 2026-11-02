@@ -113,8 +113,8 @@ describe('Kid hands off on a straight-in final in the Cessna lands in the touchd
   }
 });
 
-// Ticket 0131: the PAPI's on-path band is the glide path +-10' (AC 150/5340-30J Table 7-2), half
-// as wide again as before on the low side; Kid's guide flies the 3° path, so the coach's "two white,
+// Ticket 0131: the PAPI's on-path band is the glide path +-10' (AC 150/5340-30J Table 7-2), symmetric
+// now: a little tighter below the path, wider above it (was 2.8-3.1°); Kid's guide flies the 3° path, so the coach's "two white,
 // two red" must be what the box shows all the way down to 200 ft.
 describe('Kid hands off down a final reads two white, two red on the PAPI (ticket 0131)', () => {
   for (const [ac, key] of [['c172', 'kads_16_final'], ['c172', 'kftw_16_final'], ['b738', 'kdfw_35c_final']]) {
