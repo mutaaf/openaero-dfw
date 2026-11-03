@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
-import { engineThrust } from '../../src/engine.js';
+import { engineThrust, maxClimbThrustN, throttleForThrust } from '../../src/engine.js';
 import { airAt, ISA_P0 } from '../../src/atmosphere.js';
 import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
@@ -533,8 +533,7 @@ describe('Boeing 737-800 descent (EUROCONTROL APD; 0119)', () => {
   });
 });
 
-// Climb (ticket 0134), 65 t, ISA, clean, full throttle (the takeoff rating, matched to CFM's
-// max climb thrust only at FL350, 0116). EUROCONTROL Aircraft Performance Database, B738, performance table, read 2026-11-02
+// Climb (ticket 0134), 65 t, ISA, clean. EUROCONTROL Aircraft Performance Database, B738, performance table, read 2026-11-02
 // (learningzone.eurocontrol.int/ilp/customs/ATCPFDB/details.aspx?ICAO=B738):
 //   Initial climb (to 5,000 ft): IAS 165 kt,  ROC 3,000 ft/min
 //   Climb (to FL 150):           IAS 290 kt,  ROC 2,000 ft/min
@@ -545,6 +544,11 @@ describe('Boeing 737-800 descent (EUROCONTROL APD; 0119)', () => {
 // holds EAS, so 290 KCAS is converted to EAS at each height (ISA, compressible: 290 KCAS is
 // ~287 KEAS at FL100, ~281 at FL240) and the Mach climb holds Mach 0.78's EAS as it climbs.
 // No 250 kt leg: the cards start above FL100.
+// Thrust (0135): the APD's rates are a crew's climb, flown on the max climb (CLB) rating, not the
+// full-throttle take-off/go-around rating (staticThrustN's lapse, 0116). The 290 kt cards fly CLB
+// (engine.js maxClimbThrustN: Bartel & Young's climb-thrust lapse, anchored to CFM's 26.5 kN max
+// climb at FL350, Mach 0.8). Full throttle is ~27% above it at FL100 (62.6 vs 47.6 kN per engine),
+// which is where the old card's ~3,400 fpm came from; the two meet near FL350.
 const A0_MPS = 340.294; // ISA sea-level speed of sound
 const machAtCas = (ft, kcas) => {
   const air = airAt(ft / M_TO_FT);
@@ -553,16 +557,25 @@ const machAtCas = (ft, kcas) => {
   return Math.sqrt(5 * (Math.pow(qc / air.pressurePa + 1, 2 / 7) - 1));
 };
 
-// Full throttle from `fromFt`, holding the schedule's EAS (`machAt(ft)`) with pitch; returns
+// From `fromFt`, holding the schedule's EAS (`machAt(ft)`) with pitch; returns
 // the mean climb rate (fpm) between each pair of `levels` (ft) and the Mach and indicated
 // speed (EAS) error as it passes each level.
-function climb(fromFt, machAt, levels) {
+const _air = {};
+const clbThrottle = (x) => {
+  const air = airAt(x.pos.y, 0, 29.92, _air);
+  return throttleForThrust(b738, maxClimbThrustN(b738, air, x.mach), x.vel.length(), air, x.mach, 0);
+};
+// `clb` flies the CLB rating (the throttle that gives maxClimbThrustN), else full throttle.
+function climb(fromFt, machAt, levels, clb = false) {
   const keas = (ft) => easAtMach(ft, machAt(ft)) / KTS_TO_MPS;
   const b = makeBody(b738, { kts: keas(fromFt), altM: fromFt / M_TO_FT, gearDown: false, throttle: 1 });
+  b.mach = machAt(fromFt);
+  const thr = (x) => (clb ? clbThrottle(x) : 1);
+  b.throttle = b.engineN = thr(b);
   const hold = speedHoldPilot((x) => keas(x.pos.y * M_TO_FT));
   const at = [];
   const top = levels[levels.length - 1];
-  fly(b, b738, 1500, (x, dt) => { x.throttle = 1; hold(x, dt); }, (x) => {
+  fly(b, b738, 1500, (x, dt) => { x.throttle = thr(x); hold(x, dt); }, (x) => {
     const ft = x.pos.y * M_TO_FT;
     if (at.length < levels.length && ft >= levels[at.length]) at.push({ t: x.t, mach: x.mach, ktsErr: x.iasKts - keas(ft) });
     return ft >= top;
@@ -573,33 +586,44 @@ function climb(fromFt, machAt, levels) {
 }
 
 describe('Boeing 737-800 climb (EUROCONTROL APD; 0134)', () => {
-  // 290 KCAS from 8,000 ft (2,000 ft to settle), measured FL100-FL150 and FL150-FL240.
+  // 290 KCAS on the CLB rating from 8,000 ft (2,000 ft to settle), measured FL100-FL150 and FL150-FL240.
   const cas290 = (ft) => machAtCas(ft, 290);
-  const low = () => climb(8000, cas290, [10000, 15000, 24000]);
+  const low = () => climb(8000, cas290, [10000, 15000, 24000], true);
 
-  // Measured ~2,375 fpm at 65 t (+19%): inside the band, ~1% from its top edge, so a drag or
-  // thrust change that speeds the low climb up will tip it (that is the card doing its job).
-  it('at 290 KCAS on full thrust it climbs from FL150 to FL240 within ±20% of the APD nominal rate, 2,000 ft/min', () => {
+  // 0135: measured ~2,190 fpm (+9%) on CLB at 65 t; full throttle (the take-off rating) climbed
+  // ~3,400 here, +70%. WRAP's measured climb row (10.24 m/s, ~2,015 ft/min at 151 m/s CAS; see the
+  // descent cards) agrees with APD's 2,000.
+  it('at 290 KCAS on max climb thrust it climbs from FL100 to FL150 within ±20% of the APD nominal rate, 2,000 ft/min', () => {
+    const { fpm, at } = low();
+    within(fpm[0], 2000, 0.2);
+    for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3); // flown on the schedule
+  });
+
+  // Measured ~1,690 fpm on CLB at 65 t (-15%; on full throttle it was ~2,375, +19%).
+  it('at 290 KCAS on max climb thrust it climbs from FL150 to FL240 within ±20% of the APD nominal rate, 2,000 ft/min', () => {
     const { fpm, at } = low();
     within(fpm[1], 2000, 0.2);
-    for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3); // flown on the schedule
+    for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3);
   });
 
   // The Mach climb on the schedule a crew flies: 290 KCAS until that is Mach 0.78 (~FL309), then
   // Mach 0.78 (holding Mach 0.78 from FL240 would be ~335 KCAS there, near the 340 kt VMO).
-  // Measured ~1,350 fpm FL240-FL350 at 65 t (-10%), ~1,070 fpm passing FL350.
+  // Measured ~1,350 fpm FL240-FL350 at 65 t (-10%) on full throttle, ~1,070 fpm passing FL350.
+  // Still flown on full throttle: above ~FL300 the full-throttle lapse is fitted to CFM's max
+  // climb thrust (0116) and within ~3% of CLB, but FL240-FL300 it is up to 12% above it.
+  const machClimb = (clb) => climb(22000, (ft) => Math.min(cas290(ft), 0.78), [24000, 35000], clb);
   it('on 290 KCAS then Mach 0.78, full thrust, it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
-    const { fpm, at } = climb(22000, (ft) => Math.min(cas290(ft), 0.78), [24000, 35000]);
+    const { fpm, at } = machClimb(false);
     within(fpm[0], 1500, 0.2);
     for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3);
     expect(Math.abs(at[1].mach - 0.78)).toBeLessThanOrEqual(0.01);
   });
 
-  // KNOWN GAP (0135): from FL100 to FL150 at 290 KCAS the model climbs ~3,400 fpm, ~70% above
-  // APD's 2,000 (±20% = 1,600-2,400). The low end of the climb is where full throttle is
-  // takeoff thrust (240 kN static, σ^0.94; only FL350 is anchored to CFM's max climb thrust,
-  // 0116); mass does not explain it (at 79 t, the TCDS take-off mass, it is still ~2,590, +29%).
-  it.fails('KNOWN GAP (0135): at 290 KCAS on full thrust it climbs from FL100 to FL150 within ±20% of the APD nominal rate, 2,000 ft/min', () => {
-    within(low().fpm[0], 2000, 0.2);
+  // KNOWN GAP (0139): on the CLB rating the same Mach climb measures ~1,185 fpm (-21%), just
+  // under the band. Bartel & Young's lapse steps ~3% at FL300 (their bands meet there), and the
+  // model's L/D at Mach 0.78, FL350 is ~16; either may be the cause. Not tuned here.
+  it.fails('KNOWN GAP (0139): on 290 KCAS then Mach 0.78, max climb thrust, it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
+    const { fpm } = machClimb(true);
+    within(fpm[0], 1500, 0.2);
   });
 });

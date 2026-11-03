@@ -1,12 +1,12 @@
 ---
 id: 0135
 title: 737 climbs ~3,400 ft/min from FL100 to FL150 at 290 kt, ~70% above EUROCONTROL's 2,000
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-02
-pr:
+pr: 174
 ---
 
 ## Why
@@ -35,3 +35,14 @@ Promote the flight card; add a unit check of the thrust source used.
 
 ## Out of scope
 VNAV, derated or assumed-temperature takeoff, the ceiling (0129), the idle descent (0126).
+
+## Outcome
+The cause is the rating, not the airframe: full throttle is the take-off/go-around rating
+(240 kN static, σ^0.94; 57.5 kN per engine at FL125, Mach 0.55, within ~2% of Bartel & Young's
+take-off lapse there), while APD's rates are a crew's climb on the max climb (CLB) rating.
+`src/engine.js` maxClimbThrustN is Bartel & Young's climb-thrust lapse (J. Aircraft 45(4), 2008,
+eqs. 15-19; OpenAP's fits of their tables) anchored to CFM's 26.5 kN max climb at FL350, Mach 0.8
+(`spec.engine.climb`): 45.1 kN per engine at FL125, ~27% under full throttle at FL100, equal at
+FL350. On it the 737 climbs ~2,190 ft/min FL100-FL150 (+9%) and ~1,690 FL150-FL240 (-15%). Full
+throttle and every other card are unchanged (the go-around, windshear and take-off cards use the
+take-off rating, as a real TO/GA does). The FL240-FL350 Mach climb on CLB is ~1,185 (-21%): 0139.

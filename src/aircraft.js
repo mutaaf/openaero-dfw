@@ -85,7 +85,11 @@ export const AIRCRAFT_DATABASE = {
     // 2nd ed., eq. 2.45a, δ0·(1 − 0.49√M)) is within ~1% of it at 10,000 ft, Mach 0.5, but 9%
     // under CFM at FL350 and ~11% under the fit at FL410: a sanity check, not a second source.
     // Idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s from flight idle to 95%).
-    engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.94, spoolTau: 1.2 },
+    engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.94, spoolTau: 1.2,
+      // The max climb (CLB) rating (engine.js maxClimbThrustN, 0135): Bartel & Young's climb lapse
+      // anchored to CFM's 26.5 kN per engine at FL350, Mach 0.8 (above). Full throttle stays the
+      // take-off/go-around rating; CLB is what the APD climb cards fly.
+      climb: { refThrustN: 53000, refFt: 35000, refMach: 0.8 } },
     // Compressibility drag rise (aero.js waveDragCd, 0120; Mason's Korn + Lock). Sweep 25° at the
     // quarter chord and average t/c 12.89% are the 737's in Jenkinson, Simpkin & Rhodes, Civil Jet
     // Aircraft Design (1999), Aircraft Data File (its t/c row is the Original/Classic; the NG keeps the
