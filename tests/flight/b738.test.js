@@ -547,7 +547,7 @@ describe('Boeing 737-800 descent (EUROCONTROL APD; 0119)', () => {
 // Thrust (0135): the APD's rates are a crew's climb, flown on the max climb (CLB) rating, not the
 // full-throttle take-off/go-around rating (staticThrustN's lapse, 0116). The 290 kt cards fly CLB
 // (engine.js maxClimbThrustN: Bartel & Young's climb-thrust lapse, anchored to CFM's 26.5 kN max
-// climb at FL350, Mach 0.8). Full throttle is ~27% above it at FL100 (62.6 vs 47.6 kN per engine),
+// climb at FL350, Mach 0.8). Full throttle is ~31% above it at FL100 (62.6 vs 47.6 kN per engine), ~28% at FL125,
 // which is where the old card's ~3,400 fpm came from; the two meet near FL350.
 const A0_MPS = 340.294; // ISA sea-level speed of sound
 const machAtCas = (ft, kcas) => {
@@ -588,7 +588,8 @@ function climb(fromFt, machAt, levels, clb = false) {
 describe('Boeing 737-800 climb (EUROCONTROL APD; 0134)', () => {
   // 290 KCAS on the CLB rating from 8,000 ft (2,000 ft to settle), measured FL100-FL150 and FL150-FL240.
   const cas290 = (ft) => machAtCas(ft, 290);
-  const low = () => climb(8000, cas290, [10000, 15000, 24000], true);
+  let lowRun = null; // one 1,500 s climb serves both 290 kt cards
+  const low = () => (lowRun ??= climb(8000, cas290, [10000, 15000, 24000], true));
 
   // 0135: measured ~2,190 fpm (+9%) on CLB at 65 t; full throttle (the take-off rating) climbed
   // ~3,400 here, +70%. WRAP's measured climb row (10.24 m/s, ~2,015 ft/min at 151 m/s CAS; see the
@@ -610,7 +611,8 @@ describe('Boeing 737-800 climb (EUROCONTROL APD; 0134)', () => {
   // Mach 0.78 (holding Mach 0.78 from FL240 would be ~335 KCAS there, near the 340 kt VMO).
   // Measured ~1,350 fpm FL240-FL350 at 65 t (-10%) on full throttle, ~1,070 fpm passing FL350.
   // Still flown on full throttle: above ~FL300 the full-throttle lapse is fitted to CFM's max
-  // climb thrust (0116) and within ~3% of CLB, but FL240-FL300 it is up to 12% above it.
+  // climb thrust (0116) and within ~5% of CLB, but FL240-FL300 it is up to 12% above it, so this
+  // pass leans on the take-off rating below FL300; it moves to CLB in 0139.
   const machClimb = (clb) => climb(22000, (ft) => Math.min(cas290(ft), 0.78), [24000, 35000], clb);
   it('on 290 KCAS then Mach 0.78, full thrust, it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
     const { fpm, at } = machClimb(false);

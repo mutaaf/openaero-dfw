@@ -42,7 +42,11 @@ The cause is the rating, not the airframe: full throttle is the take-off/go-arou
 take-off lapse there), while APD's rates are a crew's climb on the max climb (CLB) rating.
 `src/engine.js` maxClimbThrustN is Bartel & Young's climb-thrust lapse (J. Aircraft 45(4), 2008,
 eqs. 15-19; OpenAP's fits of their tables) anchored to CFM's 26.5 kN max climb at FL350, Mach 0.8
-(`spec.engine.climb`): 45.1 kN per engine at FL125, ~27% under full throttle at FL100, equal at
-FL350. On it the 737 climbs ~2,190 ft/min FL100-FL150 (+9%) and ~1,690 FL150-FL240 (-15%). Full
+(`spec.engine.climb`): 45.1 kN per engine at FL125, ~22% under full throttle there (~24% at FL100),
+equal at FL350. On it the 737 climbs ~2,190 ft/min FL100-FL150 (+9%) and ~1,690 FL150-FL240 (-15%). Full
 throttle and every other card are unchanged (the go-around, windshear and take-off cards use the
 take-off rating, as a real TO/GA does). The FL240-FL350 Mach climb on CLB is ~1,185 (-21%): 0139.
+The Why's "too easy" concern does not hold: full throttle is the levers fully forward, which on a
+737NG gives full-rated take-off thrust (there is no CLB detent), and ~3,400 ft/min on it is right.
+The gap was in what the card compared, not in what the player flies. A unit card checks full
+throttle at FL125 against Bartel & Young's take-off lapse (CFM56-7B26: 117 kN, BPR 5.1).

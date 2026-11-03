@@ -61,13 +61,14 @@ export function engineThrust(spec, n, tasMps, air, mach, qPa) {
 // climb at climb.refFt, climb.refMach), by the pressure ratio P/Pcr and CAS/CAScr, in three bands
 // (above 30,000 ft, 10,000-30,000, below 10,000). The fits of their Tables 2-4 (d, n, m) are
 // OpenAP's (J. Sun et al., Aerospace 7(8) 104, 2020; openap/thrust.py, read 2026-11-03); `n` is
-// taken at their moderate climb, 2,500 ft/min (±1,500 moves the thrust ±2%).
+// taken at their moderate climb, 2,500 ft/min (±1,500 moves the thrust ±2%). Needs Mach > 0: CAS
+// is floored at a tenth of the top of climb's so a caller on the ground never gets Infinity.
 const casRatio = (pressurePa, mach) => Math.sqrt(5 * (Math.pow((pressurePa / ISA_P0) * (Math.pow(1 + 0.2 * mach * mach, 3.5) - 1) + 1, 2 / 7) - 1));
 export function maxClimbThrustN(spec, air, mach) {
   const c = spec.engine.climb;
   const roc = 2500;
   const pcr = isaPressure(c.refFt * FT_TO_M);
-  const vr = casRatio(air.pressurePa, mach) / casRatio(pcr, c.refMach); // CAS / CAS at the top of climb
+  const vr = Math.max(0.1, casRatio(air.pressurePa, mach) / casRatio(pcr, c.refMach)); // CAS / CAS at the top of climb
   const pr = air.pressurePa / pcr;
   const ft = isaAltFt(air.pressurePa);
   let ratio;

@@ -100,4 +100,17 @@ describe('737 max climb thrust (0135)', () => {
     expect(ratio).toBeGreaterThan(1.2);
     expect(ratio).toBeLessThan(1.3);
   });
+  // Full throttle is the take-off rating: Bartel & Young eq. 11 (OpenAP's G0 fit of their Fig. 5, eqs.
+  // 12-14), CFM56-7B26 117 kN static, bypass ratio 5.1 (CFM fact sheet), at FL125 on the 290 kt
+  // schedule (Mach 0.548): 56.3 kN per engine; the model's full throttle there is 57.5 (+2%).
+  it('full throttle at FL125, 290 KCAS is Bartel & Young\'s take-off lapse for a CFM56-7B26 (±3%)', () => {
+    const a = airAt(12500 / 3.28084), M = machAt290(12500), bpr = 5.1;
+    const dP = a.pressurePa / 101325, g0 = 0.0606 * bpr + 0.6337;
+    const A = -0.4327 * dP ** 2 + 1.3855 * dP + 0.0472;
+    const Z = 0.9106 * dP ** 3 - 1.7736 * dP ** 2 + 1.8697 * dP;
+    const X = 0.1377 * dP ** 3 - 0.4374 * dP ** 2 + 1.3003 * dP;
+    const lapse = A - (0.377 * (1 + bpr) / Math.sqrt((1 + 0.82 * bpr) * g0)) * Z * M + (0.23 + 0.19 * Math.sqrt(bpr)) * X * M * M;
+    const full = engineThrust(b738, 1, M * a.speedOfSoundMps, a, M, 0) / 2;
+    expect(Math.abs(full / (lapse * 117000) - 1)).toBeLessThanOrEqual(0.03);
+  });
 });
