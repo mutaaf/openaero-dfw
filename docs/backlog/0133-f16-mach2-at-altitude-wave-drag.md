@@ -1,12 +1,12 @@
 ---
 id: 0133
 title: F-16 card: full afterburner at 40,000 ft tops out near Mach 2, as the USAF says (needs wave drag past Mach 1)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-02
-pr:
+pr: 176
 ---
 
 ## Why
@@ -41,3 +41,14 @@ the wave-drag term is zero below its critical Mach and finite everywhere.
 ## Out of scope
 Sea-level top speed, supersonic lift/stability changes, the g and AoA limiter (that is 0121), heat
 or intake models.
+
+## Outcome (2026-11-03)
+- `src/aero.js` supersonicWaveCd: the F-16 (`spec.supersonic`) gets Raymer's Sears-Haack wave drag
+  (Sect. 12.5.9-12.5.10: E_WD 2.0, Amax 2.2 m² our estimate, length 15.06 m USAF, 40° LE sweep), the
+  drag rise starting at its Korn + Lock Mcrit (NACA 64A204, κA 0.87, 32.7° quarter-chord sweep),
+  faired MDD → 1.05 → 1.2 in AeroSandbox's shape. CD 0.022 at Mach 1.2, peak ~0.027 near 1.1,
+  0.018 at Mach 2; within ±30% of JSBSim's open F-16 Mach drag (cross-check card).
+- The card did not close: full AB level at 40,000 ft is ~2.34 at 240 s (was 5.7) and still
+  gaining ~0.003 Mach/s, because the engine's thrust grows with M² as fast as the drag. It stays
+  `it.fails`, now for ticket 0143 (supersonic thrust lapse), with a passing regression guard
+  (under Mach 2.5 at 240 s). Below Mcrit (~0.85 at 1 g) nothing moved: every other card passes.

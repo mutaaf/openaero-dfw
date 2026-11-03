@@ -109,9 +109,11 @@ export function dragDivergenceMach(spec, cl) {
 }
 export function waveDragCd(spec, cl, mach) {
   if (!spec.transonic || !(mach > 0.5)) return 0;
-  const dm = mach - (dragDivergenceMach(spec, cl) - LOCK_DM);
+  const mdd = dragDivergenceMach(spec, cl), dm = mach - (mdd - LOCK_DM);
   if (dm <= 0) return 0;
-  return dm < LOCK_DM ? 20 * dm * dm * dm * dm : LOCK_RISE_AT_MDD + 0.1 * (dm - LOCK_DM);
+  if (dm < LOCK_DM) return 20 * dm * dm * dm * dm;
+  // Past MDD, an airframe with supersonic data (spec.supersonicCd, the F-16's, supersonic.js 0133).
+  return spec.supersonicCd ? spec.supersonicCd(mdd, mach) : LOCK_RISE_AT_MDD + 0.1 * (dm - LOCK_DM);
 }
 
 // Heading error in degrees, wrapped to [-180, 180].
