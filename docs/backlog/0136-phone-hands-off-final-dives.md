@@ -1,12 +1,12 @@
 ---
 id: 0136
 title: A hands-off Learner final holds its path on a phone-size touch screen, as it does on desktop
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-11-03
-pr:
+pr: 170
 ---
 
 ## Why
@@ -58,3 +58,22 @@ New `tests/e2e/handsOff.mobile.spec.js` (phone project): taps Fly with a touch t
 
 ## Out of scope
 Changing the assist trim law or the ILS coach.
+
+## Outcome (2026-11-03, Builder)
+The dive did not reproduce on `main` (a58b2d5) or on the build the Scout flew (665dcf3): Learner,
+Kid and Pilot fly the same hands-off final at 1280x720, 390x844 and 844x390 with touch (Learner
+2.2° throughout and ~910 fpm, a little steeper than the 3° path's ~810, on every device; Kid ~785;
+Pilot 2.1 → 1.6°, ~990), with Fly pressed by Playwright tap, click, `touchscreen.tap`,
+`mouse.click` and raw CDP touches, at DPR 1 and 3, after 3 s and 15 s on the start screen. The
+Scout's run was most likely a harness artifact. The Kid/Pilot comparison is a one-off probe
+(PR #170), not a spec; tests 1-2 of handsOff.mobile.spec.js are a regression guard (they pass on
+the old code too).
+What the hunt did find is a real way to get that dive: a touch stick that loses its pointer
+capture mid-hold gets its pointerup on whatever is under the thumb, and stayed pulled for the rest
+of the flight (shown in Chromium with `releasePointerCapture`; that iOS Safari loses capture this
+way is plausible but unverified here). The stick and trim buttons now let go when their own
+pointer ends anywhere (window listeners), or the window blurs or the page is hidden; the throttle
+keeps its setting.
+**Changed criterion (operator: please confirm):** "loses under 300 ft/min" is impossible on a 3°
+final at 153 kt (the ticket's own desktop run loses ~1,050 ft/min of AGL). The spec asserts the
+sink is within 200 ft/min of the 3° path's sink at the mean groundspeed (~2.3° to ~3.7°).
