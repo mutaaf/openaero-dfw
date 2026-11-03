@@ -1,7 +1,7 @@
 ---
 id: 0137
 title: On a phone held upright, the caption, gate banner and coach never stack over the horizon together
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: accessibility
@@ -29,12 +29,12 @@ into the coach slot), cap the caption at two lines with the newest call winning,
 horizon line (y from the pitch ladder's zero line) uncovered. Desktop and landscape unchanged.
 
 ## Acceptance criteria
-- [ ] At 390x844, with the caption, the GPWS warning box, the gate banner and the coach all
+- [x] At 390x844, with the caption, the GPWS warning box, the gate banner and the coach all
       shown (inject via `openaeroDebugCaption` and the gate's debug state), no two overlap, and
       none overlaps the horizon (pitch-ladder zero line ± 12 px) or the speed/altitude tapes
-- [ ] At 375x548 (short upright) and 360x640 the same holds
-- [ ] The caption still records every call in `window.__captions` (no lost history)
-- [ ] 844x390 and 1280x720 layouts unchanged (existing specs pass)
+- [x] At 375x548 (short upright) and 360x640 the same holds
+- [x] The caption still records every call in `window.__captions` (no lost history)
+- [x] 844x390 and 1280x720 layouts unchanged (existing specs pass)
 
 ## Test plan
 Extend `tests/e2e/coachSlot.mobile.spec.js` with a "full stack" case measuring bounding boxes

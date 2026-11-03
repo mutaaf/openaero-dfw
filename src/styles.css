@@ -149,6 +149,12 @@ body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
    installed (0086); a phone held sideways puts them in the coach's slot below. */
 #masterAlertBanner { top: calc(5rem + env(safe-area-inset-top)); }
 #stallAlertBanner { top: calc(7rem + env(safe-area-inset-top)); }
+/* Held upright on a phone (0137): left: 50% gave the box half the width, so PULL UP wrapped to two
+   lines and reached the heading box on a short screen (375x548: its top is 129 px). One line, as wide
+   as it needs, tracked a little tighter so the longest (WINDSHEAR — MAX THRUST, PITCH 15°) fits 360. */
+@media (orientation: portrait) and (max-width: 699.98px) {
+  #masterAlertBanner { width: max-content; max-width: calc(100% - 1rem); padding-left: 1rem; padding-right: 1rem; letter-spacing: 0.05em; }
+}
 
 /* Phone held sideways (ticket 0025): the canvas tapes fill most of the height, so the
    controls go to the edges. Throttle on the left edge, a stick on the right sized to

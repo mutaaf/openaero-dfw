@@ -57,6 +57,16 @@ describe('createCaption (0117)', () => {
     expect(cap.text).toBe('unstabilized, go around');
   });
 
+  it('a third queued call drops the oldest: two calls at most, the newest kept (0137)', () => {
+    const { shown, cap } = recorder();
+    cap.say('unstabilized, go around', 0);
+    cap.say('five hundred', 0.2, true);
+    cap.say(plainCaption('sink rate'), 0.4, true);
+    expect(cap.text).toBe('five hundred · sink rate · too fast down');
+    // Every line it showed is still recorded, in order (no lost history).
+    expect(shown).toEqual(['unstabilized, go around', 'unstabilized, go around · five hundred', 'five hundred · sink rate · too fast down']);
+  });
+
   it('ignores empty words', () => {
     const { shown, cap } = recorder();
     cap.say('', 0);

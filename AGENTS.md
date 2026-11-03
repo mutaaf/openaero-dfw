@@ -286,7 +286,8 @@ src/replay.js       landing replay (0019, lazy chunk after boot): main.js record
                     instead of updateCamera; the aircraft is posed from the recording, sim untouched): chase, then the
                     wing, then Side: a spot beside the end of the track (level with it if it ended aloft) for the last 7 s; any key or tap (#replayBar) returns
                     to the card. The HUD and panels hide (body.replaying), the imagery credits stay
-src/debugScreen.js  ?debug only (lazy): openaeroDebug().runwayScreen, the active runway's screen outline, and papiLampsWhite (the 3D PAPI's white lamps)
+src/debugScreen.js  ?debug only (lazy): openaeroDebug().runwayScreen, the active runway's screen outline, and papiLampsWhite (the 3D PAPI's white lamps);
+                    hooks() installs the test hooks openaeroDebugFinal/Hop/DeadStick (0137; openaeroDebugCaption stays in main.js)
 src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembered
 src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
                     windows, back up after a fast cool-down that backs off (pure, tested)
@@ -303,7 +304,9 @@ src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box 
                     an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the coach card's slot (0130:
                     coachOverHud; over the tapes, SPD label or 12% under the horizon on a short upright
                     screen or the iPad held sideways, main.js placeCoach moves #coach under the top bar,
-                    .coach-top, for the rest of the flight; .coach-tight if it would reach the heading box) + the wind box
+                    .coach-top, for the rest of the flight; .coach-tight if it would reach the heading box) + the gate verdict's box
+                    (0137: gateVerdictRect, cy + 76; on a short phone held upright it comes up over the touch deck,
+                    TOUCH_DECK_H, into the slot the coach left) + the wind box
                     (0075): over the altitude tape, its text (source, arrow, speed, XW/HW
                     vs the active runway under 1,500 ft) refreshed once a second; fixed1
                     (the AoA badge's one decimal, never "-0.0", 2026-10-31); altCaptionRect (0132): the altitude tape's "MSL"
@@ -387,7 +390,7 @@ src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gest
                     sink rate / pull up and the sim's calls are picked sound or not, each to a caption
 src/captions.js     callout captions (0117): #calloutCaption shows each spoken call's words for 1.2 s, in
                     the takeoff call's slot under the heading box (it wins it), left of the wind box; a queued
-                    call joins the line; plainCaption gives Kid/Learner plain words (pure, tested)
+                    call joins the line, two calls at most, the newest kept (0137); plainCaption gives Kid/Learner plain words (pure, tested)
 src/controlsSheet.js controls cheat sheet (0049, lazy): "?" or Controls (menu/toolbar) opens #controlsSheet,
                     keyboard / gamepad / touch rows (touch first on a touch screen); pauses the flight while
                     open unless it already was, owns the keyboard (Esc / "?" close, Tab trapped). Its rows are
@@ -454,7 +457,7 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-02 (0060): 200.42 kB (the night/dusk missions' entries and missionSun's wiring). 2026-11-02 (0130): 200.60 kB (the coach card's slot check, placeCoach, +0.18 kB). 2026-11-02 (0131): 200.72 kB (the ?debug PAPI fields; the HUD and 3D lamps share airports.js papiWhite). 2026-11-02 (0132): 200.99 kB (the altitude tape's MSL tab, its layout and ?debug rect, +0.27 kB); 10 B of headroom: the next boot feature trims first. 2026-11-03 (0121): 200.99 kB (the seat load factor and the F-16 limiter's hook, paid for by the limiter's lazy chunk src/fbw.js and the ?debug runwayScreen moving into src/debugScreen.js); a few bytes of headroom. 2026-11-03 (0136): 200.98 kB (every touch control lets go on its pointer's end anywhere and on the window's blur, +70 B, paid for by the ?debug-only papiLampsWhite moving into src/debugScreen.js). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-02 (0060): 200.42 kB (the night/dusk missions' entries and missionSun's wiring). 2026-11-02 (0130): 200.60 kB (the coach card's slot check, placeCoach, +0.18 kB). 2026-11-02 (0131): 200.72 kB (the ?debug PAPI fields; the HUD and 3D lamps share airports.js papiWhite). 2026-11-02 (0132): 200.99 kB (the altitude tape's MSL tab, its layout and ?debug rect, +0.27 kB); 10 B of headroom: the next boot feature trims first. 2026-11-03 (0121): 200.99 kB (the seat load factor and the F-16 limiter's hook, paid for by the limiter's lazy chunk src/fbw.js and the ?debug runwayScreen moving into src/debugScreen.js); a few bytes of headroom. 2026-11-03 (0136): 200.98 kB (every touch control lets go on its pointer's end anywhere and on the window's blur, +70 B, paid for by the ?debug-only papiLampsWhite moving into src/debugScreen.js). 2026-11-03 (0137): 200.96 kB (the gate verdict's box over the touch deck, +80 B, paid for by the ?debug test hooks openaeroDebugFinal/Hop/DeadStick moving into src/debugScreen.js hooks()). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
 `loadDrill` for the drills' lazy chunks, `startDrills`, and the ?debug Google usage line and
 snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A lazy chunk that
 imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's

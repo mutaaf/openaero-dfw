@@ -16,11 +16,12 @@ export function createCaption(show, holdS = CAPTION_HOLD_S) {
   let until = -1;
   return {
     // A call that queues behind the one being said (interrupt false in audio.js) joins it on
-    // the line; one that cuts it off replaces it. The same words again inside the window are
-    // ignored, so a repeated call doesn't keep the line up.
+    // the line, two calls at most: a third drops the oldest, so the line stays two lines on a
+    // phone and the newest call wins (0137). One that cuts it off replaces it. The same words
+    // again inside the window are ignored, so a repeated call doesn't keep the line up.
     say(words, now, queued = false) {
       if (!words || (words === last && now < until)) return;
-      text = queued && now < until ? `${text} · ${words}` : words;
+      text = queued && now < until ? `${last} · ${words}` : words;
       last = words;
       until = now + holdS;
       show(text);

@@ -54,7 +54,7 @@ import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSup
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
   windBoxRect, altCaptionRect, ALT_CAPTION, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
-  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
+  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud, gateVerdictRect,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { radioAltitudeM } from './gear.js';
@@ -2154,7 +2154,7 @@ function renderHud() {
   }
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
-  if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(cx, cy);
+  if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(w, h);
   // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
   if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
 
@@ -2311,13 +2311,15 @@ function drawFlareCue(cx, cy) {
   hudCtx.textAlign = 'left';
 }
 
-function drawGateVerdict(cx, cy) {
+// Where: hudLayout.js gateVerdictRect (over the touch deck on a short phone held upright, 0137).
+const _gateBox = {};
+function drawGateVerdict(w, h) {
   const g = sim.gate;
-  const y = cy + 92;
   const lines = Math.ceil(g.failing.length / 3);
+  const r = gateVerdictRect(w, h, lines, _gateBox), cx = w / 2, y = r.y + 16;
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(cx - 120, y - 16, 240, 24 + lines * 16);
+  hudCtx.fillRect(r.x, r.y, r.w, r.h);
   hudCtx.font = 'bold 13px monospace';
   hudCtx.fillStyle = g.stable ? '#6ee7b7' : '#fcd34d';
   hudCtx.fillText(g.stable ? 'STABILIZED' : 'UNSTABILIZED', cx, y + 1);
@@ -3471,19 +3473,11 @@ function updateDebugOverlay(dt) {
 }
 
 if (debugOverlay) {
-  // ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
-  // fastKts (0127): that much over the final's speed, flaps and all (an overspeed on the final).
-  window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0) => runwayEnd(airport, rwy)
-    && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts });
-  // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce;
-  // with onGroundS, armed: it fires in the physics after that long on the wheels (sim time), so
-  // a slow frame can't move it along the derotation (the nose comes down ~8°/s after touchdown).
-  window.openaeroDebugHop = (mps, onGroundS) => { if (onGroundS == null) sim.vel.y = mps; else debugHop = { mps, s: onGroundS }; };
   // ?debug (tests, 0117): put words on the caption line as audio.js would.
   window.openaeroDebugCaption = sayCaption;
-  // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
-  window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
-  import('./debugScreen.js').then((m) => (debugScreen = m)); // runwayScreen, papiLampsWhite: off the boot budget
+  // runwayScreen, papiLampsWhite and the test hooks (a final anywhere, a scripted hop, the dead-stick
+  // final): off the boot budget. The hop is armed here (debugHop) and fires in the physics.
+  import('./debugScreen.js').then((m) => (debugScreen = m).hooks(sim, (key, f) => runwayEnd(f.airport, f.rwy) && loadScenario(key, f), (h) => (debugHop = h), () => deadLib, ground));
 }
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {

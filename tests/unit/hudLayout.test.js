@@ -287,3 +287,35 @@ describe('altCaptionRect (0132)', () => {
     expect(altCaptionRect(640, 360, out)).toBe(out);
   });
 });
+
+// Ticket 0137: the stabilized gate's verdict (main.js drawGateVerdict) sits cy + 76 … under the
+// boresight. On a short phone held upright that is under the touch deck (its top is TOUCH_DECK_H
+// over the bottom): there it comes up to just over the deck, still under the level horizon (cy).
+import { gateVerdictRect, TOUCH_DECK_H, GATE_VERDICT_BOTTOM } from '../../src/hudLayout.js';
+describe('gateVerdictRect (0137)', () => {
+  const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  for (const lines of [1, 2]) {
+    for (const [w, h] of [[1280, 720], [844, 390], [820, 1180], [1180, 820], [390, 844]]) {
+      it(`${w}x${h}, ${lines} line(s): where it always was`, () => {
+        const r = gateVerdictRect(w, h, lines, {});
+        expect(r).toEqual({ x: w / 2 - 120, y: h / 2 + 76, w: 240, h: 24 + lines * 16 });
+      });
+    }
+    for (const [w, h] of [[390, 664], [375, 548], [360, 640], [375, 667], [390, 844]]) {
+      it(`${w}x${h} upright, ${lines} line(s): over the touch deck, under the horizon, off the tapes`, () => {
+        const cx = w / 2, cy = h / 2;
+        const r = gateVerdictRect(w, h, lines, {});
+        expect(r.y + r.h).toBeLessThanOrEqual(h - TOUCH_DECK_H - 4);
+        expect(r.y + r.h).toBeLessThanOrEqual(cy + GATE_VERDICT_BOTTOM); // the coach's slot rule still holds
+        expect(r.y).toBeGreaterThanOrEqual(cy + 4);
+        expect(r.h).toBe(24 + lines * 16);
+        expect(overlaps(r, { x: cx - 191, y: cy - 90, w: 60, h: 180 }), 'speed tape').toBe(false);
+        expect(overlaps(r, { x: cx + 130, y: cy - 90, w: 64, h: 180 }), 'altitude tape').toBe(false);
+      });
+    }
+  }
+  it('writes into out (no allocation per frame)', () => {
+    const out = {};
+    expect(gateVerdictRect(390, 548, 2, out)).toBe(out);
+  });
+});
