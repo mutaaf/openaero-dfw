@@ -145,6 +145,25 @@ describe('F-16C capability bound (not a performance claim)', () => {
   });
 });
 
+// Ticket 0133 (validator): the USAF fact sheet lists "Mach 2 at altitude". Clean, full
+// afterburner, held level at 40,000 ft, the speed it settles to should be the Mach 2 class
+// (1.8-2.1; open data gives no tighter band). The model has no supersonic wave drag, so it is a
+// KNOWN GAP: `it.fails` until 0133 adds the drag rise; the fixing PR promotes it to `it`.
+describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => {
+  it.fails('KNOWN GAP (0133): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: 5.7, no wave drag)', () => {
+    const alt0 = 40000 / M_TO_FT;
+    const b = makeBody(f16, { kts: 400, altM: alt0, throttle: 1, gearDown: false });
+    fly(b, f16, 240, (x) => {
+      const { pitchDeg, bankRightDeg } = attitude(x);
+      const cmd = Math.max(-5, Math.min(10, (alt0 - x.pos.y) * 0.01 - vsFpm(x) * 0.0005 + 2));
+      x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+    });
+    expect(b.mach).toBeGreaterThanOrEqual(1.8);
+    expect(b.mach).toBeLessThanOrEqual(2.1);
+  });
+});
+
 // Ticket 0118: what a full pull does. USAF fact sheet (the copy above): "With a full load of
 // internal fuel, the F-16 can withstand up to nine G's" (the spec's 12 t is empty + internal
 // fuel, the card above), and the fly-by-wire flight control system holds the airplane to it;
