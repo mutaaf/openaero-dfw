@@ -13,6 +13,12 @@
 // `n` is the engine's spooled power setting in [0, 1]; it follows the throttle with a
 // first-order lag that is slower near idle (jets) or almost instant (pistons).
 
+import { ISA_P0, isaPressure } from './atmosphere.js';
+import { FT_TO_M } from './constants.js';
+
+// Pressure altitude (ft) of a static pressure (ISA troposphere / lower stratosphere).
+const isaAltFt = (p) => (p >= 22632 ? (1 - Math.pow(p / ISA_P0, 0.190263)) * 145442.16 : 36089.24 + Math.log(22632 / p) * 20805.8);
+
 const lerpTable = (table, x) => {
   if (x <= table[0][0]) return table[0][1];
   for (let i = 1; i < table.length; i++) {
@@ -45,6 +51,44 @@ export function engineThrust(spec, n, tasMps, air, mach, qPa) {
   const full = e.staticThrustN * Math.pow(air.sigma, e.densityExp) * Math.max(0, 1 - k1 * mach + k2 * mach * mach);
   const idle = e.idleFraction ?? 0;
   return full * (idle + (1 - idle) * n);
+}
+
+// Max climb thrust (N, all engines), the CLB rating a crew climbs on, for a turbofan with
+// `spec.engine.climb` (0135). Full throttle is the take-off/go-around rating (staticThrustN's
+// lapse); the climb rating is less below the top of climb. M. Bartel & T. M. Young, "Simplified
+// Thrust and Fuel Consumption Models for Modern Two-Shaft Turbofan Engines", J. Aircraft 45(4),
+// 2008, eqs. 15-19: the climb thrust as a ratio of the top-of-climb thrust Fcr (here CFM's max
+// climb at climb.refFt, climb.refMach), by the pressure ratio P/Pcr and CAS/CAScr, in three bands
+// (above 30,000 ft, 10,000-30,000, below 10,000). The fits of their Tables 2-4 (d, n, m) are
+// OpenAP's (J. Sun et al., Aerospace 7(8) 104, 2020; openap/thrust.py, read 2026-11-03); `n` is
+// taken at their moderate climb, 2,500 ft/min (±1,500 moves the thrust up to ±4% FL050-FL200, ~1% near
+// FL300). Defined for climb speeds (above ~150 KCAS): CAS is floored at a tenth of the top of climb's
+// so a caller on the ground never gets Infinity, but the number there means nothing. ISA only: no
+// flat rating or hot-day lapse (the bands and ratios read pressure). Never above full throttle (the
+// take-off rating): above FL350 the fit would run up to ~5% over it by FL410.
+const casRatio = (pressurePa, mach) => Math.sqrt(5 * (Math.pow((pressurePa / ISA_P0) * (Math.pow(1 + 0.2 * mach * mach, 3.5) - 1) + 1, 2 / 7) - 1));
+export function maxClimbThrustN(spec, air, mach) {
+  const c = spec.engine.climb;
+  const roc = 2500;
+  const pcr = isaPressure(c.refFt * FT_TO_M);
+  const vr = Math.max(0.1, casRatio(air.pressurePa, mach) / casRatio(pcr, c.refMach)); // CAS / CAS at the top of climb
+  const pr = air.pressurePa / pcr;
+  const ft = isaAltFt(air.pressurePa);
+  let ratio;
+  if (ft > 30000) {
+    const mr = mach / c.refMach;
+    ratio = (-0.4204 * mr + 1.0824) * Math.log(pr) + Math.pow(mr, -0.11); // eqs. 15, 16
+  } else {
+    const n = 2.667e-5 * roc + 0.8633;
+    const band2 = (p) => Math.pow(vr, -0.1) * Math.pow(p, -0.355 * vr + n); // eqs. 17, 18
+    if (ft > 10000) ratio = band2(pr);
+    else {
+      const p10 = isaPressure(10000 * FT_TO_M) / pcr;
+      const m = -0.12043 * vr - 8.8889e-9 * roc * roc + 2.4444e-5 * roc + 0.47379;
+      ratio = m * pr + band2(p10) - m * p10; // eq. 19
+    }
+  }
+  return Math.min(ratio * c.refThrustN, engineThrust(spec, 1, mach * air.speedOfSoundMps, air, mach, 0));
 }
 
 // Advance the spool state towards the throttle command over dt (s).

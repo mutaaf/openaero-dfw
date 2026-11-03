@@ -21,12 +21,12 @@ describe('Cessna 172S best climb speeds (flightModel, FAA-H-8083-25B ch. 11, POH
 
   // Measured (flightModel.js, 2026-11-02, KIAS: fpm): 56: 477, 64: 596, 72: 684, 74: 698, 80: 712, 85: 708,
   // 90: 689, 100: 597. The rate is flat-topped, so Vy sits well inside 3% of the best rate; the peak itself
-  // is at ~80 KIAS, 6 above the POH's 74 (ticket 0132).
+  // is at ~80 KIAS, 6 above the POH's 74 (ticket 0148).
   it('at the POH Vy, 74 KIAS, the climb rate is within 3% of the best of the sweep', () => {
     expect(roc(74)).toBeGreaterThanOrEqual(0.97 * Math.max(...rates));
   });
 
-  it.fails('KNOWN GAP (0132): the best climb rate is within 3 KIAS of the POH Vy, 74 KIAS (model peaks near 80)', () => {
+  it.fails('KNOWN GAP (0148): the best climb rate is within 3 KIAS of the POH Vy, 74 KIAS (model peaks near 80)', () => {
     expect(Math.abs(best(rates) - 74)).toBeLessThanOrEqual(3);
   });
 

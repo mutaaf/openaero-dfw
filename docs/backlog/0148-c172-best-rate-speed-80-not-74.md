@@ -1,5 +1,5 @@
 ---
-id: 0132
+id: 0148
 title: The C172's best-rate-of-climb speed is ~80 KIAS in the model, the POH's Vy is 74
 status: ready
 priority: P2

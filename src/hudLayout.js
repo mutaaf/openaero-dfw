@@ -14,6 +14,26 @@ export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
 
+// The tapes' inner edges (main.js drawTape) and the altitude readout box, x offset from the
+// tape's inner edge, size. The speed tape's scale runs left of cx + SPEED_TAPE_X.
+export const SPEED_TAPE_X = -131;
+export const ALT_TAPE_X = 130;
+export const ALT_BOX = { dx: 8, w: 56, h: 22 };
+// The altitude tape reads above sea level (0132): "MSL" in a small tab just under its readout box,
+// right of the major ticks (9 px), where drawTape leaves out the scale's numbers. The top bar's
+// AGL is the main wheels' radio altitude (0122). Whole pixels, so the tab's edges stay sharp
+// when cy is a half pixel (an odd height). Writes into `out`.
+export const ALT_CAPTION = 'MSL';
+export const ALT_CAPTION_W = 26;
+export const ALT_CAPTION_H = 13;
+export function altCaptionRect(cx, cy, out) {
+  out.x = Math.round(cx + ALT_TAPE_X + 12);
+  out.y = Math.round(cy + ALT_BOX.h / 2 + 2);
+  out.w = ALT_CAPTION_W;
+  out.h = ALT_CAPTION_H;
+  return out;
+}
+
 // One decimal for a HUD readout that sits near zero (the AoA badge): a tiny negative value
 // would print "-0.0", flicker against "0.0" and shift the line it is in.
 export function fixed1(v) {
@@ -170,6 +190,7 @@ export function windReadout(wx, comps, out = {}) {
 // bar's inset when installed: styles.css adds env(safe-area-inset-top), this is the inset-0 case).
 export const COACH_TOP_SLOT = 58;
 export const GATE_VERDICT_BOTTOM = 132;
+
 export function coachClearBottom(h) {
   const cy = h / 2;
   return Math.max(cy + GATE_VERDICT_BOTTOM, cy + h * 0.12);

@@ -231,6 +231,7 @@ export function createJsbsimFdm(sdk, model = 'c172') {
     body.betaDeg = get('aero/beta-deg');
     body.sigma = get('atmosphere/rho-slugs_ft3') / RHO0_SLUG_FT3;
     body.accelY = ran > 0 ? (body.vel.y - vy0) / ran : 0;
+    body.loadFactor = get('accelerations/Nz'); // the seat's load factor, as flightModel.js's (0121)
     body.engineN = Math.max(0, get('propulsion/engine/power-hp') / 180);
     body.rpm = get('propulsion/engine/engine-rpm');
     if (!body.onGround) body.lastAirVsi = Math.round(body.vel.y * M_TO_FT * 60);
