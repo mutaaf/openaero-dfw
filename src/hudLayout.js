@@ -190,6 +190,7 @@ export function windReadout(wx, comps, out = {}) {
 // bar's inset when installed: styles.css adds env(safe-area-inset-top), this is the inset-0 case).
 export const COACH_TOP_SLOT = 58;
 export const GATE_VERDICT_BOTTOM = 132;
+
 export function coachClearBottom(h) {
   const cy = h / 2;
   return Math.max(cy + GATE_VERDICT_BOTTOM, cy + h * 0.12);

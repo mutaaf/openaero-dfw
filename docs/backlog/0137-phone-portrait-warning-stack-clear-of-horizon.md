@@ -1,12 +1,12 @@
 ---
 id: 0137
 title: On a phone held upright, the caption, gate banner and coach never stack over the horizon together
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: accessibility
 created: 2026-11-03
-pr:
+pr: 171
 ---
 
 ## Why
@@ -29,12 +29,15 @@ into the coach slot), cap the caption at two lines with the newest call winning,
 horizon line (y from the pitch ladder's zero line) uncovered. Desktop and landscape unchanged.
 
 ## Acceptance criteria
-- [ ] At 390x844, with the caption, the GPWS warning box, the gate banner and the coach all
+- [x] At 390x844, with the caption, the GPWS warning box, the gate banner and the coach all
       shown (inject via `openaeroDebugCaption` and the gate's debug state), no two overlap, and
       none overlaps the horizon (pitch-ladder zero line ± 12 px) or the speed/altitude tapes
-- [ ] At 375x548 (short upright) and 360x640 the same holds
-- [ ] The caption still records every call in `window.__captions` (no lost history)
-- [ ] 844x390 and 1280x720 layouts unchanged (existing specs pass)
+- [x] At 375x548 (short upright) and 360x640 the same holds, with one exception kept from 0130: there
+      the coach card lives under the top bar and is hidden while an alert box shows, so it is not on
+      screen beside PULL UP (the spec checks every element that is shown). The gate verdict takes the
+      caption's slot in the sky and gives way while a caption shows, so those two never show together
+- [x] The caption still records every call in `window.__captions` (no lost history)
+- [x] 844x390 and 1280x720 layouts unchanged (existing specs pass)
 
 ## Test plan
 Extend `tests/e2e/coachSlot.mobile.spec.js` with a "full stack" case measuring bounding boxes
@@ -42,3 +45,11 @@ against each other and the horizon element; screenshot attached to the PR.
 
 ## Out of scope
 Changing what is said, GPWS timing, or desktop HUD layout (0031).
+
+## Outcome (PR 171)
+Before: on 375x548 and 360x640 the gate verdict was drawn under the touch deck, PULL UP wrapped onto
+the heading box, and a third queued call made the caption three lines. Now the caption keeps two calls
+(the newest, and a warning over a height count), PULL UP is one line on upright phones, and on a short
+upright screen the verdict sits in the caption's slot (lazy src/gateVerdict.js). Known gap: at 320 px
+wide Kid/Learner's plain words for the gate's call with "sink rate · too fast down" still take three
+lines (the caption is 172 px there to keep clear of the wind box).

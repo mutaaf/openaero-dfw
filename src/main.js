@@ -2154,7 +2154,7 @@ function renderHud() {
   }
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
-  if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(cx, cy);
+  if (sim.gate && sim.simTime < sim.gateShownUntil) gateVerdict?.drawGateVerdict(hudCtx, sim, w, h, caption.text);
   // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
   if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
 
@@ -2162,6 +2162,7 @@ function renderHud() {
 }
 
 const ILS_DASH = [3, 3], NO_DASH = [];
+let gateVerdict = null; // gateVerdict.js (lazy, fetched after boot): draws the stabilized gate's verdict
 
 // Screen position (HUD canvas px) of a world point, or null behind the camera.
 const _hudP = new THREE.Vector3();
@@ -2309,20 +2310,6 @@ function drawFlareCue(cx, cy) {
   hudCtx.fillStyle = idle ? '#fcd34d' : '#6ee7b7';
   hudCtx.fillText(idle ? '▼ IDLE ▼' : '▲ FLARE ▲', cx, cy - 34);
   hudCtx.textAlign = 'left';
-}
-
-function drawGateVerdict(cx, cy) {
-  const g = sim.gate;
-  const y = cy + 92;
-  const lines = Math.ceil(g.failing.length / 3);
-  hudCtx.textAlign = 'center';
-  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(cx - 120, y - 16, 240, 24 + lines * 16);
-  hudCtx.font = 'bold 13px monospace';
-  hudCtx.fillStyle = g.stable ? '#6ee7b7' : '#fcd34d';
-  hudCtx.fillText(g.stable ? 'STABILIZED' : 'UNSTABILIZED', cx, y + 1);
-  // At most 3 items a line (≤ 26 characters, ~205 px), so the box always holds them.
-  for (let i = 0; i < lines; i++) hudCtx.fillText(sim.gateLines[i], cx, y + 18 + i * 16);
 }
 
 // The takeoff callout's word (0035), just under the heading box (hudLayout.js).
@@ -3471,19 +3458,11 @@ function updateDebugOverlay(dt) {
 }
 
 if (debugOverlay) {
-  // ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
-  // fastKts (0127): that much over the final's speed, flaps and all (an overspeed on the final).
-  window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0) => runwayEnd(airport, rwy)
-    && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts });
-  // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce;
-  // with onGroundS, armed: it fires in the physics after that long on the wheels (sim time), so
-  // a slow frame can't move it along the derotation (the nose comes down ~8°/s after touchdown).
-  window.openaeroDebugHop = (mps, onGroundS) => { if (onGroundS == null) sim.vel.y = mps; else debugHop = { mps, s: onGroundS }; };
   // ?debug (tests, 0117): put words on the caption line as audio.js would.
   window.openaeroDebugCaption = sayCaption;
-  // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
-  window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
-  import('./debugScreen.js').then((m) => (debugScreen = m)); // runwayScreen, papiLampsWhite: off the boot budget
+  // runwayScreen, papiLampsWhite and the test hooks (a final anywhere, a scripted hop, the dead-stick
+  // final): off the boot budget. The hop is armed here (debugHop) and fires in the physics.
+  import('./debugScreen.js').then((m) => (debugScreen = m).hooks(sim, (key, f) => runwayEnd(f.airport, f.rwy) && loadScenario(key, f), (h) => (debugHop = h), () => deadLib, ground));
 }
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {
@@ -3690,6 +3669,7 @@ function boot() {
     applySun();       // sky, stars, Moon and the caption
   }).catch((err) => console.warn('Sky unavailable, plain haze instead:', err.message));
   loadResults().catch(() => {}); // retried at the card
+  import('./gateVerdict.js').then((m) => (gateVerdict = m), console.warn); // the gate's HUD verdict (0137)
   import('./ads.js').then((m) => {
     ads = m.createAds({
       level: () => sim.assist,

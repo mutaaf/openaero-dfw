@@ -1,4 +1,4 @@
-// ?debug only (a lazy chunk main.js loads with the overlay): screen geometry for e2e specs.
+// ?debug only (a lazy chunk main.js loads with the overlay): screen geometry and test hooks for e2e specs.
 import { Vector3 } from 'three';
 import { courseVector } from './airports.js';
 
@@ -24,4 +24,19 @@ export function papiLampsWhite(lamps, end, ends) {
   if (!lamps || !end) return null;
   const c = lamps.geometry.attributes.color.array, k = ends.indexOf(end) * 4;
   return [0, 1, 2, 3].filter((i) => c[(k + i) * 3 + 1] > 0.5).length;
+}
+
+// The ?debug test hooks (main.js passes what they reach; scenario(null, final) loads a final when the
+// runway end exists, arm(hop) arms a scripted bounce, dead() is the dead-stick chunk once loaded).
+export function hooks(sim, scenario, arm, dead, ground) {
+  // 0068: a final to any runway end from any distance, e.g. 17R from 10 NM; fastKts (0127): that
+  // much over the final's speed, flaps and all (an overspeed on the final).
+  window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0) => scenario(null,
+    { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts });
+  // 0091: throw the airplane back up off the runway (m/s), a scripted bounce; with onGroundS, armed:
+  // it fires in the physics after that long on the wheels (sim time), so a slow frame can't move it
+  // along the derotation (the nose comes down ~8°/s after touchdown).
+  window.openaeroDebugHop = (mps, onGroundS) => { if (onGroundS == null) sim.vel.y = mps; else arm({ mps, s: onGroundS }); };
+  // 0036: the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
+  window.openaeroDebugDeadStick = (distNm, aglFt) => dead()?.debugFinal(sim, distNm, aglFt, ground);
 }
