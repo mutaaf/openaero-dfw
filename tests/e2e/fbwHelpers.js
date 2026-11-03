@@ -4,7 +4,7 @@ import { stubTiles, collectErrors, enterCockpit } from './helpers.js';
 // Ticket 0121: the F-16's fly-by-wire limits a full pull (NASA TP-1538 App. A, Fig. 63: 9 g, less as
 // α passes 15°, 1 g at ~25°; src/fbw.js), and the HUD's G-LOAD is the seat's load factor (the body
 // up axis), not the world-vertical acceleration. In Pilot, on the default final (~140 kt, slow
-// enough that the AoA limit binds before the g limit), full back stick for 4 s: α stops at ~25°
+// enough that the AoA limit binds before the g limit), full back stick for 12 s as it slows: α stops at ~25°
 // (≤ 26°, a 1° transient: before 0121 it ran through the 28° stall to 90°), and the readout climbs
 // past 1.3 g. Flown by fbwLimit.spec.js (keyboard) and fbwLimit.mobile.spec.js (touch).
 export async function fullPullF16(page, pull, release) {
@@ -33,7 +33,7 @@ export async function fullPullF16(page, pull, release) {
   });
   const t0 = (await snap()).simTime;
   await pull();
-  await expect.poll(async () => (await snap()).simTime - t0, { timeout: 30_000 }).toBeGreaterThan(4);
+  await expect.poll(async () => (await snap()).simTime - t0, { timeout: 30_000 }).toBeGreaterThan(12);
   await release();
   const r = await page.evaluate(() => { window.__pull.on = false; return window.__pull; });
   const s = await snap();

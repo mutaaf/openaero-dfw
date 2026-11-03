@@ -153,12 +153,12 @@ describe('F-16C capability bound (not a performance claim)', () => {
 // 9.5); slow, the wing runs out first and the AoA limit holds α at 25° (well under 9 g). The
 // seat's load factor is loadFactorMeter's (harness.js). The model's indicated speed is EAS:
 // the ticket's 450 KCAS is 434 KEAS at 15,000 ft, ISA (Mach 0.87).
-const fullPull = (kts) => {
-  const b = makeBody(f16, { kts, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
+const fullPull = (kts, seconds = 5, throttle = 1) => {
+  const b = makeBody(f16, { kts, altM: 15000 / M_TO_FT, throttle, gearDown: false });
   const meter = loadFactorMeter();
   meter(b);
   let peakG = 0, maxAoa = 0;
-  fly(b, f16, 5, (x) => {
+  fly(b, f16, seconds, (x) => {
     x.elevInput = -1; // elevator + = nose down: full back stick
     x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
   }, (x) => {
@@ -192,10 +192,18 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
 
   // Slow, the same pull stops at the AoA limit: α ≤ 25° (a 1° transient allowed), and the load
   // factor stays well under 9 g (~1.7 g: at 150 kt the dynamic pressure allows no more).
-  it('a full pull at 150 kt, 15,000 ft is AoA-limited: α ≤ 26° and under 9 g', () => {
-    const { peakG, maxAoa } = fullPull(150);
+  // Held 25 s, as the jet slows (the first 5 s alone missed a climb to α ~38° on the final: the
+  // limiter's path rate read gravity on the body axis, cos θ, not across the path, cos γ).
+  it('a full pull at 150 kt, 15,000 ft is AoA-limited: α ≤ 26° and under 9 g, held 25 s', () => {
+    const { peakG, maxAoa } = fullPull(150, 25);
     expect(maxAoa).toBeLessThanOrEqual(26);
     expect(peakG).toBeLessThan(9);
+  });
+
+  // Slow and with little power the limit is Fig. 63's 1-g end (~25°) with a transient: α ≤ 27°,
+  // below the model's 28° stall, held 25 s at throttle 0.3 (before: 28.7°; at idle 32.8°).
+  it('a full pull at 150 kt, 15,000 ft, throttle 0.3, held 25 s stays under the stall: α ≤ 27°', () => {
+    expect(fullPull(150, 25, 0.3).maxAoa).toBeLessThanOrEqual(27);
   });
 
   // Held, fast enough that the wing is not what stops it (500 KEAS, 15,000 ft: 9 g at α ~13°, under

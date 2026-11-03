@@ -5,7 +5,8 @@ import { Vector3 } from 'three';
 import { GRAVITY, RAD_TO_DEG } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 
-const _up = new Vector3();
+const _x = new Vector3();
+const _v = new Vector3();
 
 // The F-16's g and AoA limiter (ticket 0121), NASA TP-1538 App. A and Fig. 63: the flight control
 // system's commandable normal acceleration is 1 g + 8 g, cut by 0.322 g per degree of α from 15° to
@@ -25,8 +26,9 @@ export function fbwLoadLimit(aoaDeg) {
 // the nose where it is (0090). α and n are led by the pitch loop's lag (`lagS`) at today's α rate
 // (body pitch rate `qBody` less the flight path's), so a fast pull stops at the limit, not through
 // it; that lead and FBW_ALPHA_GAIN are the game's too (TP-1538's gains are not modelled).
-// `nNow` is the seat's load factor from the aero forces, `upY` the body up axis' world-vertical
-// part (cos θ·cos φ; cos γ·cos φ exactly, ~0.01 rad/s apart at α 25°), `qDyn` the dynamic pressure (Pa).
+// `nNow` is the seat's load factor from the aero forces, `upY` the lift direction's world-vertical
+// part (cos γ·cos φ: gravity across the flight path; the body up axis' cos θ·cos φ overstated the
+// path's rate nose-high and let a held slow pull climb to α ~38°), `qDyn` the dynamic pressure (Pa).
 const FBW_ALPHA_GAIN = 1;
 export function fbwPitchRateCap(spec, pull, aoaRad, nNow, upY, tasMps, qDyn, qBody, lagS) {
   const nPerRad = (spec.clAlpha * qDyn * spec.wingAreaM2) / (spec.massKg * GRAVITY);
@@ -47,7 +49,15 @@ export function fbwPitchRateCap(spec, pull, aoaRad, nNow, upY, tasMps, qDyn, qBo
 export function fbwPitch(body, spec, qCmd, aoaRad, liftN, tasMps, qDyn) {
   if (body.onGround || tasMps <= 20) return qCmd;
   return Math.min(qCmd, Math.max(-(spec.pitchAuthority ?? 1.8) / spec.pitchDamping, fbwPitchRateCap(spec, -body.elevInput, aoaRad, liftN / (spec.massKg * GRAVITY),
-    _up.set(0, 1, 0).applyQuaternion(body.quat).y, tasMps, qDyn, body.angVel.x, 120 / (spec.pitchDamping * tasMps))));
+    liftUpY(body), tasMps, qDyn, body.angVel.x, 120 / (spec.pitchDamping * tasMps))));
+}
+
+// The world-vertical part of the lift direction (body x axis × the air-relative velocity, as
+// flightModel.js builds lift): cos γ·cos φ.
+function liftUpY(body) {
+  _x.set(1, 0, 0).applyQuaternion(body.quat);
+  _v.copy(body.vel).sub(body.windVec).normalize();
+  return _x.cross(_v).normalize().y;
 }
 
 // Give every fly-by-wire airframe in `db` (aircraft.js AIRCRAFT_DATABASE) its limiter.
