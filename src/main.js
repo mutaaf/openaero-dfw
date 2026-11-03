@@ -1241,7 +1241,7 @@ const tutor = createTutor();
 // The tutor's phases and words (apTutor.js) are a lazy chunk, fetched right after boot; until
 // it arrives (or if it can't) the tutor is quiet.
 let tutorLib = null;
-import('./fbw.js').catch(() => {}); // the F-16's g/AoA limiter (0121): it installs itself
+import('./fbw.js').catch(console.warn); // the F-16's g/AoA limiter (0121): it installs itself; a failed load warns
 import('./apTutor.js').then((m) => { tutorLib = m; }).catch((e) => console.warn('[openaero] no autopilot tutor:', e));
 let tutorEnabled = true;
 let coachHandover = false; // the player took over from the autopilot on a final
