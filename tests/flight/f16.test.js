@@ -20,9 +20,8 @@
 //    class engine the spec models, so its lapse is not this engine's. (For the record, at
 //    max thrust the model has little of the table's ram rise with Mach: Tmax at sea level is
 //    28,886 lbf at M 1.0 vs 21,420 at M 0.2 there, 1.35 ×; 1.05 × in the model.)
-//  - the flight-control system (g and AoA limiters): out of scope for 0053; the 25° AoA
-//    limit below sets the AoA at which the 1-g speed card is computed, and 0118's full-pull
-//    cards measure that the model has neither limiter yet (0121).
+//  - the flight-control system: TP-1538 App. A's g and AoA limiter (Fig. 63) is modelled (0121) and
+//    carded with 0118's full pulls below; its gains and filters are not (only the limit's shape).
 //  - induced drag: aspectRatio 3.2 is the bare 31 ft wing (9.449² / 27.87); the span card
 //    checks the USAF span, which (we infer) includes the wingtip missile rails.
 //
@@ -184,20 +183,77 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
     expect(fullPull(434).peakG).toBeGreaterThanOrEqual(7.5);
   });
 
-  // The model has no g limiter: full back stick is full stabilator whatever the speed, so the
-  // pull overshoots to ~13 g by 1 s and α then runs through the stall until it pegs at 90° (the
-  // nose goes over the top). Part of the overshoot is the wing (0066: CL above TP-1538's at 25°,
-  // no Mach term); the fix is a load-factor and AoA command law on spec.pitchFbw (0121).
-  it.fails('KNOWN GAP (0121): the same pull stays at or under 9.5 g (the 9 g limit and a transient; model: ~13 g)', () => {
+  // The g and AoA limiter (0121, NASA TP-1538 App. A and Fig. 63: full back stick commands 9 g,
+  // less as α passes 15°, 1 g at ~25°; flightModel.js fbwLoadLimit). Before it, full stabilator
+  // pulled ~13 g by 1 s and α pegged at 90°.
+  it('the same pull stays at or under 9.5 g (the 9 g limit and a transient)', () => {
     expect(fullPull(434).peakG).toBeLessThanOrEqual(9.5);
   });
 
-  // Slow, the same pull should stop at the AoA limit: α ≤ 25° (a 1° transient allowed), and the
-  // load factor stays well under 9 g. The model does stay under 9 g (~1.7 g; at 150 kt the dynamic
-  // pressure allows no more), but α runs past the 28° stall and pegs at 90° (0121).
-  it.fails('KNOWN GAP (0121): a full pull at 150 kt, 15,000 ft is AoA-limited: α ≤ 26° and under 9 g (model: α 90°)', () => {
+  // Slow, the same pull stops at the AoA limit: α ≤ 25° (a 1° transient allowed), and the load
+  // factor stays well under 9 g (~1.7 g: at 150 kt the dynamic pressure allows no more).
+  it('a full pull at 150 kt, 15,000 ft is AoA-limited: α ≤ 26° and under 9 g', () => {
     const { peakG, maxAoa } = fullPull(150);
     expect(maxAoa).toBeLessThanOrEqual(26);
     expect(peakG).toBeLessThan(9);
+  });
+
+  // Held, fast enough that the wing is not what stops it (500 KEAS, 15,000 ft: 9 g at α ~13°, under
+  // Fig. 63's 15° knee), full back stick settles near the 9 g command (8-9.5 g from 2 to 4 s), not
+  // only peaks there.
+  it('a held full pull at 500 KEAS, 15,000 ft settles at 8-9.5 g', () => {
+    const b = makeBody(f16, { kts: 500, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
+    const meter = loadFactorMeter();
+    meter(b);
+    let lo = Infinity, hi = 0;
+    fly(b, f16, 4, (x) => {
+      x.elevInput = -1;
+      x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+    }, (x) => {
+      const n = meter(x);
+      if (x.t >= 2) { lo = Math.min(lo, n); hi = Math.max(hi, n); }
+      return false;
+    });
+    expect(lo).toBeGreaterThanOrEqual(8);
+    expect(hi).toBeLessThanOrEqual(9.5);
+  });
+
+  // The stick commands load factor (TP-1538 App. A), so half back stick is a moderate pull, not
+  // the limit: 1 g + 8 g × the pull past a 5% breakout (≈ 4.8 g at half stick), here 4-5.5 g.
+  it('half back stick at 500 KEAS, 15,000 ft is a moderate pull: 4-5.5 g held, well under the limit', () => {
+    const b = makeBody(f16, { kts: 500, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
+    const meter = loadFactorMeter();
+    meter(b);
+    let sum = 0, n = 0;
+    fly(b, f16, 4, (x) => {
+      x.elevInput = -0.5;
+      x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+    }, (x) => {
+      const g = meter(x);
+      if (x.t >= 2) { sum += g; n++; }
+      return false;
+    });
+    expect(sum / n).toBeGreaterThanOrEqual(4);
+    expect(sum / n).toBeLessThanOrEqual(5.5);
+  });
+
+  // Let go from a 5 g pull: the fly-by-wire trims itself (0090: a released stick holds the nose
+  // where it is), so the pull unloads and the seat returns towards 1 g within 6 s (≤ 1.3 g).
+  it('a stick released from a 5 g pull at 450 KEAS returns towards 1 g (≤ 1.3 g within 6 s)', () => {
+    const b = makeBody(f16, { kts: 450, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
+    const meter = loadFactorMeter();
+    meter(b);
+    let released = null, last = 0;
+    fly(b, f16, 10, (x) => {
+      x.elevInput = released === null ? -0.6 : 0;
+      x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+    }, (x) => {
+      last = meter(x);
+      if (released === null && last >= 5) released = x.t;
+      return released !== null && x.t >= released + 6;
+    });
+    expect(released).not.toBeNull();
+    expect(last).toBeLessThanOrEqual(1.3);
+    expect(last).toBeGreaterThan(0.7);
   });
 });

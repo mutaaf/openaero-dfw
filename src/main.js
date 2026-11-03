@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import './styles.css';
 import {
-  M_TO_FT, FT_TO_M, NM_TO_M, KTS_TO_MPS, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
+  M_TO_FT, FT_TO_M, NM_TO_M, KTS_TO_MPS, DEG_TO_RAD, RAD_TO_DEG, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 import { prismGeometry } from './prism.js';
@@ -78,7 +78,7 @@ const sim = {
 
   // Flight Parameters
   iasKts: 140, tasKts: 144, gsKts: 122, mach: 0.22,
-  vsiFpm: -700, aglFt: 1270, raFt: 1258, mslFt: 1876, gLoad: 1.0,
+  vsiFpm: -700, aglFt: 1270, raFt: 1258, mslFt: 1876, loadFactor: 1,
   aoaDeg: 2.4, betaDeg: 0,
 
   // Controls
@@ -1241,6 +1241,7 @@ const tutor = createTutor();
 // The tutor's phases and words (apTutor.js) are a lazy chunk, fetched right after boot; until
 // it arrives (or if it can't) the tutor is quiet.
 let tutorLib = null;
+import('./fbw.js').catch(() => {}); // the F-16's g/AoA limiter (0121): it installs itself
 import('./apTutor.js').then((m) => { tutorLib = m; }).catch((e) => console.warn('[openaero] no autopilot tutor:', e));
 let tutorEnabled = true;
 let coachHandover = false; // the player took over from the autopilot on a final
@@ -1788,7 +1789,6 @@ function integrateSubStep(dt) {
   sim.raFt = Math.round(radioAltitudeM(sim, spec) * M_TO_FT);
   sim.mslFt = Math.round(yToFtMsl(sim.pos.y));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
-  sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
 
   // Warning alerts
   // Keyed to where the flaps are, like the tape's band (0128): moving the lever doesn't move the wing.
@@ -2757,7 +2757,7 @@ function syncUI() {
   byId('txtAltMsl').textContent = `${sim.mslFt} FT`;
   byId('txtAltAgl').textContent = `${sim.raFt} FT`; // RADAR AGL: the wheels' radio altitude (0122)
   byId('txtVsi').textContent = `${sim.vsiFpm} FPM`;
-  byId('txtGLoad').textContent = `${sim.gLoad.toFixed(2)}G`;
+  byId('txtGLoad').textContent = `${sim.loadFactor.toFixed(2)}G`; // the seat's, body up axis (0121)
   byId('txtAoaBadge').textContent = `${fixed1(sim.aoaDeg)}°`;
 
   _euler.setFromQuaternion(sim.quat, 'YXZ');
@@ -3451,6 +3451,7 @@ if (debugOverlay) {
   document.body.appendChild(debugOverlay);
 }
 let debugTimer = 0;
+let debugScreen; // ?debug only: debugScreen.js
 let creditsTimer = 0;
 function updateDebugOverlay(dt) {
   if (photorealOn && (creditsTimer -= dt) <= 0) {
@@ -3476,18 +3477,8 @@ if (debugOverlay) {
   window.openaeroDebugCaption = sayCaption;
   // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
   window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
+  import('./debugScreen.js').then((m) => (debugScreen = m)); // runwayScreen, off the boot budget
 }
-// The active runway on screen (CSS px): its approach lights' outer end to the far end, as wide
-// as the runway. Read by tests/e2e/runwayVisibility.spec.js.
-function runwayScreen(e) {
-  const d = courseVector(e.hdgT), l = { x: d.z, z: -d.x }, w = e.widthM / 2, rect = simCanvas.getBoundingClientRect();
-  return [-2400 * 0.3048, e.lengthM - e.displacedM].flatMap((s) => [-w, w].map((o) => {
-    const x = e.thrX + d.x * s + l.x * o, z = e.thrZ + d.z * s + l.z * o;
-    const p = _v3.set(x, ground.heightAt(x, z), z).project(camera);
-    return { x: (p.x + 1) / 2 * rect.width, y: (1 - p.y) / 2 * rect.height, z: p.z };
-  }));
-}
-
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {
   _euler.setFromQuaternion(sim.quat, 'YXZ');
@@ -3512,7 +3503,7 @@ window.openaeroDebug = () => {
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
     hudAltCaption: { text: ALT_CAPTION, ..._altCap }, // the altitude tape's MSL tab (0132), canvas px
-    runwayScreen: sim.activeEnd ? runwayScreen(sim.activeEnd) : null,
+    runwayScreen: debugScreen?.runwayScreen(sim.activeEnd, camera, simCanvas, ground) ?? null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,
