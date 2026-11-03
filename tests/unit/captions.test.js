@@ -57,14 +57,37 @@ describe('createCaption (0117)', () => {
     expect(cap.text).toBe('unstabilized, go around');
   });
 
-  it('a third queued call drops the oldest: two calls at most, the newest kept (0137)', () => {
+  it('a third queued call drops one: two calls at most, the newest kept (0137)', () => {
     const { shown, cap } = recorder();
+    cap.say('four hundred', 0);
+    cap.say('sink rate', 0.2, true);
+    cap.say('three hundred', 0.4, true);
+    expect(cap.text).toBe('sink rate · three hundred'); // the warning outlasts the height
+    cap.say('two hundred', 0.6, true);
+    expect(cap.text).toBe('sink rate · two hundred');
+    cap.say('pull up', 0.8, true);
+    expect(cap.text).toBe('sink rate · pull up');
+    expect(shown).toEqual(['four hundred', 'four hundred · sink rate', 'sink rate · three hundred', 'sink rate · two hundred', 'sink rate · pull up']);
+  });
+
+  it('a burst at the gate keeps the go-around call on the line, whatever the order (0137)', () => {
+    for (const order of [['unstabilized, go around', 'five hundred'], ['five hundred', 'unstabilized, go around']]) {
+      const { cap } = recorder();
+      cap.say(order[0], 0);
+      cap.say(order[1], 0.01, true);
+      cap.say(plainCaption('sink rate'), 0.5, true);
+      expect(cap.text).toBe('unstabilized, go around · sink rate · too fast down');
+    }
+    const { cap } = recorder();
     cap.say('unstabilized, go around', 0);
-    cap.say('five hundred', 0.2, true);
-    cap.say(plainCaption('sink rate'), 0.4, true);
-    expect(cap.text).toBe('five hundred · sink rate · too fast down');
-    // Every line it showed is still recorded, in order (no lost history).
-    expect(shown).toEqual(['unstabilized, go around', 'unstabilized, go around · five hundred', 'five hundred · sink rate · too fast down']);
+    cap.say('sink rate', 0.1, true);
+    cap.say('four hundred', 0.6, true);
+    expect(cap.text).toBe('sink rate · four hundred'); // two warnings: the later one stays
+    cap.update(2); // the line clears, and with it what it kept
+    cap.say('three hundred', 3);
+    cap.say('two hundred', 3.1, true);
+    cap.say('one hundred', 3.2, true);
+    expect(cap.text).toBe('two hundred · one hundred');
   });
 
   it('ignores empty words', () => {

@@ -54,7 +54,7 @@ import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSup
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
   windBoxRect, altCaptionRect, ALT_CAPTION, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
-  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud, gateVerdictRect,
+  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { radioAltitudeM } from './gear.js';
@@ -2154,7 +2154,7 @@ function renderHud() {
   }
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
-  if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(w, h);
+  if (sim.gate && sim.simTime < sim.gateShownUntil) gateVerdict?.drawGateVerdict(hudCtx, sim, w, h, caption.text);
   // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
   if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
 
@@ -2162,6 +2162,7 @@ function renderHud() {
 }
 
 const ILS_DASH = [3, 3], NO_DASH = [];
+let gateVerdict = null; // gateVerdict.js (lazy, fetched after boot): draws the stabilized gate's verdict
 
 // Screen position (HUD canvas px) of a world point, or null behind the camera.
 const _hudP = new THREE.Vector3();
@@ -2309,22 +2310,6 @@ function drawFlareCue(cx, cy) {
   hudCtx.fillStyle = idle ? '#fcd34d' : '#6ee7b7';
   hudCtx.fillText(idle ? '▼ IDLE ▼' : '▲ FLARE ▲', cx, cy - 34);
   hudCtx.textAlign = 'left';
-}
-
-// Where: hudLayout.js gateVerdictRect (over the touch deck on a short phone held upright, 0137).
-const _gateBox = {};
-function drawGateVerdict(w, h) {
-  const g = sim.gate;
-  const lines = Math.ceil(g.failing.length / 3);
-  const r = gateVerdictRect(w, h, lines, _gateBox), cx = w / 2, y = r.y + 16;
-  hudCtx.textAlign = 'center';
-  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(r.x, r.y, r.w, r.h);
-  hudCtx.font = 'bold 13px monospace';
-  hudCtx.fillStyle = g.stable ? '#6ee7b7' : '#fcd34d';
-  hudCtx.fillText(g.stable ? 'STABILIZED' : 'UNSTABILIZED', cx, y + 1);
-  // At most 3 items a line (≤ 26 characters, ~205 px), so the box always holds them.
-  for (let i = 0; i < lines; i++) hudCtx.fillText(sim.gateLines[i], cx, y + 18 + i * 16);
 }
 
 // The takeoff callout's word (0035), just under the heading box (hudLayout.js).
@@ -3684,6 +3669,7 @@ function boot() {
     applySun();       // sky, stars, Moon and the caption
   }).catch((err) => console.warn('Sky unavailable, plain haze instead:', err.message));
   loadResults().catch(() => {}); // retried at the card
+  import('./gateVerdict.js').then((m) => (gateVerdict = m), console.warn); // the gate's HUD verdict (0137)
   import('./ads.js').then((m) => {
     ads = m.createAds({
       level: () => sim.assist,

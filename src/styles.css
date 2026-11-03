@@ -155,6 +155,7 @@ body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
 @media (orientation: portrait) and (max-width: 699.98px) {
   #masterAlertBanner { width: max-content; max-width: calc(100% - 1rem); padding-left: 1rem; padding-right: 1rem; letter-spacing: 0.05em; }
 }
+@media (orientation: portrait) and (max-width: 359.98px) { #masterAlertBanner { font-size: 0.75rem; letter-spacing: 0; } }
 
 /* Phone held sideways (ticket 0025): the canvas tapes fill most of the height, so the
    controls go to the edges. Throttle on the left edge, a stick on the right sized to

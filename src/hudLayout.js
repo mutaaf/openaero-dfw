@@ -191,21 +191,6 @@ export function windReadout(wx, comps, out = {}) {
 export const COACH_TOP_SLOT = 58;
 export const GATE_VERDICT_BOTTOM = 132;
 
-// The stabilized gate's verdict (0020, main.js drawGateVerdict): a 240 px box, 24 px + 16 a line
-// of failing items, from cy + 76 (under the boresight, between the tapes). On a short phone held
-// upright that is under the touch deck (its controls start TOUCH_DECK_H over the bottom; Safari and
-// an iPhone SE have no home-indicator inset there): there it comes up to sit just over the deck,
-// the slot the coach left for the top bar (0130), still under the horizon on a final (0137).
-// Writes into `out`.
-export const TOUCH_DECK_H = 207;
-export function gateVerdictRect(w, h, lines, out) {
-  out.h = 24 + lines * 16;
-  out.x = w / 2 - 120;
-  out.y = h / 2 + 76;
-  if (h > w) out.y = Math.min(out.y, h - TOUCH_DECK_H - 4 - out.h);
-  out.w = 240;
-  return out;
-}
 export function coachClearBottom(h) {
   const cy = h / 2;
   return Math.max(cy + GATE_VERDICT_BOTTOM, cy + h * 0.12);

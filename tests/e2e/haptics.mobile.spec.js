@@ -38,6 +38,8 @@ test('phone: nothing behind the start screen; the pull-up pulses once; Vibrate i
   await stubTiles(page);
   await page.goto(`${BASE}?debug&mission=kdfw_35c_flare`);
   await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  // The ?debug hooks install from a lazy chunk (debugScreen.js, 0137): this spec is their earliest caller.
+  await page.waitForFunction(() => window.openaeroDebugHop && window.openaeroDebugFinal);
   // Behind the start screen the boot flight runs, but nothing buzzes there.
   expect(await dive(page)).toBe(true);
   expect(await page.evaluate(() => window.__vibes)).toEqual([]);
