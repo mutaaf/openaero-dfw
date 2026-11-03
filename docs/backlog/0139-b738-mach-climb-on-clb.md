@@ -23,7 +23,8 @@ Find the cause before changing anything. Candidates: Bartel & Young's band 2 mee
 ~3% step at FL300 (their fits, not a cited CFM figure); the model's L/D at Mach 0.78, FL350 is ~16,
 where public 737-800 cruise L/D estimates run higher; the CFM figure is "moteur avionné" (installed)
 but the airframe's bleed and offtakes are not modelled; maxClimbThrustN fixes Bartel & Young's `n`
-at a 2,500 ft/min climb while this climb is ~1,185 (about 1-2% of thrust, small but rule it out);
+at a 2,500 ft/min climb while this climb is ~1,185 (about 1-2% of thrust here; `roc` 4,000 would
+flip the card, so it must not be the knob that closes the gap: the card is only 1.3% outside the band);
 the fact sheet gives the 26.5 kN for every -7B rating, so the anchor is not variant-specific. Find a cited climb thrust at FL250-FL300 or a
 cited 737-800 cruise drag, and fit to it; do not tune to make the card pass.
 

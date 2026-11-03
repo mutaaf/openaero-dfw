@@ -61,8 +61,11 @@ export function engineThrust(spec, n, tasMps, air, mach, qPa) {
 // climb at climb.refFt, climb.refMach), by the pressure ratio P/Pcr and CAS/CAScr, in three bands
 // (above 30,000 ft, 10,000-30,000, below 10,000). The fits of their Tables 2-4 (d, n, m) are
 // OpenAP's (J. Sun et al., Aerospace 7(8) 104, 2020; openap/thrust.py, read 2026-11-03); `n` is
-// taken at their moderate climb, 2,500 ft/min (±1,500 moves the thrust ±2%). Needs Mach > 0: CAS
-// is floored at a tenth of the top of climb's so a caller on the ground never gets Infinity.
+// taken at their moderate climb, 2,500 ft/min (±1,500 moves the thrust up to ±4% FL050-FL200, ~1% near
+// FL300). Defined for climb speeds (above ~150 KCAS): CAS is floored at a tenth of the top of climb's
+// so a caller on the ground never gets Infinity, but the number there means nothing. ISA only: no
+// flat rating or hot-day lapse (the bands and ratios read pressure). Never above full throttle (the
+// take-off rating): above FL350 the fit would run up to ~5% over it by FL410.
 const casRatio = (pressurePa, mach) => Math.sqrt(5 * (Math.pow((pressurePa / ISA_P0) * (Math.pow(1 + 0.2 * mach * mach, 3.5) - 1) + 1, 2 / 7) - 1));
 export function maxClimbThrustN(spec, air, mach) {
   const c = spec.engine.climb;
@@ -85,7 +88,7 @@ export function maxClimbThrustN(spec, air, mach) {
       ratio = m * pr + band2(p10) - m * p10; // eq. 19
     }
   }
-  return ratio * c.refThrustN;
+  return Math.min(ratio * c.refThrustN, engineThrust(spec, 1, mach * air.speedOfSoundMps, air, mach, 0));
 }
 
 // Advance the spool state towards the throttle command over dt (s).

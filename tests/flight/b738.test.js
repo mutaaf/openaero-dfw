@@ -614,7 +614,7 @@ describe('Boeing 737-800 climb (EUROCONTROL APD; 0134)', () => {
   // climb thrust (0116) and within ~5% of CLB, but FL240-FL300 it is up to 12% above it, so this
   // pass leans on the take-off rating below FL300; it moves to CLB in 0139.
   const machClimb = (clb) => climb(22000, (ft) => Math.min(cas290(ft), 0.78), [24000, 35000], clb);
-  it('on 290 KCAS then Mach 0.78, full thrust, it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
+  it('on 290 KCAS then Mach 0.78, full thrust (a regression guard: APD\'s rate is on CLB, see 0139), it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
     const { fpm, at } = machClimb(false);
     within(fpm[0], 1500, 0.2);
     for (const p of at) expect(Math.abs(p.ktsErr)).toBeLessThanOrEqual(3);

@@ -82,7 +82,8 @@ describe('737 max climb thrust (0135)', () => {
   };
   const perEngine = (ft, mach) => maxClimbThrustN(b738, airAt(ft / 3.28084), mach) / 2;
   it('is CFM\'s 26.5 kN max climb per engine at FL350, Mach 0.8 (the anchor)', () => {
-    expect(perEngine(35000, 0.8)).toBeCloseTo(26500, -1);
+    // ±0.5%: capped at full throttle, which is the same CFM figure fitted to ~0.04% (0116).
+    expect(Math.abs(perEngine(35000, 0.8) / 26500 - 1)).toBeLessThanOrEqual(0.005);
   });
   it('matches the paper\'s equations at 290 KCAS: 38.1 kN at FL200 (eq. 17), 53.3 kN at 5,000 ft (eq. 19)', () => {
     expect(perEngine(20000, machAt290(20000)) / 1000).toBeCloseTo(38.08, 1);
@@ -90,8 +91,8 @@ describe('737 max climb thrust (0135)', () => {
   });
   it('is continuous at 10,000 ft and is never more than full throttle (the take-off rating) on the climb schedule', () => {
     expect(perEngine(10001, machAt290(10001)) / perEngine(9999, machAt290(9999))).toBeCloseTo(1, 2);
-    for (let ft = 0; ft <= 30000; ft += 2500) {
-      const a = airAt(ft / 3.28084), m = machAt290(ft);
+    for (let ft = 0; ft <= 41000; ft += 2500) {
+      const a = airAt(ft / 3.28084), m = Math.min(0.78, machAt290(ft));
       expect(maxClimbThrustN(b738, a, m)).toBeLessThanOrEqual(engineThrust(b738, 1, m * a.speedOfSoundMps, a, m, 0));
     }
     // FL100-FL150, where the APD climb card sits: full throttle is 20-30% above CLB.
@@ -102,7 +103,8 @@ describe('737 max climb thrust (0135)', () => {
   });
   // Full throttle is the take-off rating: Bartel & Young eq. 11 (OpenAP's G0 fit of their Fig. 5, eqs.
   // 12-14), CFM56-7B26 117 kN static, bypass ratio 5.1 (CFM fact sheet), at FL125 on the 290 kt
-  // schedule (Mach 0.548): 56.3 kN per engine; the model's full throttle there is 57.5 (+2%).
+  // schedule (Mach 0.548): 56.0 kN per engine; the model's full throttle there is 57.5 (+2.7%). A single
+  // point, and eq. 11 is a take-off (low-Mach) fit: along the schedule the model is +4-8% FL050-FL200.
   it('full throttle at FL125, 290 KCAS is Bartel & Young\'s take-off lapse for a CFM56-7B26 (±3%)', () => {
     const a = airAt(12500 / 3.28084), M = machAt290(12500), bpr = 5.1;
     const dP = a.pressurePa / 101325, g0 = 0.0606 * bpr + 0.6337;
