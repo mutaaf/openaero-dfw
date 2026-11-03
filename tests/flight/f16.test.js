@@ -13,9 +13,9 @@
 // What the open data does not cover, so there is no card for it (gaps, not guesses):
 //  - climb rate, turn rate, roll rate, takeoff and landing distances, approach speeds: all in
 //    the restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited.
-//  - top speed: USAF gives "Mach 2 at altitude", but the model has no transonic wave drag, so
-//    its supersonic acceleration is not a performance claim (the zoom card is a capability
-//    bound only).
+//  - top speed: USAF gives "Mach 2 at altitude". The model has supersonic wave drag (0133), but
+//    its afterburner thrust keeps growing with Mach, so the Mach 2 card below is a KNOWN GAP
+//    (0143) and the zoom card is a capability bound only.
 //  - thrust lapse: TP-1538 Table VI tabulates the 1979 F100-PW-100, not the F110/F100-229
 //    class engine the spec models, so its lapse is not this engine's. (For the record, at
 //    max thrust the model has little of the table's ram rise with Mach: Tmax at sea level is
@@ -117,8 +117,8 @@ describe('F-16C capability bound (not a performance claim)', () => {
   // USAF: "Mach 2 at altitude", ceiling "above 50,000 feet". The thresholds are ticket
   // 0053's, well inside those: a clean, full-afterburner run at 30,000 ft must pass Mach 1.2
   // and zoom past 40,000 ft with the numbers finite, below the model's own stall AoA and
-  // above its own stall speed. The model has no wave drag, so how fast it gets there says
-  // nothing.
+  // above its own stall speed. How fast it gets there says nothing (the engine's supersonic
+  // thrust is the 0143 gap).
   it('accelerates past Mach 1.2 at 30,000 ft and zooms past 40,000 ft without NaN or stall', () => {
     const alt0 = 30000 / M_TO_FT;
     const b = makeBody(f16, { kts: 325, altM: alt0, throttle: 1, gearDown: false });
@@ -142,6 +142,71 @@ describe('F-16C capability bound (not a performance claim)', () => {
     expect(b.pos.y * M_TO_FT).toBeGreaterThanOrEqual(40000);
     expect(maxAoa).toBeLessThan(stallAoaDeg(f16, 0));
     expect(minIas).toBeGreaterThan(stallSpeedKts(f16, 0));
+  });
+});
+
+// Ticket 0133: the USAF fact sheet lists "Mach 2 at altitude". Clean, full afterburner, held
+// level at 40,000 ft from 250 KEAS (Mach 0.88, so it must push through the drag peak near Mach
+// 1.1), the speed it settles to should be the Mach 2 class (1.8-2.1; open data gives no tighter
+// band), and settle means settle: under 0.02 Mach gained over the last 30 s of 300. 0133 gave the
+// jet its wave drag (supersonic.js, Raymer's Sears-Haack correlation): with none it ran away
+// (Mach 5.7 at 240 s from 400 KEAS); now it is ~2.27 at 300 s, still gaining ~0.003 Mach/s, and
+// settles only near Mach 3.2 after ~30 min. Still a KNOWN GAP, now for the engine: its afterburner
+// thrust grows with M² (engine.js, machLapse 0.3/0.3, uncited past Mach 1, see the header), so
+// thrust over q·S is ~0.046 at Mach 2 against a total CD of ~0.037. A real F110 or F100 runs out of thrust there (compressor inlet temperature, inlet
+// recovery): ticket 0143, whose PR promotes this card to `it`.
+const levelAt40k = (seconds, onStep) => {
+  const alt0 = 40000 / M_TO_FT;
+  const b = makeBody(f16, { kts: 250, altM: alt0, throttle: 1, gearDown: false });
+  fly(b, f16, seconds, (x) => {
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    const cmd = Math.max(-5, Math.min(10, (alt0 - x.pos.y) * 0.01 - vsFpm(x) * 0.0005 + 2));
+    x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
+    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+  }, (x) => { onStep(x, alt0); return false; });
+  return b;
+};
+describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => {
+  it.fails('KNOWN GAP (0143): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: ~2.27 at 300 s and still gaining ~0.1 Mach per 30 s)', () => {
+    let mach270 = null, maxDevFt = 0;
+    const b = levelAt40k(300, (x, alt0) => {
+      if (mach270 == null && x.t >= 270) mach270 = x.mach;
+      if (x.t > 60) maxDevFt = Math.max(maxDevFt, Math.abs(x.pos.y - alt0) * M_TO_FT);
+    });
+    expect(maxDevFt).toBeLessThan(2000); // level: the hold sits ~1,000 ft high, inside this
+    expect(b.mach - mach270).toBeLessThan(0.02);
+    expect(b.mach).toBeGreaterThanOrEqual(1.8);
+    expect(b.mach).toBeLessThanOrEqual(2.1);
+  });
+
+  // What 0133 does pass, a regression guard (not a performance claim; the band above is the
+  // claim): the same run crosses Mach 1.8 and stays under Mach 2.5 at 300 s, finite throughout
+  // (with no wave drag it ran away: Mach 5.7 by 240 s from 400 KEAS).
+  it('the same run passes Mach 1.8 and stays under Mach 2.5 at 300 s (the wave drag slows it)', () => {
+    let finite = true, maxDevFt = 0;
+    const b = levelAt40k(300, (x, alt0) => {
+      finite &&= [x.pos.y, x.vel.x, x.vel.y, x.vel.z, x.quat.w, x.mach, x.aoaDeg].every(Number.isFinite);
+      if (x.t > 60) maxDevFt = Math.max(maxDevFt, Math.abs(x.pos.y - alt0) * M_TO_FT);
+    });
+    expect(finite).toBe(true);
+    expect(maxDevFt).toBeLessThan(2000);
+    expect(b.mach).toBeGreaterThan(1.8);
+    expect(b.mach).toBeLessThan(2.5);
+  });
+
+  // Held for half an hour it does not run away (the panel's catch: Raymer's factor alone falls on
+  // with Mach, and the run went past Mach 45 by 40 min; the 0.8 floor holds it). It settles near
+  // Mach 3.2: under 0.02 Mach gained over the last 300 s of 1800, and under Mach 3.4.
+  it('held 30 min it settles (near Mach 3.2, the 0143 gap) instead of running away', () => {
+    let mach1500 = null, maxDevFt = 0;
+    const b = levelAt40k(1800, (x, alt0) => {
+      if (mach1500 == null && x.t >= 1500) mach1500 = x.mach;
+      if (x.t > 60) maxDevFt = Math.max(maxDevFt, Math.abs(x.pos.y - alt0) * M_TO_FT);
+    });
+    expect(Number.isFinite(b.mach)).toBe(true);
+    expect(maxDevFt).toBeLessThan(2000);
+    expect(b.mach - mach1500).toBeLessThan(0.02);
+    expect(b.mach).toBeLessThan(3.4);
   });
 });
 
