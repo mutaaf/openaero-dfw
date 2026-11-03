@@ -1,7 +1,7 @@
 ---
 id: 0133
 title: F-16 card: full afterburner at 40,000 ft tops out near Mach 2, as the USAF says (needs wave drag past Mach 1)
-status: ready
+status: in-progress
 priority: P2
 size: M
 lens: authenticity
@@ -41,3 +41,21 @@ the wave-drag term is zero below its critical Mach and finite everywhere.
 ## Out of scope
 Sea-level top speed, supersonic lift/stability changes, the g and AoA limiter (that is 0121), heat
 or intake models.
+
+## Notes (Builder, 2026-11-03)
+The wave drag is in, and on its own it does not close the card. `aero.js supersonicWaveDragCd`
+is Krus & Abdalla 2019 Eq. 5 (10th Aerospace Technology Congress, doi 10.3384/ecp19162003; open):
+Cdw = fM·Cdw0·kdw / (((M − kdwm)² − 1)² + kdw⁴)^¼, the 1/√(M² − 1) of linear theory without its
+Mach 1 singularity, times a logistic step from Mcrit = 1 − δM; with the paper's worked parameters
+(Cdw0 0.0264, kdwm 0.05, kdw 0.5, δM 0.2) it peaks at 264 counts at Mach 1.05 and falls to 79 at
+Mach 2. The card went from Mach 5.7 to 3.7 at 240 s and still accelerates: at 40,000 ft the
+engine's full-afterburner thrust is 130 kN · σ^0.8 · (1 − 0.3M + 0.3M²), which grows without
+bound past Mach 1 (1.6× its static value at Mach 2, 2.8× at Mach 3), while a real fixed-inlet
+fighter's falls (a pitot inlet loses 28% of its total pressure to the normal shock at Mach 2,
+NACA Report 1135, before the engine's inlet-temperature limit). Level at Mach 2 this drag is ~39 kN
+against ~68 kN of thrust: a Mach 2 top speed needs ~40% less. That lapse is uncited past Mach 1 (f16.test.js's header) and intake models
+are out of scope here, so the card stays `it.fails` with the measured Mach in its name. Next:
+a ticket for a cited supersonic thrust lapse (e.g. Mattingly, Heiser & Pratt, Aircraft Engine
+Design, the installed-thrust lapse of a mixed-flow afterburning turbofan) that flips the card.
+Subsonic cards, the 737 and the C172 do not move (tests/flight 214 pass + 11 known gaps, before
+and after). Boot JS +0.06 kB, paid for by the ?debug landmarks readout moving into debugScreen.js.

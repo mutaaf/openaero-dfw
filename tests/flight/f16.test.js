@@ -13,9 +13,11 @@
 // What the open data does not cover, so there is no card for it (gaps, not guesses):
 //  - climb rate, turn rate, roll rate, takeoff and landing distances, approach speeds: all in
 //    the restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited.
-//  - top speed: USAF gives "Mach 2 at altitude", but the model has no transonic wave drag, so
-//    its supersonic acceleration is not a performance claim (the zoom card is a capability
-//    bound only).
+//  - top speed: USAF gives "Mach 2 at altitude" (the KNOWN GAP card below, 0133). The zero-lift
+//    wave drag is modelled (aero.js supersonicWaveDragCd, Krus & Abdalla 2019), but the
+//    turbofan's thrust rises with Mach without bound (engine.js 1 − 0.3M + 0.3M², uncited past
+//    Mach 1, see thrust lapse below), so supersonic acceleration is still not a performance
+//    claim (the zoom card is a capability bound only).
 //  - thrust lapse: TP-1538 Table VI tabulates the 1979 F100-PW-100, not the F110/F100-229
 //    class engine the spec models, so its lapse is not this engine's. (For the record, at
 //    max thrust the model has little of the table's ram rise with Mach: Tmax at sea level is
@@ -147,10 +149,14 @@ describe('F-16C capability bound (not a performance claim)', () => {
 
 // Ticket 0133 (validator): the USAF fact sheet lists "Mach 2 at altitude". Clean, full
 // afterburner, held level at 40,000 ft, the speed it settles to should be the Mach 2 class
-// (1.8-2.1; open data gives no tighter band). The model has no supersonic wave drag, so it is a
-// KNOWN GAP: `it.fails` until 0133 adds the drag rise; the fixing PR promotes it to `it`.
+// (1.8-2.1; open data gives no tighter band). 0133 added the wave drag (Krus & Abdalla 2019, peak
+// 264 counts at Mach 1.05, 79 at Mach 2): before it the card ran to Mach 5.7, now 3.7, and still
+// accelerating, because full-afterburner thrust grows as 1 − 0.3M + 0.3M² (1.6× static at Mach 2,
+// 2.8× at Mach 3, uncited past Mach 1; a fixed pitot inlet alone loses 28% of its total pressure
+// to the normal shock at Mach 2, NACA Report 1135). Still a KNOWN GAP: it stays `it.fails` until the
+// engine's supersonic lapse has a cited source; that PR promotes it to `it`.
 describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => {
-  it.fails('KNOWN GAP (0133): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: 5.7, no wave drag)', () => {
+  it.fails('KNOWN GAP (0133): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: 3.7 at 240 s and accelerating; thrust lapse past Mach 1)', () => {
     const alt0 = 40000 / M_TO_FT;
     const b = makeBody(f16, { kts: 400, altM: alt0, throttle: 1, gearDown: false });
     fly(b, f16, 240, (x) => {

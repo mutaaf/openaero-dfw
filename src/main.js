@@ -3540,8 +3540,7 @@ window.openaeroDebug = () => {
     rto: sim.rto ? { ...sim.rto } : null,
     windshear: sim.windshear ? { ...sim.windshear } : null,
     takeoffCalls: [...sim.takeoffCalls],
-    landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
-      { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
+    landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
     photoreal: photoreal ? photoreal.debugState() : null, // photoreal.js (or its boot stand-in)
     render: renderer ? { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles } : null,

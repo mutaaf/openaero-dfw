@@ -107,7 +107,21 @@ export function dragDivergenceMach(spec, cl) {
   const t = spec.transonic, c = Math.cos(t.sweepDeg * DEG_TO_RAD);
   return t.kappaA / c - t.tOverC / (c * c) - Math.abs(cl) / (10 * c * c * c);
 }
+// A supersonic airframe (spec.supersonic { cdw0, kdwm, kdw, dM }; 0133) has a zero-lift wave drag
+// that rises through Mach 1 and falls past it: P. Krus and A. Abdalla, Modelling of Transonic and
+// Supersonic Aerodynamics for Conceptual Design and Flight Simulation, 10th Aerospace Technology
+// Congress, Stockholm 2019 (doi 10.3384/ecp19162003), Eq. 5: Cdw = fM · Cdw0 · kdw /
+// (((M − kdwm)² − 1)² + kdw⁴)^¼, the 1/√(M² − 1) of linear theory with its Mach 1 singularity
+// removed (peak Cdw0 at M = 1 + kdwm), times the logistic step fM = 1 / (1 + e^(−8 (M − (1 − δM/2)) / δM))
+// (Eq. 3) that starts the rise at Mcrit = 1 − δM. Wing area is the reference (Eq. 7).
+export function supersonicWaveDragCd(spec, mach) {
+  const w = spec.supersonic;
+  if (!w || !(mach > 0.5)) return 0;
+  const s = (mach - w.kdwm) ** 2 - 1;
+  return w.cdw0 * w.kdw / (1 + Math.exp(8 * (1 - w.dM / 2 - mach) / w.dM)) / (s * s + w.kdw ** 4) ** 0.25;
+}
 export function waveDragCd(spec, cl, mach) {
+  if (spec.supersonic) return supersonicWaveDragCd(spec, mach);
   if (!spec.transonic || !(mach > 0.5)) return 0;
   const dm = mach - (dragDivergenceMach(spec, cl) - LOCK_DM);
   if (dm <= 0) return 0;

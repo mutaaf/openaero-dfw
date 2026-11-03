@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient, waveDragCd, dragDivergenceMach,
+  clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient, waveDragCd, dragDivergenceMach, supersonicWaveDragCd,
   inducedDragK, headingError, headingFromYaw, papiWhiteLights, PAPI_SETTING_OFFSETS_DEG, gpwsCalloutIndex, gpwsRearm,
   GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, takeoffCalloutIndex, TAKEOFF_CALLOUTS,
   TAKEOFF_CALLOUT_HUD_PLAIN,
@@ -89,12 +89,49 @@ describe('waveDragCd (0120: Korn + Lock drag rise)', () => {
   it('a pushover loads the wing too: a negative CL rises like a positive one', () => {
     expect(waveDragCd(b738, -0.3, 0.8)).toBeCloseTo(waveDragCd(b738, 0.3, 0.8), 10);
   });
-  it('only an airframe with transonic data has it (C172, F-16 unchanged), and dragCoefficient adds it', () => {
+  it('only an airframe with transonic data has it (C172 none; the F-16 has 0133\'s supersonic form), and dragCoefficient adds it', () => {
     expect(waveDragCd(AIRCRAFT_DATABASE.c172, 0.5, 0.9)).toBe(0);
-    expect(waveDragCd(AIRCRAFT_DATABASE.f16, 0.5, 0.9)).toBe(0);
+    expect(waveDragCd(AIRCRAFT_DATABASE.f16, 0.5, 0.9)).toBe(supersonicWaveDragCd(AIRCRAFT_DATABASE.f16, 0.9));
     expect(dragCoefficient(b738, 0.6, false, 0, 1, 0.8) - dragCoefficient(b738, 0.6, false, 0, 1))
       .toBeCloseTo(waveDragCd(b738, 0.6, 0.8), 10);
     expect(dragCoefficient(b738, 0.6, false, 0, 1, 0.3)).toBe(dragCoefficient(b738, 0.6, false, 0, 1));
+  });
+});
+
+// 0133: Krus & Abdalla 2019 Eq. 5, Cdw = fM·Cdw0·kdw / (((M − kdwm)² − 1)² + kdw⁴)^¼ with
+// fM = 1 / (1 + e^(−8 (M − 0.9) / 0.2)); the F-16's Cdw0 0.0264, kdwm 0.05, kdw 0.5, δM 0.2.
+// Expected numbers worked by hand (a separate Python run), not read back from the code:
+//   M 1.05: fM 0.997527, the root term 0.5 → 0.026335; M 2.0: (1.95² − 1)² + 0.0625 = 7.916506,
+//   ^¼ 1.677388 → 0.0078694; M 0.9: fM 0.5, 0.139506^¼ 0.611150 → 0.0107993; M 3: 0.0047549.
+describe('supersonicWaveDragCd (0133: Krus & Abdalla 2019, the F-16)', () => {
+  const f16 = AIRCRAFT_DATABASE.f16;
+  it('peaks at Cdw0 just past Mach 1 (M = 1 + kdwm) and falls as 1/√(M² − 1) beyond', () => {
+    expect(supersonicWaveDragCd(f16, 1.05)).toBeCloseTo(0.026335, 6);
+    expect(supersonicWaveDragCd(f16, 2.0)).toBeCloseTo(0.0078694, 6);
+    expect(supersonicWaveDragCd(f16, 3.0)).toBeCloseTo(0.0047549, 6);
+    expect(supersonicWaveDragCd(f16, 1.05)).toBeGreaterThan(supersonicWaveDragCd(f16, 1.0));
+    expect(supersonicWaveDragCd(f16, 1.05)).toBeGreaterThan(supersonicWaveDragCd(f16, 1.1));
+  });
+  it('rises through the logistic step: half its value at Mach 0.9, nothing that counts below 0.7, zero at 0.5', () => {
+    expect(supersonicWaveDragCd(f16, 0.9)).toBeCloseTo(0.0107993, 6);
+    expect(supersonicWaveDragCd(f16, 0.7)).toBeLessThan(1e-5); // < 0.1 count
+    expect(supersonicWaveDragCd(f16, 0.5)).toBe(0);
+    expect(supersonicWaveDragCd(f16, 0)).toBe(0);
+  });
+  it('is finite and non-negative everywhere, Mach 1 included (no linear-theory singularity)', () => {
+    for (let m = 0; m <= 6; m += 0.01) {
+      const cd = supersonicWaveDragCd(f16, m);
+      expect(Number.isFinite(cd)).toBe(true);
+      expect(cd).toBeGreaterThanOrEqual(0);
+      expect(cd).toBeLessThanOrEqual(0.0264);
+    }
+    expect(supersonicWaveDragCd(f16, NaN)).toBe(0);
+  });
+  it('is the F-16\'s alone: the 737 keeps its Korn + Lock rise, the C172 has none', () => {
+    expect(supersonicWaveDragCd(b738, 1.05)).toBe(0);
+    expect(supersonicWaveDragCd(AIRCRAFT_DATABASE.c172, 1.05)).toBe(0);
+    expect(dragCoefficient(f16, 0.1, false, 0, 1, 2.0) - dragCoefficient(f16, 0.1, false, 0, 1))
+      .toBeCloseTo(0.0078694, 6);
   });
 });
 

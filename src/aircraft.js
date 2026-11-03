@@ -238,6 +238,13 @@ export const AIRCRAFT_DATABASE = {
     cl0: 0.15,
     clAlpha: 3.6,
     clMaxFlaps: 1.8,
+    // Zero-lift wave drag (0133, aero.js supersonicWaveDragCd): Krus and Abdalla 2019 Eq. 5 with
+    // the paper's worked parameters (Cdw0 0.0264, kdwm 0.05, kdw 0.5, δM 0.2: its Fig. 3); its § 5
+    // drag example uses coefficients "chosen to loosely resemble the F-16 flying at 10000m with a
+    // weight of 12000kg" (this spec's mass). The rise starts near Mach 0.8, peaks at 0.0264 (264
+    // counts, ~2.5× cd0) at Mach 1.05 and falls to 79 counts at Mach 2. A conceptual-design
+    // estimate, not F-16 wind-tunnel data (none is open past Mach 1).
+    supersonic: { cdw0: 0.0264, kdwm: 0.05, kdw: 0.5, dM: 0.2 },
     // Control-surface limits (°): the F-16 model of NASA TP-1538 as flown in Stevens & Lewis,
     // Aircraft Control and Simulation: stabilator ±25, flaperons ±21.5, rudder ±30. The
     // flaperons are also its flaps (surfaces.js adds the two).
