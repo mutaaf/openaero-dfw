@@ -1,7 +1,7 @@
 ---
 id: 0141
 title: C172 takeoff: Pilot's takeoff trim should settle into a climb, not back onto the runway
-status: shipped
+status: in-progress
 priority: P2
 size: M
 lens: authenticity
@@ -36,11 +36,24 @@ spawn carries the new trim.
 ## Out of scope
 A takeoff coach (0093); trim UI.
 
-## Outcome
-The takeoff spawn trims for Vy where the airframe publishes one (`spec.vyKts`, the C172's 74 KIAS,
-POH Sec. 5), `trim.js takeoffTrimAoaDeg`; the jets keep 1.2 Vr bit for bit. Card (c172.test.js,
-flaps 0 and 10, rotations to 6-9°, released at positive rate with main.js's hold-to-trim stand-in):
-+572 to +780 ft in 60 s, settling at 67-73 KIAS mean (the stand-in trims part of the pull away),
-troughs 5+ kt above the stall warning, never back on the runway. With 1.2 Vr every case failed.
-Over-rotations of 10-12° are logged, not carded: at 12° with flaps 10 the lightly damped phugoid
-still dips to ~54 kt (a warning) and touches once. A full aft yank is a separate model gap: 0144.
+## Outcome (in progress, #177)
+Validation panel (2026-11-03) rescoped it. The takeoff spawn trims for Vy only flaps up
+(`trim.js takeoffTrimAoaDeg`, `spec.vyKts`: POH Vy 74 KIAS is a flaps-up speed), which serves the
+KADS engine-failure missions ("climb at 74 knots"). With flaps 10 (every other Cessna takeoff) it
+keeps 1.2 Vr: there the device panel showed touch/gamepad players holding a 40-60% pull touching
+back down on Vy trim where 1.2 Vr climbed away, and for a pilot's 6-9° rotation Vy only lifted the
+trough 3-7 kt. Flaps 10 on Vy waits for 0144.
+
+Card (c172.test.js, flaps up, 6-9° rotations, let go at positive rate, with and without main.js's
+hold-to-trim stand-in): +694-780 ft in 60 s, mean 68.7-73.5 KIAS from 30 s, troughs 65+ KIAS, no
+stall warning, never back on the runway. The same card run on the old 1.2 Vr trim fails at every
+rotation (troughs 57-60 KIAS, a stall warning at 7-8°). The criterion "IAS 65-85" is carded as a
+mean within Vy ±10 and a trough at 63+ (the stall warning + 5 kt): the model's phugoid is barely
+damped (period ~22 s, ±4-7 kt that does not settle in 60 s), so a minimum over 30 s measures the
+swing, not the trim. Acceptance: hands-off climb, no warning ✓ (flaps up); takeoff e2e ✓; jets
+unchanged ✓ (bit for bit); no card regressed ✓.
+
+Blocked: boot JS. The scoped change measures 201.003 kB (budget 201; main is 200.983 and lazy-chunk
+hash churn moves the total ±9 B), so it needs real headroom bought first (a Keeper job: rank the
+boot chunk by source and move something lazy). Other open items: a phugoid damping card (the
+model's ζ ≈ 0.01; light aircraft ~0.04-0.1) is worth its own ticket.

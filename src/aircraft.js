@@ -192,7 +192,7 @@ export const AIRCRAFT_DATABASE = {
     vfeKtsByFlapDeg: [[10, 110], [30, 85]], // flaps extended (0127, POH Section 2): 110 KIAS to 10°, 85 KIAS 10°-30°
     vrefKts: 62,
     vrKts: 55,
-    vyKts: 74, // best rate of climb, sea level (POH Section 5, Fig. 5-6): what the takeoff trim flies hands off (0141)
+    vyKts: 74, // best rate of climb, flaps up, sea level (POH Sec. 4/5): the flaps-up takeoff trim (0141)
     stallCleanKts: 48,
     vGlideKts: 68, // best glide, 2,550 lb (POH Section 3, engine failure; the dead-stick drill, 0036)
     gearHeight: 1.65,

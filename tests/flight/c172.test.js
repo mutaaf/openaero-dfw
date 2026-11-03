@@ -745,8 +745,8 @@ describe('Cessna 172S phugoid period (flightModel, ticket 0102)', () => {
   });
 });
 
-// Stick-fixed takeoff (0090), the trim set as main.js's takeoff spawn sets it (Vy since 0141,
-// flaps 1): full power and a neutral stick never rotate the Cessna by themselves before 1.4 Vr,
+// Stick-fixed takeoff (0090), the trim set as main.js's takeoff spawn sets it (flaps 1: 1.2 Vr;
+// 0141 trims for Vy only flaps up): full power and a neutral stick never rotate the Cessna by themselves before 1.4 Vr,
 // and with the stick held back the nose comes up near Vr as before.
 function stickFixedNoseLiftKts(elev) {
   const b = Object.assign(makeBody(c172, { flaps: 1, throttle: 1 }), { autoTrim: false, trimAlphaDeg: takeoffTrimAoaDeg(c172, 1) });
@@ -767,19 +767,18 @@ describe('Cessna 172S stick-fixed takeoff (flightModel, ticket 0090)', () => {
   });
 });
 
-// Takeoff trim, hands off after the rotation (ticket 0141). Cessna 172S POH Section 4, Normal
-// Takeoff: "Elevator Trim - TAKEOFF", rotate at 55 KIAS, "Climb Speed - 70-80 KIAS"; Section 5
-// (Fig. 5-6): Vy 74 KIAS. The pilot flies Pilot as main.js does: full power, at Vr the stick
-// pulls the nose to a lift-off attitude (through the game's 10/s stick lag), the hold-to-trim
-// stand-in trims the pull's pressure away over ~8 s (main.js, until the player first trims), and
-// the stick is let go at "positive rate" (aero.js takeoffCalloutIndex: wheels > 5 ft, > 300 fpm).
-// Then hands off for 60 s. It settles at 67-73 KIAS (mean), a few knots under Vy: the stand-in
-// trims part of the pull away. The spawn's trim used to fly 1.2 Vr (66 kt): a stall warning at
-// 7-8° flaps up, and every flaps-10 trough at 58-61 KIAS (under the warning + 5 kt). Over-rotating past ~10° leaves the
-// Cessna far below its trimmed speed when it is let go: the phugoid, lightly damped as a real
-// one is, then swings it wide (logged, not carded).
-function handsOffTakeoff(flaps, pitchDeg) {
-  const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: takeoffTrimAoaDeg(c172, flaps) });
+// Takeoff trim, hands off after the rotation (ticket 0141). Cessna 172S POH Section 4: the
+// before-takeoff checklist sets the elevator trim for takeoff; Normal Takeoff rotates at 55 KIAS
+// and climbs at 70-80 KIAS; Vy 74 KIAS (flaps up, sea level). The pilot flies Pilot as main.js
+// does: full power, at Vr the stick pulls the nose to a lift-off attitude through the game's 10/s
+// stick lag (an idealised stick or gamepad pilot; a keyboard is full deflection only, 0144), the
+// hold-to-trim stand-in trims the pull's pressure away over ~8 s (main.js, until the player first
+// trims; `standIn: false` is a player who touched the trim), and the stick is let go at "positive
+// rate" (aero.js takeoffCalloutIndex: wheels > 5 ft, > 300 fpm). Then hands off for 60 s. The
+// model's phugoid is barely damped (period ~22 s), so the speed swings ±4-7 kt about its mean.
+const POH_VY_KTS = 74; // literal, so a card run against an older trim still has its bounds
+function handsOffTakeoff(flaps, pitchDeg, { trimAlphaDeg = takeoffTrimAoaDeg(c172, flaps), standIn = true } = {}) {
+  const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg });
   const warnKts = stallWarningKts(c172, flaps);
   let rel = null, h0 = 0, warned = false, landed = false, lo = Infinity, hi = 0, sum = 0, n = 0;
   const wheelsFt = (x) => Math.max(0, (x.pos.y - c172.gearHeight) * M_TO_FT);
@@ -791,7 +790,7 @@ function handsOffTakeoff(flaps, pitchDeg) {
       if (!x.onGround && wheelsFt(x) > 5 && vsFpm(x) > 300) { rel = x.t; h0 = wheelsFt(x); }
     }
     x.elevInput += (target - x.elevInput) * Math.min(1, dt * 10);
-    if (rel === null && Math.abs(x.elevInput) > 0.05) {
+    if (standIn && rel === null && Math.abs(x.elevInput) > 0.05) {
       x.trimAlphaDeg = clampTrim(x.trimAlphaDeg + (x.aoaDeg - x.trimAlphaDeg) * dt / 8, x.trimAlphaDeg, c172, x.flapsIndex);
     }
     if (rel !== null) {
@@ -802,27 +801,34 @@ function handsOffTakeoff(flaps, pitchDeg) {
   }, (x) => rel !== null && x.t - rel >= 60);
   return { rel, gainFt: wheelsFt(b) - h0, lo, hi, meanKts: sum / n, warned, landed };
 }
+const fmtTakeoff = (r) => `+${r.gainFt.toFixed(0)} ft in 60 s, ${r.lo.toFixed(1)}-${r.hi.toFixed(1)} (mean ${r.meanKts.toFixed(1)}) KIAS from 30 s, warned ${r.warned}, back on the runway ${r.landed}`;
+// The card: climbing, no stall warning, never back on the runway, the mean from 30 s within Vy
+// ±10 kt, the trough at 63+ KIAS (the warning + 5 kt) and the crest under Vy + 10.
+const meetsTakeoffCard = (r) => r.rel !== null && !r.warned && !r.landed && r.gainFt >= 500
+  && Math.abs(r.meanKts - POH_VY_KTS) <= 10 && r.lo >= 63 && r.hi <= POH_VY_KTS + 10;
 
 describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, ticket 0141)', () => {
-  for (const flaps of [0, 1]) for (const pitchDeg of [6, 7, 8, 9]) {
-    it(`flaps ${c172.flapDetentsDeg[flaps]}, rotated to ${pitchDeg}° and let go at positive rate: climbs 500+ ft in 60 s, settles at Vy ±10 kt from 30 s, no stall warning, never back on the runway (POH Sec. 4/5)`, () => {
-      const r = handsOffTakeoff(flaps, pitchDeg);
-      console.log(`[c172 flightModel] hands-off takeoff flaps ${flaps} ${pitchDeg}°: +${r.gainFt.toFixed(0)} ft in 60 s, ${r.lo.toFixed(1)}-${r.hi.toFixed(1)} (mean ${r.meanKts.toFixed(1)}) KIAS from 30 s, warned ${r.warned}, back on the runway ${r.landed}`);
-      expect(r.rel).not.toBeNull();
-      expect(r.warned).toBe(false);
-      expect(r.landed).toBe(false);
-      expect(r.gainFt).toBeGreaterThanOrEqual(500);
-      // Settled: the mean over 30-60 s within Vy ±10 kt; the phugoid's trough stays 5 kt clear of
-      // the stall warning (~10 kt over the stall) and its crest under Vy + 10.
-      expect(Math.abs(r.meanKts - c172.vyKts)).toBeLessThanOrEqual(10);
-      expect(r.lo).toBeGreaterThanOrEqual(stallWarningKts(c172, flaps) + 5);
-      expect(r.hi).toBeLessThanOrEqual(c172.vyKts + 10);
+  for (const standIn of [true, false]) for (const pitchDeg of [6, 7, 8, 9]) {
+    it(`flaps up, rotated to ${pitchDeg}° and let go at positive rate${standIn ? '' : ' (trim touched: no stand-in)'}: climbs 500+ ft in 60 s about Vy, no stall warning, never back on the runway (POH Sec. 4/5)`, () => {
+      const r = handsOffTakeoff(0, pitchDeg, { standIn });
+      console.log(`[c172 flightModel] hands-off takeoff flaps 0 ${pitchDeg}° stand-in ${standIn}: ${fmtTakeoff(r)}`);
+      expect(meetsTakeoffCard(r)).toBe(true);
     });
   }
-  it('logs the over-rotations (10-12°) it does not card', () => {
-    for (const flaps of [0, 1]) for (const pitchDeg of [10, 11, 12]) {
+  // The proof the card tests the change: the old spawn trim (1.2 Vr, 66 kt) fails it at every rotation.
+  it('the old 1.2 Vr takeoff trim fails the same card flaps up at every rotation (6-9°)', () => {
+    for (const pitchDeg of [6, 7, 8, 9]) {
+      const r = handsOffTakeoff(0, pitchDeg, { trimAlphaDeg: trimAoaDeg(c172, c172.vrKts * 0.617, 0) });
+      console.log(`[c172 flightModel] hands-off takeoff flaps 0 ${pitchDeg}° on the old 1.2 Vr trim: ${fmtTakeoff(r)}`);
+      expect(meetsTakeoffCard(r)).toBe(false);
+    }
+  });
+  // Flaps 10 keeps 1.2 Vr (trim.js): Vy's lower nose leaves a held partial pull (touch, gamepad)
+  // short of speed and back on the runway (device panel, #177) until 0144 stops the over-rotation.
+  it('logs flaps 10 and the over-rotations (10-12°) it does not card', () => {
+    for (const [flaps, pitches] of [[1, [6, 7, 8, 9, 10, 11, 12]], [0, [10, 11, 12]]]) for (const pitchDeg of pitches) {
       const r = handsOffTakeoff(flaps, pitchDeg);
-      console.log(`[c172 flightModel] hands-off takeoff flaps ${flaps} ${pitchDeg}° (not carded): +${r.gainFt.toFixed(0)} ft, ${r.lo.toFixed(1)}-${r.hi.toFixed(1)} (mean ${r.meanKts.toFixed(1)}) KIAS from 30 s, warned ${r.warned}, back on the runway ${r.landed}`);
+      console.log(`[c172 flightModel] hands-off takeoff flaps ${flaps} ${pitchDeg}° (not carded): ${fmtTakeoff(r)}`);
       expect(r.rel).not.toBeNull();
     }
   });
