@@ -57,4 +57,5 @@ or intake models.
   thrust lapse), with passing regression guards (Mach 1.8-2.5 at 300 s; held 30 min it settles
   near Mach 3.2, where without the floor it ran past Mach 45). At sea level full AB settles near
   Mach 1.45 (~936 KIAS; a real F-16: ~1.2, ~800 KCAS), the same lapse. Below Mcrit (~0.80-0.87 at 1 g) nothing
-  moved: every other card passes.
+  moved; the 0118 pulls (Mach 0.87-1.0 at high CL, where Mcrit is ~0.6-0.7) lose ≤ 0.1 g (500 KEAS
+  held: 8.38 → 8.27 g low) and still pass; every other card passes unchanged.

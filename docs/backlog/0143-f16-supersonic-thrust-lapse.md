@@ -22,8 +22,8 @@ it keeps gaining (~0.003 Mach/s at 300 s) until the two meet near Mach 3.2 (thru
 of thrust there, as a real F110/F100 does: the compressor inlet temperature limit (the "theta break")
 and the fixed inlet's falling pressure recovery past ~Mach 1.6 (a pitot inlet loses 28% of its
 total pressure to the normal shock at Mach 2, NACA Report 1135). At sea level full afterburner
-also settles near Mach 1.45 (~936 KIAS) against a real F-16's ~1.2 (~800 KCAS; the game has no
-airspeed limit for it): the same lapse. Sources an earlier run
+also settles near Mach 1.45 (~936 KIAS) against a real F-16's ~1.2 (~800 KCAS; commonly quoted, no open
+citation yet, so no card; the game has no airspeed limit for it): the same lapse. Sources an earlier run
 named but did not verify: Mattingly, Heiser & Pratt, Aircraft Engine Design (2nd ed., AIAA 2002),
 the installed thrust lapse of a mixed-flow afterburning turbofan with a theta break.
 

@@ -183,11 +183,13 @@ describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => 
   // claim): the same run crosses Mach 1.8 and stays under Mach 2.5 at 300 s, finite throughout
   // (with no wave drag it ran away: Mach 5.7 by 240 s from 400 KEAS).
   it('the same run passes Mach 1.8 and stays under Mach 2.5 at 300 s (the wave drag slows it)', () => {
-    let finite = true;
-    const b = levelAt40k(300, (x) => {
+    let finite = true, maxDevFt = 0;
+    const b = levelAt40k(300, (x, alt0) => {
       finite &&= [x.pos.y, x.vel.x, x.vel.y, x.vel.z, x.quat.w, x.mach, x.aoaDeg].every(Number.isFinite);
+      if (x.t > 60) maxDevFt = Math.max(maxDevFt, Math.abs(x.pos.y - alt0) * M_TO_FT);
     });
     expect(finite).toBe(true);
+    expect(maxDevFt).toBeLessThan(2000);
     expect(b.mach).toBeGreaterThan(1.8);
     expect(b.mach).toBeLessThan(2.5);
   });
@@ -196,9 +198,13 @@ describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => 
   // with Mach, and the run went past Mach 45 by 40 min; the 0.8 floor holds it). It settles near
   // Mach 3.2: under 0.02 Mach gained over the last 300 s of 1800, and under Mach 3.4.
   it('held 30 min it settles (near Mach 3.2, the 0143 gap) instead of running away', () => {
-    let mach1500 = null;
-    const b = levelAt40k(1800, (x) => { if (mach1500 == null && x.t >= 1500) mach1500 = x.mach; });
+    let mach1500 = null, maxDevFt = 0;
+    const b = levelAt40k(1800, (x, alt0) => {
+      if (mach1500 == null && x.t >= 1500) mach1500 = x.mach;
+      if (x.t > 60) maxDevFt = Math.max(maxDevFt, Math.abs(x.pos.y - alt0) * M_TO_FT);
+    });
     expect(Number.isFinite(b.mach)).toBe(true);
+    expect(maxDevFt).toBeLessThan(2000);
     expect(b.mach - mach1500).toBeLessThan(0.02);
     expect(b.mach).toBeLessThan(3.4);
   });

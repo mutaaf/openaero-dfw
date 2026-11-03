@@ -10,9 +10,12 @@ import { AIRCRAFT_DATABASE } from './aircraft.js';
 // falling slowly with Mach as the leading edge's sweep allows:
 // (D/q)wave = E_WD [1 − 0.386 (M − 1.2)^0.57 (1 − π Λle^0.77 / 100)] (D/q)SH (Λle in degrees).
 // Below Mach 1.2 Raymer fairs a curve: Lock's rise to MDD (aero.js, as the 737's), up to the Mach
-// 1.2 value by Mach 1.05, a hump between. The fairing's shape is AeroSandbox's approximate_CD_wave
-// (P. Sharpe, MIT licence; read 2026-11-03): cubic Hermite patches MDD → 1.05 (slope 0.1 →
-// 8·CD1.2) and 1.05 → 1.2 (8·CD1.2 → −4·CD1.2), a ~23% hump near Mach 1.1. Raymer's factor
+// 1.2 value by Mach 1.05, a hump between. The fairing is adapted from AeroSandbox's
+// approximate_CD_wave (P. Sharpe, MIT licence; read 2026-11-03): its cubic Hermite patches MDD →
+// 1.05 (slope 0.1 → 8·CD1.2) and 1.05 → 1.2 (8·CD1.2 → −4·CD1.2), a ~23% hump near Mach 1.1; but
+// where AeroSandbox scales its Lock part by CD1.2, here it stays Mason's absolute rise (continuous
+// with aero.js and the 737), and above 1.2 it is Raymer's own factor, not AeroSandbox's blend (the
+// slope kinks at 1.2: the (M − 1.2)^0.57 term starts vertical). Raymer's factor
 // would fall on to zero near Mach 21; it is floored at 0.8 of the Mach 1.2 value, the high-Mach
 // limit AeroSandbox takes from Raymer (reached near Mach 2.4 at 40° sweep). Zero-lift only:
 // supersonic lift and stability changes are not modelled.
@@ -39,10 +42,13 @@ export function supersonicWaveCd(spec, mdd, mach) {
 // The F-16. Where the rise starts, Korn + Lock as the 737's: its NACA 64A204 wing (a 6-series
 // section, Mason's κA 0.87; t/c 0.04), 40° leading-edge sweep, 32.7° at the quarter chord (taper
 // 0.227, aircraft.js aspectRatio 3.2). Past Mach 1, Raymer's correlation: length 49 ft 5 in
-// (15.06 m, USAF fact sheet); E_WD 2.0 (a typical fighter by Raymer; 1 is the ideal body); Amax
+// (15.06 m, USAF fact sheet); E_WD 2.0 (our reading of Raymer's guidance for a typical fighter, not
+// quoted from the text; 1 is the ideal body); Amax
 // 2.2 m² is our estimate (no open area distribution: fuselage, inlet and wing at the widest
 // station, less the inlet's capture area). CD 0.022 at Mach 1.2, ~0.018 at Mach 2; the unit card
-// checks it against JSBSim's open F-16 table within ±30%.
+// checks it against JSBSim's open F-16 table within ±30% (it runs high: +16% at Mach 1.1, +26% at
+// 1.8; drag goes as Amax², so ±10% on the area is ±21%). If this chunk fails to load the F-16 flies
+// with no wave drag, as before 0133 (a console warning, like fbw.js).
 const f16 = AIRCRAFT_DATABASE.f16;
 f16.transonic = { kappaA: 0.87, tOverC: 0.04, sweepDeg: 32.7 };
 f16.supersonic = { ewd: 2.0, areaMaxM2: 2.2, lengthM: 15.06, sweepLeDeg: 40 };
