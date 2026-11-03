@@ -184,7 +184,7 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
   });
 
   // The g and AoA limiter (0121, NASA TP-1538 App. A and Fig. 63: full back stick commands 9 g,
-  // less as α passes 15°, 1 g at ~25°; flightModel.js fbwLoadLimit). Before it, full stabilator
+  // less as α passes 15°, 1 g at ~25°; src/fbw.js fbwLoadLimit). Before it, full stabilator
   // pulled ~13 g by 1 s and α pegged at 90°.
   it('the same pull stays at or under 9.5 g (the 9 g limit and a transient)', () => {
     expect(fullPull(434).peakG).toBeLessThanOrEqual(9.5);
@@ -219,7 +219,8 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
   });
 
   // The stick commands load factor (TP-1538 App. A), so half back stick is a moderate pull, not
-  // the limit: 1 g + 8 g × the pull past a 5% breakout (≈ 4.8 g at half stick), here 4-5.5 g.
+  // the limit. The gradient is the game's (1 g + 8 g × the pull, 5 g at half stick; TP-1538 gives
+  // none), so the card asks only for a moderate pull: 4-5.5 g.
   it('half back stick at 500 KEAS, 15,000 ft is a moderate pull: 4-5.5 g held, well under the limit', () => {
     const b = makeBody(f16, { kts: 500, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
     const meter = loadFactorMeter();
