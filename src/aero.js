@@ -113,13 +113,14 @@ export function dragDivergenceMach(spec, cl) {
 // Congress, Stockholm 2019 (doi 10.3384/ecp19162003), Eq. 5: Cdw = fM · Cdw0 · kdw /
 // (((M − kdwm)² − 1)² + kdw⁴)^¼, the 1/√(M² − 1) of linear theory with its Mach 1 singularity
 // removed (peak Cdw0 at M = 1 + kdwm), times the logistic step fM = 1 / (1 + e^(−8 (M − (1 − δM/2)) / δM))
-// (Eq. 3) that starts the rise at Mcrit = 1 − δM. Wing area is the reference (Eq. 7).
+// (Eq. 3) that starts the rise at Mcrit = 1 − δM (Eq. 4). Cdw0 is on the wing area, as every CD here.
 export function supersonicWaveDragCd(spec, mach) {
   const w = spec.supersonic;
   if (!w || !(mach > 0.5)) return 0;
   const s = (mach - w.kdwm) ** 2 - 1;
   return w.cdw0 * w.kdw / (1 + Math.exp(8 * (1 - w.dM / 2 - mach) / w.dM)) / (s * s + w.kdw ** 4) ** 0.25;
 }
+// An airframe has one or the other: spec.supersonic wins over spec.transonic.
 export function waveDragCd(spec, cl, mach) {
   if (spec.supersonic) return supersonicWaveDragCd(spec, mach);
   if (!spec.transonic || !(mach > 0.5)) return 0;

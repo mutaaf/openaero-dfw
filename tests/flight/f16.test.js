@@ -17,7 +17,9 @@
 //    wave drag is modelled (aero.js supersonicWaveDragCd, Krus & Abdalla 2019), but the
 //    turbofan's thrust rises with Mach without bound (engine.js 1 − 0.3M + 0.3M², uncited past
 //    Mach 1, see thrust lapse below), so supersonic acceleration is still not a performance
-//    claim (the zoom card is a capability bound only).
+//    claim (the zoom card is a capability bound only). Not modelled either: the supersonic
+//    lift-dependent drag the leading edge's lost suction adds (Krus & Abdalla § 4.4), so a cited
+//    lapse could pass the Mach 2 card partly for that reason.
 //  - thrust lapse: TP-1538 Table VI tabulates the 1979 F100-PW-100, not the F110/F100-229
 //    class engine the spec models, so its lapse is not this engine's. (For the record, at
 //    max thrust the model has little of the table's ram rise with Mach: Tmax at sea level is
@@ -119,8 +121,8 @@ describe('F-16C capability bound (not a performance claim)', () => {
   // USAF: "Mach 2 at altitude", ceiling "above 50,000 feet". The thresholds are ticket
   // 0053's, well inside those: a clean, full-afterburner run at 30,000 ft must pass Mach 1.2
   // and zoom past 40,000 ft with the numbers finite, below the model's own stall AoA and
-  // above its own stall speed. The model has no wave drag, so how fast it gets there says
-  // nothing.
+  // above its own stall speed. The wave drag is modelled (0133) but the thrust's Mach lapse is
+  // uncited past Mach 1 (see the header), so how fast it gets there says nothing.
   it('accelerates past Mach 1.2 at 30,000 ft and zooms past 40,000 ft without NaN or stall', () => {
     const alt0 = 30000 / M_TO_FT;
     const b = makeBody(f16, { kts: 325, altM: alt0, throttle: 1, gearDown: false });
@@ -150,21 +152,29 @@ describe('F-16C capability bound (not a performance claim)', () => {
 // Ticket 0133 (validator): the USAF fact sheet lists "Mach 2 at altitude". Clean, full
 // afterburner, held level at 40,000 ft, the speed it settles to should be the Mach 2 class
 // (1.8-2.1; open data gives no tighter band). 0133 added the wave drag (Krus & Abdalla 2019, peak
-// 264 counts at Mach 1.05, 79 at Mach 2): before it the card ran to Mach 5.7, now 3.7, and still
+// 264 counts at Mach 1.05, 79 at Mach 2): from 400 KIAS the card ran to Mach 5.7 at 240 s before it
+// and 3.7 after it; from 250 KIAS (below) it is Mach 3.3 at 300 s (2.9 at 270 s), still
 // accelerating, because full-afterburner thrust grows as 1 − 0.3M + 0.3M² (1.6× static at Mach 2,
 // 2.8× at Mach 3, uncited past Mach 1; a fixed pitot inlet alone loses 28% of its total pressure
 // to the normal shock at Mach 2, NACA Report 1135). Still a KNOWN GAP: it stays `it.fails` until the
 // engine's supersonic lapse has a cited source; that PR promotes it to `it`.
 describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => {
-  it.fails('KNOWN GAP (0133): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: 3.7 at 240 s and accelerating; thrust lapse past Mach 1)', () => {
+  // It starts subsonic (250 KIAS, Mach 0.88) so it must push through the drag peak at Mach 1.05,
+  // and "settles" means it: the Mach over the last 30 s of 300 changes by less than 0.02.
+  it.fails('KNOWN GAP (0133): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: 3.3 at 300 s and accelerating; thrust lapse past Mach 1)', () => {
     const alt0 = 40000 / M_TO_FT;
-    const b = makeBody(f16, { kts: 400, altM: alt0, throttle: 1, gearDown: false });
-    fly(b, f16, 240, (x) => {
+    const b = makeBody(f16, { kts: 250, altM: alt0, throttle: 1, gearDown: false });
+    let mach270 = null, maxDevFt = 0;
+    fly(b, f16, 300, (x) => {
       const { pitchDeg, bankRightDeg } = attitude(x);
       const cmd = Math.max(-5, Math.min(10, (alt0 - x.pos.y) * 0.01 - vsFpm(x) * 0.0005 + 2));
       x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
       x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+      if (mach270 == null && x.t >= 270) mach270 = x.mach;
+      if (x.t > 60) maxDevFt = Math.max(maxDevFt, Math.abs(x.pos.y - alt0) * M_TO_FT);
     });
+    expect(maxDevFt).toBeLessThan(2000); // level: the hold sits ~1,300 ft high, inside this
+    expect(Math.abs(b.mach - mach270)).toBeLessThan(0.02);
     expect(b.mach).toBeGreaterThanOrEqual(1.8);
     expect(b.mach).toBeLessThanOrEqual(2.1);
   });

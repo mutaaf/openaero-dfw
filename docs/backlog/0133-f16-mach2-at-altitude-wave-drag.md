@@ -48,7 +48,9 @@ is Krus & Abdalla 2019 Eq. 5 (10th Aerospace Technology Congress, doi 10.3384/ec
 Cdw = fM·Cdw0·kdw / (((M − kdwm)² − 1)² + kdw⁴)^¼, the 1/√(M² − 1) of linear theory without its
 Mach 1 singularity, times a logistic step from Mcrit = 1 − δM; with the paper's worked parameters
 (Cdw0 0.0264, kdwm 0.05, kdw 0.5, δM 0.2) it peaks at 264 counts at Mach 1.05 and falls to 79 at
-Mach 2. The card went from Mach 5.7 to 3.7 at 240 s and still accelerates: at 40,000 ft the
+Mach 2. The card (as filed, from 400 KIAS) went from Mach 5.7 to 3.7 at 240 s and still accelerates;
+the panel had it start subsonic (250 KIAS, so it must cross the drag peak) and require a settled
+speed (< 0.02 Mach change over the last 30 s of 300): Mach 3.3 at 300 s, 2.9 at 270 s. The cause: at 40,000 ft the
 engine's full-afterburner thrust is 130 kN · σ^0.8 · (1 − 0.3M + 0.3M²), which grows without
 bound past Mach 1 (1.6× its static value at Mach 2, 2.8× at Mach 3), while a real fixed-inlet
 fighter's falls (a pitot inlet loses 28% of its total pressure to the normal shock at Mach 2,
@@ -59,3 +61,7 @@ a ticket for a cited supersonic thrust lapse (e.g. Mattingly, Heiser & Pratt, Ai
 Design, the installed-thrust lapse of a mixed-flow afterburning turbofan) that flips the card.
 Subsonic cards, the 737 and the C172 do not move (tests/flight 214 pass + 11 known gaps, before
 and after). Boot JS +0.06 kB, paid for by the ?debug landmarks readout moving into debugScreen.js.
+The panel also measured full afterburner at sea level: Mach 1.87 (~1,200 KIAS) after 180 s, still
+accelerating (Mach 3.4 before), against a real F-16's ~Mach 1.2: the same lapse, for the same
+follow-up ticket. Held thrust at its Mach 1 value would settle near Mach 2.1 at 40,000 ft with this
+drag, so the follow-up must fly the card, not assume it.
