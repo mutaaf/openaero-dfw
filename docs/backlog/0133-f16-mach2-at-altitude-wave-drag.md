@@ -48,7 +48,11 @@ or intake models.
   drag rise starting at its Korn + Lock Mcrit (NACA 64A204, κA 0.87, 32.7° quarter-chord sweep),
   faired MDD → 1.05 → 1.2 in AeroSandbox's shape. CD 0.022 at Mach 1.2, peak ~0.027 near 1.1,
   0.018 at Mach 2; within ±30% of JSBSim's open F-16 Mach drag (cross-check card).
-- The card did not close: full AB level at 40,000 ft is ~2.34 at 240 s (was 5.7) and still
-  gaining ~0.003 Mach/s, because the engine's thrust grows with M² as fast as the drag. It stays
-  `it.fails`, now for ticket 0143 (supersonic thrust lapse), with a passing regression guard
-  (under Mach 2.5 at 240 s). Below Mcrit (~0.85 at 1 g) nothing moved: every other card passes.
+- The card did not close. It now starts subsonic (250 KEAS) and must settle (< 0.02 Mach over the
+  last 30 s of 300), as an earlier unmerged run of this ticket proposed (branch
+  build/0133-f16-wave-drag, a generic Krus & Abdalla 2019 curve: Mach 3.3 at 300 s). With Raymer
+  on the F-16's geometry: ~2.27 at 300 s, still gaining ~0.1 Mach per 30 s, because the engine's
+  thrust grows with M² as fast as the drag. It stays `it.fails`, now for ticket 0143 (supersonic
+  thrust lapse), with a passing regression guard (Mach 1.8-2.5 at 300 s). At sea level full AB
+  settles near Mach 1.46 (a real F-16: ~1.2), the same lapse. Below Mcrit (~0.85 at 1 g) nothing
+  moved: every other card passes.

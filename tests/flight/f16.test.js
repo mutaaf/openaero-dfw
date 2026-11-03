@@ -146,48 +146,48 @@ describe('F-16C capability bound (not a performance claim)', () => {
 });
 
 // Ticket 0133: the USAF fact sheet lists "Mach 2 at altitude". Clean, full afterburner, held
-// level at 40,000 ft, the speed it settles to should be the Mach 2 class (1.8-2.1; open data gives
-// no tighter band), and settle means settle: under 0.0005 Mach/s over the last 40 s. 0133 gave the
-// jet its supersonic wave drag (aero.js supersonicWaveCd, Raymer's Sears-Haack correlation): it
-// was Mach 5.7 at 240 s with none, ~2.34 now. It is still a KNOWN GAP, now for the engine: its
-// afterburner thrust grows with M² (engine.js, machLapse 0.3/0.3), as fast as the drag does, so
-// past Mach 2 thrust minus drag never closes and it keeps gaining ~0.003 Mach/s. A real F110 or
-// F100 runs out of thrust there (compressor inlet temperature, inlet recovery): ticket 0143.
+// level at 40,000 ft from 250 KEAS (Mach 0.88, so it must push through the drag peak near Mach
+// 1.1), the speed it settles to should be the Mach 2 class (1.8-2.1; open data gives no tighter
+// band), and settle means settle: under 0.02 Mach gained over the last 30 s of 300. 0133 gave the
+// jet its wave drag (supersonic.js, Raymer's Sears-Haack correlation): with none it ran away
+// (Mach 5.7 at 240 s from 400 KEAS); now it is ~2.27 at 300 s, still gaining ~0.003 Mach/s. Still a
+// KNOWN GAP, now for the engine: its afterburner thrust grows with M² (engine.js, machLapse
+// 0.3/0.3, uncited past Mach 1, see the header), as fast as the drag, so thrust minus drag never
+// closes. A real F110 or F100 runs out of thrust there (compressor inlet temperature, inlet
+// recovery): ticket 0143, whose PR promotes this card to `it`.
+const levelAt40k = (seconds, onStep) => {
+  const alt0 = 40000 / M_TO_FT;
+  const b = makeBody(f16, { kts: 250, altM: alt0, throttle: 1, gearDown: false });
+  fly(b, f16, seconds, (x) => {
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    const cmd = Math.max(-5, Math.min(10, (alt0 - x.pos.y) * 0.01 - vsFpm(x) * 0.0005 + 2));
+    x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
+    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+  }, (x) => { onStep(x, alt0); return false; });
+  return b;
+};
 describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => {
-  it.fails('KNOWN GAP (0143): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: ~2.34 at 240 s, still gaining ~0.003 Mach/s)', () => {
-    const alt0 = 40000 / M_TO_FT;
-    const b = makeBody(f16, { kts: 400, altM: alt0, throttle: 1, gearDown: false });
-    let mach200 = 0, finite = true;
-    fly(b, f16, 240, (x) => {
-      const { pitchDeg, bankRightDeg } = attitude(x);
-      const cmd = Math.max(-5, Math.min(10, (alt0 - x.pos.y) * 0.01 - vsFpm(x) * 0.0005 + 2));
-      x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
-      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
-    }, (x) => {
-      finite &&= [x.pos.y, x.vel.x, x.vel.y, x.vel.z, x.mach].every(Number.isFinite);
-      if (!mach200 && x.t >= 200) mach200 = x.mach;
-      return false;
+  it.fails('KNOWN GAP (0143): full afterburner, level at 40,000 ft settles at Mach 1.8-2.1 (model: ~2.27 at 300 s and still gaining ~0.1 Mach per 30 s)', () => {
+    let mach270 = null, maxDevFt = 0;
+    const b = levelAt40k(300, (x, alt0) => {
+      if (mach270 == null && x.t >= 270) mach270 = x.mach;
+      if (x.t > 60) maxDevFt = Math.max(maxDevFt, Math.abs(x.pos.y - alt0) * M_TO_FT);
     });
-    expect(finite).toBe(true);
-    expect(Math.abs(b.pos.y - alt0) * M_TO_FT).toBeLessThan(1500);
+    expect(maxDevFt).toBeLessThan(2000); // level: the hold sits ~1,000 ft high, inside this
+    expect(b.mach - mach270).toBeLessThan(0.02);
     expect(b.mach).toBeGreaterThanOrEqual(1.8);
     expect(b.mach).toBeLessThanOrEqual(2.1);
-    expect(Math.abs(b.mach - mach200) / 40).toBeLessThan(0.0005);
   });
 
-  // What 0133 does pass: the wave drag is on, so the same run no longer runs away to Mach 5.7.
-  // A regression guard, not a performance claim (the band above is the claim): under Mach 2.5 at
-  // 240 s, finite throughout.
-  it('the same run stays under Mach 2.5 at 240 s (the drag rise holds it; before 0133: 5.7)', () => {
-    const alt0 = 40000 / M_TO_FT;
-    const b = makeBody(f16, { kts: 400, altM: alt0, throttle: 1, gearDown: false });
-    fly(b, f16, 240, (x) => {
-      const { pitchDeg, bankRightDeg } = attitude(x);
-      const cmd = Math.max(-5, Math.min(10, (alt0 - x.pos.y) * 0.01 - vsFpm(x) * 0.0005 + 2));
-      x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
-      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+  // What 0133 does pass, a regression guard (not a performance claim; the band above is the
+  // claim): the same run crosses Mach 1.8 and stays under Mach 2.5 at 300 s, finite throughout
+  // (with no wave drag it ran away: Mach 5.7 by 240 s from 400 KEAS).
+  it('the same run passes Mach 1.8 and stays under Mach 2.5 at 300 s (the wave drag holds it)', () => {
+    let finite = true;
+    const b = levelAt40k(300, (x) => {
+      finite &&= [x.pos.y, x.vel.x, x.vel.y, x.vel.z, x.quat.w, x.mach, x.aoaDeg].every(Number.isFinite);
     });
-    expect(Number.isFinite(b.mach)).toBe(true);
+    expect(finite).toBe(true);
     expect(b.mach).toBeGreaterThan(1.8);
     expect(b.mach).toBeLessThan(2.5);
   });
