@@ -36,10 +36,17 @@ Speedbrakes; VNAV logic; the thrust lapse at climb power (0116).
 
 ## Outcome
 No cause in the model: at FL170, 280 KEAS, 65 t, clean CD 0.0272 (L/D 14.8) against 4 kN of idle
-thrust gives ~2,260 ft/min level-speed, ~1,850 with a constant-EAS descent's kinetic energy; even
-zero idle thrust gives ~2,100. Reaching APD's 2,800 floor needs L/D ~11, an airliner with its
-speedbrakes out. The reference was the gap: WRAP (Sun, Ellerbroek & Hoekstra, Transp. Res. C 98,
-2019; OpenAP's b738 table), fitted to ADS-B tracks of real 737-800 flights, puts the constant-CAS
-descent (282 kt, ~FL318 to ~FL194) at 1,959 ft/min mean (±1σ 1,425-2,492; steepest seen 2,833,
-below APD's 3,500). The model flies 1,900-2,030 across that band. The card now asks for WRAP's
-mean ±1σ; no model parameter changed. WRAP's climb row agrees with APD's (0135 stands).
+thrust (idle is 4% of the lapsed full thrust, so it does lapse, unlike the Why above says) gives
+~2,260 ft/min at constant speed, ~1,850 in a constant-EAS descent; even zero idle thrust gives
+~2,100. Reaching APD's 2,800 floor needs L/D ~11, an airliner with its speedbrakes out. The
+reference was the gap: WRAP (Sun, Ellerbroek & Hoekstra, Transp. Res. C 98, 2019; OpenAP's b738
+table), fitted to ADS-B tracks of real 737-800 flights, puts the constant-CAS descent (282 kt,
+~FL318 to ~FL194) at 1,959 ft/min mean (σ 533; 95th percentile 2,833); APD's 3,500 is ~2.9σ
+steeper. The model flies 1,890-2,030 across that band; the card asks for WRAP's mean ±20% (the
+repo's card tolerance; ±1σ would pass a tripled idle thrust). No model parameter changed.
+WRAP's fleet mean mixes idle with managed descents (its constant-Mach row, 1,142 ft/min, is as
+shallow as APD's 800 while a clean idle there sinks ~2,900), so the card is a consistency check,
+not an idle measurement. Below FL194 (WRAP's after-CAS row ~1,225 ft/min, decelerating, no speed
+given) the model sinks ~1,240-1,480 at 250 KCAS: not carded. WRAP's climb row agrees with APD's
+2,000 ft/min, so 0135 stands. Player impact: no 737 mission starts high (finals, go-around, RTO,
+windshear); only free flight descends from cruise.

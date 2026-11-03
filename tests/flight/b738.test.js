@@ -472,8 +472,8 @@ describe('Boeing 737-800 cruise and ceiling (EUROCONTROL APD, EASA TCDS IM.A.120
 //   Approach:                    IAS 250 kt, ROD 1,500 ft/min
 // The APD gives nominal rates for the speed schedule, not "at idle": the Mach 0.78 rate is a
 // shallow, thrust-managed descent, so idle must be at least as steep (a floor, not a match).
-// The 280 kt card flies WRAP's measured 737-800 descents instead (0126: APD's 3,500 is above
-// every flight WRAP saw). The
+// The 280 kt card flies WRAP's measured 737-800 descents instead (0126: APD's 3,500 is ~3σ
+// steeper than WRAP's mean). The
 // harness holds EAS (≈ CAS within a few kt at these levels) with pitch.
 function idleDescent(ft, kts, mach = null) {
   const target = (x) => (mach ? easAtMach(x.pos.y * M_TO_FT, mach) / KTS_TO_MPS : kts);
@@ -499,17 +499,25 @@ describe('Boeing 737-800 descent (EUROCONTROL APD; 0119)', () => {
   // performance model", Transportation Research Part C 98 (2019) 118-138, fitted to ADS-B tracks of
   // real flights; its B738 table (OpenAP, github.com/junzis/openap, openap/data/wrap/b738.txt, read
   // 2026-11-03): constant-Mach descent (Mach 0.77) to the crossover at 9.7 km (~FL318), then
-  // constant CAS 145 m/s (282 kt; 132-159 m/s) down to 5.9 km (~FL194), at a mean descent rate of
-  // 9.95 m/s, 1,959 ft/min (normal fit 9.94 ± 2.71 m/s: ±1σ = 1,425-2,492 ft/min; observed
-  // 1,079-2,833). APD's 3,500 ft/min for its 280 kt leg is above WRAP's steepest observed flight, so
-  // it is a schedule figure, not a clean idle rate (the old KNOWN GAP card asked for it at FL170;
-  // the model flew ~1,850). WRAP's climb row for the same airframe (10.24 m/s at 151 m/s CAS) does
-  // agree with APD's 2,000 ft/min climb, so 0135 still stands on APD. Most airline descents are
-  // idle (FMS VNAV), so the clean idle rate is held to the fleet's mean ±1σ, and never steeper
-  // than the steepest flight WRAP saw (which may use speedbrakes). Measured: FL300 ~2,030,
-  // FL260 ~1,980, FL220 ~1,900 ft/min. Speed brakes and a 280 -> 250 kt deceleration: not modelled.
-  it('idle at WRAP\'s 282 KCAS through its constant-CAS band (FL300-FL220), 65 t, sinks at the fleet\'s mean rate, 1,959 ft/min (±1σ)', () => {
+  // constant CAS 145 m/s (282 kt) down to 5.9 km (~FL194), at a mean descent rate of 9.95 m/s,
+  // 1,959 ft/min (normal fit 9.94 ± 2.71 m/s; the table's min/max, 5.48-14.39 m/s, are its 5th
+  // and 95th percentiles, mean ± 1.645σ). APD's 3,500 ft/min (17.8 m/s) for its 280 kt leg is ~2.9σ
+  // steeper than that mean, a rate ~0.2% of the fitted flights reach: a schedule figure, not a clean
+  // idle rate (the old KNOWN GAP card asked for it at FL170; the model flew ~1,850).
+  // What the card does and does not show. The fleet mean mixes idle (FMS VNAV) with thrust-managed,
+  // ATC-constrained and speedbrake descents, so it is a consistency check on the idle rate, not an
+  // idle measurement: WRAP's constant-Mach row (5.8 m/s, 1,142 ft/min) is as shallow as APD's
+  // 800, while a clean idle at Mach 0.78 must sink ~2,800-2,900 (L/D ~16 at ~450 kt TAS; the card
+  // above measures 2,908), so that phase is thrust-managed and is not carded. The tolerance is the
+  // repo's ±20% on the mean (1,567-2,351), not WRAP's ±1σ fleet spread (±27%), which would pass a
+  // tripled idle thrust or 25% more drag. WRAP's climb row (10.24 m/s at 151 m/s CAS) agrees with
+  // APD's 2,000 ft/min climb, so 0135 stands on APD. Below FL194 WRAP's after-CAS row (6.22 ± 1.03
+  // m/s, ~1,225 ft/min) is a decelerating descent at no stated speed: not carded; at a constant 250
+  // KCAS the model sinks ~1,240-1,480 there. Measured here: FL300 ~2,030, FL260 ~1,960, FL220
+  // ~1,890 ft/min. Speed brakes and the 280 -> 250 kt deceleration: not modelled.
+  it('idle at WRAP\'s 282 KCAS through its constant-CAS band (FL300-FL220), 65 t, sinks at the fleet\'s mean rate, 1,959 ft/min (±20%)', () => {
     const KCAS = 145 / KTS_TO_MPS; // 281.9 kt
+    const WRAP_MEAN_FPM = 9.95 * 60 * M_TO_FT;
     const keas = (ft) => easAtMach(ft, machAtCas(ft, KCAS)) / KTS_TO_MPS;
     for (const ft of [30000, 26000, 22000]) {
       const b = makeBody(b738, { kts: keas(ft), altM: ft / M_TO_FT, gearDown: false, throttle: 0 });
@@ -517,12 +525,10 @@ describe('Boeing 737-800 descent (EUROCONTROL APD; 0119)', () => {
       fly(b, b738, 40, (x, dt) => { x.throttle = 0; hold(x, dt); });
       let sum = 0, n = 0;
       fly(b, b738, 30, (x, dt) => { x.throttle = 0; hold(x, dt); sum += vsFpm(x); n++; });
-      const fpm = -sum / n, endFt = b.pos.y * M_TO_FT;
+      const endFt = b.pos.y * M_TO_FT;
       expect(endFt).toBeGreaterThan(19400); // still inside WRAP's constant-CAS band
       expect(Math.abs(b.iasKts - keas(endFt))).toBeLessThanOrEqual(2); // on the schedule's CAS
-      expect(fpm).toBeGreaterThanOrEqual(9.94 * 60 * M_TO_FT - 2.71 * 60 * M_TO_FT);
-      expect(fpm).toBeLessThanOrEqual(9.94 * 60 * M_TO_FT + 2.71 * 60 * M_TO_FT);
-      expect(fpm).toBeLessThan(14.39 * 60 * M_TO_FT);
+      within(-sum / n, WRAP_MEAN_FPM, 0.2);
     }
   });
 });
