@@ -8,6 +8,8 @@ import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT, GRAVITY } from '../../src/
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { surfaceWindFactor } from '../../src/weather.js';
+// The F-16's g/AoA limiter (0121): the game loads it right after boot (main.js), the cards fly with it.
+import '../../src/fbw.js';
 
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
