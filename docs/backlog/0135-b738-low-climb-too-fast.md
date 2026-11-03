@@ -1,7 +1,7 @@
 ---
 id: 0135
 title: 737 climbs ~3,400 ft/min from FL100 to FL150 at 290 kt, ~70% above EUROCONTROL's 2,000
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
