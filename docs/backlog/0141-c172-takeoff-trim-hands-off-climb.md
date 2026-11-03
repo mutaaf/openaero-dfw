@@ -1,7 +1,7 @@
 ---
 id: 0141
 title: C172 takeoff: Pilot's takeoff trim should settle into a climb, not back onto the runway
-status: in-progress
+status: shipped
 priority: P2
 size: M
 lens: authenticity
@@ -36,7 +36,7 @@ spawn carries the new trim.
 ## Out of scope
 A takeoff coach (0093); trim UI.
 
-## Outcome (in progress, #177)
+## Outcome (#177)
 Validation panel (2026-11-03) rescoped it. The takeoff spawn trims for Vy only flaps up
 (`trim.js takeoffTrimAoaDeg`, `spec.vyKts`: POH Vy 74 KIAS is a flaps-up speed), which serves the
 KADS engine-failure missions ("climb at 74 knots"). With flaps 10 (every other Cessna takeoff) it

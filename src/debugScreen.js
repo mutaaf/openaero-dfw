@@ -26,6 +26,11 @@ export function papiLampsWhite(lamps, end, ends) {
   return [0, 1, 2, 3].filter((i) => c[(k + i) * 3 + 1] > 0.5).length;
 }
 
+// Where each stand-in landmark stands (0010) and the ground under it, by landmark key, for
+// tests/e2e/landmarks.spec.js through openaeroDebug().landmarks (moved off boot for 0141).
+export const landmarkSeats = (objs, ground) => Object.fromEntries(objs.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
+  { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }]));
+
 // The ?debug test hooks (main.js passes what they reach; scenario(null, final) loads a final when the
 // runway end exists, arm(hop) arms a scripted bounce, dead() is the dead-stick chunk once loaded).
 export function hooks(sim, scenario, arm, dead, ground) {

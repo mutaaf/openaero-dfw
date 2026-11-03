@@ -1,6 +1,6 @@
 // Landmarks at their true coordinates (ticket 0010): the tours point you at the real thing.
 import { test, expect } from './fixtures.js';
-import { stubTiles, enterCockpit, collectErrors } from './helpers.js';
+import { BASE, stubTiles, enterCockpit, collectErrors } from './helpers.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS, ATT_STADIUM } from '../../src/landmarks.js';
 import { missionByKey } from '../../src/missions.js';
 
@@ -31,9 +31,13 @@ for (const [mission, target, name] of [['downtown_skyline', DOWNTOWN_DALLAS, 'do
 }
 
 test('every landmark model stands at its true position on its own ground', async ({ page }) => {
-  await enterCockpit(page);
+  // The seats are a ?debug readout (debugScreen.js, a lazy chunk): load it and wait for it.
+  await page.goto(`${BASE}?debug`);
+  await page.locator('#btnStartFlight').click();
+  await expect(page.locator('#onboardingModal')).toBeHidden();
   // The DEM loads after boot and re-seats the landmarks; wait for it.
   await expect.poll(() => page.evaluate(() => window.openaeroDebug().terrain?.demLoaded)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.openaeroDebug().landmarks)).not.toBeNull();
   const placed = (await page.evaluate(() => window.openaeroDebug())).landmarks;
   for (const key of Object.keys(LANDMARKS)) {
     const want = landmarkPos(key), got = placed[key];
