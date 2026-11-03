@@ -3222,14 +3222,15 @@ byId('btnCenterWings').addEventListener('click', () => {
 });
 
 // On-screen sticks (desktop drag pad + phone touch stick) feed sim.stick through pointer
-// events. Each control captures its own pointer, so two thumbs work at once. A held control
-// lets go when its pointer ends anywhere (a lost capture sends the pointerup to whatever is
-// under the thumb) and when the window loses focus (an app switch mid-hold), so nothing stays
-// deflected hands-off (0136).
+// events. Each control captures its own pointer, so two thumbs work at once. A held stick or
+// trim button lets go when its pointer ends anywhere (a lost capture sends the pointerup to
+// whatever is under the thumb) and when the window loses focus or the page is hidden (an app
+// switch mid-hold), so nothing stays deflected hands-off (0136). The throttle keeps its setting.
 // (blur is the window's own: not captured, so a button losing focus never lets go of the stick.)
 const onPtrEnd = (f) => {
   for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) window.addEventListener(t, f, true);
   window.addEventListener('blur', f);
+  document.addEventListener('visibilitychange', f);
 };
 function bindStick(el) {
   let pointerId = null;

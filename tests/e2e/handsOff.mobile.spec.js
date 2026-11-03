@@ -3,8 +3,9 @@ import { BASE, stubTiles, collectErrors } from './helpers.js';
 
 // Ticket 0136: a first-timer on a phone taps Fly and lets go. The default final (KDFW 35C, Learner on a
 // first visit) must fly its 3° path hands-off, as it does on desktop, and the touch stick must read
-// exactly centred until a thumb is on it. A stick whose pointerup never reaches it (iOS Safari drops it
-// when the captured element loses the pointer, or the app is switched mid-hold) must not stay deflected.
+// exactly centred until a thumb is on it. A stick whose pointerup never reaches it (a lost pointer
+// capture, or an app switched mid-hold) must not stay deflected. Chromium here, not WebKit: the lost
+// capture is forced with releasePointerCapture and the app switch is a synthetic window blur.
 test.use({ storageState: { cookies: [], origins: [] } }); // a first visit: Learner, as the Scout flew it
 const OFF_DECK = { x: 195, y: 120 }; // the top of an upright phone, well off the touch deck
 
@@ -41,9 +42,11 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
     }
     const last = samples.at(-1);
     const sinkFpm = (first.msl - last.msl) / ((last.t - first.t) / 60);
-    // The 3° path's sink at this groundspeed (~800 fpm at 153 kt); the Scout's phone dive was ~4,700.
-    const pathFpm = Math.tan(3 * Math.PI / 180) * last.gs * 6076.12 / 60;
-    expect(Math.abs(sinkFpm - pathFpm), `sink ${sinkFpm.toFixed(0)} fpm vs the path's ${pathFpm.toFixed(0)}`).toBeLessThan(300);
+    // The 3° path's sink at the mean groundspeed (~810 fpm at 153 kt; Learner flies ~910, desktop and
+    // phone alike); ±200 fpm is ~2.3° to ~3.7°. The Scout's phone dive was ~4,700.
+    const gs = samples.reduce((a, s) => a + s.gs, 0) / samples.length;
+    const pathFpm = Math.tan(3 * Math.PI / 180) * gs * 6076.12 / 60;
+    expect(Math.abs(sinkFpm - pathFpm), `sink ${sinkFpm.toFixed(0)} fpm vs the path's ${pathFpm.toFixed(0)}`).toBeLessThan(200);
     expect(errors).toEqual([]);
   });
 }
@@ -63,6 +66,22 @@ test('a held touch stick that loses its pointer, or the app, lets go (0136)', as
     expect((await sample(page)).stick.y).toBeLessThan(-0.3);
   };
   const slide = (to) => cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [to] });
+  const held = async () => {
+    const s = (await sample(page)).stick;
+    expect(s.active, 'stick still held').toBe(true);
+    expect(s.y).toBeLessThan(-0.3);
+  };
+
+  // A second finger taps a deck button while the stick is held: its pointerup is not the stick's.
+  await hold();
+  const gear = await page.locator('#touchGear').boundingBox();
+  const g = { x: gear.x + gear.width / 2, y: gear.y + gear.height / 2 };
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 0 }, { ...g, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [{ ...g, id: 1 }] }); // CDP: the points released
+  await page.waitForTimeout(200);
+  await held();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect.poll(async () => (await sample(page)).stick).toEqual({ x: 0, y: 0, active: false });
   const lift = () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 
   // The stick loses its capture mid-hold (as iOS can when the captured element stops getting the
@@ -71,6 +90,8 @@ test('a held touch stick that loses its pointer, or the app, lets go (0136)', as
   await hold();
   await page.evaluate(() => document.getElementById('touchStick').releasePointerCapture(window.__stickPointer));
   await slide(OFF_DECK);
+  await page.waitForTimeout(200);
+  await held(); // the thumb is still down: nothing has let go yet
   await lift();
   await page.waitForTimeout(300);
   const after = await sample(page);
