@@ -44,3 +44,8 @@ export function trimSpeedKts(spec, alphaDeg, flapsIndex) {
   if (cl < 0.05) return null;
   return Math.sqrt((2 * spec.massKg * GRAVITY) / (RHO_SEA_LEVEL * spec.wingAreaM2 * cl)) * MPS_TO_KTS;
 }
+
+// The takeoff spawn's trim (0141): a released stick climbs at Vy where the airframe publishes one
+// (the C172S POH's "Elevator Trim - TAKEOFF", then 70-80 KIAS, Vy 74), else at 1.2 Vr (the jets).
+export const takeoffTrimAoaDeg = (spec, flapsIndex) =>
+  trimAoaDeg(spec, spec.vyKts * KTS_TO_MPS || spec.vrKts * 0.617, flapsIndex);

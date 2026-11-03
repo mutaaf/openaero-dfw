@@ -1,12 +1,12 @@
 ---
 id: 0141
 title: C172 takeoff: Pilot's takeoff trim should settle into a climb, not back onto the runway
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-03
-pr:
+pr: 177
 ---
 
 ## Why
@@ -35,3 +35,12 @@ spawn carries the new trim.
 
 ## Out of scope
 A takeoff coach (0093); trim UI.
+
+## Outcome
+The takeoff spawn trims for Vy where the airframe publishes one (`spec.vyKts`, the C172's 74 KIAS,
+POH Sec. 5), `trim.js takeoffTrimAoaDeg`; the jets keep 1.2 Vr bit for bit. Card (c172.test.js,
+flaps 0 and 10, rotations to 6-9°, released at positive rate with main.js's hold-to-trim stand-in):
++572 to +780 ft in 60 s, settling at 67-73 KIAS mean (the stand-in trims part of the pull away),
+troughs 5+ kt above the stall warning, never back on the runway. With 1.2 Vr every case failed.
+Over-rotations of 10-12° are logged, not carded: at 12° with flaps 10 the lightly damped phugoid
+still dips to ~54 kt (a warning) and touches once. A full aft yank is a separate model gap: 0144.

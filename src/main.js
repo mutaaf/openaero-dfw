@@ -43,7 +43,7 @@ import {
   groundSteerRudder,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare } from './input.js';
-import { trimStep, trimSpeedKts, clampTrim } from './trim.js';
+import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from './trim.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
@@ -2596,8 +2596,8 @@ function loadScenario(key, final = null) {
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0;
     sim.flapsIndex = mission.flaps ?? 1;
-    // Takeoff trim: a neutral stick flies the climb-out speed (1.2 Vr, in m/s) once it lifts off.
-    trimAlpha = trimAoaDeg(sim.spec, sim.spec.vrKts * 0.617, sim.flapsIndex);
+    // Takeoff trim: a neutral stick flies the climb-out speed (Vy, else 1.2 Vr) once it lifts off (0141).
+    trimAlpha = takeoffTrimAoaDeg(sim.spec, sim.flapsIndex);
     sim.gearDown = true;
     sim.onGround = true;
     sim.activeEnd = end;
