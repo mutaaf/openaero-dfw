@@ -3222,7 +3222,15 @@ byId('btnCenterWings').addEventListener('click', () => {
 });
 
 // On-screen sticks (desktop drag pad + phone touch stick) feed sim.stick through pointer
-// events. Each control captures its own pointer, so two thumbs work at once.
+// events. Each control captures its own pointer, so two thumbs work at once. A held control
+// lets go when its pointer ends anywhere (a lost capture sends the pointerup to whatever is
+// under the thumb) and when the window loses focus (an app switch mid-hold), so nothing stays
+// deflected hands-off (0136).
+// (blur is the window's own: not captured, so a button losing focus never lets go of the stick.)
+const onPtrEnd = (f) => {
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) window.addEventListener(t, f, true);
+  window.addEventListener('blur', f);
+};
 function bindStick(el) {
   let pointerId = null;
   const move = (e) => {
@@ -3238,12 +3246,11 @@ function bindStick(el) {
   });
   el.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) move(e); });
   const release = (e) => {
-    if (e.pointerId !== pointerId) return;
+    if (e.pointerId != null && e.pointerId !== pointerId) return; // a blur has no pointerId
     pointerId = null;
     sim.stick.active = false; sim.stick.x = 0; sim.stick.y = 0;
   };
-  el.addEventListener('pointerup', release);
-  el.addEventListener('pointercancel', release);
+  onPtrEnd(release);
 }
 bindStick(byId('virtualStickPad'));
 bindStick(byId('touchStick'));
@@ -3258,8 +3265,7 @@ bindStick(byId('touchStick'));
   };
   el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); set(e); e.preventDefault(); });
   el.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) set(e); });
-  el.addEventListener('pointerup', (e) => { if (e.pointerId === pointerId) pointerId = null; });
-  el.addEventListener('pointercancel', (e) => { if (e.pointerId === pointerId) pointerId = null; });
+  onPtrEnd((e) => { if (e.pointerId === pointerId) pointerId = null; });
 })();
 
 // Touch trim rocker (0094, Pilot): trims while a thumb holds a button, like the wheel.
@@ -3269,9 +3275,8 @@ for (const [id, key] of [['touchTrimDn', 'dn'], ['touchTrimUp', 'up']]) {
   let pointerId = null;
   const set = (on) => { trimHeld[key] = on; sim.touchTrim = (trimHeld.up ? 1 : 0) - (trimHeld.dn ? 1 : 0); };
   el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); set(true); e.preventDefault(); });
-  const release = (e) => { if (e.pointerId === pointerId) { pointerId = null; set(false); } };
-  el.addEventListener('pointerup', release);
-  el.addEventListener('pointercancel', release);
+  const release = (e) => { if (e.pointerId == null || e.pointerId === pointerId) { pointerId = null; set(false); } };
+  onPtrEnd(release);
 }
 
 // Phone system buttons reuse the desktop handlers.
@@ -3477,7 +3482,7 @@ if (debugOverlay) {
   window.openaeroDebugCaption = sayCaption;
   // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
   window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
-  import('./debugScreen.js').then((m) => (debugScreen = m)); // runwayScreen, off the boot budget
+  import('./debugScreen.js').then((m) => (debugScreen = m)); // runwayScreen, papiLampsWhite: off the boot budget
 }
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {
@@ -3493,9 +3498,10 @@ window.openaeroDebug = () => {
     overspeed: !!sim.overspeed,
     stallKts: sim.stallKts ?? null,
     // The PAPI (0131): the white lamps the HUD/coach read, and the active end's 3D lamps that are white.
-    papiWhite: sim.papiWhite, papiLampsWhite: papiLamps && sim.activeEnd ? [0, 1, 2, 3].filter((i) => papiLamps.geometry.attributes.color.array[(RUNWAY_ENDS.indexOf(sim.activeEnd) * 4 + i) * 3 + 1] > 0.5).length : null,
+    papiWhite: sim.papiWhite, papiLampsWhite: debugScreen?.papiLampsWhite(papiLamps, sim.activeEnd, RUNWAY_ENDS) ?? null, // ?debug (debugScreen.js)
     ilsLocDots: sim.ilsLocDots, ilsGsDots: sim.ilsGsDots, ilsLocBarPx: sim.ilsLocBarPx, ilsGsBarPx: sim.ilsGsBarPx,
     inputSource: sim.inputSource,
+    stick: { ...sim.stick },
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,

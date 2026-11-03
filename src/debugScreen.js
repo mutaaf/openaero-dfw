@@ -16,3 +16,12 @@ export function runwayScreen(e, camera, canvas, ground) {
     return { x: (p.x + 1) / 2 * rect.width, y: (1 - p.y) / 2 * rect.height, z: p.z };
   }));
 }
+
+// The active end's 3D PAPI lamps that are white (0131; null before the lamps or with no active
+// runway), for tests/e2e/papi.spec.js through openaeroDebug().papiLampsWhite. Four lamps per end,
+// in RUNWAY_ENDS order, a white lamp's green channel lit.
+export function papiLampsWhite(lamps, end, ends) {
+  if (!lamps || !end) return null;
+  const c = lamps.geometry.attributes.color.array, k = ends.indexOf(end) * 4;
+  return [0, 1, 2, 3].filter((i) => c[(k + i) * 3 + 1] > 0.5).length;
+}

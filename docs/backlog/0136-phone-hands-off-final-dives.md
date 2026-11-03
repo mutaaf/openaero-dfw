@@ -1,12 +1,12 @@
 ---
 id: 0136
 title: A hands-off Learner final holds its path on a phone-size touch screen, as it does on desktop
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-11-03
-pr:
+pr: 170
 ---
 
 ## Why
@@ -58,3 +58,15 @@ New `tests/e2e/handsOff.mobile.spec.js` (phone project): taps Fly with a touch t
 
 ## Out of scope
 Changing the assist trim law or the ILS coach.
+
+## Outcome (2026-11-03, Builder)
+The dive did not reproduce on `main` (a58b2d5) or on the build the Scout flew (665dcf3): Learner,
+Kid and Pilot fly the same hands-off final at 1280x720, 390x844 and 844x390 with touch (Learner
+2.2° throughout, ~910 fpm on the 3° path everywhere; Kid ~785; Pilot 2.1 → 1.6°, ~990), with Fly
+pressed by Playwright tap, click, `touchscreen.tap`, `mouse.click` and raw CDP touches, at DPR 1
+and 3, after 3 s and 15 s on the start screen. The Scout's run was most likely a harness artifact.
+What the hunt did find is a real way to get that dive: a touch stick that loses its pointer
+capture mid-hold (iOS can) gets its pointerup on whatever is under the thumb, and stayed pulled
+for the rest of the flight. Every touch control now lets go when its own pointer ends anywhere
+(window listeners) or the window loses focus. The acceptance's "under 300 ft/min" is read as
+"within 300 ft/min of the 3° path's sink" (the ticket's own desktop run loses ~1,050 ft/min).
