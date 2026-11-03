@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   clamp, lerp, dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient, waveDragCd, dragDivergenceMach,
-  inducedDragK, headingError, headingFromYaw, papiWhiteLights, gpwsCalloutIndex, gpwsRearm,
+  inducedDragK, headingError, headingFromYaw, papiWhiteLights, PAPI_SETTING_OFFSETS_DEG, gpwsCalloutIndex, gpwsRearm,
   GPWS_ALT_THRESHOLDS, isStallWarning, isGpwsWarning, takeoffCalloutIndex, TAKEOFF_CALLOUTS,
   TAKEOFF_CALLOUT_HUD_PLAIN,
 } from '../../src/aero.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
+import { searsHaackCd } from '../../src/supersonic.js';
 import { DEG_TO_RAD, KTS_TO_MPS, MPS_TO_KTS, M_TO_FT, FT_TO_M } from '../../src/constants.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
@@ -89,9 +90,9 @@ describe('waveDragCd (0120: Korn + Lock drag rise)', () => {
   it('a pushover loads the wing too: a negative CL rises like a positive one', () => {
     expect(waveDragCd(b738, -0.3, 0.8)).toBeCloseTo(waveDragCd(b738, 0.3, 0.8), 10);
   });
-  it('only an airframe with transonic data has it (C172, F-16 unchanged), and dragCoefficient adds it', () => {
+  it('only an airframe with transonic data has it (C172 none; F-16 none below its Mcrit), and dragCoefficient adds it', () => {
     expect(waveDragCd(AIRCRAFT_DATABASE.c172, 0.5, 0.9)).toBe(0);
-    expect(waveDragCd(AIRCRAFT_DATABASE.f16, 0.5, 0.9)).toBe(0);
+    expect(waveDragCd(AIRCRAFT_DATABASE.f16, 0.5, 0.78)).toBe(0); // Mcrit 0.786 at CL 0.5
     expect(dragCoefficient(b738, 0.6, false, 0, 1, 0.8) - dragCoefficient(b738, 0.6, false, 0, 1))
       .toBeCloseTo(waveDragCd(b738, 0.6, 0.8), 10);
     expect(dragCoefficient(b738, 0.6, false, 0, 1, 0.3)).toBe(dragCoefficient(b738, 0.6, false, 0, 1));
@@ -144,6 +145,26 @@ describe('PAPI', () => {
     expect(papiWhiteLights(3.2)).toBe(3);
     expect(papiWhiteLights(2.6)).toBe(1);
     expect(papiWhiteLights(2.0)).toBe(0);
+  });
+  // Ticket 0131: AC 150/5340-30J Table 7-2 aims a 4-box PAPI's units at the glide path G
+  // +30', +10', -10', -30' (standard installation), so two white / two red is G +-10'.
+  it('turns at the AC 150/5340-30J setting angles around a 3.0° path', () => {
+    expect(PAPI_SETTING_OFFSETS_DEG).toEqual([-30 / 60, -10 / 60, 10 / 60, 30 / 60]);
+    for (const [deg, white] of [[3.0, 2], [2.84, 2], [3.16, 2], [2.82, 1], [3.18, 3], [2.51, 1], [3.49, 3],
+      [2.49, 0], [3.51, 4], [0, 0], [-1, 0], [10, 4]]) {
+      expect(papiWhiteLights(deg), `${deg}°`).toBe(white);
+      expect(papiWhiteLights(deg, 3), `${deg}° (G 3.0)`).toBe(white);
+    }
+  });
+  it('is symmetric about the path: the on-path band is +-10 arc-minutes', () => {
+    for (const d of [0.1, 0.16, 0.18, 0.3, 0.49, 0.51, 1]) {
+      expect(papiWhiteLights(3 + d) + papiWhiteLights(3 - d), `+-${d}°`).toBe(4);
+    }
+  });
+  it('moves the same offsets with the glide path angle (G = 3.2°)', () => {
+    for (const [deg, white] of [[3.2, 2], [3.04, 2], [3.36, 2], [3.02, 1], [3.38, 3], [2.69, 0], [2.71, 1], [3.69, 3], [3.71, 4]]) {
+      expect(papiWhiteLights(deg, 3.2), `${deg}° (G 3.2)`).toBe(white);
+    }
   });
 });
 
@@ -298,5 +319,65 @@ describe('calloutWord', () => {
     expect(T.map((_, i) => calloutWord(i))).toEqual([
       'one thousand', 'five hundred', 'four hundred', 'three hundred', 'two hundred',
       'one hundred', 'fifty', 'forty', 'thirty', 'twenty', 'ten']);
+  });
+});
+
+// 0133: the F-16's supersonic wave drag (Raymer's Sears-Haack correlation, Sect. 12.5.9-12.5.10).
+describe('waveDragCd supersonic (0133: the F-16)', () => {
+  const f16 = AIRCRAFT_DATABASE.f16;
+  const mdd = (cl) => dragDivergenceMach(f16, cl);
+  it('is zero below Mcrit at every lift (the subsonic cards do not move)', () => {
+    for (const cl of [-0.5, 0, 0.3, 1.0]) {
+      const mcrit = mdd(cl) - Math.cbrt(0.1 / 80);
+      expect(waveDragCd(f16, cl, mcrit - 1e-6)).toBe(0);
+      expect(waveDragCd(f16, cl, 0.5)).toBe(0);
+    }
+    expect(mdd(0.1)).toBeCloseTo(0.961, 3);
+  });
+  it('the Sears-Haack drag area is (9π/2)(Amax/l)², the volume form 128V²/(πl⁴) of the same body', () => {
+    const { areaMaxM2: a, lengthM: l, ewd } = f16.supersonic;
+    const r = Math.sqrt(a / Math.PI), volume = 3 * Math.PI ** 2 * r * r * l / 16; // Sears-Haack body
+    expect(searsHaackCd(f16) * f16.wingAreaM2 / ewd).toBeCloseTo(128 * volume ** 2 / (Math.PI * l ** 4), 10);
+    expect(searsHaackCd(f16)).toBeCloseTo(0.02165, 4);
+  });
+  it('at Mach 1.2 and 1.05 it is the Sears-Haack value; from 1.2 up, Raymer\'s Mach and sweep factor', () => {
+    const cd12 = searsHaackCd(f16);
+    expect(waveDragCd(f16, 0.1, 1.2)).toBeCloseTo(cd12, 10);
+    expect(waveDragCd(f16, 0.1, 1.05)).toBeCloseTo(cd12, 10);
+    const raymer = (m) => cd12 * (1 - 0.386 * (m - 1.2) ** 0.57 * (1 - Math.PI * 40 ** 0.77 / 100));
+    expect(waveDragCd(f16, 0.1, 2.0)).toBeCloseTo(raymer(2.0), 10); // ≈ 0.0182
+    expect(waveDragCd(f16, 0.1, 2.0)).toBeCloseTo(0.0182, 4);
+  });
+  it('past ~Mach 2.4 it holds at 0.8 of the Mach 1.2 value (Raymer\'s high-Mach limit), out to Mach 10', () => {
+    expect(waveDragCd(f16, 0.1, 2.3)).toBeGreaterThan(0.8 * searsHaackCd(f16));
+    for (const m of [2.5, 4, 10]) expect(waveDragCd(f16, 0.1, m)).toBeCloseTo(0.8 * searsHaackCd(f16), 10);
+  });
+  it('is continuous through MDD, 1.05 and 1.2, finite and non-negative everywhere, peaks near Mach 1.1', () => {
+    for (const m of [mdd(0.1), 1.05, 1.2]) {
+      expect(Math.abs(waveDragCd(f16, 0.1, m + 1e-7) - waveDragCd(f16, 0.1, m - 1e-7))).toBeLessThan(1e-6);
+    }
+    let peakM = 0, peak = 0;
+    for (let m = 0; m <= 4; m += 0.001) {
+      const cd = waveDragCd(f16, 0.1, m);
+      expect(Number.isFinite(cd)).toBe(true);
+      expect(cd).toBeGreaterThanOrEqual(0);
+      if (cd > peak) { peak = cd; peakM = m; }
+    }
+    expect(peakM).toBeGreaterThan(1.05);
+    expect(peakM).toBeLessThan(1.2);
+    expect(peak / searsHaackCd(f16)).toBeLessThan(1.3);
+  });
+  // A cross-check, not the source: JSBSim's open F-16 (aircraft/f16/f16.xml, GPL; numbers cited,
+  // not copied) adds a Mach drag of 0.023 at Mach 1.1 and 0.015 at Mach 1.8. Ours: within ±30%.
+  it('is within ±30% of JSBSim\'s open F-16 Mach drag at Mach 1.1 (0.023) and 1.8 (0.015)', () => {
+    expect(Math.abs(waveDragCd(f16, 0.1, 1.1) / 0.023 - 1)).toBeLessThanOrEqual(0.3);
+    expect(Math.abs(waveDragCd(f16, 0.1, 1.8) / 0.015 - 1)).toBeLessThanOrEqual(0.3);
+  });
+  it('installs itself on the F-16 only; the 737 keeps 0120\'s linear continuation past MDD', () => {
+    expect(f16.supersonicCd).toBeTypeOf('function');
+    expect(b738.supersonicCd).toBeUndefined();
+    expect(AIRCRAFT_DATABASE.c172.transonic).toBeUndefined();
+    const m = dragDivergenceMach(b738, 0.2);
+    expect(waveDragCd(b738, 0.2, 1.1)).toBeCloseTo(20 * Math.cbrt(0.1 / 80) ** 4 + 0.1 * (1.1 - m), 6);
   });
 });

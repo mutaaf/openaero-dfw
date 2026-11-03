@@ -1,0 +1,67 @@
+// The F-16's fly-by-wire g and AoA limiter (ticket 0121), a lazy chunk main.js loads right after
+// boot (tests/flight/harness.js imports it): loading it gives every spec.pitchFbw airframe its
+// spec.fbw, which flightModel.js calls in the air; until then the stick is the raw pitch command.
+import { Vector3 } from 'three';
+import { GRAVITY, RAD_TO_DEG } from './constants.js';
+import { AIRCRAFT_DATABASE } from './aircraft.js';
+
+const _x = new Vector3();
+const _v = new Vector3();
+
+// The F-16's g and AoA limiter (ticket 0121), NASA TP-1538 App. A and Fig. 63: the flight control
+// system's commandable normal acceleration is 1 g + 8 g, cut by 0.322 g per degree of α from 15° to
+// 20.4° and by 1.322 g/deg above, so it reaches 1 g at ~25° ("an angle-of-attack limit in 1g
+// flight of approximately 25°"). Full back stick = this limit. Returns the load factor (g).
+export function fbwLoadLimit(aoaDeg) {
+  return 9 - 0.322 * Math.min(Math.max(aoaDeg - 15, 0), 5.4) - 1.322 * Math.max(0, aoaDeg - 20.4);
+}
+
+// The highest pitch rate (rad/s, + nose up) the limiter lets the stick command (TP-1538 App. A: the
+// stick commands normal acceleration, full back the Fig. 63 limit): the flight path's own rate
+// (g·(n − up_y)/V, which holds α) plus a step towards the α where the load factor n meets the
+// command (n grows with α by the lift slope; Fig. 63's limit falls by its own slope), at
+// FBW_ALPHA_GAIN of the pitch loop's bandwidth. `pull` (0-1, back stick) commands 1 g + 8 g × the
+// pull: a straight line, the game's own choice (TP-1538 gives no stick gradient or breakout; full
+// back = Fig. 63's 9 g). A released stick (pull ≤ 0) is held only to Fig. 63, so it keeps holding
+// the nose where it is (0090). α and n are led by the pitch loop's lag (`lagS`) at today's α rate
+// (body pitch rate `qBody` less the flight path's), so a fast pull stops at the limit, not through
+// it; that lead and FBW_ALPHA_GAIN are the game's too (TP-1538's gains are not modelled).
+// `nNow` is the seat's load factor from the aero forces, `upY` the lift direction's world-vertical
+// part (cos γ·cos φ: gravity across the flight path; the body up axis' cos θ·cos φ overstated the
+// path's rate nose-high and let a held slow pull climb to α ~38°), `qDyn` the dynamic pressure (Pa).
+const FBW_ALPHA_GAIN = 1;
+export function fbwPitchRateCap(spec, pull, aoaRad, nNow, upY, tasMps, qDyn, qBody, lagS) {
+  const nPerRad = (spec.clAlpha * qDyn * spec.wingAreaM2) / (spec.massKg * GRAVITY);
+  const pathRate = (GRAVITY * (nNow - upY)) / tasMps;
+  const lead = (qBody - pathRate) * lagS;
+  const aoaDeg = (aoaRad + lead) * RAD_TO_DEG;
+  const nLimit = fbwLoadLimit(aoaDeg);
+  const nStick = pull > 0 ? 1 + 8 * pull : Infinity;
+  const limitSlope = nStick < nLimit ? 0 : (aoaDeg > 20.4 ? 1.322 : aoaDeg > 15 ? 0.322 : 0) * RAD_TO_DEG;
+  const alphaGap = (Math.min(nLimit, nStick) - nNow - nPerRad * lead) / (nPerRad + limitSlope);
+  return pathRate + (FBW_ALPHA_GAIN / lagS) * alphaGap;
+}
+
+// flightModel.js's hook: the stick's pitch-rate command `qCmd` (rad/s), capped by the limiter in the
+// air (above 20 m/s; on the wheels the stick is the stabilator, as before). `liftN` is the aero force
+// along the body's up axis (N), so the seat's load factor is liftN / weight. Never more nose-down
+// than full forward stick (the stabilator's own limit).
+export function fbwPitch(body, spec, qCmd, aoaRad, liftN, tasMps, qDyn) {
+  if (body.onGround || tasMps <= 20) return qCmd;
+  return Math.min(qCmd, Math.max(-(spec.pitchAuthority ?? 1.8) / spec.pitchDamping, fbwPitchRateCap(spec, -body.elevInput, aoaRad, liftN / (spec.massKg * GRAVITY),
+    liftUpY(body), tasMps, qDyn, body.angVel.x, 120 / (spec.pitchDamping * tasMps))));
+}
+
+// The world-vertical part of the lift direction (body x axis × the air-relative velocity, as
+// flightModel.js builds lift): cos γ·cos φ.
+function liftUpY(body) {
+  _x.set(1, 0, 0).applyQuaternion(body.quat);
+  _v.copy(body.vel).sub(body.windVec).normalize();
+  return _x.cross(_v).normalize().y;
+}
+
+// Give every fly-by-wire airframe in `db` (aircraft.js AIRCRAFT_DATABASE) its limiter.
+export function installFbw(db) {
+  for (const spec of Object.values(db)) if (spec.pitchFbw) spec.fbw = fbwPitch;
+}
+installFbw(AIRCRAFT_DATABASE);

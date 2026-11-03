@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
 import { stepFlightModel } from '../../src/flightModel.js';
+import { fbwLoadLimit } from '../../src/fbw.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { dynamicPressure, liftCoefficient, dragCoefficient } from '../../src/aero.js';
 import { DEG_TO_RAD } from '../../src/constants.js';
@@ -116,5 +117,35 @@ describe('ground spoilers dump lift at every flap setting', () => {
       expect(share).toBeGreaterThan(0.1);
       expect(share).toBeLessThan(0.3);
     }
+  });
+});
+
+// Ticket 0121: NASA TP-1538 App. A and Fig. 63, the F-16's maximum commandable normal acceleration:
+// 8 g incremental (9 g) to α 15°, less 0.322 g/deg to 20.4°, less 1.322 g/deg above, so 1 g at ~25°.
+describe('F-16 g and AoA limiter (TP-1538 Fig. 63)', () => {
+  it('is 9 g up to 15° AoA', () => {
+    for (const a of [-5, 0, 10, 15]) expect(fbwLoadLimit(a)).toBeCloseTo(9, 6);
+  });
+  it('falls 0.322 g/deg from 15° to 20.4° (7.26 g there)', () => {
+    expect(fbwLoadLimit(20.4)).toBeCloseTo(9 - 0.322 * 5.4, 6);
+    expect(fbwLoadLimit(18)).toBeCloseTo(9 - 0.322 * 3, 6);
+  });
+  it('falls 1.322 g/deg above 20.4° and reaches 1 g near 25° (TP-1538: "approximately 25°")', () => {
+    expect(fbwLoadLimit(22)).toBeCloseTo(9 - 0.322 * 5.4 - 1.322 * 1.6, 6);
+    const a1g = 20.4 + (8 - 0.322 * 5.4) / 1.322;
+    expect(fbwLoadLimit(a1g)).toBeCloseTo(1, 6);
+    expect(a1g).toBeGreaterThan(24.5);
+    expect(a1g).toBeLessThan(25.5);
+  });
+});
+
+describe('seat load factor (body.loadFactor, the HUD G)', () => {
+  it('reads the aero force along the body up axis over the weight (gravity itself is not felt)', () => {
+    // Level flight path, nose 5° up, wings level, no thrust: lift and drag's components on the
+    // body's up axis, over the weight.
+    const b = bodyAt(5);
+    stepFlightModel(b, spec, 1 / 120);
+    const lift = liftCoefficient(spec, 5 * DEG_TO_RAD, 0) * dynamicPressure(35) * spec.wingAreaM2;
+    expect(b.loadFactor).toBeCloseTo((lift * Math.cos(5 * DEG_TO_RAD) + dragCoefficient(spec, liftCoefficient(spec, 5 * DEG_TO_RAD, 0), true, 0, 1, 0) * dynamicPressure(35) * spec.wingAreaM2 * Math.sin(5 * DEG_TO_RAD)) / (spec.massKg * 9.80665), 2);
   });
 });

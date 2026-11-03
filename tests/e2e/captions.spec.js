@@ -2,6 +2,7 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
 import { recordCaptions, overlaps } from './captionHelpers.js';
 import { headingBoxTop, HEADING_BOX_H, windBoxRect } from '../../src/hudLayout.js';
+import { GPWS_ALT_THRESHOLDS, calloutWord } from '../../src/aero.js';
 
 // Ticket 0117: every spoken callout is captioned on screen, with the sound off too.
 // A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
@@ -24,7 +25,15 @@ test('sound off, a final to the runway captions each GPWS height once, in order,
     .not.toBeNull();
   expect((await page.evaluate(() => window.openaeroDebug())).audio).toBe('off');
   const caps = await page.evaluate(() => window.__captions);
-  const heights = caps.map((c) => c.text.split(' · ')[0]);
+  // A call made while the line is still up joins it ("twenty · throttle idle · ten" on a slow runner,
+  // where 20 ft to 10 ft takes under the line's 1.2 s): each record's new calls are what it added to
+  // the one before, and the heights are those of them that are GPWS heights.
+  const HEIGHTS = GPWS_ALT_THRESHOLDS.map((_, i) => calloutWord(i));
+  const heights = caps.flatMap((c, i) => {
+    const prev = i > 0 ? caps[i - 1].text : null;
+    const added = prev && c.text.startsWith(`${prev} · `) ? c.text.slice(prev.length + 3) : c.text;
+    return added.split(' · ');
+  }).filter((w) => HEIGHTS.includes(w));
   // From 1.3 NM down: each height once, in order (no "fifty" again after "forty"), down to "ten"
   // before the 737's mains touch: the calls read the radio altitude at the wheels (0122), not the
   // CG's height, which is ~12 ft over the runway at touchdown.

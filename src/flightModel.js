@@ -9,7 +9,7 @@
 // (the angle of attack the elevator trim flies; autoTrim = it follows α), engineFailed (the
 // dead-stick drill, 0036: the engine makes no power whatever the throttle; the prop windmills); optional
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
-// writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY,
+// writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY, loadFactor,
 // sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn),
 // spoilers (ground spoiler extension 0–1, airframes with spec.groundSpoilers). Systems
 // (systems.js) run first: the gear, flaps, brakes and reversers follow their levers at
@@ -177,6 +177,9 @@ export function stepFlightModel(body, spec, dt) {
 
   const accel = totalForceWorld.divideScalar(spec.massKg);
   body.accelY = accel.y;
+  // The seat's load factor (g, + = pushed into the seat, 0121): the specific force (acceleration
+  // less gravity) along the body's up axis, what the HUD's G shows.
+  body.loadFactor = _v4.set(0, 1, 0).applyQuaternion(body.quat).dot(accel) / GRAVITY + _v4.y;
   body.vel.addScaledVector(accel, dt);
   body.pos.addScaledVector(body.vel, dt);
 
@@ -200,7 +203,11 @@ export function stepFlightModel(body, spec, dt) {
   if (body.autoTrim || spec.pitchFbw || body.trimAlphaDeg == null) body.trimAlphaDeg = body.aoaDeg;
   const stiffness = spec.elevatorAlphaDeg ? authority / (spec.elevatorAlphaDeg * DEG_TO_RAD) : 0;
   const alphaErr = MathUtils.clamp(aoaRad - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
-  const qRate = (-body.elevInput * authority - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
+  // The stick's steady pitch rate (pitch authority over damping); a fly-by-wire airframe's g and
+  // AoA limiter (spec.fbw, fbw.js, 0121) caps it in the air, so a held pull stops at the limits.
+  let qCmd = -body.elevInput * authority / spec.pitchDamping;
+  if (spec.fbw) qCmd = spec.fbw(body, spec, qCmd, aoaRad, fBodyY, airspeed, qDyn);
+  const qRate = (qCmd * spec.pitchDamping - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
   // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
   const dihedral = dihedralAileron(spec, betaRad);

@@ -109,9 +109,11 @@ export function dragDivergenceMach(spec, cl) {
 }
 export function waveDragCd(spec, cl, mach) {
   if (!spec.transonic || !(mach > 0.5)) return 0;
-  const dm = mach - (dragDivergenceMach(spec, cl) - LOCK_DM);
+  const mdd = dragDivergenceMach(spec, cl), dm = mach - (mdd - LOCK_DM);
   if (dm <= 0) return 0;
-  return dm < LOCK_DM ? 20 * dm * dm * dm * dm : LOCK_RISE_AT_MDD + 0.1 * (dm - LOCK_DM);
+  if (dm < LOCK_DM) return 20 * dm * dm * dm * dm;
+  // Past MDD, an airframe with supersonic data (spec.supersonicCd, the F-16's, supersonic.js 0133).
+  return spec.supersonicCd ? spec.supersonicCd(mdd, mach) : LOCK_RISE_AT_MDD + 0.1 * (dm - LOCK_DM);
 }
 
 // Heading error in degrees, wrapped to [-180, 180].
@@ -127,14 +129,16 @@ export function headingFromYaw(yawRad) {
   return ((-yawRad * 180 / Math.PI) % 360 + 360) % 360;
 }
 
-// 4-light PAPI: number of WHITE lights for an approach slope angle (deg).
-// 2 white / 2 red = on a ~3° glidepath.
-export function papiWhiteLights(slopeDeg) {
-  if (slopeDeg > 3.4) return 4;
-  if (slopeDeg > 3.1) return 3;
-  if (slopeDeg > 2.8) return 2;
-  if (slopeDeg > 2.5) return 1;
-  return 0;
+// 4-light PAPI: number of WHITE lights for an approach slope angle (deg) to the PAPI.
+// FAA AC 150/5340-30J Table 7-2 (standard installation): the units are aimed at the glide path
+// G +30', +10', -10' and -30' (nearest the runway highest), so two white / two red is G +-10',
+// symmetric about the path (3.0°: 2.5, 2.83, 3.17, 3.5); a sharp switch, not a blend.
+// https://www.faa.gov/documentLibrary/media/Advisory_Circular/150-5340-30J.pdf (§7.5.4.6)
+export const PAPI_SETTING_OFFSETS_DEG = [-30 / 60, -10 / 60, 10 / 60, 30 / 60];
+export function papiWhiteLights(slopeDeg, glideDeg = 3) {
+  let white = 0;
+  for (let i = 0; i < 4; i++) if (slopeDeg > glideDeg + PAPI_SETTING_OFFSETS_DEG[i]) white++;
+  return white;
 }
 
 export const GPWS_ALT_THRESHOLDS = [1000, 500, 400, 300, 200, 100, 50, 40, 30, 20, 10];

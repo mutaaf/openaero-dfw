@@ -62,9 +62,19 @@ export function showResults(sim, result, best, end, gate) {
   strip.setAttribute('aria-label', td ? touchdownLabel(td) : '');
   shownStrip = td ? { td, grade: result.grade } : null;
   if (td) drawStrip(strip, td, result.grade);
+  const body = byId('resultsBody');
+  body.scrollTop = 0;
+  markMore();
 }
+// The card's middle scrolls on a short screen (0125): fade its foot while there is more below.
+function markMore() {
+  const body = byId('resultsBody');
+  body.classList.toggle('more', body.scrollTop + body.clientHeight < body.scrollHeight - 2);
+}
+byId('resultsBody').addEventListener('scroll', markMore, { passive: true });
 // Turned sideways with the card up, the strip changes size: draw it again at the new one.
 let shownStrip = null;
 addEventListener('resize', () => {
   if (shownStrip && !byId('resultsCard').classList.contains('hidden')) drawStrip(byId('touchdownStrip'), shownStrip.td, shownStrip.grade);
+  markMore();
 });

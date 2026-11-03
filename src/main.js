@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import './styles.css';
 import {
-  M_TO_FT, FT_TO_M, NM_TO_M, KTS_TO_MPS, DEG_TO_RAD, RAD_TO_DEG, GRAVITY, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
+  M_TO_FT, FT_TO_M, NM_TO_M, KTS_TO_MPS, DEG_TO_RAD, RAD_TO_DEG, DFW_ORIGIN_LAT, DFW_ORIGIN_LON,
 } from './constants.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 import { prismGeometry } from './prism.js';
@@ -13,9 +13,9 @@ import { magHeadingText } from './magvar.js';
 import { LANDMARKS, landmarkPos, DOWNTOWN_DALLAS } from './landmarks.js';
 import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
-  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES, runwayFactsText,
+  approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES, papiWhite, runwayFactsText,
 } from './airports.js';
-import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions } from './missions.js';
+import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions, missionSun } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
 import { gradeLanding, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S, GRADE_COLOURS } from './landing.js';
 import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
@@ -33,7 +33,7 @@ import { createLazyPhotoreal, photorealAllowed } from './photorealLazy.js';
 import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './terrain.js';
 import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './atmosphere.js';
 import {
-  headingError, papiWhiteLights, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
+  headingError, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
   takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN, speedLimitKts, overspeedStep, stallSpeedKts,
 } from './aero.js';
@@ -53,8 +53,8 @@ import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
-  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF,
+  windBoxRect, altCaptionRect, ALT_CAPTION, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
+  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
 import { radioAltitudeM } from './gear.js';
@@ -78,7 +78,7 @@ const sim = {
 
   // Flight Parameters
   iasKts: 140, tasKts: 144, gsKts: 122, mach: 0.22,
-  vsiFpm: -700, aglFt: 1270, raFt: 1258, mslFt: 1876, gLoad: 1.0,
+  vsiFpm: -700, aglFt: 1270, raFt: 1258, mslFt: 1876, loadFactor: 1,
   aoaDeg: 2.4, betaDeg: 0,
 
   // Controls
@@ -223,6 +223,10 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 // its own chunk, loaded right after boot; until then the sky is the plain haze colour.
 let skyDome = null;
 let runwayLights = null;
+let windsocks = null; // windsock.js (0027), lazy
+// Landing replay (0019, lazy): the last 30 s at 20 Hz of sim time, REPLAY on the results card.
+let replayLib = null, replayBuf = null, replaying = null;
+let _sockT = 0;
 
 camera = new THREE.PerspectiveCamera(cameraFovDeg(window.innerWidth, window.innerHeight), window.innerWidth / window.innerHeight, 0.5, 95000);
 
@@ -406,7 +410,15 @@ function buildRunways() {
   import('./runwayLights.js').then(({ createRunwayLights }) => {
     runwayLights = createRunwayLights({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, reducedMotion });
     scene.add(runwayLights.points);
+    if (debugOverlay) window.openaeroRunwayLights = runwayLights; // e2e: switch them off for a control frame
   }).catch((err) => console.warn('Runway lights unavailable:', err.message));
+  // A wind cone by every runway end's touchdown zone, in its field's METAR wind (0027).
+  import('./windsock.js').then(({ createWindsocks }) => {
+    windsocks = createWindsocks({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, gustAt: gustFactor, surfaceFactor: surfaceWindFactor, reducedMotion });
+    scene.add(windsocks.group);
+    if (debugOverlay) window.openaeroWindsocks = windsocks; // e2e: hide them for a control frame
+  }).catch((err) => console.warn('Windsocks unavailable:', err.message));
+  import('./replay.js').then((m) => { replayLib = m; replayBuf = m.createReplayBuffer(); }).catch(() => {});
 }
 
 function buildSatelliteTerrain() {
@@ -553,6 +565,7 @@ async function loadDem() {
     terrainLod.redrape();
     seatLandmarks();
     runwayLights?.reseat();
+    windsocks?.reseat();
   } catch (err) {
     console.warn('Terrain elevation unavailable, flying on flat ground:', err.message);
   }
@@ -910,6 +923,8 @@ function startGoAroundDrill(mission) {
 // once it climbs away (or fails). stallDrill.js is a lazy chunk, loaded with the drill.
 let stallLib = null;
 let aircraftBeforeMission = null; // yours, while a mission flies its own airframe (the drill's)
+let sunBeforeMission = null; // your When? choice, while a night or dusk mission flies its own (0060)
+let sunPickedFor = null; // the mission you picked a When? on: its reloads (METAR, assist, FLY AGAIN) keep your pick
 const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0, iasKts: 0, warnKts: 0 };
 let stallPullIn = 0; // the player's back stick this sub-step, before the assists
 let drillCoach = false; // the drill is always coached (its only instructions) until Skip
@@ -1120,6 +1135,7 @@ function showResults(result, best, end, gate) {
     // airplane on unwatched into the grass behind it (0106). KEEP ROLLING resumes it.
     if (!sim.paused) { resultsPaused = true; setPaused(true); }
     m.showResults(sim, result, best, end, gate);
+    byId('btnReplay').classList.toggle('hidden', !(replayBuf && replayLib.replayDuration(replayBuf) > 2));
   }).catch(() => showToast(`${result.title ?? 'Landing'}: ${result.grade} · ${result.score}`));
 }
 
@@ -1136,8 +1152,20 @@ function flyAgain() {
   loadScenario(sim.missionKey);
 }
 byId('btnFlyAgain').addEventListener('click', () => {
+  byId('btnReplay').classList.add('hidden'); // no replay while an ad break is pending
   const brk = ads?.between();
   if (brk) brk.then(flyAgain); else flyAgain();
+});
+// The replay poses the aircraft from its recording (a pose with sim's fields), then sim's own.
+function poseAircraft(b) {
+  aircraftRoot.position.copy(b.pos);
+  aircraftRoot.quaternion.copy(b.quat);
+  if (surfaces && animRefs.parts) surfaces.poseParts(animRefs.parts, sim.spec, b, 0);
+  animRefs.model?.update(b);
+}
+byId('btnReplay').addEventListener('click', () => {
+  replaying = aircraftRoot && replayLib.startReplay({ buf: replayBuf, camera, heightAt: ground.heightAt, spec: sim.spec,
+    pose: poseAircraft, done: () => { replaying = null; camera.up.set(0, 1, 0); poseAircraft(sim); } });
 });
 byId('btnKeepRolling').addEventListener('click', () => {
   byId('resultsCard').classList.add('hidden');
@@ -1213,6 +1241,8 @@ const tutor = createTutor();
 // The tutor's phases and words (apTutor.js) are a lazy chunk, fetched right after boot; until
 // it arrives (or if it can't) the tutor is quiet.
 let tutorLib = null;
+import('./fbw.js').catch(console.warn); // the F-16's g/AoA limiter (0121): it installs itself; a failed load warns
+import('./supersonic.js').catch(console.warn); // the F-16's wave drag (0133): it installs itself
 import('./apTutor.js').then((m) => { tutorLib = m; }).catch((e) => console.warn('[openaero] no autopilot tutor:', e));
 let tutorEnabled = true;
 let coachHandover = false; // the player took over from the autopilot on a final
@@ -1297,6 +1327,7 @@ function updateCoach(dt) {
   coachShown = key;
   byId('coach').classList.toggle('hidden', key === null);
   byId('btnTakeover').classList.toggle('hidden', !caption);
+  byId('coach').classList.toggle('coach-ap', !!caption); // the top slot's corner holds Your turn too (0130)
   if (key === null) return;
   byId('txtCoachLabel').textContent = caption ? 'Autopilot' : 'Coach';
   const skip = byId('btnCoachSkip');
@@ -1308,6 +1339,7 @@ function updateCoach(dt) {
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
     const text = tutorLib.TUTOR_TEXT[caption](tutorVals);
     byId('txtCoach').textContent = text;
+    placeCoach();
     // The GPWS callouts own the last 100 ft; the tutor speaks above them.
     if (sim.aglFt > 100 || caption === 'rollout') audio.teach(text);
     return;
@@ -1318,12 +1350,33 @@ function updateCoach(dt) {
   coachVals.touch = touchOnly;
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   byId('txtCoach').textContent = text;
+  placeCoach();
   // Spoken too when sound is on; the GPWS callouts own the last 100 ft.
   if (sim.aglFt > 100 || sim.onGround) audio.teach(text);
   if (!coachMarked) {
     coachMarked = true;
     try { markCoachSeen(window.localStorage); } catch { /* storage unavailable */ }
   }
+}
+
+// The coach card's CSS slot is over the touch deck; on a short screen held upright that is on the
+// speed tape, its SPD label and the runway under the horizon (0130): there it goes up under the top
+// bar (.coach-top) and stays there for the flight (a wrapped bounce prompt must not make it jump),
+// with smaller words (.coach-tight) if a long one would still reach the heading box. Measured when
+// the words change and on resize, never per frame.
+let coachTopHeld = false;
+function placeCoach(resized = false) {
+  const el = byId('coach');
+  if (resized) coachTopHeld = false;
+  if (el.classList.contains('hidden')) return;
+  if (!coachTopHeld) {
+    el.classList.remove('coach-top');
+    const r = el.getBoundingClientRect();
+    coachTopHeld = coachOverHud(window.innerHeight, r.top, r.bottom);
+    el.classList.toggle('coach-top', coachTopHeld);
+  }
+  el.classList.remove('coach-tight');
+  if (coachTopHeld && el.getBoundingClientRect().bottom > headingBoxTop(window.innerHeight / 2) - 2) el.classList.add('coach-tight');
 }
 
 // Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
@@ -1485,10 +1538,12 @@ function syncDensityAltitude() {
   const hint = d.thin ? THIN_AIR[kind] || THIN_AIR.other : '';
   const text = `Density altitude ${d.where}: ${d.ft} (${d.src}).`;
   const facts = runwayFactsText(sim.activeEnd);
-  if (text + hint + facts === daShown) return;
-  daShown = text + hint + facts;
+  const key = text + hint + facts + sim.activeEnd?.src;
+  if (key === daShown) return;
+  daShown = key;
   const factsEl = byId('txtRunwayFacts');
   byId('txtRunwayFactsLine').textContent = facts;
+  if (facts) byId('txtRunwayFactsSrc').textContent = `(${sim.activeEnd.src})`;
   factsEl.classList.toggle('hidden', !facts);
   byId('txtDaValue').textContent = text;
   const el = byId('txtThinAir');
@@ -1567,6 +1622,7 @@ function step6DofPhysics(dt) {
     aircraftRoot.position.copy(sim.pos);
     aircraftRoot.quaternion.copy(sim.quat);
   }
+  if (replayBuf) replayLib.recordReplay(replayBuf, sim);
 
   // Secondary visual animations
   // Control surfaces, gear swing and prop/fans (0063): from the state the physics just used.
@@ -1734,7 +1790,6 @@ function integrateSubStep(dt) {
   sim.raFt = Math.round(radioAltitudeM(sim, spec) * M_TO_FT);
   sim.mslFt = Math.round(yToFtMsl(sim.pos.y));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
-  sim.gLoad = 1.0 + (sim.accelY / GRAVITY);
 
   // Warning alerts
   // Keyed to where the flaps are, like the tape's band (0128): moving the lever doesn't move the wing.
@@ -1774,8 +1829,7 @@ function updatePapi() {
   const col = papiLamps.geometry.attributes.color.array;
   RUNWAY_ENDS.forEach((e, ei) => {
     const g = approachGeometry(e, sim.pos);
-    const distToPapi = Math.max(10, g.distM + AIM_POINT_M);
-    const white = g.distM > -AIM_POINT_M ? papiWhiteLights(Math.atan2(sim.pos.y - e.thrY, distToPapi) * RAD_TO_DEG) : 0;
+    const white = papiWhite(e, sim.pos, g.distM) ?? 0; // past the box: dark from behind
     // Lamps are numbered outward from the runway; the inboard lamps turn red first.
     for (let i = 0; i < 4; i++) {
       const k = (ei * 4 + i) * 3;
@@ -1789,8 +1843,9 @@ function updatePapi() {
   sim.papiWhite = null;
   if (!sim.activeEnd) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
   const ap = sim.approach;
-  const numWhite = papiWhiteLights(Math.atan2(sim.pos.y - sim.activeEnd.thrY, Math.max(10, ap.distM + AIM_POINT_M)) * RAD_TO_DEG);
+  const numWhite = papiWhite(sim.activeEnd, sim.pos, ap.distM);
   sim.papiWhite = numWhite;
+  if (numWhite === null) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
   if (numWhite === 2) {
     txt.textContent = 'ON GLIDESLOPE';
     txt.className = 'text-emerald-400 font-bold ml-1';
@@ -1892,7 +1947,8 @@ function updateCamera() {
 
 // One HUD tape: a vertical scale whose inner edge is at x (side −1 = scale to the left of
 // it, +1 = to the right), centred on y, scrolling so `value` sits at the readout.
-function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false) {
+// clearBelow: how far under the readout the scale's numbers stay out (the altitude tape's MSL tab).
+function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false, clearBelow = 16) {
   const half = 90;
   hudCtx.save();
   hudCtx.beginPath();
@@ -1914,7 +1970,7 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false) {
     const ty = y - (v - value) * pxPerUnit;
     const isMajor = v % major === 0;
     hudCtx.moveTo(x, ty); hudCtx.lineTo(x + side * (isMajor ? 9 : 5), ty);
-    if (isMajor && Math.abs(ty - y) > 16) hudCtx.fillText(`${v}`, x + side * 12, ty + 3.5);
+    if (isMajor && (ty < y - 16 || ty > y + clearBelow)) hudCtx.fillText(`${v}`, x + side * 12, ty + 3.5);
   }
   hudCtx.stroke();
   hudCtx.restore();
@@ -1932,6 +1988,22 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false) {
   hudCtx.font = 'bold 13px monospace';
   hudCtx.textAlign = 'center';
   hudCtx.fillText(`${Math.round(value)}`, bx + bw / 2, y + 4.5);
+  hudCtx.textAlign = 'left';
+}
+
+// "MSL" under the altitude readout (0132, hudLayout.js altCaptionRect): the tape is the CG's height
+// above sea level, the top bar's AGL the main wheels' radio altitude (sim.raFt). An opaque-enough tab keeps 4.5:1 over bright imagery.
+const _altCap = altCaptionRect(0, 0, {});
+// The scale's numbers (text ty - 4 … ty + 3.5) stay off the tab's rows.
+const ALT_CAPTION_CLEAR = ALT_BOX.h / 2 + 2 + ALT_CAPTION_H + 4;
+function drawAltCaption(cx, cy) {
+  const r = altCaptionRect(cx, cy, _altCap);
+  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+  hudCtx.fillRect(r.x, r.y, r.w, r.h);
+  hudCtx.fillStyle = '#e0f2fe';
+  hudCtx.font = 'bold 11px monospace';
+  hudCtx.textAlign = 'center';
+  hudCtx.fillText(ALT_CAPTION, r.x + r.w / 2, r.y + r.h - 2.5);
   hudCtx.textAlign = 'left';
 }
 
@@ -2021,7 +2093,8 @@ function renderHud() {
   // Speed and altitude tapes: see-through scales that scroll past a boxed readout, so
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
   drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
-  drawTape(cx + 130, cy, 1, sim.mslFt, 0.2, 100, 500);
+  drawTape(cx + ALT_TAPE_X, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
+  drawAltCaption(cx, cy);
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
   if (sim.stallKts && !sim.onGround) drawStallBand(cx - 131, cy);
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
@@ -2082,7 +2155,7 @@ function renderHud() {
   }
 
   // Stabilized-gate verdict (ticket 0020), for a few seconds after the gate
-  if (sim.gate && sim.simTime < sim.gateShownUntil) drawGateVerdict(cx, cy);
+  if (sim.gate && sim.simTime < sim.gateShownUntil) gateVerdict?.drawGateVerdict(hudCtx, sim, w, h, caption.text);
   // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
   if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
 
@@ -2090,6 +2163,7 @@ function renderHud() {
 }
 
 const ILS_DASH = [3, 3], NO_DASH = [];
+let gateVerdict = null; // gateVerdict.js (lazy, fetched after boot): draws the stabilized gate's verdict
 
 // Screen position (HUD canvas px) of a world point, or null behind the camera.
 const _hudP = new THREE.Vector3();
@@ -2237,20 +2311,6 @@ function drawFlareCue(cx, cy) {
   hudCtx.fillStyle = idle ? '#fcd34d' : '#6ee7b7';
   hudCtx.fillText(idle ? '▼ IDLE ▼' : '▲ FLARE ▲', cx, cy - 34);
   hudCtx.textAlign = 'left';
-}
-
-function drawGateVerdict(cx, cy) {
-  const g = sim.gate;
-  const y = cy + 92;
-  const lines = Math.ceil(g.failing.length / 3);
-  hudCtx.textAlign = 'center';
-  hudCtx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-  hudCtx.fillRect(cx - 120, y - 16, 240, 24 + lines * 16);
-  hudCtx.font = 'bold 13px monospace';
-  hudCtx.fillStyle = g.stable ? '#6ee7b7' : '#fcd34d';
-  hudCtx.fillText(g.stable ? 'STABILIZED' : 'UNSTABILIZED', cx, y + 1);
-  // At most 3 items a line (≤ 26 characters, ~205 px), so the box always holds them.
-  for (let i = 0; i < lines; i++) hudCtx.fillText(sim.gateLines[i], cx, y + 18 + i * 16);
 }
 
 // The takeoff callout's word (0035), just under the heading box (hudLayout.js).
@@ -2462,13 +2522,23 @@ function resetApFilters() {
 
 // `final` (?debug only, 0068): fly the default final to another runway end or distance.
 function loadScenario(key, final = null) {
+  coachTopHeld = false;
   hapticsReset();
+  replaying?.stop(false); // a restart ends a replay without the old card (0019)
+  if (replayBuf) replayLib.resetReplay(replayBuf);
   const mission = final ? { ...MISSIONS[0], ...final } : missionByKey(key, sim.dynamicMissions);
   // A mission flown in one airframe (the stall drill's Cessna) brings it; the next mission
   // without one gives yours back.
   if (mission.aircraft) {
     if (mission.aircraft !== sim.aircraftKey) { aircraftBeforeMission ??= sim.aircraftKey; setAircraft(mission.aircraft); }
   } else if (aircraftBeforeMission) { setAircraft(aircraftBeforeMission); aircraftBeforeMission = null; }
+  // A night or dusk mission flies its own sky; the next mission without one gives your When? back.
+  if (mission.key !== sunPickedFor) {
+    sunPickedFor = null;
+    const sky = missionSun(mission, sim.timeOfDayMode, sunBeforeMission);
+    sunBeforeMission = sky.before;
+    if (sky.mode !== sim.timeOfDayMode) { sim.timeOfDayMode = sky.mode; applySun(); }
+  }
   sim.missionKey = mission.key;
   let trimAlpha = null;
   sim.loadedMission = mission;
@@ -2634,7 +2704,7 @@ function skyCaption(mode) {
   return `${when} · ${light} · ${moon}`;
 }
 for (const btn of document.querySelectorAll('#timePicker .btnTime')) {
-  btn.addEventListener('click', () => { sim.timeOfDayMode = Number(btn.dataset.time); applySun(); });
+  btn.addEventListener('click', () => { sim.timeOfDayMode = Number(btn.dataset.time); sunBeforeMission = null; sunPickedFor = sim.missionKey; applySun(); });
 }
 
 // Clean view (desktop): panels folded away, the world fills the screen (H toggles).
@@ -2648,6 +2718,8 @@ byId('btnPanelsHide').addEventListener('click', () => setCleanView(true));
 
 function toggleTimeOfDay() {
   sim.timeOfDayMode = (sim.timeOfDayMode + 1) % TIME_MODES.length;
+  sunBeforeMission = null; // your choice now, kept through this mission's reloads
+  sunPickedFor = sim.missionKey;
   applySun();
 }
 
@@ -2673,7 +2745,7 @@ function syncUI() {
   byId('txtAltMsl').textContent = `${sim.mslFt} FT`;
   byId('txtAltAgl').textContent = `${sim.raFt} FT`; // RADAR AGL: the wheels' radio altitude (0122)
   byId('txtVsi').textContent = `${sim.vsiFpm} FPM`;
-  byId('txtGLoad').textContent = `${sim.gLoad.toFixed(2)}G`;
+  byId('txtGLoad').textContent = `${sim.loadFactor.toFixed(2)}G`; // the seat's, body up axis (0121)
   byId('txtAoaBadge').textContent = `${fixed1(sim.aoaDeg)}°`;
 
   _euler.setFromQuaternion(sim.quat, 'YXZ');
@@ -2777,6 +2849,7 @@ function handleResize() {
   const mapRect = mapCanvas.parentElement.getBoundingClientRect();
   mapCanvas.width = Math.max(120, Math.floor(mapRect.width));
   mapCanvas.height = Math.max(80, Math.floor(mapRect.height));
+  placeCoach(true);
 }
 
 window.addEventListener('resize', handleResize);
@@ -3012,6 +3085,7 @@ const txtGfxLostTitle = byId('txtGfxLostTitle');
 const btnGfxResume = byId('btnGfxResume');
 const btnGfxReload = byId('btnGfxReload');
 simCanvas.addEventListener('webglcontextlost', (e) => {
+  replaying?.stop(false); // the Graphics paused dialog takes over (0019)
   e.preventDefault();
   if (gfx.lost) return;
   // A phone usually loses the context in the background, after hiding paused the flight:
@@ -3136,7 +3210,16 @@ byId('btnCenterWings').addEventListener('click', () => {
 });
 
 // On-screen sticks (desktop drag pad + phone touch stick) feed sim.stick through pointer
-// events. Each control captures its own pointer, so two thumbs work at once.
+// events. Each control captures its own pointer, so two thumbs work at once. A held stick or
+// trim button lets go when its pointer ends anywhere (a lost capture sends the pointerup to
+// whatever is under the thumb) and when the window loses focus or the page is hidden (an app
+// switch mid-hold), so nothing stays deflected hands-off (0136). The throttle keeps its setting.
+// (blur is the window's own: not captured, so a button losing focus never lets go of the stick.)
+const onPtrEnd = (f) => {
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) window.addEventListener(t, f, true);
+  window.addEventListener('blur', f);
+  document.addEventListener('visibilitychange', f);
+};
 function bindStick(el) {
   let pointerId = null;
   const move = (e) => {
@@ -3152,12 +3235,11 @@ function bindStick(el) {
   });
   el.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) move(e); });
   const release = (e) => {
-    if (e.pointerId !== pointerId) return;
+    if (e.pointerId != null && e.pointerId !== pointerId) return; // a blur has no pointerId
     pointerId = null;
     sim.stick.active = false; sim.stick.x = 0; sim.stick.y = 0;
   };
-  el.addEventListener('pointerup', release);
-  el.addEventListener('pointercancel', release);
+  onPtrEnd(release);
 }
 bindStick(byId('virtualStickPad'));
 bindStick(byId('touchStick'));
@@ -3172,8 +3254,7 @@ bindStick(byId('touchStick'));
   };
   el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); set(e); e.preventDefault(); });
   el.addEventListener('pointermove', (e) => { if (e.pointerId === pointerId) set(e); });
-  el.addEventListener('pointerup', (e) => { if (e.pointerId === pointerId) pointerId = null; });
-  el.addEventListener('pointercancel', (e) => { if (e.pointerId === pointerId) pointerId = null; });
+  onPtrEnd((e) => { if (e.pointerId === pointerId) pointerId = null; });
 })();
 
 // Touch trim rocker (0094, Pilot): trims while a thumb holds a button, like the wheel.
@@ -3183,9 +3264,8 @@ for (const [id, key] of [['touchTrimDn', 'dn'], ['touchTrimUp', 'up']]) {
   let pointerId = null;
   const set = (on) => { trimHeld[key] = on; sim.touchTrim = (trimHeld.up ? 1 : 0) - (trimHeld.dn ? 1 : 0); };
   el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); set(true); e.preventDefault(); });
-  const release = (e) => { if (e.pointerId === pointerId) { pointerId = null; set(false); } };
-  el.addEventListener('pointerup', release);
-  el.addEventListener('pointercancel', release);
+  const release = (e) => { if (e.pointerId == null || e.pointerId === pointerId) { pointerId = null; set(false); } };
+  onPtrEnd(release);
 }
 
 // Phone system buttons reuse the desktop handlers.
@@ -3215,6 +3295,7 @@ function updateGamepad() {
   const p = pollGamepad();
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
+  if (replaying) { if (p.edges.length) replaying.stop(); return; } // any button ends the replay (0019), nothing else
   if (!controlsSheetEl.classList.contains('hidden')) return; // no pad button acts behind the controls sheet
   for (const b of p.edges) {
     if (b === BUTTON.A) byId('btnFlaps').click();
@@ -3318,13 +3399,13 @@ function renderLoop(time) {
   }
 
   // Keep the screen awake while flying (released when paused, hidden, in a modal or on results).
-  wakeLock.sync(!idle && resultsCard.classList.contains('hidden'));
+  wakeLock.sync(!!replaying || (!idle && resultsCard.classList.contains('hidden')));
 
   updateGamepad();
   step6DofPhysics(dt);
   if (!sim.paused) updateCoach(dt);
   syncWeatherUI(dt);
-  updateCamera();
+  if (replaying) replaying.step(dt); else updateCamera();
   updateSkyAndLights(time / 1000);
   if (!gfx.lost) terrainLod.update(dt, camera);
   photoreal.update(dt);
@@ -3347,6 +3428,14 @@ function updateSkyAndLights(t) {
     runwayLights.update(t, renderer.getPixelRatio(), night, camera.position);
   }
   if (papiLamps) papiLamps.material.size = 5 + 4 * night;
+  // On the sim's clock (frozen when paused), the flown field in the wind the aircraft feels.
+  if (windsocks) {
+    windsocks.update(sim.simTime, sim.simTime - _sockT, sockWx, camera.position, night, nightUniforms.uGroundTint.value);
+    _sockT = sim.simTime;
+  }
+}
+function sockWx(icao) {
+  return icao === (sim.activeEnd?.airport ?? 'KDFW') ? sim.wx : sim.wxByIcao[icao] || sim.wx;
 }
 
 // ?debug: a one-line usage readout of the Google session (to verify the free tier holds).
@@ -3356,6 +3445,7 @@ if (debugOverlay) {
   document.body.appendChild(debugOverlay);
 }
 let debugTimer = 0;
+let debugScreen; // ?debug only: debugScreen.js
 let creditsTimer = 0;
 function updateDebugOverlay(dt) {
   if (photorealOn && (creditsTimer -= dt) <= 0) {
@@ -3369,30 +3459,12 @@ function updateDebugOverlay(dt) {
 }
 
 if (debugOverlay) {
-  // ?debug (tests, 0068): a final to any runway end from any distance, e.g. 17R from 10 NM.
-  // fastKts (0127): that much over the final's speed, flaps and all (an overspeed on the final).
-  window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0) => runwayEnd(airport, rwy)
-    && loadScenario(null, { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts });
-  // ?debug (tests, 0091): throw the airplane back up off the runway (m/s), a scripted bounce;
-  // with onGroundS, armed: it fires in the physics after that long on the wheels (sim time), so
-  // a slow frame can't move it along the derotation (the nose comes down ~8°/s after touchdown).
-  window.openaeroDebugHop = (mps, onGroundS) => { if (onGroundS == null) sim.vel.y = mps; else debugHop = { mps, s: onGroundS }; };
   // ?debug (tests, 0117): put words on the caption line as audio.js would.
   window.openaeroDebugCaption = sayCaption;
-  // ?debug (tests, 0036): the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
-  window.openaeroDebugDeadStick = (distNm, aglFt) => deadLib?.debugFinal(sim, distNm, aglFt, ground);
+  // runwayScreen, papiLampsWhite and the test hooks (a final anywhere, a scripted hop, the dead-stick
+  // final): off the boot budget. The hop is armed here (debugHop) and fires in the physics.
+  import('./debugScreen.js').then((m) => (debugScreen = m).hooks(sim, (key, f) => runwayEnd(f.airport, f.rwy) && loadScenario(key, f), (h) => (debugHop = h), () => deadLib, ground));
 }
-// The active runway on screen (CSS px): its approach lights' outer end to the far end, as wide
-// as the runway. Read by tests/e2e/runwayVisibility.spec.js.
-function runwayScreen(e) {
-  const d = courseVector(e.hdgT), l = { x: d.z, z: -d.x }, w = e.widthM / 2, rect = simCanvas.getBoundingClientRect();
-  return [-2400 * 0.3048, e.lengthM - e.displacedM].flatMap((s) => [-w, w].map((o) => {
-    const x = e.thrX + d.x * s + l.x * o, z = e.thrZ + d.z * s + l.z * o;
-    const p = _v3.set(x, ground.heightAt(x, z), z).project(camera);
-    return { x: (p.x + 1) / 2 * rect.width, y: (1 - p.y) / 2 * rect.height, z: p.z };
-  }));
-}
-
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {
   _euler.setFromQuaternion(sim.quat, 'YXZ');
@@ -3406,15 +3478,19 @@ window.openaeroDebug = () => {
     speedLimitKts: sim.speedLimitKts ?? null,
     overspeed: !!sim.overspeed,
     stallKts: sim.stallKts ?? null,
+    // The PAPI (0131): the white lamps the HUD/coach read, and the active end's 3D lamps that are white.
+    papiWhite: sim.papiWhite, papiLampsWhite: debugScreen?.papiLampsWhite(papiLamps, sim.activeEnd, RUNWAY_ENDS) ?? null, // ?debug (debugScreen.js)
     ilsLocDots: sim.ilsLocDots, ilsGsDots: sim.ilsGsDots, ilsLocBarPx: sim.ilsLocBarPx, ilsGsBarPx: sim.ilsGsBarPx,
     inputSource: sim.inputSource,
+    stick: { ...sim.stick },
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
     crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
     activeRunway: sim.activeEnd?.id ?? null,
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
-    runwayScreen: sim.activeEnd ? runwayScreen(sim.activeEnd) : null,
+    hudAltCaption: { text: ALT_CAPTION, ..._altCap }, // the altitude tape's MSL tab (0132), canvas px
+    runwayScreen: debugScreen?.runwayScreen(sim.activeEnd, camera, simCanvas, ground) ?? null,
     headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,
@@ -3456,6 +3532,7 @@ window.openaeroDebug = () => {
     cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,
     cloudLayers: (sim.wx.cloudLayers || []).length,
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
+    windsocks: windsocks ? windsocks.debug() : null,
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
     goAround: sim.goAround ? { ...sim.goAround } : null,
@@ -3593,6 +3670,7 @@ function boot() {
     applySun();       // sky, stars, Moon and the caption
   }).catch((err) => console.warn('Sky unavailable, plain haze instead:', err.message));
   loadResults().catch(() => {}); // retried at the card
+  import('./gateVerdict.js').then((m) => (gateVerdict = m), console.warn); // the gate's HUD verdict (0137)
   import('./ads.js').then((m) => {
     ads = m.createAds({
       level: () => sim.assist,

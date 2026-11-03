@@ -27,7 +27,12 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4173',
     launchOptions: { args: GL_ARGS },
-    trace: 'retain-on-failure',
+    // A trace records screenshots and DOM snapshots for the whole test, which costs CPU that
+    // SwiftShader needs: 'retain-on-failure' recorded every test and cut the cost only by
+    // deleting it afterwards. The same desktop specs ran 156 s with it and 94 s without
+    // (2 workers); CI was cancelled at its 30 min limit with every test green. CI retries a
+    // failure once and traces that retry, so a failing test still uploads its trace.
+    trace: 'on-first-retry',
   },
   projects: [
     { name: 'desktop', testIgnore: /mobile\.spec|phone-landscape\.spec|perf\.spec|devices\.spec/, use: DESKTOP },

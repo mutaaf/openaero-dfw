@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { MISSIONS, RECOMMENDED_KEY, groupMissions } from '../../src/missions.js';
+import { MISSIONS, RECOMMENDED_KEY, groupMissions, missionSun } from '../../src/missions.js';
+import { TIME_MODES } from '../../src/sun.js';
 import { BEST_KEY, bestGrades } from '../../src/landing.js';
 
 describe('groupMissions (0029)', () => {
@@ -56,5 +57,52 @@ describe('bestGrades (0029)', () => {
     expect(bestGrades(store('{not json'))).toEqual({});
     expect(bestGrades(null)).toEqual({});
     expect(bestGrades(store(JSON.stringify({ v: 1, missions: { k: { grade: 7 }, n: null } })))).toEqual({});
+  });
+});
+
+describe('night and dusk missions (0060)', () => {
+  it('a mission sun is one of the When? presets, never Now', () => {
+    const withSun = MISSIONS.filter((m) => m.sun);
+    expect(withSun.length).toBeGreaterThanOrEqual(2);
+    for (const m of withSun) {
+      expect(TIME_MODES, m.key).toContain(m.sun);
+      expect(m.sun, m.key).not.toBe('Now');
+    }
+  });
+
+  it('KDFW 35C at night and KDAL 31R at dusk, each its own mission key under its airport', () => {
+    const night = MISSIONS.find((m) => m.key === 'kdfw_35c_night');
+    const dusk = MISSIONS.find((m) => m.key === 'kdal_31r_dusk');
+    expect(night).toMatchObject({ kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4, sun: 'Night' });
+    expect(dusk).toMatchObject({ kind: 'final', airport: 'KDAL', rwy: '31R', sun: 'Dusk' });
+    // Personal bests key by mission key: separate from the day finals.
+    expect(night.key).not.toBe('kdfw_35c_final');
+    expect(dusk.key).not.toBe('kdal_31r_final');
+    const groups = groupMissions(MISSIONS);
+    expect(groups.find((g) => g.id === 'KDFW').missions.map((m) => m.key)).toContain('kdfw_35c_night');
+    expect(groups.find((g) => g.id === 'KDAL').missions.map((m) => m.key)).toContain('kdal_31r_dusk');
+  });
+
+  const NOW = TIME_MODES.indexOf('Now');
+  const NOON = TIME_MODES.indexOf('Noon');
+  const NIGHT = TIME_MODES.indexOf('Night');
+  const DUSK = TIME_MODES.indexOf('Dusk');
+
+  it('missionSun flies the preset and keeps the player\'s choice to give back', () => {
+    expect(missionSun({ sun: 'Night' }, NOON, null)).toEqual({ mode: NIGHT, before: NOON });
+    // FLY AGAIN, or another night/dusk mission, keeps the original choice.
+    expect(missionSun({ sun: 'Night' }, NIGHT, NOON)).toEqual({ mode: NIGHT, before: NOON });
+    expect(missionSun({ sun: 'Dusk' }, NIGHT, NOON)).toEqual({ mode: DUSK, before: NOON });
+    // The next mission without one restores it.
+    expect(missionSun({}, NIGHT, NOON)).toEqual({ mode: NOON, before: null });
+  });
+
+  it('missionSun leaves the When? choice alone for a mission without a sun', () => {
+    expect(missionSun({}, NOW, null)).toEqual({ mode: NOW, before: null });
+    expect(missionSun({}, DUSK, null)).toEqual({ mode: DUSK, before: null });
+  });
+
+  it('an unknown preset is ignored, not applied as -1', () => {
+    expect(missionSun({ sun: 'Midnight' }, NOON, null)).toEqual({ mode: NOON, before: null });
   });
 });

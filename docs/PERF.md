@@ -92,3 +92,5 @@ there scales with pixels, which is why the iPad sizes are slowest.
 
 Chromium with emulated touch only: iOS Safari/WebKit is not rendered here. The probe also
 opens ☰ Menu and holds the sheet's controls to 44 px.
+
+Keeper 2026-11-01: boot JS 199.70 kB gz (budget 201 kB), one three.js copy; no frame-time probe run (no Playwright browser step this run).
