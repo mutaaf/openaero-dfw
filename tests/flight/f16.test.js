@@ -150,10 +150,10 @@ describe('F-16C capability bound (not a performance claim)', () => {
 // 1.1), the speed it settles to should be the Mach 2 class (1.8-2.1; open data gives no tighter
 // band), and settle means settle: under 0.02 Mach gained over the last 30 s of 300. 0133 gave the
 // jet its wave drag (supersonic.js, Raymer's Sears-Haack correlation): with none it ran away
-// (Mach 5.7 at 240 s from 400 KEAS); now it is ~2.27 at 300 s, still gaining ~0.003 Mach/s. Still a
-// KNOWN GAP, now for the engine: its afterburner thrust grows with M² (engine.js, machLapse
-// 0.3/0.3, uncited past Mach 1, see the header), as fast as the drag, so thrust minus drag never
-// closes. A real F110 or F100 runs out of thrust there (compressor inlet temperature, inlet
+// (Mach 5.7 at 240 s from 400 KEAS); now it is ~2.27 at 300 s, still gaining ~0.003 Mach/s, and
+// settles only near Mach 3.2 after ~30 min. Still a KNOWN GAP, now for the engine: its afterburner
+// thrust grows with M² (engine.js, machLapse 0.3/0.3, uncited past Mach 1, see the header), so
+// thrust over q·S is ~0.046 at Mach 2 against a total CD of ~0.037. A real F110 or F100 runs out of thrust there (compressor inlet temperature, inlet
 // recovery): ticket 0143, whose PR promotes this card to `it`.
 const levelAt40k = (seconds, onStep) => {
   const alt0 = 40000 / M_TO_FT;
@@ -182,7 +182,7 @@ describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => 
   // What 0133 does pass, a regression guard (not a performance claim; the band above is the
   // claim): the same run crosses Mach 1.8 and stays under Mach 2.5 at 300 s, finite throughout
   // (with no wave drag it ran away: Mach 5.7 by 240 s from 400 KEAS).
-  it('the same run passes Mach 1.8 and stays under Mach 2.5 at 300 s (the wave drag holds it)', () => {
+  it('the same run passes Mach 1.8 and stays under Mach 2.5 at 300 s (the wave drag slows it)', () => {
     let finite = true;
     const b = levelAt40k(300, (x) => {
       finite &&= [x.pos.y, x.vel.x, x.vel.y, x.vel.z, x.quat.w, x.mach, x.aoaDeg].every(Number.isFinite);
@@ -190,6 +190,17 @@ describe('F-16C top speed vs the USAF fact sheet ("Mach 2 at altitude")', () => 
     expect(finite).toBe(true);
     expect(b.mach).toBeGreaterThan(1.8);
     expect(b.mach).toBeLessThan(2.5);
+  });
+
+  // Held for half an hour it does not run away (the panel's catch: Raymer's factor alone falls on
+  // with Mach, and the run went past Mach 45 by 40 min; the 0.8 floor holds it). It settles near
+  // Mach 3.2: under 0.02 Mach gained over the last 300 s of 1800, and under Mach 3.4.
+  it('held 30 min it settles (near Mach 3.2, the 0143 gap) instead of running away', () => {
+    let mach1500 = null;
+    const b = levelAt40k(1800, (x) => { if (mach1500 == null && x.t >= 1500) mach1500 = x.mach; });
+    expect(Number.isFinite(b.mach)).toBe(true);
+    expect(b.mach - mach1500).toBeLessThan(0.02);
+    expect(b.mach).toBeLessThan(3.4);
   });
 });
 

@@ -12,7 +12,9 @@ import { AIRCRAFT_DATABASE } from './aircraft.js';
 // Below Mach 1.2 Raymer fairs a curve: Lock's rise to MDD (aero.js, as the 737's), up to the Mach
 // 1.2 value by Mach 1.05, a hump between. The fairing's shape is AeroSandbox's approximate_CD_wave
 // (P. Sharpe, MIT licence; read 2026-11-03): cubic Hermite patches MDD → 1.05 (slope 0.1 →
-// 8·CD1.2) and 1.05 → 1.2 (8·CD1.2 → −4·CD1.2), a ~23% hump near Mach 1.1. Zero-lift only:
+// 8·CD1.2) and 1.05 → 1.2 (8·CD1.2 → −4·CD1.2), a ~23% hump near Mach 1.1. Raymer's factor
+// would fall on to zero near Mach 21; it is floored at 0.8 of the Mach 1.2 value, the high-Mach
+// limit AeroSandbox takes from Raymer (reached near Mach 2.4 at 40° sweep). Zero-lift only:
 // supersonic lift and stability changes are not modelled.
 export function searsHaackCd(spec) {
   const s = spec.supersonic;
@@ -31,7 +33,7 @@ export function supersonicWaveCd(spec, mdd, mach) {
   if (mach < 1.05) return hermite(mach, mdd, 1.05, LOCK_RISE_AT_MDD, cd12, 0.1, 8 * cd12);
   if (mach < 1.2) return hermite(mach, 1.05, 1.2, cd12, cd12, 8 * cd12, -4 * cd12);
   const sweep = 1 - Math.PI * Math.pow(spec.supersonic.sweepLeDeg, 0.77) / 100;
-  return cd12 * Math.max(0, 1 - 0.386 * Math.pow(mach - 1.2, 0.57) * sweep);
+  return cd12 * Math.max(0.8, 1 - 0.386 * Math.pow(mach - 1.2, 0.57) * sweep);
 }
 
 // The F-16. Where the rise starts, Korn + Lock as the 737's: its NACA 64A204 wing (a 6-series

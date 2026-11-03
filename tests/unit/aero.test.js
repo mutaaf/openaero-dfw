@@ -348,6 +348,10 @@ describe('waveDragCd supersonic (0133: the F-16)', () => {
     expect(waveDragCd(f16, 0.1, 2.0)).toBeCloseTo(raymer(2.0), 10); // ≈ 0.0182
     expect(waveDragCd(f16, 0.1, 2.0)).toBeCloseTo(0.0182, 4);
   });
+  it('past ~Mach 2.4 it holds at 0.8 of the Mach 1.2 value (Raymer\'s high-Mach limit), out to Mach 10', () => {
+    expect(waveDragCd(f16, 0.1, 2.3)).toBeGreaterThan(0.8 * searsHaackCd(f16));
+    for (const m of [2.5, 4, 10]) expect(waveDragCd(f16, 0.1, m)).toBeCloseTo(0.8 * searsHaackCd(f16), 10);
+  });
   it('is continuous through MDD, 1.05 and 1.2, finite and non-negative everywhere, peaks near Mach 1.1', () => {
     for (const m of [mdd(0.1), 1.05, 1.2]) {
       expect(Math.abs(waveDragCd(f16, 0.1, m + 1e-7) - waveDragCd(f16, 0.1, m - 1e-7))).toBeLessThan(1e-6);
