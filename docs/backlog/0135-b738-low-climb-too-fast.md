@@ -1,12 +1,12 @@
 ---
 id: 0135
 title: 737 climbs ~3,400 ft/min from FL100 to FL150 at 290 kt, ~70% above EUROCONTROL's 2,000
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-02
-pr:
+pr: 174
 ---
 
 ## Why
@@ -35,3 +35,19 @@ Promote the flight card; add a unit check of the thrust source used.
 
 ## Out of scope
 VNAV, derated or assumed-temperature takeoff, the ceiling (0129), the idle descent (0126).
+
+## Outcome
+The cause is the rating, not the airframe: full throttle is the take-off/go-around rating
+(240 kN static, σ^0.94; 57.5 kN per engine at FL125, Mach 0.55, ~3% above Bartel & Young's
+take-off lapse there, a single-point check outside eq. 11's take-off range), while APD's rates are a crew's climb on the max climb (CLB) rating.
+`src/engine.js` maxClimbThrustN is Bartel & Young's climb-thrust lapse (J. Aircraft 45(4), 2008,
+eqs. 15-19; OpenAP's fits of their tables) anchored to CFM's 26.5 kN max climb at FL350, Mach 0.8
+(`spec.engine.climb`): 45.1 kN per engine at FL125, ~22% under full throttle there (~24% at FL100),
+equal at FL350 and capped at full throttle above it. On it the 737 climbs ~2,190 ft/min FL100-FL150 (+9%) and ~1,690 FL150-FL240 (-15%). Full
+throttle and every other card are unchanged (the go-around, windshear and take-off cards use the
+take-off rating, as a real TO/GA does). The FL240-FL350 Mach climb on CLB is ~1,185 (-21%): 0139.
+The Why's "too easy" concern is not what the card measured: full throttle is the levers fully
+forward, which on a 737NG gives full-rated take-off thrust (there is no CLB detent), and ~3,400
+ft/min on it is consistent with that rating (B&Y's take-off lapse, ~3% at FL125); it is not checked
+against a measured full-thrust climb. The gap was in what the card compared. A unit card checks full
+throttle at FL125 against Bartel & Young's take-off lapse (CFM56-7B26: 117 kN, BPR 5.1).

@@ -367,7 +367,9 @@ src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter
                     and the takeoff briefing toast on Fly, with a thin-air hint 1,500 ft above the field
 src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
                     windmilling at idle), turbofan (Mach/density lapse, idle, spool lag; the 737's σ^0.94
-                    fitted to CFM's FL350 max climb thrust, 0116)
+                    fitted to CFM's FL350 max climb thrust, 0116); full throttle is the take-off/go-around
+                    rating. maxClimbThrustN (0135): the 737's CLB rating (Bartel & Young 2008, anchored to CFM's
+                    FL350 figure, spec.engine.climb), what the APD climb cards fly; the game does not use it
 src/aero.js         pure aero/avionics: CL with stall, CD + ground effect + the 737's Mach drag rise
                     (waveDragCd, 0120: Mason's Korn + Lock, spec.transonic), PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
