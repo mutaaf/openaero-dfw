@@ -15,7 +15,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
-import { stallAoaDeg, stallWarningKts, stallSpeedKts } from '../../src/aero.js';
+import { stallAoaDeg, stallWarningKts, stallSpeedKts, isStallWarning } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
 import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
@@ -23,7 +23,7 @@ import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
 import { DEADSTICK_KEY, createDeadStick, deadStickPrompt, kidGuide } from '../../src/deadStick.js';
-import { trimStep, trimSpeedKts } from '../../src/trim.js';
+import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from '../../src/trim.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -745,11 +745,11 @@ describe('Cessna 172S phugoid period (flightModel, ticket 0102)', () => {
   });
 });
 
-// Stick-fixed takeoff (0090), the trim set as main.js's takeoff spawn sets it (1.2 Vr, flaps
-// 1): full power and a neutral stick never rotate the Cessna by themselves before 1.4 Vr, and
-// with the stick held back the nose comes up near Vr as before.
+// Stick-fixed takeoff (0090), the trim set as main.js's takeoff spawn sets it (flaps 1: 1.2 Vr;
+// 0141 trims for Vy only flaps up): full power and a neutral stick never rotate the Cessna by themselves before 1.4 Vr,
+// and with the stick held back the nose comes up near Vr as before.
 function stickFixedNoseLiftKts(elev) {
-  const b = Object.assign(makeBody(c172, { flaps: 1, throttle: 1 }), { autoTrim: false, trimAlphaDeg: trimAoaDeg(c172, c172.vrKts * 1.2 * KTS_TO_MPS, 1) });
+  const b = Object.assign(makeBody(c172, { flaps: 1, throttle: 1 }), { autoTrim: false, trimAlphaDeg: takeoffTrimAoaDeg(c172, 1) });
   let liftKts = null;
   fly(b, c172, 60, (x) => { x.elevInput = x.iasKts >= c172.vrKts ? elev : 0; x.brakesOn = false; },
     (x) => { if (x.t > 1 && !noseWheelOn(x)) liftKts = x.iasKts; return liftKts !== null; });
@@ -764,6 +764,73 @@ describe('Cessna 172S stick-fixed takeoff (flightModel, ticket 0090)', () => {
     expect(hands === null || hands > 1.4 * c172.vrKts).toBe(true);
     expect(pulled).not.toBeNull();
     expect(pulled).toBeLessThan(c172.vrKts + 8);
+  });
+});
+
+// Takeoff trim, hands off after the rotation (ticket 0141). Cessna 172S POH Section 4: the
+// before-takeoff checklist sets the elevator trim for takeoff; Normal Takeoff rotates at 55 KIAS
+// and climbs at 70-80 KIAS; Vy 74 KIAS (flaps up, sea level). The pilot flies Pilot as main.js
+// does: full power, at Vr the stick pulls the nose to a lift-off attitude through the game's 10/s
+// stick lag (an idealised stick or gamepad pilot; a keyboard is full deflection only, 0144), the
+// hold-to-trim stand-in trims the pull's pressure away over ~8 s (main.js, until the player first
+// trims; `standIn: false` is a player who touched the trim), and the stick is let go at "positive
+// rate" (aero.js takeoffCalloutIndex: wheels > 5 ft, > 300 fpm). Then hands off for 60 s. The
+// model's phugoid is barely damped (period ~22 s), so the speed swings ±4-7 kt about its mean.
+const POH_VY_KTS = 74; // literal, so a card run against an older trim still has its bounds
+function handsOffTakeoff(flaps, pitchDeg, { trimAlphaDeg = takeoffTrimAoaDeg(c172, flaps), standIn = true } = {}) {
+  const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg });
+  const warnKts = stallWarningKts(c172, flaps);
+  let rel = null, h0 = 0, warned = false, landed = false, lo = Infinity, hi = 0, sum = 0, n = 0;
+  const wheelsFt = (x) => Math.max(0, (x.pos.y - c172.gearHeight) * M_TO_FT);
+  fly(b, c172, 150, (x, dt) => {
+    let target = 0;
+    if (rel === null) {
+      if (x.iasKts >= c172.vrKts) x.rotating = true;
+      if (x.rotating) target = elevatorForPitch(pitchDeg, attitude(x).pitchDeg, x.angVel.x);
+      if (!x.onGround && wheelsFt(x) > 5 && vsFpm(x) > 300) { rel = x.t; h0 = wheelsFt(x); }
+    }
+    x.elevInput += (target - x.elevInput) * Math.min(1, dt * 10);
+    if (standIn && rel === null && Math.abs(x.elevInput) > 0.05) {
+      x.trimAlphaDeg = clampTrim(x.trimAlphaDeg + (x.aoaDeg - x.trimAlphaDeg) * dt / 8, x.trimAlphaDeg, c172, x.flapsIndex);
+    }
+    if (rel !== null) {
+      if (isStallWarning(x.iasKts, warnKts, x.onGround)) warned = true;
+      if (x.onGround) landed = true;
+      if (x.t - rel >= 30) { lo = Math.min(lo, x.iasKts); hi = Math.max(hi, x.iasKts); sum += x.iasKts; n++; }
+    }
+  }, (x) => rel !== null && x.t - rel >= 60);
+  return { rel, gainFt: wheelsFt(b) - h0, lo, hi, meanKts: sum / n, warned, landed };
+}
+const fmtTakeoff = (r) => `+${r.gainFt.toFixed(0)} ft in 60 s, ${r.lo.toFixed(1)}-${r.hi.toFixed(1)} (mean ${r.meanKts.toFixed(1)}) KIAS from 30 s, warned ${r.warned}, back on the runway ${r.landed}`;
+// The card: climbing, no stall warning, never back on the runway, the mean from 30 s within Vy
+// ±10 kt, the trough at 63+ KIAS (the warning + 5 kt) and the crest under Vy + 10.
+const meetsTakeoffCard = (r) => r.rel !== null && !r.warned && !r.landed && r.gainFt >= 500
+  && Math.abs(r.meanKts - POH_VY_KTS) <= 10 && r.lo >= 63 && r.hi <= POH_VY_KTS + 10;
+
+describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, ticket 0141)', () => {
+  for (const standIn of [true, false]) for (const pitchDeg of [6, 7, 8, 9]) {
+    it(`flaps up, rotated to ${pitchDeg}° and let go at positive rate${standIn ? '' : ' (trim touched: no stand-in)'}: climbs 500+ ft in 60 s about Vy, no stall warning, never back on the runway (POH Sec. 4/5)`, () => {
+      const r = handsOffTakeoff(0, pitchDeg, { standIn });
+      console.log(`[c172 flightModel] hands-off takeoff flaps 0 ${pitchDeg}° stand-in ${standIn}: ${fmtTakeoff(r)}`);
+      expect(meetsTakeoffCard(r)).toBe(true);
+    });
+  }
+  // The proof the card tests the change: the old spawn trim (1.2 Vr, 66 kt) fails it at every rotation.
+  it('the old 1.2 Vr takeoff trim fails the same card flaps up at every rotation (6-9°)', () => {
+    for (const pitchDeg of [6, 7, 8, 9]) {
+      const r = handsOffTakeoff(0, pitchDeg, { trimAlphaDeg: trimAoaDeg(c172, c172.vrKts * 0.617, 0) });
+      console.log(`[c172 flightModel] hands-off takeoff flaps 0 ${pitchDeg}° on the old 1.2 Vr trim: ${fmtTakeoff(r)}`);
+      expect(meetsTakeoffCard(r)).toBe(false);
+    }
+  });
+  // Flaps 10 keeps 1.2 Vr (trim.js): Vy's lower nose leaves a held partial pull (touch, gamepad)
+  // short of speed and back on the runway (device panel, #177) until 0144 stops the over-rotation.
+  it('logs flaps 10 and the over-rotations (10-12°) it does not card', () => {
+    for (const [flaps, pitches] of [[1, [6, 7, 8, 9, 10, 11, 12]], [0, [10, 11, 12]]]) for (const pitchDeg of pitches) {
+      const r = handsOffTakeoff(flaps, pitchDeg);
+      console.log(`[c172 flightModel] hands-off takeoff flaps ${flaps} ${pitchDeg}° (not carded): ${fmtTakeoff(r)}`);
+      expect(r.rel).not.toBeNull();
+    }
   });
 });
 

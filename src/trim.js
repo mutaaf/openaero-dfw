@@ -44,3 +44,10 @@ export function trimSpeedKts(spec, alphaDeg, flapsIndex) {
   if (cl < 0.05) return null;
   return Math.sqrt((2 * spec.massKg * GRAVITY) / (RHO_SEA_LEVEL * spec.wingAreaM2 * cl)) * MPS_TO_KTS;
 }
+
+// The takeoff spawn's trim (0141): flaps up, a released stick climbs at Vy where the airframe
+// publishes one (the C172S's 74 KIAS, a flaps-up speed: POH Sec. 4/5), else at 1.2 Vr (the jets,
+// and the Cessna with flaps set: until a held pull stops over-rotating it, 0144, Vy's lower
+// nose leaves a touch player's over-pitched lift-off short of speed and back on the runway).
+export const takeoffTrimAoaDeg = (spec, flapsIndex) =>
+  trimAoaDeg(spec, !flapsIndex && spec.vyKts * KTS_TO_MPS || spec.vrKts * 0.617, flapsIndex);

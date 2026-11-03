@@ -43,7 +43,7 @@ import {
   groundSteerRudder,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare } from './input.js';
-import { trimStep, trimSpeedKts, clampTrim } from './trim.js';
+import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from './trim.js';
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
@@ -2596,8 +2596,8 @@ function loadScenario(key, final = null) {
     sim.quat.setFromAxisAngle(_v3.set(0, 1, 0), s.yawRad);
     sim.throttle = 0;
     sim.flapsIndex = mission.flaps ?? 1;
-    // Takeoff trim: a neutral stick flies the climb-out speed (1.2 Vr, in m/s) once it lifts off.
-    trimAlpha = trimAoaDeg(sim.spec, sim.spec.vrKts * 0.617, sim.flapsIndex);
+    // Takeoff trim: a neutral stick flies the climb-out speed (Vy, else 1.2 Vr) once it lifts off (0141).
+    trimAlpha = takeoffTrimAoaDeg(sim.spec, sim.flapsIndex);
     sim.gearDown = true;
     sim.onGround = true;
     sim.activeEnd = end;
@@ -3461,7 +3461,7 @@ function updateDebugOverlay(dt) {
 if (debugOverlay) {
   // ?debug (tests, 0117): put words on the caption line as audio.js would.
   window.openaeroDebugCaption = sayCaption;
-  // runwayScreen, papiLampsWhite and the test hooks (a final anywhere, a scripted hop, the dead-stick
+  // runwayScreen, papiLampsWhite, landmarkSeats and the test hooks (a final anywhere, a scripted hop, the dead-stick
   // final): off the boot budget. The hop is armed here (debugHop) and fires in the physics.
   import('./debugScreen.js').then((m) => (debugScreen = m).hooks(sim, (key, f) => runwayEnd(f.airport, f.rwy) && loadScenario(key, f), (h) => (debugHop = h), () => deadLib, ground));
 }
@@ -3541,8 +3541,7 @@ window.openaeroDebug = () => {
     rto: sim.rto ? { ...sim.rto } : null,
     windshear: sim.windshear ? { ...sim.windshear } : null,
     takeoffCalls: [...sim.takeoffCalls],
-    landmarks: Object.fromEntries(landmarks.filter((o) => o.userData.landmark).map((o) => [o.userData.landmark,
-      { x: o.position.x, z: o.position.z, seatY: o.position.y - o.userData.baseY, groundY: ground.heightAt(o.position.x, o.position.z) }])),
+    landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
     photoreal: photoreal ? photoreal.debugState() : null, // photoreal.js (or its boot stand-in)
     render: renderer ? { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles } : null,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { trimStep, trimSpeedKts, trimLimits, clampTrim, TRIM_SPEED_RATE } from '../../src/trim.js';
+import { trimStep, trimSpeedKts, trimLimits, clampTrim, TRIM_SPEED_RATE, takeoffTrimAoaDeg } from '../../src/trim.js';
 import { trimAoaDeg } from '../../src/autopilot.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { KTS_TO_MPS } from '../../src/constants.js';
@@ -79,5 +79,21 @@ describe('pitch trim (ticket 0094)', () => {
     expect(gamepadTargets([0, 0, 0, 0.05], buttons).trim).toBe(0);
     // A flight stick's throttle slider resting at -1 on axis 3 must not run the trim.
     expect(gamepadTargets([0, 0, 0, -1], buttons, '').trim).toBe(0);
+  });
+});
+
+describe('takeoff trim (ticket 0141)', () => {
+  it('the Cessna\'s takeoff spawn trims for Vy 74 KIAS (POH) flaps up, and keeps 1.2 Vr with flaps set (0144)', () => {
+    expect(c172.vyKts).toBe(74);
+    expect(trimSpeedKts(c172, takeoffTrimAoaDeg(c172, 0), 0)).toBeCloseTo(74, 6);
+    for (const f of [1, 2, 3]) expect(takeoffTrimAoaDeg(c172, f)).toBe(trimAoaDeg(c172, c172.vrKts * 0.617, f));
+  });
+
+  it('only the Cessna carries Vy: the jets keep their 1.2 Vr takeoff trim, bit for bit', () => {
+    for (const [key, spec] of Object.entries(AIRCRAFT_DATABASE)) {
+      if (key === 'c172') continue;
+      expect(spec.vyKts).toBeUndefined();
+      for (const f of [0, 1, 2]) expect(takeoffTrimAoaDeg(spec, f)).toBe(trimAoaDeg(spec, spec.vrKts * 0.617, f));
+    }
   });
 });
