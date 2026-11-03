@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { RUNWAY_DATA, RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, approachGeometry, selectActiveRunway, approachSpawn, GLIDE_DEG, AIM_POINT_M } from '../../src/airports.js';
+import { RUNWAY_DATA, runwayFactsText, RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, approachGeometry, selectActiveRunway, approachSpawn, GLIDE_DEG, AIM_POINT_M, papiWhite } from '../../src/airports.js';
 import { latLonToSimMeters } from '../../src/geo.js';
+import { papiWhiteLights } from '../../src/aero.js';
+import { MAG_VAR_DEG } from '../../src/magvar.js';
 
 describe('runway data (OurAirports)', () => {
   it('has every runway at the six DFW-area fields', () => {
@@ -108,6 +110,45 @@ describe('missions', () => {
   });
 });
 
+// Ticket 0124: the ends drawn and graded (RUNWAYS_GEOM, the results strip, "off the runway") and
+// the length the start screen prints (lengthFt) are the same runway.
+describe('runway ends agree with the published length', () => {
+  const R = 6371008.8;
+  const rad = Math.PI / 180;
+  const haversineM = (a, b) => {
+    const dLat = (b.lat - a.lat) * rad, dLon = (b.lon - a.lon) * rad;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  it('every runway: end-to-end distance within 30 m of lengthFt', () => {
+    for (const r of RUNWAY_DATA) {
+      const name = `${r.airport} ${r.le.ident}/${r.he.ident}`;
+      expect(Math.abs(haversineM(r.le, r.he) - r.lengthFt * 0.3048), name).toBeLessThan(30);
+    }
+  });
+  it('the runway drawn (RUNWAYS_GEOM) is as long as the chart, within 30 m', () => {
+    for (const g of RUNWAYS_GEOM) {
+      const r = RUNWAY_DATA.find((d) => `${d.airport} ${d.le.ident}/${d.he.ident}` === g.name);
+      expect(Math.abs(g.lengthM - r.lengthFt * 0.3048), g.name).toBeLessThan(30);
+    }
+  });
+  it('KAFW: the FAA record\'s four ends and 34L\'s 716 ft displaced threshold', () => {
+    // FAA airport record (5010) for KAFW, via AirNav, 2026-11-02: 16L 33-00.325685N 097-19.291575W,
+    // 16R 33-00.308878N 097-19.407327W; 34L threshold displaced 716 ft (LDA 10,409 ft).
+    const p16L = latLonToSimMeters(33 + 0.325685 / 60, -(97 + 19.291575 / 60));
+    const p16R = latLonToSimMeters(33 + 0.308878 / 60, -(97 + 19.407327 / 60));
+    const e16L = runwayEnd('KAFW', '16L'), e16R = runwayEnd('KAFW', '16R');
+    expect(Math.hypot(e16L.endX - p16L.x, e16L.endZ - p16L.z)).toBeLessThan(5);
+    expect(Math.hypot(e16R.endX - p16R.x, e16R.endZ - p16R.z)).toBeLessThan(5);
+    const e34L = runwayEnd('KAFW', '34L');
+    expect(e34L.displacedM).toBeCloseTo(716 * 0.3048, 3);
+    expect(Math.hypot(e34L.thrX - e34L.endX, e34L.thrZ - e34L.endZ)).toBeCloseTo(716 * 0.3048, 1);
+    // The facts line names its source: the FAA's ends for Alliance (its °M is WMM-2025's and the
+    // THR is interpolated, as everywhere), OurAirports everywhere else.
+    for (const e of RUNWAY_ENDS) expect(e.src, e.id).toBe(e.airport === 'KAFW' ? 'FAA ends' : 'OurAirports');
+  });
+});
+
 describe('real field elevations', () => {
   const FT = 0.3048;
   it('thresholds sit at their surveyed height relative to KDFW (606 ft = y 0)', () => {
@@ -131,5 +172,83 @@ describe('real field elevations', () => {
     const r = RUNWAYS_GEOM.find((g) => g.name === 'KDFW 13L/31R');
     expect(r.ay).toBeCloseTo((550 - 606) * FT, 3);
     expect(r.by).toBeCloseTo((508 - 606) * FT, 3);
+  });
+});
+
+// Ticket 0114: the line a pilot checks against the chart (OurAirports survey data).
+describe('runwayFactsText', () => {
+  it('KDFW 35C: ident, magnetic heading, 13,400 x 150 ft, threshold elevation', () => {
+    const e = runwayEnd('KDFW', '35C');
+    // OurAirports (and the FAA chart) list 17C/35C as 13,400 x 150 ft; 17R/35L is the 200 ft one.
+    expect(runwayFactsText(e)).toBe('RWY 35C: 13,400 × 150 ft · 358°M · THR 562 ft');
+    // The course flown down the final to the threshold (sim frame: +X east, -Z north), less magvar.
+    const p = approachSpawn(e, 5).pos;
+    expect(Math.abs(approachGeometry(e, p).crossM)).toBeLessThan(0.01);
+    const course = (Math.atan2(e.thrX - p.x, -(e.thrZ - p.z)) * 180 / Math.PI + 360) % 360;
+    const magCourse = (course - MAG_VAR_DEG + 360) % 360;
+    expect(Math.abs(358 - magCourse)).toBeLessThan(1);
+  });
+  it('reads back every runway end: length, width and threshold elevation from the survey', () => {
+    for (const rwy of RUNWAY_DATA) {
+      for (const [end, other] of [[rwy.le, rwy.he], [rwy.he, rwy.le]]) {
+        const text = runwayFactsText(runwayEnd(rwy.airport, end.ident));
+        const m = text.match(/^RWY (\w+): ([\d,]+) × ([\d,]+) ft · (\d{3})°M · THR ([\d,]+) ft$/);
+        expect(m, text).not.toBeNull();
+        expect(m[1]).toBe(end.ident);
+        expect(Number(m[2].replace(/,/g, ''))).toBe(rwy.lengthFt);
+        expect(Number(m[3].replace(/,/g, ''))).toBe(rwy.widthFt);
+        // The landing threshold: down the runway's slope by any displacement.
+        const thr = end.elevFt + (other.elevFt - end.elevFt) * end.displacedFt / rwy.lengthFt;
+        expect(Number(m[5].replace(/,/g, ''))).toBe(Math.round(thr));
+        // The runway number is the magnetic heading in tens of degrees (±1 for the old charts).
+        const num = Number(end.ident.replace(/\D/g, '')) * 10;
+        const dh = ((Number(m[4]) - num + 540) % 360) - 180;
+        expect(Math.abs(dh)).toBeLessThanOrEqual(10);
+      }
+    }
+  });
+  it('no runway, no line', () => {
+    expect(runwayFactsText(null)).toBe('');
+  });
+});
+
+// Ticket 0131: one PAPI reading for the HUD text, the coach and the 3D lamps, aimed at the path
+// approachGeometry flies (GLIDE_DEG to the aim point, where the PAPI stands).
+describe('papiWhite', () => {
+  it('reads two white, two red on every runway end\'s 3° path from 10 NM to the threshold', () => {
+    for (const e of RUNWAY_ENDS) {
+      for (const nm of [10, 4, 1, 0.3, 0.05]) {
+        const { pos } = approachSpawn(e, nm);
+        expect(papiWhite(e, pos, approachGeometry(e, pos).distM), `${e.id} ${nm} NM`).toBe(2);
+      }
+    }
+  });
+  it('is the setting angles of the slope to the PAPI box (papiWhiteLights at GLIDE_DEG)', () => {
+    const e = runwayEnd('KDFW', '35C');
+    for (const nm of [6, 2, 0.5]) {
+      for (const dDeg of [-0.6, -0.4, -0.2, -0.1, 0.1, 0.2, 0.4, 0.6]) {
+        const { pos } = approachSpawn(e, nm);
+        const distM = approachGeometry(e, pos).distM;
+        pos.y = e.thrY + (distM + AIM_POINT_M) * Math.tan((GLIDE_DEG + dDeg) * Math.PI / 180);
+        expect(papiWhite(e, pos, distM), `${nm} NM ${dDeg}°`).toBe(papiWhiteLights(GLIDE_DEG + dDeg, GLIDE_DEG));
+      }
+    }
+  });
+  it('tells the AC bands from the old 2.8-3.1° ones on a real final: 3.12° and 2.85° are on the path', () => {
+    const e = runwayEnd('KADS', '16');
+    for (const [deg, white] of [[3.12, 2], [2.85, 2], [3.2, 3], [2.81, 1]]) {
+      const { pos } = approachSpawn(e, 1);
+      const distM = approachGeometry(e, pos).distM;
+      pos.y = e.thrY + (distM + AIM_POINT_M) * Math.tan(deg * Math.PI / 180);
+      expect(papiWhite(e, pos, distM), `${deg}°`).toBe(white); // the old thresholds gave 3, 2, 3, 1
+    }
+  });
+  it('reads nothing once past the box (a float or the rollout is not "high", 0131)', () => {
+    const e = runwayEnd('KDFW', '35C');
+    const { pos } = approachSpawn(e, 0);
+    pos.y = e.thrY + 10; // floating 10 m up
+    expect(papiWhite(e, pos, -AIM_POINT_M + 1)).not.toBeNull();
+    expect(papiWhite(e, pos, -AIM_POINT_M)).toBeNull();
+    expect(papiWhite(e, pos, -1500)).toBeNull();
   });
 });

@@ -1,4 +1,6 @@
 // Keyboard state → pilot control targets. Pure mapping, unit-tested.
+import { KTS_TO_MPS } from './constants.js';
+
 export const keys = {};
 
 export function pilotTargets(k) {
@@ -10,6 +12,12 @@ export function pilotTargets(k) {
   if (k.KeyQ) yaw -= 1.0;
   if (k.KeyE) yaw += 1.0;
   return { pitch, roll, yaw };
+}
+
+// Pitch trim keys (ticket 0094): + = nose up. [ and ] sit in W/S order (nose down, nose up);
+// Numpad 7 / 1 are the common desktop-sim keys.
+export function trimDirection(k) {
+  return (k.BracketRight || k.Numpad1 ? 1 : 0) - (k.BracketLeft || k.Numpad7 ? 1 : 0);
 }
 
 // Normalised stick position (-1..1 on each axis) from a point inside a rect.
@@ -40,4 +48,28 @@ export function combineTargets(kb, stick, pad) {
 export function throttleFromPoint(clientY, rect) {
   const t = 1 - (clientY - rect.top) / rect.height;
   return Math.max(0, Math.min(1, t));
+}
+
+// Touch has no pedals (0110): Pilot taxiing steers the nose wheel with the stick's sideways push, a
+// tiller (main.js, below 40 kt; Kid and Learner hold the centreline themselves). Past a quarter of the
+// pad (a resting thumb is not a steer), and scaled so full stick turns the airplane at most
+// TILLER_MAX_DEG_S at any groundspeed (gsMps): full nose wheel at taxi speeds, a touch of it on the
+// roll. wheelbaseM and steerDeg are the airframe's (gear.js). Returns the rudder (-1..1, + = right).
+export const TILLER_DEAD = 0.25;
+export const TILLER_MAX_DEG_S = 8;
+export function tillerRudder(x, gsMps, wheelbaseM, steerDeg) {
+  const s = Math.sign(x) * Math.max(0, Math.abs(x) - TILLER_DEAD) / (1 - TILLER_DEAD);
+  const full = (TILLER_MAX_DEG_S * Math.PI / 180) * wheelbaseM / (Math.max(0.5, gsMps) * Math.tan(steerDeg * Math.PI / 180));
+  return Math.max(-1, Math.min(1, s * Math.min(1, full)));
+}
+
+// Pilot on touch on the ground (main.js): the tiller's share of the stick's sideways push, all of
+// it to 20 kt and none from 40 kt (the ailerons get the rest), and the rudder: the tiller while the
+// thumb steers, otherwise `holdRud` (assists.js groundSteerRudder on the runway, 0 off it), which
+// also takes over above the tiller. With no pedals to reach, the centreline hold steers the roll
+// to Vr and the rollout to a stop (0106: the METAR crosswind ran a phone 737 off from 40 kt).
+export const tillerShare = (gsMps) => Math.max(0, Math.min(1, (40 - gsMps / KTS_TO_MPS) / 20));
+export function touchGroundRudder(x, gsMps, wheelbaseM, steerDeg, holdRud) {
+  const w = Math.abs(x) > TILLER_DEAD ? tillerShare(gsMps) : 0;
+  return w * tillerRudder(x, gsMps, wheelbaseM, steerDeg) + (1 - w) * holdRud;
 }

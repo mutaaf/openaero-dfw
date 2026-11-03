@@ -14,7 +14,7 @@
 // flight, or onto the localizer and glidepath when it is on a final), a no-dive floor
 // below ~500 ft and an auto-flare near the ground, and main.js adds the autothrottle, automatic
 // gear/flaps and a hard landing that resets instead of crashing (see ASSIST_CONFIG).
-import { aileronForBank, elevatorForPitch, flareSinkMps, bankCommandForHeading } from './autopilot.js';
+import { aileronForBank, elevatorForPitch, flareSinkMps, bankCommandForHeading, glidepathGammaDeg } from './autopilot.js';
 import { headingError, vrefFor } from './aero.js';
 
 export const ASSIST_KEY = 'openaero_assist_v1';
@@ -26,7 +26,7 @@ export const DEFAULT_ASSIST = 'learner';
 
 export const ASSIST_CONFIG = {
   kid: {
-    bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 4,
+    bankMaxDeg: 30, pitchUpMaxDeg: 15, pitchDownMaxDeg: -10, aoaMarginDeg: 4, flareAoaMarginDeg: 3,
     autoThrottle: true, autoConfig: true, autoFlare: true, softLanding: true, groundFloor: true, handsOff: true,
   },
   learner: {
@@ -44,6 +44,7 @@ const DEAD = 0.05;
 const PITCH_RATE_DEG_S = 8;   // full fore/aft stick moves the held pitch this fast
 const PITCH_LEAD_DEG = 4;     // the held pitch never runs further than this ahead of the nose
 const COORD_GAIN = 0.1;       // rudder per degree of sideslip
+const COORD_FROM_M = 3;       // …with the wheels at least this high (0110)
 const CMD_SHARE = 0.85;       // full stick commands this share of a limit; the rest is overshoot room
 const FLARE_FROM_M = 12;      // Kid auto-flare: wheel height where it starts…
 const FLARE_BANK_DEG = 5;     // …and the most bank it allows there (wingtip strike is > 10°)
@@ -66,15 +67,22 @@ export function updateDeparture(st, onGround, aglFt) {
 // One sub-step of input shaping. cfg = assistConfig(level) (never null here).
 // s: { pitchIn, rollIn, yawIn (raw stick targets: pitch + = nose down, roll + = right),
 //      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), aoaDeg, betaDeg, dihedralAil,
-//      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true),
+//      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true), vsMps (+ = up), flarePerS (spec.kidFlarePerS),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
-//      localizer bank and glidepath angle on a final) }
+//      localizer bank and glidepath angle on a final), rwyHdgDeg, noseHdgDeg, crossM, crossVelMps,
+//      steerRateDegS (on the runway: its true heading or null off it, the nose's, the offset and
+//      drift right of its centreline, full pedal's steered yaw rate; 0110), noFloor (no engine, 0036: the glide is
+//      steeper than the floor, and holding the floor would only slow it to a mush) }
 // Writes out.elev, out.ail, out.rud (surface commands, -1..1); returns out. No allocation.
 export function shapeControls(cfg, st, s, dt, out) {
   if (s.onGround) {
-    // On the runway the airplane is the pilot's (rotation, taxi): the envelope starts at lift-off.
+    // On the runway the stick is the pilot's (rotation, taxi): the envelope starts at lift-off.
+    // The pedals too, when they use them; when they don't, the nose wheel holds the centreline
+    // of the runway it is on (0110), never the sideslip's coordination (it would steer into the wind).
     st.pitchHoldDeg = null;
-    out.elev = s.pitchIn; out.ail = s.rollIn; out.rud = s.yawIn;
+    out.elev = s.pitchIn; out.ail = s.rollIn;
+    out.rud = Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null ? s.yawIn
+      : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS);
     return out;
   }
   if (st.pitchHoldDeg === null) st.pitchHoldDeg = s.pitchDeg;
@@ -85,23 +93,30 @@ export function shapeControls(cfg, st, s, dt, out) {
       s.pitchDeg - PITCH_LEAD_DEG, s.pitchDeg + PITCH_LEAD_DEG);
   } else if (cfg.handsOff) {
     // Kid let go: ease toward the guide's flight path (pitch = path + angle of attack).
+    // Not lower while climbing in the flare (0101 panel): after a balloon (a pull, then let go) the
+    // guide dived from the top of it faster than the flare's floor could catch: ~700-800 fpm.
     const step = GUIDE_RATE_DEG_S * dt;
-    st.pitchHoldDeg += clamp(s.guideGammaDeg + s.aoaDeg - st.pitchHoldDeg, -step, step);
+    const ballooning = cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M && s.vsMps > 0;
+    st.pitchHoldDeg += clamp(s.guideGammaDeg + s.aoaDeg - st.pitchHoldDeg, ballooning ? 0 : -step, step);
   }
   st.pitchHoldDeg = clamp(st.pitchHoldDeg, cfg.pitchDownMaxDeg * CMD_SHARE, cfg.pitchUpMaxDeg * CMD_SHARE);
   // Kid ground floor: a dive held from higher up is shallowed out before the ground.
-  if (cfg.groundFloor && s.wheelHeightM < FLOOR_BELOW_M) {
+  if (cfg.groundFloor && !s.noFloor && s.wheelHeightM < FLOOR_BELOW_M) {
     st.pitchHoldDeg = Math.max(st.pitchHoldDeg, FLOOR_GAMMA_DEG + s.aoaDeg);
   }
   // Kid auto-flare: near the ground, never less nose-up than the flare's sink-rate profile.
   if (cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M) {
     // Air-relative path (true airspeed), to match the air-relative angle of attack added to it.
-    const flareGammaDeg = Math.atan2(flareSinkMps(Math.max(0, s.wheelHeightM)), Math.max(20, s.airspeedMps)) * 180 / Math.PI;
+    // s.flarePerS: the airframe's sink profile (spec.kidFlarePerS, 0101), else autopilot.js's.
+    const flareGammaDeg = Math.atan2(flareSinkMps(Math.max(0, s.wheelHeightM), s.flarePerS), Math.max(20, s.airspeedMps)) * 180 / Math.PI;
     st.pitchHoldDeg = Math.min(Math.max(st.pitchHoldDeg, flareGammaDeg + s.aoaDeg), s.tailstrikeDeg - TAIL_MARGIN_DEG);
   }
   // Angle-of-attack protection: the pitch that would put the wing at its limit on the
   // current flight path (pitch − α + α_max). Over the limit, the nose comes down.
-  const aoaMax = s.stallAoaDeg - cfg.aoaMarginDeg;
+  // Kid's auto-flare may use more of the wing (flareAoaMarginDeg, 0102): with a stiff nose the
+  // limit holds exactly, and 4° under the stall left no lift to stop a slow glide's sink.
+  const flaring = cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M;
+  const aoaMax = s.stallAoaDeg - (flaring ? cfg.flareAoaMarginDeg : cfg.aoaMarginDeg);
   // The loop overshoots α by ~1.5–2° as an idle airplane slows (headless runs), so the
   // margins are 4°: ~2° of real margin left at worst.
   const pitchAtAoaMax = s.pitchDeg - s.aoaDeg + aoaMax;
@@ -123,18 +138,57 @@ export function shapeControls(cfg, st, s, dt, out) {
 
   // Yaw: the pilot's rudder if they use it, else coordinate (rudder + = yaw right cancels
   // a positive, from-the-right sideslip).
-  out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn : clamp(s.betaDeg * COORD_GAIN, -1, 1);
+  // Not with the wheels just off the runway (lift-off, a skip): a crosswind's sideslip there asks for
+  // full pedal, which the nose wheel turns into a swerve when they touch again (0110).
+  out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn
+    : s.wheelHeightM < COORD_FROM_M ? 0 : clamp(s.betaDeg * COORD_GAIN, -1, 1);
   return out;
+}
+
+// The assists' rudder moves at most this fast (full travel in half a second, main.js): the runway
+// hold and the air's coordination ask for different pedals, and a wheels-on/off moment (lift-off, a
+// skip on touchdown) must not slam it from stop to stop (0110).
+export const RUDDER_SLEW_PER_S = 2;
+export const slewRudder = (cur, cmd, dt) => cur + clamp(cmd - cur, -RUDDER_SLEW_PER_S * dt, RUDDER_SLEW_PER_S * dt);
+
+// Kid and Learner on the runway with the pedals free (0110): the nose turns at most 4°/s
+// towards a heading at most 3° off the runway's, back towards the centreline, by the offset right of
+// it (crossM, m) and the drift across it (crossVelMps). steerRateDegS: the yaw rate full pedal
+// steers at this groundspeed (v·tan δ / wheelbase, main.js), so the pedal it asks is the rate it
+// wants: gentle at landing speeds, full at a walk.
+const GROUND_TURN_DEG_S = 4;
+export function groundSteerRudder(rwyHdgDeg, noseHdgDeg, crossM, crossVelMps, steerRateDegS) {
+  const target = rwyHdgDeg - clamp(crossM * 0.5 + crossVelMps, -3, 3);
+  const want = clamp(headingError(target, noseHdgDeg) * 0.5, -GROUND_TURN_DEG_S, GROUND_TURN_DEG_S);
+  return clamp(want / Math.max(0.5, steerRateDegS), -1, 1);
 }
 
 // Kid hands-off line-up on a final: bank (deg, + = right) toward a 20°-max intercept of the
 // centreline (crossM + = right of it). Softer than the autopilot's localizer (0.5°/m, full
 // heading gain), which S-turned a hand-flown airplane with no roll-rate feedback of its own;
 // tuned on the flight model (tests/unit/assists.test.js) for the 737 and the 172 (0.8 of the
-// heading bank since the sideslip side force, 0081: at 0.7 the 737 overshot 31 m; the
-// 0.15°/m intercept is kept, since a crosswind's steady offset goes as 1/that).
+// heading bank since the sideslip side force, 0081: at 0.7 the 737 overshot 31 m). curHdgDeg
+// is the ground track (0097; main.js, pattern.js, deadStick.js): fed the nose heading, a
+// crosswind's crab left a steady offset of drift / 0.15°/m, ~50 m at 10 kt in the Cessna.
 export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
   0.8 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.15, -20, 20), curHdgDeg));
+
+// Kid's hands-off final (main.js applyAssists): `ap` is airports.js approachGeometry for `end`.
+// Captured on the nose (within 45°), flown on the ground track so a crab holds the centreline
+// (0097), the 3° path to its aim point and on over the runway, under the auto-flare's floor, so
+// it lands (0098: stopped at the threshold, level flight floated the runway). Past the threshold
+// only a landing: under ~100 ft over the first third of the runway, never steeper than 2° (an
+// airplane let go higher, later or climbing away is not dived at the runway). Leaves out.guide*
+// alone (level flight) off the final.
+export function kidFinalGuide(end, ap, noseDeg, trackDeg, out) {
+  const past = ap.distM < 0;
+  if (past && (ap.heightAbovePathM + ap.pathHeightM > 30 || -ap.distM > (end.lengthM - end.displacedM) / 3)) return;
+  if (ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(end.hdgT, noseDeg)) < 45) {
+    out.guideBankDeg = kidLocalizerBankDeg(end.hdgT, trackDeg, ap.crossM);
+    out.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
+    if (past) out.guideGammaDeg = Math.max(out.guideGammaDeg, -2);
+  }
+}
 
 // Kid's automatic gear and flaps from height and vertical speed. Mutates and returns cfgOut
 // { gearDown, flapsIndex } (seeded with the current values). Hysteresis: down/out when

@@ -4,9 +4,13 @@
 import { Vector3, Quaternion, Euler } from 'three';
 import { stepFlightModel } from '../../src/flightModel.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank, flareSinkMps } from '../../src/autopilot.js';
-import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT } from '../../src/constants.js';
+import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT, GRAVITY } from '../../src/constants.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
+import { surfaceWindFactor } from '../../src/weather.js';
+// The F-16's g/AoA limiter (0121): the game loads it right after boot (main.js), the cards fly with it.
+import '../../src/fbw.js';
+import '../../src/supersonic.js';
 
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
@@ -99,17 +103,41 @@ export function settle(body, spec, seconds, pilot, f, settleS = 40) {
   return sum / n;
 }
 
+// The load factor an accelerometer on the pilot's seat reads (n, in g, + = pushed into the
+// seat): the specific force (acceleration less gravity) along the body's up axis. Call it
+// once after each sub-step (fly's `until`); it measures the step from the velocity change,
+// so the first call returns 1 (in trim).
+export function loadFactorMeter() {
+  const v0 = new Vector3(), f = new Vector3(), up = new Vector3();
+  let primed = false;
+  return (body, dt = DT) => {
+    if (!primed) { primed = true; v0.copy(body.vel); return 1; }
+    f.copy(body.vel).sub(v0).divideScalar(dt);
+    f.y += GRAVITY;
+    v0.copy(body.vel);
+    return f.dot(up.set(0, 1, 0).applyQuaternion(body.quat)) / GRAVITY;
+  };
+}
+
 // POH short-field takeoff: flaps 10, full power, rotate at 45 KIAS to a nose-high 11°
 // (lift-off near 51 KIAS). Ground roll ends when the wheels leave. `isaDevC`: hot day.
 // With `clearFt` the run goes on to clear an obstacle that high: the POH's 56 KIAS climb
 // (Fig. 5-5 "Speed at 50 Ft") until the wheels are `clearFt` above the runway. It also
 // reports what the pilot actually flew: IAS at rotation, peak pitch rate, worst heading.
-export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0) {
+// `windKts`: a wind straight down the runway (+ = headwind, − = tailwind), set where the
+// METAR's goes (body.windVec, the air mass's velocity). `metarKts`: the game's wind instead, a
+// METAR's 10 m wind down the runway thinned to the CG's height as main.js does (ticket 0106).
+export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0, { windKts = 0, metarKts = null } = {}) {
   const b = makeBody(spec, { throttle: 1, flaps: 1 });
   b.isaDevC = isaDevC;
+  b.windVec.copy(runwayWind(windKts));
+  const gameWind = (x) => {
+    if (metarKts !== null) x.windVec.set(0, 0, metarKts * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY));
+  };
   let rollFt = null, liftoffKts = null, rotateKts = null, maxPitchRateDegS = 0, maxHeadingDevDeg = 0;
   const climb = speedHoldPilot(() => 56);
   fly(b, spec, 120, (x, dt) => {
+    gameWind(x);
     _e.setFromQuaternion(x.quat, 'YXZ');
     const yawLeftDeg = _e.y * RAD_TO_DEG;
     maxHeadingDevDeg = Math.max(maxHeadingDevDeg, Math.abs(yawLeftDeg));
@@ -204,6 +232,10 @@ export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, 
     bleedKtsS: (first.ias - last.ias) / (last.t - first.t), t: b.t,
   };
 }
+
+// Wind along the runway (ticket 0103). The runway runs north (−Z), so a headwind of `kts`
+// is an air mass moving south (+Z) and a tailwind (kts < 0) one moving north.
+export const runwayWind = (kts) => new Vector3(0, 0, kts * KTS_TO_MPS);
 
 // Crosswind (ticket 0069). The runway runs north along x = 0 (the body's spawn heading), so
 // a wind from the right (090°) is an air mass moving west at `xwKts`. Distances across it
@@ -340,16 +372,24 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
 // segment, and what the pilot flew: touchdown IAS and sink rate, time airborne again after
 // the first touch, when the nose wheel came down, and the highest pitch and the time with
 // the nose wheel off the runway after it settled (0.5 s after it touched).
-export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2, onStep = null } = {}) {
+export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 61, flaps = 3, flareFt = 20, backS = 2, windKts = 0, metarKts = null, onStep = null, wet = false } = {}) {
   const tan3 = Math.tan(3 * DEG_TO_RAD);
   const b = makeBody(spec, { kts, altM: 50 / M_TO_FT + spec.gearHeight, flaps, throttle: 0 });
   b.isaDevC = isaDevC;
+  b.wetRunway = wet; // ticket 0108: the METAR's rain on the runway (systems.js brakeMu)
   b.vel.y = b.vel.z * tan3;
+  // `windKts` as in shortFieldTakeoff: the body starts at `kts` through the air, so its
+  // ground velocity carries the wind (a 3° path through the air; the same sink at a lower
+  // groundspeed is steeper over the ground in a headwind). `metarKts`: the game's wind, as in
+  // shortFieldTakeoff (the full METAR wind at 50 ft, thinned below 10 m: ticket 0106).
+  b.windVec.copy(runwayWind(metarKts ?? windKts));
+  b.vel.add(b.windVec);
   const approach = speedHoldPilot(() => kts);
   const aoaMax = stallAoaDeg(spec, flaps) - 1;
   const holdM = 1 / M_TO_FT;
   let td = null, flareI = null;
   fly(b, spec, 120, (x, dt) => {
+    if (metarKts !== null) x.windVec.set(0, 0, metarKts * KTS_TO_MPS * surfaceWindFactor(x.pos.y - x.groundY));
     const { pitchDeg, bankRightDeg } = attitude(x);
     x.throttle = 0;
     x.rudderInput = Math.max(-1, Math.min(1, yawLeftDegOf(x) * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15));

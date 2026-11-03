@@ -16,6 +16,23 @@ function parseVisibility(v) {
   }, 0);
 }
 
+// A wet runway (ticket 0108): rain or drizzle falling at the field. Read from the raw report
+// (the Worker keeps rawOb), its present-weather groups between the time and RMK: intensity,
+// a descriptor (SH, TS, FZ, ...), then two-letter phenomena, any of them RA or DZ. Vicinity
+// (VC) groups, a thunderstorm with no precipitation, the remarks' begin/end times and an
+// international report's trend (TEMPO/BECMG: forecast, not falling) do not count, and nothing
+// else ever says "wet".
+const WX_GROUP = /^[+-]?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?((?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+)$/;
+export function metarWetRunway(raw) {
+  const body = String(raw ?? '').split(/ (?:RMK|TEMPO|BECMG|NOSIG)\b/)[0].split(/\s+/);
+  const t = body.findIndex((g) => /^\d{6}Z$/.test(g));
+  for (let i = t + 1; i < body.length; i++) {
+    const m = t >= 0 && WX_GROUP.exec(body[i]);
+    if (m && /^(?:..)*?(?:RA|DZ)/.test(m[1])) return true;
+  }
+  return false;
+}
+
 export function parseMetar(m) {
   const variable = m.wdir === 'VRB' || typeof m.wdir !== 'number';
   const windKts = Number(m.wspd) || 0;
@@ -37,6 +54,7 @@ export function parseMetar(m) {
     altimInHg: typeof m.altim === 'number' ? m.altim * HPA_TO_INHG : 29.92,
     tempC: m.temp,
     fltCat: m.fltCat || null,
+    wetRunway: metarWetRunway(m.rawOb),
     live: true,
   };
 }
@@ -60,7 +78,7 @@ export function scenarioWeather() {
     icao: 'KDFW', raw: 'SCENARIO KDFW 35010KT 10SM FEW050 18/08 A3000', obsTime: null,
     windDirDeg: 350, windKts: 10, gustKts: 10, visibilitySm: 10, ceilingFt: null, ceilingCover: null,
     cloudLayers: cloudLayers([{ cover: 'FEW', base: 5000 }]),
-    altimInHg: 30.0, tempC: 18, fltCat: 'VFR', live: false,
+    altimInHg: 30.0, tempC: 18, fltCat: 'VFR', wetRunway: false, live: false,
   };
 }
 
@@ -70,6 +88,18 @@ export function windVector(fromDeg, speedMps) {
   if (fromDeg === null || fromDeg === undefined || !speedMps) return { x: 0, z: 0 };
   const r = fromDeg * DEG_TO_RAD;
   return { x: -Math.sin(r) * speedMps, z: Math.cos(r) * speedMps };
+}
+
+// The wind near the ground (ticket 0106). A METAR's wind is measured 10 m (33 ft) above the
+// runway (the ASOS/AWOS anemometer); below that the surface boundary layer thins it by the log
+// law, ln(z/z0) / ln(10/z0), with z0 = 0.03 m: Davenport's "open" class (flat, grass, few
+// obstacles: an airfield), WMO-No. 8 Annex 5.B. Read at the wing (the CG's height), never
+// below z = 1 m (60%): a parked or rolling aircraft feels most of the wind. Above 10 m the
+// sim flies the reported wind (no profile aloft). Parked aircraft stay put on tyre friction.
+const SURFACE_Z0_M = 0.03;
+export function surfaceWindFactor(heightM) {
+  if (!(heightM < 10)) return 1;
+  return Math.log(Math.max(1, heightM) / SURFACE_Z0_M) / Math.log(10 / SURFACE_Z0_M);
 }
 
 // Smooth, deterministic gusting between the steady wind and the gust value.

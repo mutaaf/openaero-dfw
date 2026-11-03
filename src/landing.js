@@ -13,6 +13,8 @@ export function curve(x, pts) {
 }
 
 const WEIGHTS = { rate: 0.35, centreline: 0.2, zone: 0.2, flare: 0.15, speed: 0.1 };
+// Touchdown distances past the threshold that score the zone's full marks (the strip shades it, 0088).
+export const ZONE_FULL_M = [150, 600];
 
 // t: { vsFpm (negative = descending), crossM, pastThresholdM, runwayLengthM, runwayWidthM,
 //      pitchDeg (nose up +), bankDeg, iasKts, vrefKts, driftDeg?, gearLocked? (false = belly) }
@@ -28,7 +30,7 @@ export function gradeLanding(t) {
     { key: 'centreline', label: 'Centreline', value: `${cross.toFixed(1)} m ${t.crossM >= 0 ? 'right' : 'left'}`,
       score: curve(cross, [[0, 100], [3, 100], [t.runwayWidthM / 2, 40]]) },
     { key: 'zone', label: 'Touchdown zone', value: `${Math.round(t.pastThresholdM)} m past threshold`,
-      score: t.pastThresholdM < 0 ? 0 : curve(t.pastThresholdM, [[0, 70], [150, 100], [600, 100], [900, 40], [1500, 20]]) },
+      score: t.pastThresholdM < 0 ? 0 : curve(t.pastThresholdM, [[0, 70], [ZONE_FULL_M[0], 100], [ZONE_FULL_M[1], 100], [900, 40], [1500, 20]]) },
     { key: 'flare', label: 'Flare', value: `${t.pitchDeg.toFixed(1)}° pitch, ${bank.toFixed(1)}° bank`,
       score: Math.max(0, (t.pitchDeg < 0 ? 40 : curve(t.pitchDeg, [[0, 70], [1, 100], [7, 100], [10, 60]])) - Math.max(0, bank - 2) * 8) },
     { key: 'speed', label: 'Speed', value: `${Math.round(t.iasKts)} kt (Vref ${t.vrefKts})`,
@@ -50,7 +52,9 @@ export function gradeLanding(t) {
   else if (bank > 10) { grade = 'CRASH'; reason = 'Wingtip strike: too much bank at touchdown.'; }
   else if (t.pastThresholdM < 0) { grade = 'D'; reason = 'Touched down short of the runway.'; }
   else if (offRunway) { grade = 'D'; reason = 'Touched down off the runway.'; }
-  return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason };
+  // Where the wheels touched, for the card's runway strip (0088, touchdownStrip.js).
+  const touchdown = { pastThresholdM: t.pastThresholdM, crossM: t.crossM, lengthM: t.runwayLengthM, widthM: t.runwayWidthM };
+  return { grade, score: grade === 'CRASH' ? 0 : score, factors, reason, touchdown };
 }
 
 // Bounced landings (ticket 0091). A bounce is the wheels back above BOUNCE_FT for at least

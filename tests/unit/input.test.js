@@ -26,7 +26,7 @@ describe('stickFromPoint', () => {
   });
 });
 
-import { combineTargets, throttleFromPoint } from '../../src/input.js';
+import { combineTargets, throttleFromPoint, tillerRudder } from '../../src/input.js';
 
 describe('combineTargets', () => {
   const kb = { pitch: 1, roll: -1, yaw: 0 };
@@ -57,5 +57,42 @@ describe('throttleFromPoint', () => {
   it('clamps outside the track', () => {
     expect(throttleFromPoint(0, rect)).toBe(1);
     expect(throttleFromPoint(999, rect)).toBe(0);
+  });
+});
+
+// Ticket 0110: Pilot's touch tiller on the runway.
+describe('tillerRudder', () => {
+  const wb = 1.651, steer = 10; // C172 (aircraft.js gear)
+  it('a thumb resting near the centre of the pad does not steer', () => {
+    expect(tillerRudder(0.2, 5, wb, steer)).toBe(0);
+    expect(tillerRudder(-0.25, 5, wb, steer)).toBe(-0);
+  });
+  it('full nose wheel at walking pace, either way', () => {
+    expect(tillerRudder(1, 1, wb, steer)).toBe(1);
+    expect(tillerRudder(-1, 1, wb, steer)).toBe(-1);
+  });
+  it('on the roll full stick turns no faster than 8°/s (v·tan δ / wheelbase)', () => {
+    for (const gs of [10, 25, 70]) {
+      const rud = tillerRudder(1, gs, wb, steer);
+      const rateDegS = gs * Math.tan(rud * steer * Math.PI / 180) / wb * 180 / Math.PI;
+      expect(rateDegS).toBeLessThanOrEqual(8.05);
+      expect(rateDegS).toBeGreaterThan(7);
+    }
+  });
+});
+
+// 0106: Pilot on touch has no pedals; from 40 kt to Vr the centreline hold steers the roll.
+import { touchGroundRudder, tillerShare } from '../../src/input.js';
+describe('touchGroundRudder', () => {
+  const kt = 0.514444, wb = 15.6, steer = 7;
+  it('is the tiller to 20 kt, the hold from 40 kt, a blend between; the hold whenever the thumb is not steering', () => {
+    expect(tillerShare(10 * kt)).toBe(1);
+    expect(tillerShare(30 * kt)).toBeCloseTo(0.5, 6);
+    expect(tillerShare(60 * kt)).toBe(0);
+    expect(touchGroundRudder(1, 10 * kt, wb, steer, -0.4)).toBe(tillerRudder(1, 10 * kt, wb, steer));
+    expect(touchGroundRudder(1, 80 * kt, wb, steer, -0.4)).toBe(-0.4);
+    expect(touchGroundRudder(0.625, 30 * kt, wb, steer, -0.4)).toBeCloseTo(0.5 * tillerRudder(0.625, 30 * kt, wb, steer) - 0.2, 6);
+    expect(touchGroundRudder(0, 5 * kt, wb, steer, -0.4)).toBe(-0.4);
+    expect(touchGroundRudder(0.2, 30 * kt, wb, steer, -0.4)).toBe(-0.4);
   });
 });

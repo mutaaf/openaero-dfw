@@ -1,12 +1,12 @@
 ---
 id: 0048
 title: Fly the traffic pattern at Addison in the Cessna: downwind, base, final, coached
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-10-19
-pr:
+pr: 101
 ---
 
 ## Why

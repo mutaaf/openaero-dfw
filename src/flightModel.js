@@ -6,9 +6,10 @@
 // `sim`: pos, vel, quat, angVel (world frame, see autopilot.js for the sign conventions),
 // elevInput, aileronInput, rudderInput, throttle, flapsIndex, gearDown, brakesOn, apMaster,
 // windVec (air-mass velocity) and groundY (terrain height under the aircraft), trimAlphaDeg
-// (the angle of attack the elevator trim flies; autoTrim = it follows α); optional
+// (the angle of attack the elevator trim flies; autoTrim = it follows α), engineFailed (the
+// dead-stick drill, 0036: the engine makes no power whatever the throttle; the prop windmills); optional
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
-// writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY,
+// writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY, loadFactor,
 // sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn),
 // spoilers (ground spoiler extension 0–1, airframes with spec.groundSpoilers). Systems
 // (systems.js) run first: the gear, flaps, brakes and reversers follow their levers at
@@ -20,7 +21,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, gearFriction, noseSteerYawRate, tailVsMainsAccel } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, wheelScrubYawHold, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -67,7 +68,7 @@ export function stepFlightModel(body, spec, dt) {
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
   const groundEffect = groundEffectFactor(body.pos.y - body.groundY, spec.wingSpanM);
-  let cd = dragCoefficient(spec, cl, body.gearPos, body.flapPos, groundEffect);
+  let cd = dragCoefficient(spec, cl, body.gearPos, body.flapPos, groundEffect, body.mach);
 
   // Auto ground spoilers: out over ~1 s on the ground with the thrust levers at idle, in
   // again as soon as they are advanced (reverse thrust keeps them out). Lift dumped onto
@@ -81,7 +82,7 @@ export function stepFlightModel(body, spec, dt) {
 
   const liftForce = cl * qDyn * spec.wingAreaM2;
   const dragForce = cd * qDyn * spec.wingAreaM2;
-  body.engineN = spoolEngine(spec, body.engineN ?? body.throttle, body.throttle, dt);
+  body.engineN = spoolEngine(spec, body.engineN ?? body.throttle, body.engineFailed ? 0 : body.throttle, dt);
   const thrustForce = reversedThrust(spec, engineThrust(spec, body.engineN, airspeed, air, body.mach, qDyn), body.reverserPos);
 
   // Lift is perpendicular to the relative wind (in the plane of the body's lateral axis),
@@ -117,7 +118,7 @@ export function stepFlightModel(body, spec, dt) {
   const gh = struts
     ? body.groundY + spec.gearHeight + spec.gear.strokeM - gearConstants(spec).maxStroke
     : body.groundY + spec.gearHeight * (locked ? 1 : 0.35);
-  let normalForce = 0;
+  let normalForce = 0, held = false;
   if (struts) {
     // A wheel can reach the ground only when the CG is lower than the longest leg below it.
     if (body.pos.y <= body.groundY + spec.gearHeight + spec.gear.noseZ + 1) normalForce = gearForces(body, spec, totalForceWorld, _gearM);
@@ -150,14 +151,25 @@ export function stepFlightModel(body, spec, dt) {
     // their pull below the CG loads the nose wheel.
     if (struts) gearFriction(body, spec, fwd, vAlong, totalForceWorld, _gearM);
     else {
-      const mu = locked ? brakeMu(spec, body.brakePress) : 0.5;
+      const mu = locked ? brakeMu(spec, body.brakePress, body.wetRunway, Math.abs(vAlong) * MPS_TO_KTS) : 0.5;
       const roll = Math.abs(vAlong) > 0.3 ? -Math.sign(vAlong) * mu * normalForce : -vAlong * spec.massKg * 2;
       totalForceWorld.x += fwd.x * roll;
       totalForceWorld.z += fwd.z * roll;
     }
     const sideMax = 0.8 * normalForce;
-    totalForceWorld.x += MathUtils.clamp(-vSideX * spec.massKg * 4, -sideMax, sideMax);
-    totalForceWorld.z += MathUtils.clamp(-vSideZ * spec.massKg * 4, -sideMax, sideMax);
+    let sideX = -vSideX * spec.massKg * 4, sideZ = -vSideZ * spec.massKg * 4;
+    // Nearly stopped on its wheels and not breaking away (what is left along the nose after the
+    // tyres' static grip is no more than their damping: power for the takeoff roll breaks it), the
+    // tyres also hold a steady push across them (a crosswind on a parked airplane, ticket 0106)
+    // instead of letting it creep sideways, and its heading (wheelScrubYawHold below).
+    const push = totalForceWorld.x * fwd.x + totalForceWorld.z * fwd.z;
+    held = struts && Math.abs(vAlong) <= 0.3 && Math.hypot(vSideX, vSideZ) <= 0.3 && Math.abs(push) <= spec.massKg * 0.6;
+    if (held) {
+      sideX -= totalForceWorld.x - fwd.x * push;
+      sideZ -= totalForceWorld.z - fwd.z * push;
+    }
+    totalForceWorld.x += MathUtils.clamp(sideX, -sideMax, sideMax);
+    totalForceWorld.z += MathUtils.clamp(sideZ, -sideMax, sideMax);
     body.vAlongMps = vAlong;
   } else {
     body.onGround = false;
@@ -165,6 +177,9 @@ export function stepFlightModel(body, spec, dt) {
 
   const accel = totalForceWorld.divideScalar(spec.massKg);
   body.accelY = accel.y;
+  // The seat's load factor (g, + = pushed into the seat, 0121): the specific force (acceleration
+  // less gravity) along the body's up axis, what the HUD's G shows.
+  body.loadFactor = _v4.set(0, 1, 0).applyQuaternion(body.quat).dot(accel) / GRAVITY + _v4.y;
   body.vel.addScaledVector(accel, dt);
   body.pos.addScaledVector(body.vel, dt);
 
@@ -188,7 +203,11 @@ export function stepFlightModel(body, spec, dt) {
   if (body.autoTrim || spec.pitchFbw || body.trimAlphaDeg == null) body.trimAlphaDeg = body.aoaDeg;
   const stiffness = spec.elevatorAlphaDeg ? authority / (spec.elevatorAlphaDeg * DEG_TO_RAD) : 0;
   const alphaErr = MathUtils.clamp(aoaRad - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
-  const qRate = (-body.elevInput * authority - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
+  // The stick's steady pitch rate (pitch authority over damping); a fly-by-wire airframe's g and
+  // AoA limiter (spec.fbw, fbw.js, 0121) caps it in the air, so a held pull stops at the limits.
+  let qCmd = -body.elevInput * authority / spec.pitchDamping;
+  if (spec.fbw) qCmd = spec.fbw(body, spec, qCmd, aoaRad, fBodyY, airspeed, qDyn);
+  const qRate = (qCmd * spec.pitchDamping - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
   // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
   const dihedral = dihedralAileron(spec, betaRad);
@@ -208,7 +227,9 @@ export function stepFlightModel(body, spec, dt) {
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
     const steer = noseSteerYawRate(body, spec, body.vAlongMps ?? 0);
-    if (steer !== null) body.angVel.y += (steer - body.angVel.y) * Math.min(1, dt * 6);
+    // Nearly stopped, turning it scrubs every tyre: the wind can't weathervane a parked airplane
+    // past the tyres' grip (0106). Rolling, the loaded nose tyre holds its steered rate (0110).
+    if (steer !== null) body.angVel.y += (held ? wheelScrubYawHold : noseWheelYawHold)(body, spec, steer - body.angVel.y, dt);
   }
 
   if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {
@@ -253,8 +274,8 @@ export function trimThrottle(spec, iasMps, flapsIndex, gammaDeg, gearDown = true
   const aoaRad = trimAoaDeg(spec, iasMps, flapsIndex) * DEG_TO_RAD;
   const cl = liftCoefficient(spec, aoaRad, flapsIndex);
   const q = dynamicPressure(iasMps);
-  const drag = dragCoefficient(spec, cl, gearDown, flapsIndex, 1) * q * spec.wingAreaM2;
+  const tas = iasMps / Math.sqrt(air.sigma), mach = tas / air.speedOfSoundMps;
+  const drag = dragCoefficient(spec, cl, gearDown, flapsIndex, 1, mach) * q * spec.wingAreaM2;
   const thrust = (drag + spec.massKg * GRAVITY * Math.sin(gammaDeg * DEG_TO_RAD)) / Math.cos(aoaRad);
-  const tas = iasMps / Math.sqrt(air.sigma);
-  return throttleForThrust(spec, thrust, tas, air, tas / air.speedOfSoundMps, q);
+  return throttleForThrust(spec, thrust, tas, air, mach, q);
 }

@@ -16,7 +16,7 @@
 // the CG sits spec.gearHeight above the ground (spawns and tests rely on it).
 // spec.inertia: { pitch, roll, yaw } kg·m² for the gear's moments.
 import { Vector3, Quaternion } from 'three';
-import { GRAVITY } from './constants.js';
+import { GRAVITY, MPS_TO_KTS } from './constants.js';
 import { brakeMu, ROLLING_MU } from './systems.js';
 
 const _r = new Vector3();
@@ -94,16 +94,21 @@ export function gearForces(body, spec, force, moment) {
 // groundspeed along it (m/s). Needs body.wheelLoads from gearForces this sub-step.
 export function gearFriction(body, spec, fwd, vAlong, force, moment) {
   const loads = body.wheelLoads;
+  const braked = brakeMu(spec, body.brakePress ?? 0, body.wetRunway, Math.abs(vAlong) * MPS_TO_KTS);
   if (Math.abs(vAlong) <= 0.3) {
-    // Nearly stopped: hold it (a damper, no moment), as flightModel.js does without struts.
-    const f = -vAlong * spec.massKg * 2;
+    // Nearly stopped: static friction (no moment). The tyres hold whatever pushes along the
+    // nose (the METAR wind on a parked airplane, idle thrust: 0106) up to their grip, the
+    // brakes' on the mains and rolling resistance on the nose, and damp the speed left. A
+    // damper alone let any steady push creep it (a 737 at idle on its brakes, ~7 cm/s).
+    const grip = ROLLING_MU * Math.max(0, loads[0]) + braked * (Math.max(0, loads[1]) + Math.max(0, loads[2]));
+    const push = force.x * fwd.x + force.z * fwd.z;
+    const f = Math.max(-grip, Math.min(grip, -push - vAlong * spec.massKg * 2));
     force.x += fwd.x * f;
     force.z += fwd.z * f;
     return;
   }
   const c = gearConstants(spec);
   _qi.copy(body.quat).invert();
-  const braked = brakeMu(spec, body.brakePress ?? 0);
   const s = -Math.sign(vAlong);
   for (let i = 0; i < 3; i++) {
     if (!(loads[i] > 0)) continue;
@@ -126,6 +131,34 @@ export function noseSteerYawRate(body, spec, alongMps) {
   return alongMps * Math.tan(delta) / c.wheelbase;
 }
 
+// The loaded nose tyre holding the yaw rate the pedals steer (ticket 0110): the change in yaw
+// rate (rad/s) it makes this sub-step towards `errRate` (steered rate − current). Its pull
+// follows the nose wheel's load (NOSE_HOLD_PER_S at the static share, letting go as the elevator
+// or the lift unloads it at rotation), never more than its side grip can turn the airframe
+// (NOSE_SIDE_MU · load about the mains, through spec.inertia.yaw).
+export const NOSE_HOLD_PER_S = 30;
+export const NOSE_SIDE_MU = 0.5;
+export function noseWheelYawHold(body, spec, errRate, dt) {
+  const c = gearConstants(spec);
+  const load = Math.max(0, body.wheelLoads[0]);
+  const share = load / (c.noseShare * spec.massKg * GRAVITY);
+  const cap = (NOSE_SIDE_MU * load * c.wheelbase / spec.inertia.yaw) * dt;
+  const d = errRate * Math.min(1, dt * NOSE_HOLD_PER_S * Math.min(1, share));
+  return Math.max(-cap, Math.min(cap, d));
+}
+
+// Nearly stopped (0106), brakes set or not: turning the airframe about its CG scrubs every tyre
+// sideways, so the yaw is static friction. The yaw-rate change (rad/s) towards `errRate` this
+// sub-step, up to what the tyres' side grip (SCRUB_MU · load at each wheel's arm) can do through
+// spec.inertia.yaw: a parked airplane holds its heading against the wind, never more than that.
+export const SCRUB_MU = 0.8;
+export function wheelScrubYawHold(body, spec, errRate, dt) {
+  const g = spec.gear, l = body.wheelLoads;
+  const arm = Math.max(0, l[0]) * g.noseZ + (Math.max(0, l[1]) + Math.max(0, l[2])) * g.mainZ;
+  const cap = (SCRUB_MU * arm / spec.inertia.yaw) * dt;
+  return Math.max(-cap, Math.min(cap, errRate));
+}
+
 // The tail against the mains (rad/s², body x: + = nose up). The flight model's elevator is a
 // pitch-rate command tuned in the air, where most of a real tail's power goes into balancing
 // the static stability (flightModel.js models it softly about the trim α, 0090). On the ground that power works against
@@ -137,4 +170,23 @@ export function tailVsMainsAccel(body, spec, iasKts) {
   if (!(m > 0)) return 0;
   const cap = Math.min(1, (iasKts / (0.8 * (spec.vrKts ?? spec.vrefKts))) ** 2);
   return (-(body.elevInput ?? 0) * cap * m) / spec.inertia.pitch;
+}
+
+// Radio altitude (0122): the lowest main wheel's height over the ground (m), the struts
+// hanging out as they do in the air, so it reads 0 the moment a main tyre touches (and
+// stays 0 on the runway with the struts in). A radio altimeter is rigged to read 0 at
+// main-gear touchdown and the automatic callouts are wheel heights; the CG is gearHeight
+// + strokeM over the runway at that moment (~12 ft on a 737). Nose up lowers the mains
+// (they are aft of the CG), a bank lowers the low wing's main. No gear geometry: the CG's
+// height less gearHeight. Rigged to the mains: nose down, the nose wheel is lower (~4.5 ft at -5°
+// on a 737) and isn't read; past 90° of bank it reads high, where a real one loses lock. Allocates nothing.
+export function radioAltitudeM(body, spec) {
+  if (!spec.gear) return Math.max(0, body.pos.y - body.groundY - spec.gearHeight);
+  const c = gearConstants(spec), q = body.quat;
+  let low = Infinity;
+  for (let i = 1; i < 3; i++) {
+    _r.copy(c.wheels[i]).applyQuaternion(q);
+    if (_r.y < low) low = _r.y;
+  }
+  return Math.max(0, body.pos.y + low - body.groundY);
 }

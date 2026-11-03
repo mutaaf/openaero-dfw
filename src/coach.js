@@ -18,6 +18,7 @@ export const BOUNCE_HIGH_FT = 5;
 
 export const COACH_PROMPTS = {
   papi: 'Keep two white, two red on the PAPI',
+  wet: 'Wet runway: brake early, longer roll', // a METAR with rain (0108)
   high: "You're high: ease the nose down",
   low: "You're low: raise the nose, add power",
   sink: 'Sinking fast: raise the nose, add power',
@@ -26,6 +27,7 @@ export const COACH_PROMPTS = {
   done: 'Touchdown! Hold the brakes to stop',
   // Kid level (assists.js flies the power and the flare): one prompt, nothing to contradict it
   kid: 'Let go of the stick: the plane lands itself',
+  kidWet: 'Wet runway: let go, then hold BRAKES to stop', // Kid on a wet METAR (0108)
   gear: 'Gear down! (G) You are about to land',
   flaps: 'Landing flaps: press F until 30°',
   slow: 'Slow: add power, nose a touch down',
@@ -44,33 +46,25 @@ export const COACH_PROMPTS = {
   bounceHigh: 'Big bounce: go around! Full power', // AFH: a severe bounce is not saved
   bounceKid: 'Bounced! Let go: the plane lands itself', // Kid: the autothrottle has the power
   // The go-around (0047, after the gate called it): power, pitch, flaps a notch, gear, climb.
-  gaPower: 'Go around! Full power',
-  gaPitch: 'Pitch up: stop the descent',
   gaFlaps: 'Flaps up one notch: press F',
-  gaGear: 'Positive rate: gear up (G)',
-  gaClimb: 'Climb straight ahead to 2,000 ft',
-  gaKid: 'Going around: the plane climbs for another try',
-  // The stall recovery drill (0087): slow it at idle until it stalls, then recover.
-  stIdle: 'Power to idle (throttle all the way back)',
-  stSlow: 'Ease back, more and more: hold height to a stall',
-  stNose: 'Stall! Nose down',
-  stPower: 'Power in: full throttle',
-  stWings: 'Wings level',
-  stClimb: 'Climb away',
-  stKidSlow: 'Let go: the plane slows down until it stalls',
-  stKid: 'Stall! The plane noses down and climbs away',
 };
+// The drills' own prompts are ranked here and worded in their lazy chunks (no boot bytes),
+// which add their words to DRILL_TEXT when they load: the go-around's ga* (goAround.js
+// GA_TEXT; gaFlaps stays here, it has numbers), the stall drill's st* (stallDrill.js
+// STALL_TEXT), the dead-stick's ds* (deadStick.js DS_TEXT, rank 1) and the traffic pattern's
+// pt* (pattern.js PT_TEXT, rank 1, through s.ds).
+export const DRILL_TEXT = {};
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
-const RANK = {
-  papi: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
+export const RANK = {
+  papi: 1, wet: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
   slow: 2, flaps: 2, sink: 2, gear: 3, flare: 3, decrab: 3, idle: 4,
   done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6, bounce: 5, bounceGa: 5, bounceHigh: 5, bounceKid: 5,
   gaPower: 4, gaPitch: 4, gaFlaps: 4, gaGear: 4, gaClimb: 4, gaKid: 4,
   stIdle: 4, stSlow: 4, stKidSlow: 4, stPower: 4, stWings: 4, stClimb: 4, stNose: 5, stKid: 5,
 };
 
-// On a touch screen the keys are buttons.
-const TOUCH_WORDS = {
+// On a touch screen the keys are buttons (a drill's chunk adds its own, e.g. windshear.js).
+export const TOUCH_WORDS = {
   gear: 'Gear down! Tap GEAR: you are about to land',
   reverse: 'Reverse thrust: tap REV, then add power',
   brake: 'Tap BRAKES to stop',
@@ -87,7 +81,7 @@ export function coachText(key, v = {}) {
   if (key === 'gaFlaps' && typeof v.flapsDeg === 'number') return v.touch ? `Flaps up a notch: tap FLAPS to ${v.flapsDeg}°` : `Flaps up a notch: press F, to ${v.flapsDeg}°`;
   if (key === 'flaps' && v.flapsDeg) return v.touch ? `Landing flaps: tap FLAPS until ${v.flapsDeg}°` : `Landing flaps: press F until ${v.flapsDeg}°`;
   if (v.touch && TOUCH_WORDS[key]) return TOUCH_WORDS[key];
-  return COACH_PROMPTS[key];
+  return COACH_PROMPTS[key] ?? DRILL_TEXT[key];
 }
 
 // The missed approach, step by step (s.goAround, set by main.js after the gate called it):
@@ -120,12 +114,17 @@ export function stallTarget(s) {
 //      optional: iasKts, targetKts (Vref + 5), locDots (+ = right of the centreline),
 //      gearLocked, flapsLanding, flareFt (default 50), idleFt (default 30), driftDeg,
 //      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
-//      drill's phase: stallTarget) }
+//      drill's phase: stallTarget), ds (the dead-stick challenge's or the traffic pattern's
+//      prompt key, its words in deadStick.js DS_TEXT or pattern.js PT_TEXT; rank 1),
+//      dsGround (on the runway before any lift-off: the engine-failure takeoff's, 0104),
+//      wet (the METAR's rain wets the runway: said on a steady final above 500 ft, 0108) }
 export function coachTarget(s) {
-  if (s.onGround || s.autopilot) return null;
+  if (s.autopilot) return null;
+  if (s.onGround) return s.dsGround ?? null; // before the first lift-off: a drill's takeoff words (0104)
   if (s.stall) return stallTarget(s);
+  if (s.ds) return s.ds; // the dead-stick challenge's own prompt (deadStick.js), above the flare
   if (s.goAround) return goAroundTarget(s);
-  if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : 'kid';
+  if (s.kid) return s.papiWhite === null || s.papiWhite === undefined || s.aglFt < 50 ? null : s.wet ? 'kidWet' : 'kid';
   if (s.aglFt < (s.idleFt ?? 30) && s.throttle > 0.05) return 'idle';
   if (s.aglFt < (s.flareFt ?? 50)) return Math.abs(s.driftDeg ?? 0) > 4 ? 'decrab' : 'flare';
   if (s.papiWhite === null || s.papiWhite === undefined) return null;
@@ -138,7 +137,7 @@ export function coachTarget(s) {
   if (s.papiWhite >= 3) return 'high';
   if (s.papiWhite <= 1) return 'low';
   if (fast > 10) return 'fast';
-  return 'papi';
+  return s.wet && s.aglFt > 500 ? 'wet' : 'papi';
 }
 
 // On the ground after the landing. r: { gsKts, canReverse (the airframe has reversers and
@@ -159,7 +158,7 @@ export const createCoach = () => ({ prompt: null, pending: null, pendingS: 0, fl
 // hold for COACH_MIN_HOLD_S.
 function settle(c, target, dt) {
   if (target === c.prompt) { c.pending = null; c.pendingS = 0; return; }
-  if (target === null || c.prompt === null || RANK[target] > RANK[c.prompt]) {
+  if (target === null || c.prompt === null || (RANK[target] ?? 1) > (RANK[c.prompt] ?? 1)) {
     c.prompt = target; c.pending = null; c.pendingS = 0;
     return;
   }
@@ -175,7 +174,7 @@ function settle(c, target, dt) {
 export function stepCoach(c, s, dt) {
   if (c.done) {
     if (s.bounces > 0 && !s.onGround) {
-      c.prompt = s.kid ? 'bounceKid' : s.bounces >= 2 ? 'bounceGa' : s.bounceHigh ? 'bounceHigh' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
+      c.prompt = s.kid ? 'bounceKid' : s.noPower ? 'dsBounce' : s.bounces >= 2 ? 'bounceGa' : s.bounceHigh ? 'bounceHigh' : 'bounce'; c.pending = null; c.pendingS = 0; c.doneS = 0;
       return c;
     }
     // Back on the wheels: the bounce prompt clears, the rollout prompts follow after the hold.

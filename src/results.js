@@ -1,7 +1,9 @@
 // The results card (lazy chunk, loaded by main.js at the touchdown or a drill's end): the
 // grade, score, personal best, the stabilized-gate verdict and one bar per factor. DOM only;
-// main.js pauses the flight first when the card comes up in the air (0047).
+// main.js pauses the flight first (in the air, 0047; on the rollout, 0106).
 import { GRADE_COLOURS } from './landing.js';
+import { landingTip } from './landingTip.js';
+import { drawStrip, touchdownLabel } from './touchdownStrip.js';
 
 const byId = (id) => document.getElementById(id);
 export function showResults(sim, result, best, end, gate) {
@@ -9,6 +11,8 @@ export function showResults(sim, result, best, end, gate) {
   const goAround = result.kind === 'goAround';
   byId('txtResultTitle').textContent = result.title ?? (goAround ? 'Go-around complete' : 'Landing grade');
   byId('btnKeepRolling').textContent = sim.onGround ? 'KEEP ROLLING' : 'KEEP FLYING';
+  // A drill that ended in the ground (the windshear, 0112) has nothing to keep flying: FLY AGAIN only.
+  byId('btnKeepRolling').classList.toggle('hidden', result.kind === 'windshear' && result.grade === 'CRASH');
   const gradeEl = byId('txtGrade');
   gradeEl.textContent = result.grade;
   gradeEl.className = `${result.grade === 'CRASH' ? 'text-2xl' : 'text-5xl'} font-black w-20 text-center ${GRADE_COLOURS[result.grade]}`;
@@ -17,6 +21,10 @@ export function showResults(sim, result, best, end, gate) {
   const reason = byId('txtGradeReason');
   reason.textContent = result.reason || '';
   reason.classList.toggle('hidden', !result.reason);
+  // The one thing to fix next time (0061); none for an S or a drill's own card.
+  const tip = landingTip(result, { kid: sim.assist === 'kid', noEngine: !!sim.engineFailed });
+  byId('txtTip').textContent = tip || '';
+  byId('tipRow').classList.toggle('hidden', !tip);
   const bestEl = byId('txtBest');
   if (best.isNewBest) bestEl.textContent = best.previous ? `★ New personal best (was ${best.previous.score})` : '★ First personal best on this mission';
   else bestEl.textContent = best.best ? `Personal best: ${best.best.grade} · ${best.best.score}` : '';
@@ -46,4 +54,27 @@ export function showResults(sim, result, best, end, gate) {
     list.appendChild(li);
   }
   card.classList.remove('hidden');
+  // The runway strip (0088): a landing on the runway's own picture; none for a drill's card or a
+  // glide that missed the runway (the miss is its own line, the strip would only pin it to an edge).
+  const strip = byId('touchdownStrip');
+  const td = result.madeRunway === false || !result.touchdown ? null : { ...result.touchdown, displacedM: end.displacedM || 0 };
+  strip.classList.toggle('hidden', !td);
+  strip.setAttribute('aria-label', td ? touchdownLabel(td) : '');
+  shownStrip = td ? { td, grade: result.grade } : null;
+  if (td) drawStrip(strip, td, result.grade);
+  const body = byId('resultsBody');
+  body.scrollTop = 0;
+  markMore();
 }
+// The card's middle scrolls on a short screen (0125): fade its foot while there is more below.
+function markMore() {
+  const body = byId('resultsBody');
+  body.classList.toggle('more', body.scrollTop + body.clientHeight < body.scrollHeight - 2);
+}
+byId('resultsBody').addEventListener('scroll', markMore, { passive: true });
+// Turned sideways with the card up, the strip changes size: draw it again at the new one.
+let shownStrip = null;
+addEventListener('resize', () => {
+  if (shownStrip && !byId('resultsCard').classList.contains('hidden')) drawStrip(byId('touchdownStrip'), shownStrip.td, shownStrip.grade);
+  markMore();
+});

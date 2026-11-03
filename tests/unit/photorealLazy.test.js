@@ -7,7 +7,8 @@ function fakeImpl() {
     session: { page: { roots: 1 } },
     start: vi.fn(async () => { impl.state.status = 'loading'; }),
     update: vi.fn(), setVisible: vi.fn(), resize: vi.fn(), noteSessionReuse: vi.fn(),
-    bounds: vi.fn(() => ({ min: [0, 0, 0], max: [1, 1, 1] })),
+    debugState: vi.fn(() => ({ status: 'active', page: { roots: 1 }, usage: null, bounds: { min: [0, 0, 0], max: [1, 1, 1] } })),
+    debugLine: vi.fn(() => '3D tiles: active · this page: 1 root'),
   };
   return impl;
 }
@@ -17,8 +18,8 @@ describe('lazy photoreal (0084)', () => {
     const load = vi.fn();
     const p = createLazyPhotoreal({}, load);
     expect(p.state.status).toBe('off');
-    expect(p.session).toBeNull();
-    expect(p.bounds()).toBeNull();
+    expect(p.debugState()).toEqual({ status: 'off', reason: '', visibleTiles: 0, loadedTiles: 0, calibM: 0, calibSamples: 0, attributions: '', page: null, usage: null, bounds: null });
+    expect(p.debugLine()).toBe('3D tiles: off');
     p.update(0.016); p.resize(); p.noteSessionReuse(); p.setVisible(false);
     expect(load).not.toHaveBeenCalled();
   });
@@ -40,13 +41,13 @@ describe('lazy photoreal (0084)', () => {
     expect(impl.start).toHaveBeenCalledTimes(1);
     expect(impl.start).toHaveBeenCalledWith('/openaero/api/config');
     expect(p.state).toBe(impl.state);
-    expect(p.session).toBe(impl.session);
     p.update(0.5); p.resize(); p.noteSessionReuse(); p.setVisible(true);
     expect(impl.update).toHaveBeenCalledWith(0.5);
     expect(impl.resize).toHaveBeenCalled();
     expect(impl.noteSessionReuse).toHaveBeenCalled();
     expect(impl.setVisible).toHaveBeenLastCalledWith(true);
-    expect(p.bounds()).toEqual({ min: [0, 0, 0], max: [1, 1, 1] });
+    expect(p.debugState().bounds).toEqual({ min: [0, 0, 0], max: [1, 1, 1] });
+    expect(p.debugLine()).toBe('3D tiles: active · this page: 1 root');
     await p.start('/openaero/api/config'); // after load: the module's own guard decides
     expect(impl.start).toHaveBeenCalledTimes(2);
   });

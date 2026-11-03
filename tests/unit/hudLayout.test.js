@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { headingBoxTop, HEADING_BOX_H, TAPE_TOP, BELOW_TOP_BAR, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg, BASE_FOV_DEG, MIN_HFOV_DEG, MAX_FOV_DEG,
-  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, WIND_BOX_W, WIND_BOX_H } from '../../src/hudLayout.js';
+  windBoxRect, windArrowDeg, windReadout, nearRunwayForWind, WIND_BOX_W, WIND_BOX_H, fixed1 } from '../../src/hudLayout.js';
 import { runwayWindComponents, scenarioWeather } from '../../src/weather.js';
 import { runwayEnd } from '../../src/airports.js';
 
@@ -117,6 +117,16 @@ describe('wind readout (0075)', () => {
     expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: true }, null, o)).toBe(o);
   });
 
+  // Ticket 0108: "WET RWY" only with a wet METAR; a dry one and the scenario say what they did.
+  it('a wet METAR heads the box WET RWY; dry and scenario weather keep their source', () => {
+    const o = {};
+    expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: true, wetRunway: true }, null, o).source).toBe('WET RWY');
+    expect(o.wet).toBe(true);
+    expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: true, wetRunway: false }, null, o).source).toBe('METAR WIND');
+    expect(o.wet).toBe(false);
+    expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: false }, null, o).source).toBe('SCENARIO');
+  });
+
   it('the arrow points where the wind blows, relative to the nose', () => {
     expect(windArrowDeg(350, 10, 350)).toBeCloseTo(180); // on the nose: blows at you
     expect(windArrowDeg(80, 10, 0)).toBeCloseTo(260); // from the right: blows to the left
@@ -188,5 +198,139 @@ describe('wind readout (0075)', () => {
     for (const s of [r.xw, r.hw]) expect(s.length * 6, s).toBeLessThanOrEqual(WIND_BOX_W - 24);
     expect(windReadout(scenarioWeather(), null).source.length * 5.5).toBeLessThanOrEqual(WIND_BOX_W - 4);
     expect('METAR WIND'.length * 5.5).toBeLessThanOrEqual(WIND_BOX_W - 4);
+  });
+});
+
+describe('fixed1', () => {
+  // A parked airplane's AoA wobbles around zero; "-0.0°" and "0.0°" took turns on the
+  // top bar and shifted its whole right-aligned line (main went red on surfaces.spec).
+  it('never prints a negative zero', () => {
+    for (const v of [-0, -0.0001, -0.04, -0.049]) expect(fixed1(v)).toBe('0.0');
+    expect(fixed1(0.04)).toBe('0.0');
+  });
+  it('keeps the sign and one decimal otherwise', () => {
+    expect(fixed1(-0.06)).toBe('-0.1');
+    expect(fixed1(-12.34)).toBe('-12.3');
+    expect(fixed1(15.26)).toBe('15.3');
+  });
+});
+
+// Ticket 0123: the HUD's localizer and glideslope fly-to bars read in ILS dots (aero.js ilsDots),
+// the scale the stabilized gate's "more than 1 dot" is judged on.
+import { ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF } from '../../src/hudLayout.js';
+import { ilsDots, LOC_DOT_DEG, GS_DOT_DEG } from '../../src/aero.js';
+
+describe('ilsBarOffsetPx (0123)', () => {
+  it('draws zero error through the centre and one dot on one tick', () => {
+    expect(ilsBarOffsetPx(0)).toBe(0);
+    expect(ilsBarOffsetPx(1)).toBe(ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(-1)).toBe(-ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(0.5)).toBeCloseTo(ILS_PX_PER_DOT / 2, 9);
+  });
+
+  it('is symmetric and clamps at full scale (2 dots: 2.5° localizer, 0.7° glideslope, AIM 1-1-9)', () => {
+    expect(ILS_MAX_DOTS).toBe(2);
+    expect(ILS_MAX_DOTS * LOC_DOT_DEG).toBeCloseTo(2.5, 9);
+    expect(ILS_MAX_DOTS * GS_DOT_DEG).toBeCloseTo(0.7, 9);
+    for (const d of [0.3, 1.7, 2, 3, 40]) expect(ilsBarOffsetPx(-d)).toBe(-ilsBarOffsetPx(d));
+    expect(ilsBarOffsetPx(2)).toBe(ILS_MAX_DOTS * ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(7)).toBe(ILS_MAX_DOTS * ILS_PX_PER_DOT);
+    expect(ilsBarOffsetPx(-1e6)).toBe(-ILS_MAX_DOTS * ILS_PX_PER_DOT);
+  });
+
+  it('never leaves the 140 px crosshair box, and a bad input draws centred', () => {
+    expect(ILS_BOX_HALF).toBe(70);
+    expect(ILS_MAX_DOTS * ILS_PX_PER_DOT).toBeLessThan(ILS_BOX_HALF);
+    expect(ilsBarOffsetPx(NaN)).toBe(0);
+    expect(ilsBarOffsetPx(Infinity)).toBe(ILS_MAX_DOTS * ILS_PX_PER_DOT);
+  });
+
+  it('is a function of the angle only: the same angular error is the same offset at 4 NM and 1 NM', () => {
+    const nm = 1852;
+    for (const deg of [0.1, 0.35, 0.6]) {
+      const off = (distM) => ilsBarOffsetPx(ilsDots(Math.tan(deg * Math.PI / 180) * distM, distM, GS_DOT_DEG));
+      expect(off(4 * nm)).toBeCloseTo(off(1 * nm), 9);
+    }
+    // ...and the same 100 m off the centreline is much more of a dot at 1 NM than at 4 NM.
+    const loc = (distM) => ilsBarOffsetPx(ilsDots(100, distM, LOC_DOT_DEG));
+    expect(loc(1 * nm + 3300)).toBeGreaterThan(loc(4 * nm + 3300) * 1.8);
+  });
+});
+
+// Ticket 0132: the altitude tape's readout is MSL; a caption under its box says so, clear of the
+// box's digits, the tape's ticks and its scale numbers, the speed tape and the wind box.
+import { altCaptionRect, ALT_CAPTION, ALT_TAPE_X, SPEED_TAPE_X, ALT_BOX } from '../../src/hudLayout.js';
+describe('altCaptionRect (0132)', () => {
+  const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  it('says MSL', () => expect(ALT_CAPTION).toBe('MSL'));
+  for (const [w, h] of [[1280, 720], [390, 844], [844, 390], [820, 1180], [375, 548]]) {
+    it(`${w}x${h}: under the readout box, off the ticks, the speed tape and the wind box, on screen`, () => {
+      const cx = w / 2, cy = h / 2;
+      const r = altCaptionRect(cx, cy, {});
+      const x = cx + ALT_TAPE_X;
+      const box = { x: x + ALT_BOX.dx, y: cy - ALT_BOX.h / 2, w: ALT_BOX.w, h: ALT_BOX.h };
+      expect(overlaps(r, box), 'readout box').toBe(false);
+      expect(r.y).toBeGreaterThan(box.y + box.h); // just under it
+      expect(r.y - (box.y + box.h)).toBeLessThanOrEqual(4);
+      expect(r.x, 'past the major ticks (9 px)').toBeGreaterThan(x + 9);
+      expect(r.x + r.w).toBeLessThanOrEqual(box.x + box.w); // inside the tape's column
+      expect(r.x + r.w).toBeLessThanOrEqual(w);
+      expect(r.y + r.h).toBeLessThanOrEqual(cy - TAPE_TOP);
+      expect(r.w).toBeGreaterThanOrEqual(24); // three 11 px glyphs and a margin
+      const speed = { x: cx + SPEED_TAPE_X - 60, y: cy + TAPE_TOP, w: 60, h: -2 * TAPE_TOP };
+      expect(overlaps(r, speed), 'speed tape').toBe(false);
+      expect(overlaps(r, windBoxRect(w, h)), 'wind box').toBe(false);
+    });
+  }
+  it('writes into out (no allocation per frame)', () => {
+    const out = {};
+    expect(altCaptionRect(640, 360, out)).toBe(out);
+  });
+});
+
+// Ticket 0137: the stabilized gate's verdict (main.js drawGateVerdict) sits cy + 76 … under the
+// boresight. On a screen held upright too short for that over the touch deck (TOUCH_DECK_H, + 40 px
+// for a gesture bar's inset) it was under the deck: there it takes the caption's slot in the sky.
+import { headingBoxTop as hbTop, HEADING_BOX_H as HB_H, windBoxRect as wbr, GATE_VERDICT_BOTTOM } from '../../src/hudLayout.js';
+import { gateVerdictRect, TOUCH_DECK_H } from '../../src/gateVerdict.js';
+describe('gateVerdictRect (0137)', () => {
+  const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  for (const lines of [1, 2]) {
+    for (const [w, h] of [[1280, 720], [844, 390], [820, 1180], [1180, 820], [390, 844], [430, 932]]) {
+      it(`${w}x${h}, ${lines} line(s): where it always was, over the deck with a 40 px inset`, () => {
+        const r = gateVerdictRect(w, h, lines, {});
+        expect(r).toEqual({ sky: false, x: w / 2 - 120, y: h / 2 + 76, w: 240, h: 24 + lines * 16 });
+        if (h > w) expect(r.y + r.h).toBeLessThanOrEqual(h - TOUCH_DECK_H - 40);
+      });
+    }
+    for (const [w, h] of [[390, 664], [375, 548], [360, 640], [375, 667], [320, 568], [390, 740]]) {
+      it(`${w}x${h} upright, ${lines} line(s): in the sky, off the horizon at -5° … +10°, the heading box, tapes and wind box`, () => {
+        const cx = w / 2, cy = h / 2;
+        const r = gateVerdictRect(w, h, lines, {});
+        expect(r.sky).toBe(true);
+        expect(r.y).toBe(Math.max(cy - 117, 100)); // the caption's slot (styles.css #calloutCaption)
+        expect(r.h).toBe(24 + lines * 16);
+        for (let p = -5; p <= 10; p += 0.5) { // the pitch ladder's zero rung (7 px a degree), cx ± 35, ± 12 px
+          expect(overlaps(r, { x: cx - 47, y: cy + 7 * p - 12, w: 94, h: 24 }), `horizon at ${p}°`).toBe(false);
+        }
+        expect(r.y + r.h).toBeLessThan(cy - 21); // above the flight-path marker on a 3° path, level nose
+        expect(overlaps(r, { x: cx - 40, y: hbTop(cy), w: 80, h: HB_H }), 'heading box').toBe(false);
+        expect(overlaps(r, { x: cx - 191, y: cy - 90, w: 60, h: 180 }), 'speed tape').toBe(false);
+        expect(overlaps(r, { x: cx + 130, y: cy - 90, w: 64, h: 180 }), 'altitude tape').toBe(false);
+        expect(overlaps(r, wbr(w, h)), 'wind box').toBe(false);
+        // A 26-character line of bold 13 px monospace fits from 360 px; on a 320 px phone drawGateVerdict
+        // squeezes it (fillText's maxWidth, r.w - 8) to ~80%.
+        expect(r.w).toBeGreaterThanOrEqual(w >= 360 ? 26 * 7.8 + 8 : 0.8 * 26 * 7.8 + 8);
+        expect(r.y).toBeGreaterThanOrEqual(100); // under the GPWS box's one line (80 … 120)
+      });
+    }
+  }
+  it('writes into out (no allocation per frame)', () => {
+    const out = {};
+    expect(gateVerdictRect(390, 548, 2, out)).toBe(out);
+  });
+  it('its two-line foot is the one the coach slot clears (hudLayout.js GATE_VERDICT_BOTTOM)', () => {
+    const r = gateVerdictRect(1280, 720, 2, {});
+    expect(r.y + r.h - 360).toBe(GATE_VERDICT_BOTTOM);
   });
 });

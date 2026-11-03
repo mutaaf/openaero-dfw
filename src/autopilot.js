@@ -29,8 +29,9 @@ export const aileronForBank = (bankCmdDeg, bankRightDeg, rollRateRight) =>
 export const glidepathGammaDeg = (heightAbovePathM, integralMs = 0) =>
   clamp(-3 - heightAbovePathM * 0.12 - integralMs * GS_KI, -6, -0.5);
 
-// Flare: target vertical speed (m/s, negative = down) from wheel height (m).
-export const flareSinkMps = (wheelHeightM) => -Math.max(0.8, wheelHeightM * 0.2);
+// Flare: target vertical speed (m/s, negative = down) from wheel height (m): perS of the height
+// (Kid's 737 flies spec.kidFlarePerS, 0101), never under 0.8 m/s.
+export const flareSinkMps = (wheelHeightM, perS = 0.2) => -Math.max(0.8, wheelHeightM * perS);
 
 // Pitch hold: elevator from pitch error (deg) with pitch-rate damping (rad/s).
 export const elevatorForPitch = (pitchCmdDeg, pitchDeg, pitchRateUp) =>

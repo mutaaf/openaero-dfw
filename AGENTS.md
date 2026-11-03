@@ -90,6 +90,19 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    is one per page, never persisted. Edge (`src/worker/`): `aviationweather.gov` only.
    Adding any other host needs the operator: open a `proposal/` PR.
    No analytics, ads, trackers, fonts or scripts from CDNs. Everything else is bundled.
+   **One exception, the operator's decision of 2026-10-30 ("split by audience"):** the same-origin
+   Marquee loader `../ads/v1/ads.js` (mutaafaziz.com/ads, a separate Worker and repo; app id
+   `openaero`, audience kids) is allowed, wired by `src/ads.js` (a lazy chunk). Its slots are all
+   menu context (`title` banner on the start screen, `postflight` interstitial on FLY AGAIN,
+   `livery` rewarded): Google ads appear only there, tagged child-directed by Marquee, which may
+   then load Google's ad script (`pagead2.googlesyndication.com` and its frames) from a menu, never
+   at boot and never in flight. **No ad, ad request or ad call in flight** (start screen or results
+   card on screen, the sim paused for any break, audio with it). The rewarded ad is opt-in only (a
+   button that says it is an ad, hidden when the slot has no fill). Kid shows no ads at all, nor
+   does a clean view the player chose (stored). The post-flight break skips a visit's first FLY
+   AGAIN and is capped (`BREAK_GAP_MS`). A missing or blocked loader is a no-op; nothing waits on an
+   ad. e2e serves an empty loader (tests/e2e/fixtures.js); tests/e2e/ads.spec.js proves no call
+   fires in flight. Any other ad network, tracker or analytics still needs a `proposal/` PR.
 4. **Frame budget.** The render loop must hold 60fps on a mid-range laptop and stay
    playable on a recent phone. No per-frame allocations in hot paths (reuse vectors and
    arrays), no layout thrash from the HUD.
@@ -106,7 +119,8 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    first-flight coach remembers `openaero_coach_v1 = { v: 1, seen, at }` (`src/coach.js`);
    the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`); the assist
    level `openaero_assist_v1 = { v: 1, level, at }` (`src/assists.js`); the clean view
-   `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`). Kid and Learner keep
+   `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`); haptics
+   `openaero_haptics_v1 = { v: 1, on, at }` (`src/haptics.js`). Kid and Learner keep
    their personal bests under `<missionKey>@kid` / `@learner` in `openaero_best`; Pilot keeps
    the plain mission key.
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
@@ -125,11 +139,15 @@ src/main.js         renderer + scene build, 6-DOF integrator, camera, HUD/radar 
                     the Keeper carves it into modules, no behavior change per PR.
 src/constants.js    units, KDFW origin, field elevation
 src/aircraft.js     aircraft database (mass, wing, lift/drag, thrust, V-speeds, damping)
-src/airports.js     real runways (OurAirports) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
-                    thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns
+src/airports.js     real runways (OurAirports; KAFW's ends from the FAA record, 0124, end.src) for KDFW/KDAL/KADS/KAFW/KFTW/KGKY, runway-end
+                    thresholds, approachGeometry, selectActiveRunway, approach/takeoff spawns; papiWhite (0131: the one
+                    PAPI reading for the HUD, coach and 3D lamps, aero.js papiWhiteLights at AC 150/5340-30J's G ±10'/±30'); runwayFactsText
+                    (0114): the start screen's chart line (ident, length x width, °M, threshold ft MSL)
 src/missions.js     mission catalogue (approaches by runway end, tours by spawn, a blurb each;
                     groupMissions() builds the start-screen picker, ticket 0029) + the dynamic
                     crosswind_today mission (weather.js pickCrosswindRunway, live METARs only)
+                    + night/dusk missions (0060): `sun` (a TIME_MODES preset) flies for that mission's run;
+                    missionSun keeps the player's When? choice and gives it back on the next mission without one
 src/landmarks.js    Dallas landmarks at true lat/lon (cited) + real heights, via geo.js;
                     DOWNTOWN_DALLAS (map dot, skyline tour), ATT_STADIUM
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll
@@ -138,15 +156,24 @@ src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/
                     after a contact; the card waits for 1 s on the wheels; 1 bounce caps C, 2+ D,
                     a re-contact past 600 fpm or 10° bank is a CRASH; wheels past 50 ft drop the
                     landing as a go-around; Kid holds the flare through a bounce)
-src/results.js      the results card (lazy chunk, prefetched after boot, retried at the card)
+src/results.js      the results card (lazy chunk, prefetched after boot, retried at the card); the
+                    flight pauses behind it, in the air and on the rollout (0106); its runway strip
+                    (0088, src/touchdownStrip.js, in the same chunk) draws gradeLanding's `touchdown`
+                    (along/across, runway length/width, the end's displaced pavement): the aiming point at
+                    airports.js AIM_POINT_M, the green band at landing.js ZONE_FULL_M (the zone's full marks)
+                    The card is a flex column (0125): the grade and the button row stay put, #resultsBody
+                    (reason, tip, gate, strip, factors) scrolls if the screen is short (Safari sideways ~340 px)
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
 src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes the pilot's
                     input before stepFlightModel (physics untouched): bank/pitch/AoA
                     envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,
-                    no-dive floor, auto-flare; main.js adds Kid's autothrottle, gear/flaps
-                    and soft landing. Pilot never calls in (pure, flown headless in tests).
+                    no-dive floor, auto-flare (sink profile per airframe: spec.kidFlarePerS, the 737's quicker, 0101); kidFinalGuide is Kid's hands-off final (the
+                    3° path, past the threshold only low over the first third, ≤ 2°, 0098;
+                    flight cards in tests/flight/kidFinal.test.js); main.js adds Kid's autothrottle, gear/flaps
+                    and soft landing. On the runway Kid and Learner hold its centreline with the
+                    pedals (groundSteerRudder, 0110). Pilot never calls in (pure, flown headless in tests).
                     A first visit (nothing stored) flies Learner; a stored level wins (0059)
 src/goAround.js     go-around drill (0047, lazy chunk loaded with the mission): pure state
                     machine (unstabilized gate → positive rate through 500 ft = complete,
@@ -157,11 +184,60 @@ src/stallDrill.js   stall recovery drill (0087, lazy chunk like goAround.js): th
                     complete/failed), the grade (reaction, height vs POH 230 ft, bank, secondary
                     stall; held stick capped D, even when an assist unstalls it; secondary C; no
                     recovery without power; only a slow, idle stall counts) and drillAssist
-                    (Kid/Learner stall protection off until the stall); coach.js has its prompts
+                    (Kid/Learner stall protection off until the stall); coach.js picks its
+                    prompts, their words are STALL_TEXT here. Every drill chunk adds its words
+                    to coach.js DRILL_TEXT when it loads (0036: off the boot budget)
+src/deadStick.js    dead-stick challenge (0036, lazy chunk): the C172 3,500 ft AGL abeam
+                    Addison with sim.engineFailed (flightModel.js no power whatever the
+                    throttle, JSBSim fuel off; HUD "ENG OUT"/"THR OUT"; no autopilot, no
+                    stabilized gate, idle/retard/bounce-power calls or engine tone). Its coach
+                    (best glide 68 KIAS; glide on, "turn left now" for a 1 NM final, low/high
+                    against the glide ratio by flaps and wind, POH Fig. 3-1) feeds coach.js as
+                    s.ds; Kid's hands-off guide flies the same pattern at best glide (no dive
+                    floor, autothrottle or auto flaps). The touchdown is graded on Addison
+                    wherever it is (made the runway 30%; missed = D with the distance and why:
+                    short, long or beside); ?debug openaeroDebugDeadStick puts it on a final
+src/pattern.js      traffic pattern (0048, lazy chunk): the C172 on a left downwind for Addison 16 at
+                    1,000 ft AGL (AC 90-66C), 0.75 NM out. patternLeg names the leg around any runway
+                    end (upwind, crosswind, downwind, base, final; left or right traffic), the turn
+                    to start (base with the threshold 45° behind the wing, final a 20° turn's radius
+                    out) and the height (1,000 ft, then ~4.2° down from abeam the numbers). Its
+                    pt* words reach coach.js through s.ds (the landing coach takes the final);
+                    Kid's guide flies the legs, and past the threshold the 3° path to the aim point
+src/engineOut.js    engine failure after takeoff (0104, lazy chunk): the C172 on all of Addison 16,
+                    the engine quits at the mission's engineOutFt (300 or 700 ft). turnbackHeightFt
+                    (reaction, a turn of 180° + twice the cut back from 2R beside, sink 1 + k(n²−1),
+                    the glide back downwind, less the climb's spare speed) decides "you can turn
+                    back" / "land ahead"; flight cards fly the window (tests/flight/engineOut.test.js).
+                    Graded on Addison (deadStick.js's miss grader): ahead in a field ≤ B, a turn back
+                    below the height or a stall ≤ D with what the turn cost; Kid glides ahead
+src/rto.js          rejected takeoff drill (0107, lazy chunk): the 737 on DFW 35C, an engine fire
+                    warning at 75-110 kt (below V1) on the roll; the engine keeps its thrust until the
+                    levers close. Pure state machine (armed → fire → stopped / overrun / off / rotated),
+                    the grade (reaction to idle, stop vs a 2.5 s + 14 ft/s² reference, centreline; D
+                    capped for an overrun, off the side or a takeoff), the coach's steps (ranks join
+                    coach.js RANK); the HUD banner says ENGINE FIRE — IDLE, BRAKES; Kid gets idle +
+                    autobrake MAX. Flight cards: tests/flight/rto.test.js (25.109 accelerate-stop)
+src/windshear.js    microburst windshear drill (0112, lazy chunk): the 737 on a 3 NM final to DFW 35C;
+                    at 600 ft the shear (shearAt: +15 kt headwind, 35 kt of it lost in 15 s to a 20 kt
+                    tailwind, a 1,500 fpm downdraft in the core fading out below 400 ft, 46 s) is added to
+                    the METAR's air in main.js updateWind (addShearWind, windVec.y down). State machine
+                    (final → shear → warning at 7 s → clear / failed), WINDSHEAR banner + callout, the AP
+                    and its tutor stay off in the warning, no stabilized gate; graded on reaction to full
+                    power, the pull-up to 15°, the nose held up (a dive below the attitude at full power, or
+                    a nose held low, caps C), height lost, stick shaker; the ground is a CRASH. Kid: power
+                    held through the outflow, then full power and 15° (its cap 12.75°), no gear/flaps; its
+                    card scores only the result. Touch words say which way the stick goes (TOUCH_WORDS).
+                    Cards: tests/flight/windshear.test.js (no reaction hits ~1.4 km short; thrust-only
+                    loses ~460 ft; the escape ~150 ft; a dive for speed ~370 ft)
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn.
                     A lazy chunk fetched right after boot (0091); its on/off flag and blank
                     state are src/tutorPrefs.js, at boot
+src/trim.js         Pilot's pitch trim (0094): trimStep moves sim.trimAlphaDeg, 9%/s of hands-off
+                    speed ([ ] / Numpad 7 1, the touch rocker by the throttle, the gamepad's right
+                    stick), stops 4° short of the stall and at spec.vneKts; trimSpeedKts is the
+                    HUD's amber T speed. Not under autoTrim, the F-16's pitchFbw or JSBSim
 src/autopilot.js    autopilot control laws (pure) + weathervane term + trim AoA. **Sign
                     conventions (pinned by tests):** aileron + = roll right, elevator + =
                     nose down, rudder + = yaw right; body rates: angVel.x + = nose up,
@@ -198,17 +274,47 @@ src/nightGround.js  shader patch on the ground's MeshBasicMaterials (terrainLod,
                     moonlit grade after sunset + street lights on the asphalt (world space)
 src/runwayLights.js lazy chunk: edge/centreline/threshold/end lights and ALSF-2/MALSR approach
                     lights with sequenced flashers, one Points draw (layout pure, tested)
+src/windsock.js     wind cones (0027, lazy chunk after boot): one beside every runway end's touchdown zone
+                    (~1,000 ft in, ~300 ft left, clear of every runway), streaming downwind in its own field's
+                    METAR (the flown field: sim.wx), lifted by drag ∝ V² to straight out at 15 kt at the cone (AC 150/5345-27)
+                    and swung there as a damped pendulum on the sim clock; gusts and the log-law thinning are
+                    weather.js's, passed in. Two InstancedMesh draws; a minimum 0.7° on screen (≤ 7x) at range;
+                    lit at night. ?debug: openaeroDebug().windsocks, window.openaeroWindsocks
+src/replay.js       landing replay (0019, lazy chunk after boot): main.js records pos, quat, throttle, gear, flaps and
+                    the stick into one preallocated ring buffer, the last 30 s at 20 Hz of sim time (reset by loadScenario);
+                    ▶ REPLAY on the results card plays it back with the physics paused (main.js renderLoop calls its step
+                    instead of updateCamera; the aircraft is posed from the recording, sim untouched): chase, then the
+                    wing, then Side: a spot beside the end of the track (level with it if it ended aloft) for the last 7 s; any key or tap (#replayBar) returns
+                    to the card. The HUD and panels hide (body.replaying), the imagery credits stay
+src/debugScreen.js  ?debug only (lazy): openaeroDebug().runwayScreen, the active runway's screen outline, and papiLampsWhite (the 3D PAPI's white lamps);
+                    hooks() installs the test hooks openaeroDebugFinal/Hop/DeadStick (0137; openaeroDebugCaption stays in main.js)
+src/gateVerdict.js  the stabilized gate's HUD verdict (0020; lazy, fetched after boot, 0137): gateVerdictRect (pure, tested)
+                    puts it at cy + 76 under the boresight; on a screen held upright too short for that over the touch
+                    deck (TOUCH_DECK_H + 40 px of inset) it takes the callout caption's slot under the heading box, as
+                    narrow, and gives way while a caption shows (on a 320 px phone its lines are squeezed to fit)
 src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembered
 src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
                     windows, back up after a fast cool-down that backs off (pure, tested)
+src/haptics.js      phone haptics (0033): touchdownPattern by sink (landing.js's bands: < 240 fpm a 40 ms
+                    tick, ≤ 600 80 ms, else [80,40,120]; Kid never the last; re-contacts too), stall/pull-up pulses once per onset (createAlertEdge,
+                    3 s hold-off), feature-detected navigator.vibrate (Android; iOS has none). Reduced motion:
+                    no alert pulses, one short touchdown tick. "Vibrate" toggle only on touch-only screens
+                    with the API (main.js canBuzz); e2e haptics.mobile.spec.js stubs vibrate
 src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/results), feature-
                     detected and silent; hiding the tab pauses the sim + audio (ticket 0032)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
                     phone's top bar in landscape) and the camera FOV (62° vertical in
                     landscape; portrait opens towards 60° across, capped at 80° vertical:
-                    an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the wind box
+                    an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the coach card's slot (0130:
+                    coachOverHud; over the tapes, SPD label or 12% under the horizon on a short upright
+                    screen or the iPad held sideways, main.js placeCoach moves #coach under the top bar,
+                    .coach-top, for the rest of the flight; .coach-tight if it would reach the heading box) + the wind box
                     (0075): over the altitude tape, its text (source, arrow, speed, XW/HW
-                    vs the active runway under 1,500 ft) refreshed once a second
+                    vs the active runway under 1,500 ft) refreshed once a second; fixed1
+                    (the AoA badge's one decimal, never "-0.0", 2026-10-31); altCaptionRect (0132): the altitude tape's "MSL"
+                    tab under its readout box, right of the ticks (drawTape keeps the scale's numbers off it)
+src/prism.js        flat-sided prism from a convex outline (the primitive 737's wing and fin; no
+                    ExtrudeGeometry, which costs ~8 kB of boot JS: earcut + three's curves, 0105)
 src/aircraftModel.js  detailed open-licensed glTF aircraft (0045), lazy after the first Fly:
                     GLTFLoader + three's bundled meshopt decoder, public/models/*.glb in the
                     body frame (nose -Z, wheels at -gearHeight), gear_* nodes follow the gear;
@@ -225,7 +331,15 @@ src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear 
                     Pitch stability (0090): the nose returns to body.trimAlphaDeg, full stick =
                     spec.elevatorAlphaDeg (Cmδe/Cmα); autoTrim (assists, AP, harness pilots) and
                     spec.pitchFbw (F-16) carry the trim with α; Pilot's is the spawn's (or the
-                    autopilot's), moved only by a held stick (main.js, ~8 s, 4° short of the stall)
+                    autopilot's), moved only by a held stick (main.js, ~8 s, 4° short of the stall).
+                    body.loadFactor (0121): the seat's g along the body up axis, the HUD's G-LOAD
+src/fbw.js          the F-16's g/AoA limiter (0121, lazy chunk right after boot; tests/flight/harness.js
+                    imports it): installs spec.fbw on pitchFbw airframes, which flightModel.js calls in
+                    the air. NASA TP-1538 App. A + Fig. 63: the stick commands 1 g + 8 g × the pull,
+                    capped at 9 g less 0.322 g/° past α 15° and 1.322 g/° past 20.4° (1 g at ~25°)
+src/supersonic.js   the F-16's wave drag (0133, lazy chunk right after boot; tests/flight/harness.js
+                    imports it): installs f16.transonic (Korn + Lock rise) and f16.supersonicCd past MDD
+                    (Raymer's Sears-Haack correlation, AeroSandbox's transonic fairing), aero.js waveDragCd
 src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFlightModel on
                     JSBSim (LGPL WASM, own chunk, lazy after Start flight); trims the
                     elevator and settles the engine at its throttle on an airborne spawn
@@ -235,21 +349,59 @@ src/fdm/jsbsim.js   JSBSim adapter (?fdm=jsbsim): the same contract as stepFligh
 src/systems.js      aircraft systems (pure, run first in every flightModel sub-step): hydraulic
                     gear and flap travel (levers are commands; gearPos/flapDeg/flapPos are where
                     they are), 737 flap load relief, brake pressure + anti-skid, autobrake
-                    1/2/3/MAX (Boeing decelerations), thrust reversers, belly when not locked
+                    1/2/3/MAX (Boeing decelerations), thrust reversers, belly when not locked; a wet
+                    runway (0108: body.wetRunway) caps the brakes at 14 CFR 25.109(c)'s wet μ by
+                    groundspeed and tyre pressure × anti-skid efficiency (cards: tests/flight/wetRunway.test.js)
 src/gear.js         landing gear on oleo struts (0074): nose + mains at their real positions,
                     per-wheel loads and moments through spec.inertia, harder rebound damping,
                     pedal nose-wheel steering, the tail against the mains' moment with q;
-                    tyre friction per wheel at its axle, brakes on the mains only (0082)
+                    tyre friction per wheel at its axle, brakes on the mains only (0082); the loaded
+                    nose tyre holds its steered yaw rate against the fin and lets go as the nose lifts
+                    (noseWheelYawHold, 0110; cards in tests/flight/groundSteer.test.js); nearly
+                    stopped and not breaking away, static friction holds a parked airplane against wind and
+                    idle thrust, and its heading up to the tyres' scrub moment (wheelScrubYawHold, 0106)
+                    radioAltitudeM (0122): the lowest main wheel's height (struts out, 0 at touchdown) =
+                    sim.raFt, what the GPWS heights, retard, sink rate / pull up and too low gear read
+                    (audio.js, main.js), as do the RADAR AGL box, the phone's AGL, the HUD FLARE/IDLE cue
+                    and the AP tutor's flare/retard; the coach, grade and assists keep sim.aglFt (the CG's)
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
-                    IAS ↔ TAS, speed of sound (pure, tested against the ICAO table)
-src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + δ/√θ power lapse,
-                    windmilling at idle), turbofan (Mach/density lapse, idle, spool lag)
-src/aero.js         pure aero/avionics: CL with stall, CD + ground effect, PAPI, stabilized-
+                    IAS ↔ TAS, speed of sound (pure, tested against the ICAO table); densityAltitudeFt
+                    (0111: the FAA-H-8083-25 rule, display only) for the start screen's #txtDensityAlt line
+                    and the takeoff briefing toast on Fly, with a thin-air hint 1,500 ft above the field
+src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + power lapse: δ/√θ less friction, 0099;
+                    windmilling at idle), turbofan (Mach/density lapse, idle, spool lag; the 737's σ^0.94
+                    fitted to CFM's FL350 max climb thrust, 0116); full throttle is the take-off/go-around
+                    rating. maxClimbThrustN (0135): the 737's CLB rating (Bartel & Young 2008, anchored to CFM's
+                    FL350 figure, spec.engine.climb), what the APD climb cards fly; the game does not use it
+src/aero.js         pure aero/avionics: CL with stall, CD + ground effect + the 737's Mach drag rise
+                    (waveDragCd, 0120: Mason's Korn + Lock, spec.transonic), PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),
-                    warnings, heading math
-src/input.js        keyboard state → control targets, virtual stick mapping
-src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture)
+                    warnings, heading math; speedLimitKts (0127): VMO/VNE clean, else the flaps'
+                    placard (spec.vfeKtsByFlapDeg, by where the flaps are, in transit too), overspeedStep's latch (re-arms
+                    3 kt below); main.js calls "overspeed" once, flashes the IAS box, and hudLayout.js
+                    speedLimitBand marks the tape (not for Kid)
+                    stallSpeedKts (1 g, sea-level ρ: the model's IAS is EAS) at sim.flapPos is the tape's low-speed
+                    band (0128, hudLayout.js stallBand: red up to Vs, amber to 1.1 Vs; not for Kid, not on the ground)
+src/weather.js      METAR parsing, wind vector, gusts, runway components, fog; surfaceWindFactor
+                    (0106): the METAR's 10 m wind by the log law (z0 0.03 m) at the CG's height,
+                    ~70% on the runway, which main.js updateWind applies; metarWetRunway (0108): RA/DZ
+                    falling at the field (rawOb's weather groups) → wx.wetRunway → sim.wetRunway, the
+                    wind box's amber WET RWY and the coach's "wet" call on a steady final
+src/input.js        keyboard state → control targets, virtual stick mapping (main.js bindStick: a held touch control ends on its own pointer's
+                    end anywhere or the window's blur, 0136, tests/e2e/handsOff.mobile.spec.js); tillerRudder: Pilot taxiing
+                    (< 40 kt) steers the nose wheel with the stick's sideways push (touch has no pedals, 0110);
+                    touchGroundRudder: otherwise (thumb not steering, or above 40 kt) Pilot on touch gets
+                    groundSteerRudder's centreline hold on the runway (0106)
+src/audio.js        Web Audio engine/wind/stall/GPWS chirps (starts on user gesture); the GPWS heights,
+                    sink rate / pull up and the sim's calls are picked sound or not, each to a caption
+src/captions.js     callout captions (0117): #calloutCaption shows each spoken call's words for 1.2 s, in
+                    the takeoff call's slot under the heading box (it wins it), left of the wind box; a queued
+                    call joins the line, two calls at most: the newest, and of the two before it a warning over a height count (0137); plainCaption gives Kid/Learner plain words (pure, tested)
+src/controlsSheet.js controls cheat sheet (0049, lazy): "?" or Controls (menu/toolbar) opens #controlsSheet,
+                    keyboard / gamepad / touch rows (touch first on a touch screen); pauses the flight while
+                    open unless it already was, owns the keyboard (Esc / "?" close, Tab trapped). Its rows are
+                    data a unit test holds to every key, pad button and touch control the code binds
 src/styles.css      Tailwind entry + ported custom HUD styles
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):
                     GET /openaero/api/metar?ids=KDFW,… → aviationweather.gov METARs,
@@ -312,7 +464,15 @@ Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs`
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by
-moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
+moving the ?debug overlay's inline style into styles.css). 20 B of headroom: the next boot feature trims first. 2026-11-01 (0019): 200.19 kB (the replay's lazy import, the recorder call, REPLAY wiring and the camera hook, +0.19 kB; replay.js is a lazy chunk). 2026-11-02 (0060): 200.42 kB (the night/dusk missions' entries and missionSun's wiring). 2026-11-02 (0130): 200.60 kB (the coach card's slot check, placeCoach, +0.18 kB). 2026-11-02 (0131): 200.72 kB (the ?debug PAPI fields; the HUD and 3D lamps share airports.js papiWhite). 2026-11-02 (0132): 200.99 kB (the altitude tape's MSL tab, its layout and ?debug rect, +0.27 kB); 10 B of headroom: the next boot feature trims first. 2026-11-03 (0121): 200.99 kB (the seat load factor and the F-16 limiter's hook, paid for by the limiter's lazy chunk src/fbw.js and the ?debug runwayScreen moving into src/debugScreen.js); a few bytes of headroom. 2026-11-03 (0136): 200.98 kB (every touch control lets go on its pointer's end anywhere and on the window's blur, +70 B, paid for by the ?debug-only papiLampsWhite moving into src/debugScreen.js). 2026-11-03 (0133): 200.98 kB (the F-16's wave drag and its data are a lazy chunk, src/supersonic.js; boot pays its import and aero.js's hook, +50 B; 20 B of headroom). 2026-11-03 (0137): 200.91 kB (the caption's warning-first cap; paid for by the HUD's gate verdict moving into the lazy src/gateVerdict.js and the ?debug test hooks openaeroDebugFinal/Hop/DeadStick into src/debugScreen.js hooks()). 2026-11-01 (0027): 199.96 kB (main was 199.70; the windsocks' lazy import, update and ?debug line, +0.26 kB; windsock.js is a lazy chunk). 2026-10-27 (0048): 200.996 kB (the pattern mission and its wiring +160 B, paid for by one
+`loadDrill` for the drills' lazy chunks, `startDrills`, and the ?debug Google usage line and
+snapshot moving into photoreal.js `debugLine`/`debugState`); 4 B of headroom. A lazy chunk that
+imports a boot symbol nothing else imported grows the boot chunk's exports: inline it instead. 2026-10-27 (0097): 200.996 kB (Kid's
+line-up on the ground track, paid for by main.js's seven `0.514444` literals becoming `KTS_TO_MPS`). 2026-10-28 (0098): 200.994 kB (Kid's final guide as assists.js
+kidFinalGuide with its past-the-threshold gate, +70 B, paid for by the ?debug snapshot's moving-parts poses moving into the lazy surfaces.js
+chunk (`partPoses`), its go-around a plain copy, one `if (debugOverlay)` for the ?debug hooks and a dead `_q1`); 6 B of headroom. 2026-10-28 (0099): 200.982 kB (the piston lapse's friction term, paid for by folding engine.js's P0/T0 constants into the one line that used them); 18 B of headroom. 2026-10-30 (0112): 196.74 kB (main was 196.07; the windshear mission's entry and wiring, +0.67 kB; windshear.js is a lazy chunk). 2026-10-29 (0108): 195.06 kB (main was 194.35; the wet-runway μ table, the METAR weather-group parse and the labels, +0.71 kB). 2026-10-29 (0107): 195.42 kB (main was 195.06; the rejected takeoff's mission, wiring and ENGINE FIRE banner, +0.36 kB; rto.js is a lazy chunk). 2026-10-29 (0111): 196.02 kB (the density-altitude rule, line, per-mission hints and briefing, +0.60 kB). 2026-10-29 (0104): 194.29 kB (the engine-failure missions' entries and wiring, +0.40 kB over main's 193.89; engineOut.js is a 2.6 kB lazy chunk). 2026-10-28 (0105): 192.38 kB (−8.6 kB, no behaviour change: the primitive 737's wing and fin were three's `ExtrudeGeometry`, which pulled earcut and every curve class into boot; `src/prism.js` builds the same flat-sided outlines from a `BufferGeometry`). Rank the boot chunk by source (a `--sourcemap` build, gzip per source) before trimming: one three.js class can outweigh a week of literal trims. Gzip
+eats repeated-literal trims (an `onClick` helper for ~35 click bindings and a `noseHdgDeg()` helper each
+measured 0 or worse): move code to a lazy chunk instead. 2026-10-26 (0036): 200.95 kB (the dead-stick mission, engine-out flag and its effects, coach hook and HUD readouts, paid for by moving the go-around and stall drills' coach words into their lazy chunks through coach.js DRILL_TEXT, and the abeam spawn to a lat/lon). 2026-10-26 (0091): 200.61 kB (the bounce tracker, prompts and re-contact crash, paid for by moving the results card (results.js) and the autopilot tutor's words and phases (apTutor.js) into lazy chunks fetched after boot). 2026-10-23 (0084): 199.2 kB by that measure (main was 206.7, which Vite printed as 208.9): bare `three` resolves to
 `three/src/Three.js` (vite.config.js) so the bundler splits it per file, the three.js the lazy glTF/3D-tiles chunks
 need (animation, skinning, loaders' classes) leaves the boot chunk for theirs (the boot part of three that they share
 is a few small modulepreloaded chunks: a manual `codeSplitting` group for it made a chunk cycle through rolldown's

@@ -50,12 +50,14 @@ export const AIRCRAFT_DATABASE = {
     // ~2 s sleeve travel are estimates for the CFM56-7 cascade reverser. Brakes on the
     // mains only (0082): μ 0.55 on their load keeps what 0.45 on every wheel gave, autobrake
     // MAX's 14 ft/s² with room to spare and full pedals a little harder (Boeing: maximum
-    // manual braking can exceed MAX).
+    // manual braking can exceed MAX). Wet runway (0108, 14 CFR 25.109(c)): main tyres at
+    // ~205 psi (H44.5x16.5-21, Boeing ACAP main-gear tyre pressure), fully modulating
+    // anti-skid (efficiency 0.80).
     systems: {
       hydraulics: { psi: 3000 },
       gear: { extendS: 10, retractS: 7 },
       flaps: { degPerS: 1.5, loadRelief: { fromIndex: 3, toIndex: 2, aboveKts: 162 } },
-      brakes: { tauS: 0.3, muMax: 0.55 },
+      brakes: { tauS: 0.3, muMax: 0.55, tirePsi: 205, antiSkid: 0.8 },
       autobrake: { decelFtS2: [0, 4, 5, 7.2, 14] },
       reverser: { deployS: 2, effectiveness: 0.35 },
     },
@@ -63,12 +65,48 @@ export const AIRCRAFT_DATABASE = {
     pitchAuthority: 0.5,
     rollAuthority: 1.0,
     maxGroundPitchDeg: 11, // tailstrike
+    // Kid's auto-flare sink profile (assists.js, 0101): 0.315 of the wheel height per second, not the
+    // Cessna's 0.2. At ~150 kt the slow profile was a ~10 s flare the pitch hold lagged: a balloon,
+    // then ~330-360 fpm 580-650 m in. Fitted headless (tests/flight/kidFinal.test.js: 220-350 m in,
+    // 60-180 fpm, calm to 25 kt headwind) and in the game (default final: 273 m, 219 fpm; it was 576 m,
+    // 328 fpm). A game assist, not the real technique: it starts at ~40 ft (assists.js FLARE_FROM_M)
+    // and lands shorter than Boeing's FCTM (flare ~20-30 ft, touchdown 1,000-1,500 ft in). Steeper is
+    // firmer (0.36: 371 fpm in the game); at 0.31 the calm flare balloons again (~560 m), and at 55 t
+    // it still does (558 m): only 65 t is flown. A 10 kt tailwind still lands ~745 m in.
+    kidFlarePerS: 0.315,
     alphaStallDeg: 14.8,
     maxThrustN: 240000, // 2x CFM56-7B (120 kN each)
     // Lapse fit: ~18% less thrust by Mach 0.23 at sea level (high-bypass takeoff curves),
-    // σ^0.7 with altitude; idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s
-    // from flight idle to 95%).
-    engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.7, spoolTau: 1.2 },
+    // σ^0.94 with altitude, fitted (0116) to CFM's max climb thrust at 35,000 ft, Mach 0.8, ISA:
+    // 26.5 kN per installed engine, every -7B rating (Snecma CFM56-7B fact sheet, June 2006;
+    // was σ^0.7, 35 kN). Full throttle up there is that max climb rating (a real lever's TO/CON
+    // limit is a few % more), and the one exponent also absorbs installation losses against the
+    // 120 kN bare-engine static rating. Mattingly's high-bypass lapse (Aircraft Engine Design,
+    // 2nd ed., eq. 2.45a, δ0·(1 − 0.49√M)) is within ~1% of it at 10,000 ft, Mach 0.5, but 9%
+    // under CFM at FL350 and ~11% under the fit at FL410: a sanity check, not a second source.
+    // Idle ~4%; idle → 95% thrust in ~5 s (FAR 33.73: ≤ 5 s from flight idle to 95%).
+    engine: { type: 'turbofan', staticThrustN: 240000, idleFraction: 0.04, machLapse: [0.9, 0.6], densityExp: 0.94, spoolTau: 1.2,
+      // The max climb (CLB) rating (engine.js maxClimbThrustN, 0135): Bartel & Young's climb lapse
+      // anchored to CFM's 26.5 kN per engine at FL350, Mach 0.8 (above). Full throttle stays the
+      // take-off/go-around rating; CLB is what the APD climb cards fly.
+      climb: { refThrustN: 53000, refFt: 35000, refMach: 0.8 } },
+    // Compressibility drag rise (aero.js waveDragCd, 0120; Mason's Korn + Lock). Sweep 25° at the
+    // quarter chord and average t/c 12.89% are the 737's in Jenkinson, Simpkin & Rhodes, Civil Jet
+    // Aircraft Design (1999), Aircraft Data File (its t/c row is the Original/Classic; the NG keeps the
+    // 25° sweep and no NG figure is published there). κA 0.95 is Mason's supercritical-section value,
+    // chosen between his two (0.87 for NACA 6-series), not tuned: the NG's wing is Boeing's advanced
+    // (aft-loaded) section, and the MMO agreement informed the choice (so it is not an independent
+    // check): Boeing puts MDD, 20 counts of wave drag, at MMO (Scholz & Ciornei, DGLR-2005-122), the
+    // 737-800's MMO is 0.82, and the model reaches 20 counts at ~0.822 at the FL350 cruise CL (Mason's
+    // slope-0.1 MDD is 0.824 at CL 0.5); κA 0.87 would put it at ~0.73, below the 0.785-0.79 the 737
+    // really cruises at. A buffet boundary is not modelled.
+    transonic: { kappaA: 0.95, tOverC: 0.1289, sweepDeg: 25 },
+    vneKts: 340, // VMO (FAA TCDS A16WE, 737-800): the nose-down trim stop's hands-off speed (trim.js, 0094)
+    // Flap placard speeds (0127), [flap °, KIAS]: 10 210, 15 200, 25 190, 30 175, 40 162. The model's
+    // lever has 10/30/40, but the flaps pass 15 and 25 in transit, so their placards apply on the way.
+    // These are the widely published 737-800 values (crew study cards; no public Boeing FCOM), not a
+    // certified source; 14 CFR 25.1583 is the rule that a flight manual gives them.
+    vfeKtsByFlapDeg: [[10, 210], [15, 200], [25, 190], [30, 175], [40, 162]],
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
     vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
     // The model's Vr at flaps 10, 65 t, fitted to its own lift curve: the speed from which a
@@ -133,8 +171,14 @@ export const AIRCRAFT_DATABASE = {
     // Electric flaps, 0 → 30° in ~10 s (an estimate); toe brakes on the mains, no autobrake or
     // reverse. The small disc brakes are torque-limited below the tyres' grip: μ 0.39 at full
     // pedal is fitted to POH Fig. 5-11 (575 ft roll from a near-stall touchdown, 1335 ft from
-    // 50 ft; tests/flight/c172.test.js), not a measured brake torque (ticket 0082).
-    systems: { flaps: { degPerS: 3 }, brakes: { tauS: 0.3, muMax: 0.39 } },
+    // 50 ft; tests/flight/c172.test.js), not a measured brake torque (ticket 0082). Wet
+    // runway (0108): a Part 23 airplane, so 14 CFR 25.109(c) is borrowed, not required. Its
+    // 6.00-6 main tyres run 38 psi (POH Section 8), below the rule's table: its 50 psi row (an
+    // extrapolation on the conservative side). No anti-skid; 0.37 is an effective factor
+    // fitted to the UK CAA's light-aircraft planning factor (Safety Sense Leaflet 7: a wet
+    // paved runway adds 15% to the landing distance from 50 ft; tests/flight/wetRunway.test.js),
+    // between (c)(2)'s on-off 0.30 and quasi-modulating 0.50.
+    systems: { flaps: { degPerS: 3 }, brakes: { tauS: 0.3, muMax: 0.39, tirePsi: 38, antiSkid: 0.37 } },
     alphaStallDeg: 14.1,
     maxThrustN: 2100, // Lycoming IO-360-L2A, 180 hp, fixed-pitch prop (static)
     // Sea-level full-throttle thrust vs TAS (m/s). 0: 2070 N measured static thrust of a
@@ -144,9 +188,12 @@ export const AIRCRAFT_DATABASE = {
     // 124 m/s: the 65→80 slope carried on to zero (a diving fixed-pitch prop unloads).
     // windmillCd: the idle prop's drag, from the POH's ~9:1 glide at 68 KIAS.
     engine: { type: 'piston-prop', thrustTableN: [[0, 2070], [20, 2100], [38, 2105], [50, 1960], [65, 1680], [80, 1250], [124, 0]], windmillCd: 0.0188, spoolTau: 0.3 },
+    vneKts: 163, // never exceed, KIAS (POH Section 2): the nose-down trim stop's hands-off speed (trim.js, 0094)
+    vfeKtsByFlapDeg: [[10, 110], [30, 85]], // flaps extended (0127, POH Section 2): 110 KIAS to 10°, 85 KIAS 10°-30°
     vrefKts: 62,
     vrKts: 55,
     stallCleanKts: 48,
+    vGlideKts: 68, // best glide, 2,550 lb (POH Section 3, engine failure; the dead-stick drill, 0036)
     gearHeight: 1.65,
     // Struts (gear.js): 65 in wheelbase (POH Fig. 1-1 note 2), 2.54 m main track (POH Section
     // 1). Nose wheel at arm -6.8 in and mains at 58.2 in (POH Section 6 equipment list, wheel
@@ -164,6 +211,12 @@ export const AIRCRAFT_DATABASE = {
     eyeOffset: new Vector3(0, 1.85, -1.3),
     chaseDist: 18,
     chaseHeight: 4.5,
+    // Pitch stiffness against damping (flightModel.js, 0102): the nose lags the flight path by
+    // pitchDamping / stiffness seconds of pitch rate, and that lag takes lift out of the
+    // phugoid's speed-height exchange. At 1.8 it was 1.35 s and the phugoid ran 1.9-2.2x
+    // Lanchester's period; 7.2 makes it 0.34 s (Roskam's C172, Cmq·c̄/2V / Cmα, is 0.22 s at
+    // 90 KIAS) and 1.3-1.4x. The trim α per stick is unchanged (elevatorAlphaDeg).
+    pitchAuthority: 7.2,
     pitchDamping: 3.8,
     // Elevator balance (flightModel.js, 0090): Roskam's Cmα −0.89 against Cmδe −1.28 per
     // radian, as in our JSBSim C172 (public/jsbsim/), at the TCDS's 25.5° mean elevator throw.

@@ -25,11 +25,12 @@ const FT_S2 = 0.3048;
 const KTS = 0.514444;
 
 // Airframes without their own numbers get these (estimates; the F-16's gear cycles in a few
-// seconds, its flaps are automatic and fast).
+// seconds, its flaps are automatic and fast; its high-pressure tyres and fully modulating
+// anti-skid, for a wet runway, 0108).
 const DEFAULTS = {
   gear: { extendS: 6, retractS: 5 },
   flaps: { degPerS: 5 },
-  brakes: { tauS: 0.3, muMax: 0.45 },
+  brakes: { tauS: 0.3, muMax: 0.45, tirePsi: 300, antiSkid: 0.8 },
 };
 
 export const systemsOf = (spec) => ({
@@ -135,12 +136,37 @@ export function stepSystems(body, spec, dt) {
   body.brakePress += (cmd - body.brakePress) * Math.min(1, dt / sys.brakes.tauS);
 }
 
+// Wet runway (ticket 0108): 14 CFR 25.109(c)(1)'s maximum tyre-to-ground braking coefficient
+// on a wet runway, a cubic in V/100 (V = true groundspeed, kt) per maximum tyre pressure,
+// linear between the listed pressures (as the rule allows); below 50 psi its 50 psi row.
+const WET_MU_ROWS = [
+  [50, -0.0350, 0.306, -0.851, 0.883],
+  [100, -0.0437, 0.320, -0.805, 0.804],
+  [200, -0.0331, 0.252, -0.658, 0.692],
+  [300, -0.0401, 0.263, -0.611, 0.614],
+];
+const wetRow = (r, v) => ((r[1] * v + r[2]) * v + r[3]) * v + r[4];
+export function wetRunwayMuMax(tirePsi, gsKts) {
+  const v = Math.min(2, Math.max(0, gsKts / 100));
+  const psi = Math.min(300, Math.max(50, tirePsi));
+  let i = 0;
+  while (i < WET_MU_ROWS.length - 2 && psi > WET_MU_ROWS[i + 1][0]) i++;
+  const a = WET_MU_ROWS[i], b = WET_MU_ROWS[i + 1];
+  return wetRow(a, v) + (wetRow(b, v) - wetRow(a, v)) * (psi - a[0]) / (b[0] - a[0]);
+}
+
 // Tyre friction for the brake pressure (flightModel.js): rolling μ, plus the brakes up to
-// what anti-skid lets the runway give (dry concrete).
+// what anti-skid lets the runway give (dry concrete). Wet (body.wetRunway: the METAR's rain),
+// the runway caps it at 25.109(c)(1)'s coefficient at this groundspeed times (c)(2)'s
+// anti-skid efficiency (spec.systems.brakes.antiSkid: on-off 0.30, quasi-modulating 0.50,
+// fully modulating 0.80): a light pedal below that grip brakes as on a dry runway. The cap
+// holds rolling resistance too (conservative by its 0.03).
 export const ROLLING_MU = 0.03;
-export function brakeMu(spec, brakePress) {
-  const muMax = (spec.systems?.brakes ?? DEFAULTS.brakes).muMax;
-  return ROLLING_MU + (muMax - ROLLING_MU) * Math.min(1, Math.max(0, brakePress));
+export function brakeMu(spec, brakePress, wet = false, gsKts = 0) {
+  const br = spec.systems?.brakes ?? DEFAULTS.brakes;
+  const mu = ROLLING_MU + (br.muMax - ROLLING_MU) * Math.min(1, Math.max(0, brakePress));
+  if (!wet) return mu;
+  return Math.max(ROLLING_MU, Math.min(mu, wetRunwayMuMax(br.tirePsi ?? DEFAULTS.brakes.tirePsi, gsKts) * (br.antiSkid ?? DEFAULTS.brakes.antiSkid)));
 }
 
 // Net thrust after the reversers: deployed sleeves turn the fan stream forward at the

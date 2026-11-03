@@ -6,8 +6,21 @@
 // height loss is secondary until the recovery is positive). Pure: no THREE, no DOM. Tested in
 // tests/unit/stallDrill.test.js and flown headless in tests/flight/c172.test.js.
 import { curve, letterGrade } from './landing.js';
+import { DRILL_TEXT } from './coach.js';
 
 export const STALL_KEY = 'c172_stall_recovery';
+// The coach's words for the drill (coach.js ranks and picks the keys: stallTarget).
+export const STALL_TEXT = {
+  stIdle: 'Power to idle (throttle all the way back)',
+  stSlow: 'Ease back, more and more: hold height to a stall',
+  stNose: 'Stall! Nose down',
+  stPower: 'Power in: full throttle',
+  stWings: 'Wings level',
+  stClimb: 'Climb away',
+  stKidSlow: 'Let go: the plane slows down until it stalls',
+  stKid: 'Stall! The plane noses down and climbs away',
+};
+Object.assign(DRILL_TEXT, STALL_TEXT);
 // The stall warning sounds 5 kt above the stall (aero.js stallWarningKts): on the C172's lift
 // curve that is ~3° of angle of attack below the stall angle (CL ∝ 1/V², (53/58)² of CLmax).
 // Below it the wing is flying again: "unstalled".
@@ -25,6 +38,11 @@ export const STALL_SECONDARY_S = 10;
 export const STALL_HELD_S = 3;
 export const STALL_PULL = 0.5;
 export const STALL_PULL_WINDOW_S = 5;
+// ...while the wing is within this much of its stall angle: Kid's and Learner's protection holds
+// α at the stall less 4° (assists.js aoaMarginDeg), so the gate sits a degree below that. At the
+// warning's 3° it caught the held stick only while the protection overshot (0102: a stiffer
+// pitch stops the overshoot, and a held stick graded B).
+export const STALL_HELD_MARGIN_DEG = 5;
 // A power-off stall is entered slowly at idle: a stall above the warning speed + this (a yank
 // at cruise, ~1.3 g at the C172's numbers) or with power on is not the drill's, and it stays armed.
 export const STALL_ENTRY_KTS = 4;
@@ -68,7 +86,7 @@ export function stallDrillState(st, s) {
   // Back stick counts while the wing is still near its stall angle (the assist holding it there),
   // not a firm pull-out once it flies.
   if (stalled || (s.pullIn >= STALL_PULL && s.t - st.stallT <= STALL_PULL_WINDOW_S
-    && s.aoaDeg >= s.stallAoaDeg - STALL_WARN_MARGIN_DEG)) st.stalledS += s.dt;
+    && s.aoaDeg >= s.stallAoaDeg - STALL_HELD_MARGIN_DEG)) st.stalledS += s.dt;
   if (st.stallFt - st.lowFt > STALL_FAIL_LOST_FT || s.t - st.stallT > STALL_FAIL_S || s.aglFt < STALL_FAIL_AGL_FT) {
     st.phase = 'failed';
     return 'failed';

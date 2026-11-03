@@ -1,11 +1,12 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
+import { windBoxRect } from '../../src/hudLayout.js';
 
 // Ticket 0025: a phone held sideways. Runs in the `phone` project (touch, mobile).
 // The ticket's two sizes, plus the narrowest phones the landscape query also matches.
 const SIZES = [{ width: 844, height: 390 }, { width: 667, height: 375 }, { width: 640, height: 360 }, { width: 568, height: 320 }];
 const ALERTS = ['#masterAlertBanner', '#stallAlertBanner'];
-const CONTROLS = ['#btnMenu', '#phoneTelemetry', '#touchThrottle', '#touchStick', '#touchButtons', '#coach'];
+const CONTROLS = ['#btnMenu', '#phoneTelemetry', '#touchThrottle', '#touchStick', '#touchButtons', '#touchTrim', '#coach'];
 
 const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
@@ -59,6 +60,9 @@ for (const vp of SIZES) {
       // The canvas TRK box (renderHud via headingBoxTop: max(cy - 145, 72), 104x24 centred).
       const cx = vp.width / 2, cy = vp.height / 2;
       boxes.push(['TRK box', { x: cx - 52, y: Math.max(cy - 145, 72), width: 104, height: 24 }]);
+      // The canvas wind box (hudLayout.js windBoxRect, 0075): nothing may hide the wind.
+      const wb = windBoxRect(vp.width, vp.height);
+      boxes.push(['wind box', { x: wb.x, y: wb.y, width: wb.w, height: wb.h }]);
       // Alerts take the coach's slot on purpose (GPWS over stall over coach).
       const sharesSlot = (a, b) => [a, b].every((id) => id === '#coach' || ALERTS.includes(id));
       for (let i = 0; i < boxes.length; i++) {
@@ -80,9 +84,9 @@ for (const vp of SIZES) {
         for (const t of tapes) expect(overlaps(b, t), `${id} covers a tape`).toBe(false);
       }
       // Every touch target is at least 44 px.
-      const targets = await page.locator('#touchButtons button, #btnMenu, #btnCoachSkip').evaluateAll((els) =>
+      const targets = await page.locator('#touchButtons button, #touchTrim button, #btnMenu, #btnCoachSkip').evaluateAll((els) =>
         els.map((e) => { const r = e.getBoundingClientRect(); return [e.id, r.width, r.height]; }));
-      expect(targets.length).toBe(6);
+      expect(targets.length).toBe(8); // the profile flies Pilot, so the trim rocker shows (0094)
       for (const [id, w, h] of targets) { expect(w, id).toBeGreaterThanOrEqual(44); expect(h, id).toBeGreaterThanOrEqual(44); }
       for (const id of ['#touchThrottle', '#touchStick']) {
         const b = await page.locator(id).boundingBox();

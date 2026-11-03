@@ -6,9 +6,12 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true
 test('phone: boots, starts a flight, renders, no errors, no page scroll', async ({ page }) => {
   await stubTiles(page);
   const errors = collectErrors(page);
+  // As on an iPhone, no Vibration API (0033): no Vibrate toggle, and nothing throws.
+  await page.addInitScript(() => { delete Navigator.prototype.vibrate; });
   await page.goto(BASE);
   await page.locator('#btnStartFlight').click();
   await expect(page.locator('#onboardingModal')).toBeHidden();
+  await expect(page.locator('#btnHaptics')).toBeHidden();
   // Poll: under parallel load SwiftShader can take a few seconds to draw the first frames.
   await expect.poll(() => distinctColours(page, '#simCanvas'), { timeout: 15_000 }).toBeGreaterThan(3);
   const scroll = await page.evaluate(() => ({
@@ -90,7 +93,7 @@ test('phone: two thumbs fly — stick deflects the surfaces while the throttle m
 
 test('phone: controls never overlap each other or the horizon', async ({ page }) => {
   await startFlight(page);
-  const ids = ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons'];
+  const ids = ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons', '#touchTrim'];
   const boxes = [];
   for (const id of ids) {
     const b = await page.locator(id).boundingBox();
@@ -106,9 +109,9 @@ test('phone: controls never overlap each other or the horizon', async ({ page })
   const band = { x: 0, y: 844 * 0.4, width: 390, height: 844 * 0.2 };
   for (const [id, b] of boxes) expect(overlaps(b, band), `${id} covers the horizon`).toBe(false);
   // Every touch target is at least 44px.
-  const targets = await page.locator('#touchButtons button').evaluateAll((els) =>
+  const targets = await page.locator('#touchButtons button, #touchTrim button').evaluateAll((els) =>
     els.map((e) => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }));
-  expect(targets.length).toBeGreaterThanOrEqual(4);
+  expect(targets.length).toBeGreaterThanOrEqual(6); // Pilot: the trim rocker too (0094)
   for (const [w, h] of targets) { expect(w).toBeGreaterThanOrEqual(44); expect(h).toBeGreaterThanOrEqual(44); }
 });
 
@@ -124,7 +127,7 @@ test('phone: the landing coach fits between the header and the touch deck, off t
   await startFlight(page);
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
   const coach = await page.locator('#coach').boundingBox();
-  for (const id of ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons']) {
+  for (const id of ['#phoneHeader', '#touchStick', '#touchThrottle', '#touchButtons', '#touchTrim']) {
     expect(overlaps(coach, await page.locator(id).boundingBox()), `coach vs ${id}`).toBe(false);
   }
   expect(overlaps(coach, { x: 0, y: 844 * 0.4, width: 390, height: 844 * 0.2 }), 'coach covers the horizon').toBe(false);
@@ -232,44 +235,63 @@ test('phone: telemetry and touch labels are at least 10 px and reach 4.5:1 (0007
   for (const px of sizes) expect(px).toBeGreaterThanOrEqual(10);
 });
 
-test('phone: the go-around drill flies by touch alone, and its card fits (0047)', async ({ page }) => {
-  test.setTimeout(240_000);
-  await stubTiles(page);
-  await page.goto(`${BASE}?mission=go_around_drill`);
-  const start = page.locator('#btnStartFlight');
-  await start.scrollIntoViewIfNeeded();
-  await start.tap();
-  await expect(page.locator('#onboardingModal')).toBeHidden();
-  const snap = () => page.evaluate(() => window.openaeroDebug());
-  await expect.poll(async () => (await snap()).stabilizedGate, { timeout: 120_000 }).not.toBeNull();
-  expect((await snap()).stabilizedGate.stable).toBe(false);
-  await expect(page.locator('#txtCoach')).toHaveText(/Go around! Full power/, { timeout: 5_000 });
-  // Thumb on the throttle to the top, thumb on the stick up (this stick: up = nose up) until it climbs.
-  const stick = await page.locator('#touchStick').boundingBox();
-  const thr = await page.locator('#touchThrottle').boundingBox();
-  const s = centre(stick);
-  const t = centre(thr);
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: s.x, y: s.y, id: 1 }, { x: t.x, y: t.y, id: 2 }] });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [
-    { x: s.x, y: stick.y + stick.height * 0.15, id: 1 }, { x: t.x, y: thr.y + 2, id: 2 }] });
-  await expect.poll(async () => (await snap()).pitchDeg, { timeout: 20_000 }).toBeGreaterThan(7);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect(page.locator('#txtCoach')).toHaveText(/tap FLAPS/, { timeout: 20_000 });
-  const flaps = (await snap()).flapsIndex;
-  await page.locator('#touchFlaps').tap();
-  expect((await snap()).flapsIndex).toBe(flaps - 1);
-  await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator('#txtResultTitle')).toHaveText('Go-around complete');
-  const card = await page.locator('#resultsCard').boundingBox();
-  expect(card.x).toBeGreaterThanOrEqual(0);
-  expect(card.x + card.width).toBeLessThanOrEqual(390);
-  expect(card.y).toBeGreaterThanOrEqual(0);
-  expect(card.y + card.height).toBeLessThanOrEqual(844);
-  for (const id of ['#btnFlyAgain', '#btnKeepRolling']) {
-    expect((await page.locator(id).boundingBox()).height).toBeGreaterThanOrEqual(44);
-  }
-  await page.screenshot({ path: test.info().outputPath('go-around-390.png') });
-  await page.locator('#btnKeepRolling').tap();
-  expect((await snap()).paused).toBe(false);
+test.describe(() => {
+  // A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+  test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+
+  test('phone: the go-around drill flies by touch alone, and its card fits (0047)', async ({ page }) => {
+    test.setTimeout(240_000);
+    await stubTiles(page);
+    await page.goto(`${BASE}?mission=go_around_drill`);
+    const start = page.locator('#btnStartFlight');
+    await start.scrollIntoViewIfNeeded();
+    await start.tap();
+    await expect(page.locator('#onboardingModal')).toBeHidden();
+    const snap = () => page.evaluate(() => window.openaeroDebug());
+    await expect.poll(async () => (await snap()).stabilizedGate, { timeout: 120_000 }).not.toBeNull();
+    expect((await snap()).stabilizedGate.stable).toBe(false);
+    await expect(page.locator('#txtCoach')).toHaveText(/Go around! Full power/, { timeout: 5_000 });
+    // Thumb on the throttle to the top, thumb on the stick up (this stick: up = nose up) until it climbs.
+    const stick = await page.locator('#touchStick').boundingBox();
+    const thr = await page.locator('#touchThrottle').boundingBox();
+    const s = centre(stick);
+    const t = centre(thr);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: s.x, y: s.y, id: 1 }, { x: t.x, y: t.y, id: 2 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [
+      { x: s.x, y: stick.y + stick.height * 0.15, id: 1 }, { x: t.x, y: thr.y + 2, id: 2 }] });
+    await expect.poll(async () => (await snap()).pitchDeg, { timeout: 20_000 }).toBeGreaterThan(7);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(page.locator('#txtCoach')).toHaveText(/tap FLAPS/, { timeout: 20_000 });
+    const flaps = (await snap()).flapsIndex;
+    await page.locator('#touchFlaps').tap();
+    expect((await snap()).flapsIndex).toBe(flaps - 1);
+    await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('#txtResultTitle')).toHaveText('Go-around complete');
+    const card = await page.locator('#resultsCard').boundingBox();
+    expect(card.x).toBeGreaterThanOrEqual(0);
+    expect(card.x + card.width).toBeLessThanOrEqual(390);
+    expect(card.y).toBeGreaterThanOrEqual(0);
+    expect(card.y + card.height).toBeLessThanOrEqual(844);
+    for (const id of ['#btnFlyAgain', '#btnKeepRolling']) {
+      expect((await page.locator(id).boundingBox()).height).toBeGreaterThanOrEqual(44);
+    }
+    await page.screenshot({ path: test.info().outputPath('go-around-390.png') });
+    await page.locator('#btnKeepRolling').tap();
+    expect((await snap()).paused).toBe(false);
+  });
+});
+
+// 0128: the low-speed band on a touch phone (Pilot): red just under the stall speed in the tape's column.
+test('phone: the speed tape shows the red low-speed band under the 737\'s flaps-30 stall speed', async ({ page }) => {
+  await startFlight(page);
+  await expect.poll(() => page.evaluate(() => window.openaeroDebug?.().stallKts ?? null)).not.toBeNull();
+  const [r, g, b] = await page.evaluate(() => {
+    const c = document.getElementById('hudCanvas'), s = window.openaeroDebug();
+    const x = Math.round(c.width / 2 - 131 - 6), y = Math.round(c.height / 2 + (s.iasKts - (s.stallKts - 3)) * 2);
+    return [...c.getContext('2d').getImageData(x, y, 1, 1).data];
+  });
+  expect(r).toBeGreaterThan(180);
+  expect(g).toBeLessThan(110);
+  expect(b).toBeLessThan(110);
 });

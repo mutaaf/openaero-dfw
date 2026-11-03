@@ -30,6 +30,7 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
       const d = await page.evaluate(() => window.openaeroDebug());
       expect(d.activeRunway).toBe('KDFW_35C');
       expect(d.hudWind).toMatchObject({ source: 'METAR WIND', calm: false, speed: '080/12', xwKts: 12, hw: 'HW 2' });
+      expect(d.wetRunway).toBe(false); // a dry METAR (0108)
       // Blowing from the right, so the arrow points left (about 270° from the nose).
       expect(Math.abs(d.hudWind.arrowDeg - (80 - d.headingDeg + 180 + 360) % 360)).toBeLessThan(1);
       expect(d.hudWind.arrowDeg).toBeGreaterThan(240);
@@ -75,5 +76,20 @@ test.describe('honest labels', () => {
     d = await offline.evaluate(() => window.openaeroDebug());
     expect(d.wxLive).toBe(false);
     expect(d.hudWind.speed).toMatch(/^\d{3}\/\d+/);
+  });
+});
+
+// Ticket 0108: rain on the METAR wets the runway: the wind box says WET RWY, the brakes get the
+// wet friction (sim.wetRunway) and the coach says so on the final. A dry METAR says none of it.
+const WET_METAR = { ...TEST_METAR, wdir: 350, wspd: 8, wgst: null, visib: 4, rawOb: 'METAR KDFW 161953Z 35008KT 4SM -RA BR OVC015 18/16 A2992' };
+test.describe('wet runway at 390x844', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, storageState: { cookies: [], origins: [] } });
+  test('a METAR with rain: WET RWY on the HUD, wet brakes, and the coach says to expect a longer roll', async ({ page }) => {
+    const errors = collectErrors(page);
+    await fly(page, [WET_METAR]);
+    await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudWind.source, { timeout: 10_000 }).toBe('WET RWY');
+    expect((await page.evaluate(() => window.openaeroDebug())).wetRunway).toBe(true);
+    await expect(page.locator('#coach')).toContainText(/wet runway/i, { timeout: 15_000 });
+    expect(errors).toEqual([]);
   });
 });

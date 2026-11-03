@@ -1,7 +1,7 @@
 ---
 id: 0079
 title: Stall buffet: feel the wing coming up on the stall, not only hear the horn
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: player-feel

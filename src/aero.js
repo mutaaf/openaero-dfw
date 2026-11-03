@@ -49,6 +49,24 @@ export const vrefFor = (spec, flapsIndex) => spec.vrefKtsByFlap?.[flapsIndex] ??
 
 export const stallWarningKts = (spec, flapsIndex) => stallSpeedKts(spec, flapsIndex) + 5;
 
+// The speed limit (KIAS) for where the flaps are (0127): VMO / VNE with the flaps up, else the placard
+// of the first breakpoint in spec.vfeKtsByFlapDeg at or beyond the flaps' actual angle (flaps between
+// two placards are past the lower one: the C172's "10°-30°: 85", the 737's 25-30 at 30's 175). null
+// for an airframe without the data (the F-16). Compared with the model's IAS, which is EAS: VMO is
+// KCAS, so up high the call comes a few knots late (~5 kt at 10,000 ft); under 250 kt it is < 2 kt.
+export function speedLimitKts(spec, flapDeg) {
+  const vmo = spec.vneKts ?? null, vfe = spec.vfeKtsByFlapDeg;
+  if (vmo === null || !vfe || flapDeg <= 0.5) return vmo;
+  for (const [deg, kts] of vfe) if (flapDeg <= deg + 0.5) return Math.min(vmo, kts);
+  return Math.min(vmo, vfe[vfe.length - 1][1]);
+}
+
+// The overspeed warning's latch: on above the limit, off only OVERSPEED_REARM_KTS below it, so a
+// speed riding the line is called once (one caption, one spoken call), not every gust.
+export const OVERSPEED_REARM_KTS = 3;
+export const overspeedStep = (warned, iasKts, limitKts) =>
+  limitKts !== null && iasKts > (warned ? limitKts - OVERSPEED_REARM_KTS : limitKts);
+
 // Ground-effect factor on drag (McCormick-style, 1 = out of ground effect).
 export function groundEffectFactor(heightM, wingSpanM) {
   const h = Math.max(1.0, heightM);
@@ -68,11 +86,34 @@ export function inducedDragK(spec) {
 // while the gear is in transit (an estimate: ~a third of the gear's drag).
 export const GEAR_CD = 0.018;
 export const GEAR_DOORS_CD = 0.006;
-export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect) {
+// `mach` adds the airframe's compressibility drag rise (waveDragCd; 0 by default and below Mcrit).
+export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect, mach = 0) {
   const flapCd = spec.flapCd ? notchValue(spec.flapCd, flapsIndex, 0) : flapsIndex * 0.012;
   const g = spec.fixedGear ? 1 : Number(gearDown);
   const gearCd = GEAR_CD * g + (g > 0 && g < 1 ? GEAR_DOORS_CD : 0);
-  return spec.cd0 + gearCd + flapCd + inducedDragK(spec) * cl * cl * groundEffect;
+  return spec.cd0 + gearCd + flapCd + inducedDragK(spec) * cl * cl * groundEffect + waveDragCd(spec, cl, mach);
+}
+
+// Compressibility drag rise (0120), for an airframe with spec.transonic { kappaA, tOverC,
+// sweepDeg }: W.H. Mason, Configuration Aerodynamics, Sect. 7.5.2 (Virginia Tech), the Korn
+// equation extended to sweep by simple sweep theory, MDD = κA/cosΛ − (t/c)/cos²Λ − CL/(10 cos³Λ),
+// and Lock's fourth-power drag rise from Mcrit = MDD − (0.1/80)^(1/3) (so dCD/dM = 0.1 at MDD):
+// ΔCD = 20 (M − Mcrit)^4. Lift either way loads the wing (|CL|). Lock's shape is fitted up to
+// MDD; past it the fourth power runs away (~700 counts at Mach 1), so beyond MDD the rise goes on
+// at MDD's slope, 0.1 per Mach (an assumption: ~220 counts at Mach 1, a transport's order).
+const LOCK_DM = Math.cbrt(0.1 / 80);
+const LOCK_RISE_AT_MDD = 20 * LOCK_DM ** 4; // 26.9 counts
+export function dragDivergenceMach(spec, cl) {
+  const t = spec.transonic, c = Math.cos(t.sweepDeg * DEG_TO_RAD);
+  return t.kappaA / c - t.tOverC / (c * c) - Math.abs(cl) / (10 * c * c * c);
+}
+export function waveDragCd(spec, cl, mach) {
+  if (!spec.transonic || !(mach > 0.5)) return 0;
+  const mdd = dragDivergenceMach(spec, cl), dm = mach - (mdd - LOCK_DM);
+  if (dm <= 0) return 0;
+  if (dm < LOCK_DM) return 20 * dm * dm * dm * dm;
+  // Past MDD, an airframe with supersonic data (spec.supersonicCd, the F-16's, supersonic.js 0133).
+  return spec.supersonicCd ? spec.supersonicCd(mdd, mach) : LOCK_RISE_AT_MDD + 0.1 * (dm - LOCK_DM);
 }
 
 // Heading error in degrees, wrapped to [-180, 180].
@@ -88,14 +129,16 @@ export function headingFromYaw(yawRad) {
   return ((-yawRad * 180 / Math.PI) % 360 + 360) % 360;
 }
 
-// 4-light PAPI: number of WHITE lights for an approach slope angle (deg).
-// 2 white / 2 red = on a ~3° glidepath.
-export function papiWhiteLights(slopeDeg) {
-  if (slopeDeg > 3.4) return 4;
-  if (slopeDeg > 3.1) return 3;
-  if (slopeDeg > 2.8) return 2;
-  if (slopeDeg > 2.5) return 1;
-  return 0;
+// 4-light PAPI: number of WHITE lights for an approach slope angle (deg) to the PAPI.
+// FAA AC 150/5340-30J Table 7-2 (standard installation): the units are aimed at the glide path
+// G +30', +10', -10' and -30' (nearest the runway highest), so two white / two red is G +-10',
+// symmetric about the path (3.0°: 2.5, 2.83, 3.17, 3.5); a sharp switch, not a blend.
+// https://www.faa.gov/documentLibrary/media/Advisory_Circular/150-5340-30J.pdf (§7.5.4.6)
+export const PAPI_SETTING_OFFSETS_DEG = [-30 / 60, -10 / 60, 10 / 60, 30 / 60];
+export function papiWhiteLights(slopeDeg, glideDeg = 3) {
+  let white = 0;
+  for (let i = 0; i < 4; i++) if (slopeDeg > glideDeg + PAPI_SETTING_OFFSETS_DEG[i]) white++;
+  return white;
 }
 
 export const GPWS_ALT_THRESHOLDS = [1000, 500, 400, 300, 200, 100, 50, 40, 30, 20, 10];
@@ -104,15 +147,21 @@ const CALLOUT_WORDS = ['one thousand', 'five hundred', 'four hundred', 'three hu
 // Spoken word for a GPWS_ALT_THRESHOLDS index (the real automatic callout cadence).
 export const calloutWord = (i) => CALLOUT_WORDS[i];
 
-// Index into GPWS_ALT_THRESHOLDS that should fire now, or -1. Each threshold has a
-// 35 ft window below it and does not repeat while it is the last one called.
+// Index into GPWS_ALT_THRESHOLDS that should fire now, or -1. Each threshold has a 35 ft
+// window below it; only the lowest threshold at or above the aircraft counts (under 50 ft the
+// windows overlap, and the highest match called "fifty" again after "forty", 0117), and only
+// one below the last called: a bounce or a dip in the terrain never calls a height twice.
+// gpwsRearm re-arms them after a climb.
 export function gpwsCalloutIndex(aglFt, lastIdx) {
-  for (let i = 0; i < GPWS_ALT_THRESHOLDS.length; i++) {
+  for (let i = GPWS_ALT_THRESHOLDS.length - 1; i >= 0; i--) {
     const thresh = GPWS_ALT_THRESHOLDS[i];
-    if (aglFt <= thresh && aglFt > thresh - 35 && lastIdx !== i) return i;
+    if (aglFt <= thresh) return aglFt > thresh - 35 && i > lastIdx ? i : -1;
   }
   return -1;
 }
+// The callouts re-arm (-1) once the aircraft is 100 ft above the last height called (a go-around,
+// a touch-and-go's climb-out); otherwise lastIdx stands.
+export const gpwsRearm = (aglFt, lastIdx) => (lastIdx >= 0 && aglFt > GPWS_ALT_THRESHOLDS[lastIdx] + 100 ? -1 : lastIdx);
 
 // Takeoff callouts (0035): the pilot monitoring's "eighty knots" (airspeed cross-check),
 // "V1", "rotate", then "positive rate" once the aircraft climbs. Wording varies by operator;

@@ -1,5 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { stubTiles, stubMetar, enterCockpit, TEST_METAR } from './helpers.js';
+// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // KDFW 27015KT: straight across the 17/18 and 35/36 runways.
 const WEST_15 = { ...TEST_METAR, wdir: 270, wspd: 15, wgst: null, rawOb: 'METAR KDFW 161953Z 27015KT 10SM FEW250 24/10 A3002' };

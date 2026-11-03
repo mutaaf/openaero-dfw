@@ -3,11 +3,12 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import {
   ASSIST_KEY, ASSIST_CONFIG, DEFAULT_ASSIST, assistConfig, createAssistState, shapeControls,
-  autoConfigure, kidTargetKts, kidLocalizerBankDeg, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, groundSteerRudder, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
 import { dihedralAileron } from '../../src/flightModel.js';
 import { Euler } from 'three';
+import { runwayEnd, approachGeometry } from '../../src/airports.js';
 
 const memStorage = (init = {}) => {
   const m = { ...init };
@@ -137,6 +138,41 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
     shapeControls(assistConfig('kid'), deep, { ...s, aoaDeg: 12, stallAoaDeg: 20, airspeedMps: 30 }, 1 / 120, {});
     expect(deep.pitchHoldDeg).toBeLessThanOrEqual(9);
   });
+
+  it('Kid flares to 3° under the stall angle; above the flare the protection keeps 4° (0102)', () => {
+    const s = {
+      pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: 5, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
+      aoaDeg: 10.5, betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 15, onGround: false, wheelHeightM: 4, airspeedMps: 29, guideBankDeg: 0, guideGammaDeg: 0,
+    };
+    const flare = {};
+    shapeControls(assistConfig('kid'), createAssistState(), s, 1 / 120, flare);
+    expect(flare.elev).toBeLessThan(0); // still nose up at 3.5° under the stall
+    const high = {};
+    shapeControls(assistConfig('kid'), createAssistState(), { ...s, wheelHeightM: 100 }, 1 / 120, high);
+    expect(high.elev).toBeGreaterThan(0); // the 4° margin lowers the nose
+    const over = {};
+    shapeControls(assistConfig('kid'), createAssistState(), { ...s, aoaDeg: 11.5 }, 1 / 120, over);
+    expect(over.elev).toBeGreaterThan(0); // past 3° under, even the flare lowers it
+  });
+});
+
+describe('Kid auto-flare profile per airframe (0101)', () => {
+  it('the 737 flares to its own, quicker sink profile; without one it keeps the Cessna\'s', () => {
+    // At 6 m and 75 m/s: the Cessna's profile (1.2 m/s) and the 737's (2.0 m/s) floor the
+    // pitch at their own path + α; a quicker profile asks less nose-up at the same height.
+    const s = {
+      pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: 0, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
+      aoaDeg: 5, betaDeg: 0, stallAoaDeg: 14.8, tailstrikeDeg: 11, onGround: false, wheelHeightM: 6, airspeedMps: 75, guideBankDeg: 0, guideGammaDeg: -10,
+    };
+    const slow = createAssistState(), quick = createAssistState();
+    shapeControls(assistConfig('kid'), slow, s, 1 / 120, {});
+    shapeControls(assistConfig('kid'), quick, { ...s, flarePerS: AIRCRAFT_DATABASE.b738.kidFlarePerS }, 1 / 120, {});
+    const deg = (mps) => Math.atan2(-mps, 75) * 180 / Math.PI + 5;
+    expect(slow.pitchHoldDeg).toBeCloseTo(deg(1.2), 5);
+    expect(quick.pitchHoldDeg).toBeCloseTo(deg(6 * AIRCRAFT_DATABASE.b738.kidFlarePerS), 5);
+    expect(quick.pitchHoldDeg).toBeLessThan(slow.pitchHoldDeg);
+    expect(AIRCRAFT_DATABASE.c172.kidFlarePerS).toBeUndefined();
+  });
 });
 
 describe('Kid hands-off guidance', () => {
@@ -194,6 +230,36 @@ describe('Kid and Learner hold bank against a held rudder (dihedral, 0081)', () 
   }
 });
 
+describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {
+  const end = runwayEnd('KADS', '16');
+  // A point `alongM` past the threshold (negative: short of it), `crossM` right, `upM` above it.
+  const at = (alongM, crossM = 0, upM = 15) => {
+    const d = { x: Math.sin(end.hdgT * Math.PI / 180), z: -Math.cos(end.hdgT * Math.PI / 180) };
+    return { x: end.thrX + d.x * alongM - d.z * crossM, y: end.thrY + upM, z: end.thrZ + d.z * alongM + d.x * crossM };
+  };
+  const out = (pos, noseDeg) => { const o = { guideBankDeg: 0, guideGammaDeg: 0 }; kidFinalGuide(end, approachGeometry(end, pos), noseDeg ?? end.hdgT, end.hdgT, o); return o; };
+  it('flies the 3° path on the final and on past the threshold and the aim point, low over the first third', () => {
+    const third = (end.lengthM - end.displacedM) / 3;
+    for (const along of [-3000, -100, 50, 305, third - 20]) {
+      expect(out(at(along, 0, 0.5 + Math.max(0, -along - 305) * 0.0524)).guideGammaDeg).toBeLessThan(-0.4);
+    }
+    // 15 m up past the aim point is well above the path, but never steeper than 2° past the threshold
+    expect(out(at(600)).guideGammaDeg).toBe(-2);
+  });
+  it('leaves level flight off the final: past the first third, high over the runway, far out, wide or not lined up', () => {
+    const third = (end.lengthM - end.displacedM) / 3;
+    // A go-around or takeoff climbing through 1,000 ft over its runway is not dived back at it (panel).
+    for (const o of [out(at(third + 20, 0, 3)), out(at(end.lengthM + 100)), out(at(100, 0, 35)), out(at(1500, 0, 305)),
+      out(at(-25000)), out(at(-3000, 1600, 160)), out(at(-3000, 0, 160), end.hdgT + 60)]) {
+      expect(o).toEqual({ guideBankDeg: 0, guideGammaDeg: 0 });
+    }
+  });
+  it('steers back to the centreline past the threshold too', () => {
+    expect(out(at(200, 20)).guideBankDeg).toBeLessThan(0); // right of it: bank left
+    expect(out(at(200, -20)).guideBankDeg).toBeGreaterThan(0);
+  });
+});
+
 describe('Kid hands-off line-up (headless, runway heading north, x = cross-track)', () => {
   for (const [name, spec, kts] of [['737-800', AIRCRAFT_DATABASE.b738, 141], ['Cessna 172', AIRCRAFT_DATABASE.c172, 67]]) {
     it(`${name}: from 150 m right of the centreline, captures it without S-turns`, () => {
@@ -219,6 +285,34 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
       expect(Math.abs(b.pos.x)).toBeLessThan(5);
       expect(minX).toBeGreaterThan(-30); // overshoot
       expect(maxBank).toBeLessThan(25);
+    });
+
+    // Ticket 0097: main.js flies the line-up on the ground track, so the crab a crosswind needs
+    // leaves no steady offset (on the nose heading it was drift / 0.15°/m: ~50 m at 10 kt).
+    it(`${name}: in a crosswind from the right, flown on the ground track, holds the centreline crabbed`, () => {
+      const xw = kts > 100 ? 15 : 10; // kt, from the east (runway north): ~6° and ~8.5° of crab
+      const b = makeBody(spec, { kts, altM: 400, flaps: 2, throttle: 0.3 });
+      b.apMaster = false;
+      b.windVec.set(-xw * 0.514444, 0, 0);
+      b.vel.add(b.windVec);
+      const st = createAssistState(), cfg = assistConfig('kid'), s = {}, out = {}, e = new Euler(0, 0, 0, 'YXZ');
+      let maxAbsX = 0, hdg = 0;
+      fly(b, spec, 90, (x, dt) => {
+        const { pitchDeg, bankRightDeg } = attitude(x);
+        e.setFromQuaternion(x.quat, 'YXZ');
+        hdg = -e.y * 180 / Math.PI;
+        const track = Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI;
+        Object.assign(s, {
+          pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+          aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, 2), tailstrikeDeg: 15,
+          onGround: false, wheelHeightM: 400, airspeedMps: 70, guideBankDeg: kidLocalizerBankDeg(0, track, x.pos.x), guideGammaDeg: 0,
+        });
+        shapeControls(cfg, st, s, dt, out);
+        x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
+        if (x.t > 45) maxAbsX = Math.max(maxAbsX, Math.abs(x.pos.x));
+      });
+      expect(maxAbsX).toBeLessThan(5); // settled on the centreline
+      expect(hdg).toBeGreaterThan(3); // crabbed into the wind (nose right)
     });
   }
 });
@@ -332,5 +426,36 @@ describe('assist level storage and per-level bests', () => {
     expect(assistBestKey('kdfw_35c_final', 'kid')).toBe('kdfw_35c_final@kid');
     expect(assistBestKey('kdfw_35c_final', 'learner')).toBe('kdfw_35c_final@learner');
     expect(assistBestKey('kdfw_35c_final', 'bogus')).toBe('kdfw_35c_final');
+  });
+});
+
+// Ticket 0110: on the runway, Kid and Learner hold the centreline with the pedals, never the
+// sideslip's coordination rudder (it steered the nose wheel into the wind).
+describe('on the runway (groundSteerRudder, 0110)', () => {
+  const ground = {
+    pitchIn: 0, rollIn: 0, yawIn: 0, onGround: true, betaDeg: 20,
+    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, steerRateDegS: 20,
+  };
+  it('lined up on the centreline: no rudder, whatever the sideslip', () => {
+    for (const level of ['kid', 'learner']) {
+      expect(shapeControls(assistConfig(level), createAssistState(), ground, 1 / 120, {}).rud).toBeCloseTo(0, 9);
+    }
+  });
+  it('steers back towards the runway heading and the centreline', () => {
+    expect(groundSteerRudder(350, 345, 0, 0, 20)).toBeGreaterThan(0); // nose left of the runway: right rudder
+    expect(groundSteerRudder(10, 355, 0, 0, 20)).toBeGreaterThan(0); // across north
+    expect(groundSteerRudder(350, 350, 10, 0, 20)).toBeLessThan(0); // right of the centreline: nose left
+    expect(groundSteerRudder(350, 350, 0, 2, 20)).toBeLessThan(0); // drifting right: nose left
+  });
+  it('asks for at most 4°/s of turn: a little pedal at landing speed, full at a walk', () => {
+    expect(groundSteerRudder(350, 320, 0, 0, 200)).toBeCloseTo(0.02, 9); // 30° off at speed: 4°/s of 200
+    expect(groundSteerRudder(350, 320, 0, 0, 2)).toBe(1);
+    expect(groundSteerRudder(350, 350, 100, 0, 200)).toBeCloseTo(-0.0075, 9); // never more than 3° off: 1.5°/s
+  });
+  it("the player's pedals win; off a runway the rudder is theirs (0 if they leave it)", () => {
+    const cfg = assistConfig('learner');
+    expect(shapeControls(cfg, createAssistState(), { ...ground, crossM: 10, yawIn: 0.7 }, 1 / 120, {}).rud).toBe(0.7);
+    expect(shapeControls(cfg, createAssistState(), { ...ground, crossM: 10, rwyHdgDeg: null }, 1 / 120, {}).rud).toBe(0);
+    expect(shapeControls(cfg, createAssistState(), { ...ground, crossM: 10 }, 1 / 120, {}).rud).toBeLessThan(0);
   });
 });

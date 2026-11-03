@@ -1,7 +1,8 @@
 // The boot-time face of photoreal.js (ticket 0084): the Google 3D Tiles code (and the
 // googleSession bookkeeping) is only needed once someone presses Fly on the live origin, so it
 // is its own chunk, loaded by start(). Until then this stands in with photoreal.js's API: an
-// "off" state, and calls that do nothing (setVisible is remembered and applied on load).
+// "off" state, and calls that do nothing (setVisible is remembered and applied on load). The
+// session and the tiles' bounds are read only through debugState (?debug, e2e).
 
 export const PHOTOREAL_ORIGINS = ['https://mutaafaziz.com'];
 
@@ -19,7 +20,6 @@ export function createLazyPhotoreal(opts, load = () => import('./photoreal.js'))
 
   return {
     get state() { return impl ? impl.state : idle; },
-    get session() { return impl ? impl.session : null; },
     start(configUrl) {
       if (impl) return impl.start(configUrl);
       if (loading) return loading;
@@ -40,6 +40,7 @@ export function createLazyPhotoreal(opts, load = () => import('./photoreal.js'))
     setVisible(v) { visible = v; impl?.setVisible(v); },
     resize() { impl?.resize(); },
     noteSessionReuse() { impl?.noteSessionReuse(); },
-    bounds() { return impl ? impl.bounds() : null; },
+    debugLine() { return impl ? impl.debugLine() : `3D tiles: ${idle.status}`; },
+    debugState() { return impl ? impl.debugState() : { ...idle, page: null, usage: null, bounds: null }; },
   };
 }

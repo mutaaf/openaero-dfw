@@ -70,6 +70,12 @@ export function rigParts(root) {
   return rig;
 }
 
+// For main.js's ?debug snapshot (e2e): each rigged node's name, its turn from rest (deg) and
+// whether it shows.
+export const partPoses = (rig) => [...rig.parts, ...rig.gear].map((p) => ({
+  name: p.name, deg: 2 * Math.acos(Math.min(1, Math.abs(p.rest.dot(p.node.quaternion)))) * 180 / Math.PI, visible: p.node.visible,
+}));
+
 const _angles = { aileronL: 0, aileronR: 0, elevator: 0, rudder: 0, flapL: 0, flapR: 0, gear: 1 };
 const _q = new Quaternion(), _ax = new Vector3(1, 0, 0), _ay = new Vector3(0, 1, 0), _az = new Vector3(0, 0, 1);
 

@@ -14,6 +14,75 @@ export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
 
+// The tapes' inner edges (main.js drawTape) and the altitude readout box, x offset from the
+// tape's inner edge, size. The speed tape's scale runs left of cx + SPEED_TAPE_X.
+export const SPEED_TAPE_X = -131;
+export const ALT_TAPE_X = 130;
+export const ALT_BOX = { dx: 8, w: 56, h: 22 };
+// The altitude tape reads above sea level (0132): "MSL" in a small tab just under its readout box,
+// right of the major ticks (9 px), where drawTape leaves out the scale's numbers. The top bar's
+// AGL is the main wheels' radio altitude (0122). Whole pixels, so the tab's edges stay sharp
+// when cy is a half pixel (an odd height). Writes into `out`.
+export const ALT_CAPTION = 'MSL';
+export const ALT_CAPTION_W = 26;
+export const ALT_CAPTION_H = 13;
+export function altCaptionRect(cx, cy, out) {
+  out.x = Math.round(cx + ALT_TAPE_X + 12);
+  out.y = Math.round(cy + ALT_BOX.h / 2 + 2);
+  out.w = ALT_CAPTION_W;
+  out.h = ALT_CAPTION_H;
+  return out;
+}
+
+// One decimal for a HUD readout that sits near zero (the AoA badge): a tiny negative value
+// would print "-0.0", flicker against "0.0" and shift the line it is in.
+export function fixed1(v) {
+  const s = v.toFixed(1);
+  return s === '-0.0' ? '0.0' : s;
+}
+
+// The speed limit on the speed tape (0127, 2 px per kt over the tape's ±90 px): `tick` when
+// the limit is on the tape's span (y), and an amber band from it up to the tape's top (top,
+// bot clamped to the span; `show` false when the limit is above it). Writes into `out`.
+export function speedLimitBand(cy, limitKts, iasKts, out) {
+  const y = cy - (limitKts - iasKts) * 2;
+  out.y = y;
+  out.tick = y >= cy + TAPE_TOP && y <= cy - TAPE_TOP;
+  out.top = cy + TAPE_TOP;
+  out.bot = Math.min(y, cy - TAPE_TOP);
+  out.show = out.bot > out.top;
+  return out;
+}
+
+// The low-speed band on the speed tape (0128, 2 px per kt over ±90 px): red from the tape's
+// bottom up to the 1 g stall speed (aero.js stallSpeedKts for where the flaps are), amber from it
+// up to STALL_CAUTION × Vs. Each part is clamped to the span and hidden (`red` / `amber` false)
+// when it is below it (flying fast). Writes into `out`.
+export const STALL_CAUTION = 1.1;
+export function stallBand(cy, stallKts, iasKts, out) {
+  const top = cy + TAPE_TOP, bot = cy - TAPE_TOP;
+  const yVs = cy - (stallKts - iasKts) * 2;
+  const yCaution = cy - (stallKts * STALL_CAUTION - iasKts) * 2;
+  out.redTop = Math.max(top, yVs);
+  out.redBot = bot;
+  out.red = out.redTop < bot;
+  out.amberTop = Math.max(top, yCaution);
+  out.amberBot = Math.min(bot, out.redTop);
+  out.amber = out.amberTop < out.amberBot;
+  return out;
+}
+
+// The ILS fly-to bars (0123) read in dots (aero.js ilsDots, the gate's scale): ILS_PX_PER_DOT per
+// dot, a tick at each, clamped at full scale (2 dots: 2.5° of localizer, 0.7° of glideslope, FAA
+// AIM 1-1-9), inside the crosshair box's ±ILS_BOX_HALF px. A NaN draws centred.
+export const ILS_PX_PER_DOT = 30;
+export const ILS_MAX_DOTS = 2;
+export const ILS_BOX_HALF = 70;
+export function ilsBarOffsetPx(dots, pxPerDot = ILS_PX_PER_DOT, maxDots = ILS_MAX_DOTS) {
+  if (!(dots === dots)) return 0;
+  return Math.max(-maxDots, Math.min(maxDots, dots)) * pxPerDot;
+}
+
 // The takeoff callout's word box (0035): 26 px tall, 232 px wide (24 characters of bold
 // 15 px monospace), centred, just under the heading box. On the roll the horizon is at cy
 // and rotating moves it down, so the word stays in the sky; it fits between the tapes.
@@ -80,13 +149,15 @@ export function windArrowDeg(fromDeg, kts, hdgDeg) {
 
 // The readout's text (pure; main.js refreshes it once a second, so the HUD allocates
 // nothing per frame). wx is the weather module's record ({ windDirDeg, windKts, gustKts,
-// live }); comps is runwayWindComponents for the active runway, or null when there is none
+// live, wetRunway }); comps is runwayWindComponents for the active runway, or null when there is none
 // or the aircraft is above WIND_SHOW_COMPONENTS_FT.
 export function windReadout(wx, comps, out = {}) {
   const kts = Math.round(wx.windKts || 0);
   const vrb = wx.windDirDeg === null || wx.windDirDeg === undefined;
   out.live = !!wx.live;
-  out.source = out.live ? 'METAR WIND' : 'SCENARIO';
+  // A wet runway (0108) only ever comes from the METAR's rain, so it takes the source line.
+  out.wet = !!wx.wetRunway;
+  out.source = out.wet ? 'WET RWY' : out.live ? 'METAR WIND' : 'SCENARIO';
   out.calm = kts < 2;
   // The arrow reads these, so it always agrees with the text it sits beside.
   out.dirDeg = vrb ? null : wx.windDirDeg;
@@ -106,4 +177,24 @@ export function windReadout(wx, comps, out = {}) {
     out.hw = `${hw >= 0 ? 'HW' : 'TW'} ${Math.abs(hw)}`;
   }
   return out;
+}
+
+// The coach card (0130). Its CSS slot sits just over the touch deck; on a short screen held
+// upright (Safari with its bars, ~390x664; an iPhone SE, 375x548) that is over the speed tape's
+// low end, the SPD target label (baseline cy + 106), the stabilized-gate verdict (main.js
+// drawGateVerdict: cy + 76 to cy + 132 with two lines) and the ground just under the horizon, where
+// the runway and the PAPI are on a final (12% of the height is ~11° under the level horizon, cy, at
+// the portrait FOV cap). coachClearBottom is where that ends; coachOverHud says a card spanning
+// top..bottom crosses that band (from the tapes' top down); main.js then moves it to
+// COACH_TOP_SLOT, the sky under the top bar (its 44 px row starts 8 px down, or under the status
+// bar's inset when installed: styles.css adds env(safe-area-inset-top), this is the inset-0 case).
+export const COACH_TOP_SLOT = 58;
+export const GATE_VERDICT_BOTTOM = 132;
+
+export function coachClearBottom(h) {
+  const cy = h / 2;
+  return Math.max(cy + GATE_VERDICT_BOTTOM, cy + h * 0.12);
+}
+export function coachOverHud(h, top, bottom) {
+  return bottom > h / 2 + TAPE_TOP && top < coachClearBottom(h);
 }
