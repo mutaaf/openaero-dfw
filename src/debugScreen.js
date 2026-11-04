@@ -45,3 +45,6 @@ export function hooks(sim, scenario, arm, dead, ground) {
   // 0036: the dead-stick Cessna on Addison 16's final, distNm out, aglFt up.
   window.openaeroDebugDeadStick = (distNm, aglFt) => dead()?.debugFinal(sim, distNm, aglFt, ground);
 }
+
+// openaeroDebug().render: the last frame's draw calls and triangles (off the boot budget, 0144).
+export const renderInfo = (r) => r && { calls: r.info.render.calls, triangles: r.info.render.triangles };

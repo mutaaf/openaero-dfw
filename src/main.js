@@ -3470,13 +3470,12 @@ if (debugOverlay) {
 // Read-only snapshot for e2e tests and curious players (no setters, no globals mutated).
 window.openaeroDebug = () => {
   _euler.setFromQuaternion(sim.quat, 'YXZ');
-  const m = sim.loadedMission || missionByKey(sim.missionKey);
+  const m = sim.loadedMission || missionByKey(sim.missionKey), hdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
   return {
     mission: sim.missionKey,
     assist: sim.assist,
     trimAlphaDeg: sim.trimAlphaDeg,
     trimKts: sim.trimAlphaDeg == null ? null : trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex),
-    trimShown,
     speedLimitKts: sim.speedLimitKts ?? null,
     overspeed: !!sim.overspeed,
     stallKts: sim.stallKts ?? null,
@@ -3487,13 +3486,12 @@ window.openaeroDebug = () => {
     stick: { ...sim.stick },
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
-    crosswindMission: sim.crosswindMission ? { ...sim.crosswindMission } : null,
     activeRunway: sim.activeEnd?.id ?? null,
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
     hudAltCaption: { text: ALT_CAPTION, ..._altCap }, // the altitude tape's MSL tab (0132), canvas px
     runwayScreen: debugScreen?.runwayScreen(sim.activeEnd, camera, simCanvas, ground) ?? null,
-    headingDeg: (-_euler.y * RAD_TO_DEG + 360) % 360,
+    headingDeg: hdg,
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,
     elevInput: sim.elevInput,
@@ -3523,7 +3521,7 @@ window.openaeroDebug = () => {
     wxLive: sim.wx.live,
     wetRunway: !!sim.wetRunway,
     // The HUD wind box (0075): what it says and where it is (canvas px = CSS px).
-    hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, (-_euler.y * RAD_TO_DEG + 360) % 360), box: { ..._windBox } },
+    hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, hdg), box: { ..._windBox } },
     pixelRatio: resScale.ratio,
     paused: sim.paused,
     gfxLost: gfx.lost,
@@ -3532,7 +3530,6 @@ window.openaeroDebug = () => {
     wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
     cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,
-    cloudLayers: (sim.wx.cloudLayers || []).length,
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
     windsocks: windsocks ? windsocks.debug() : null,
     lastLanding: sim.lastLanding,
@@ -3546,7 +3543,7 @@ window.openaeroDebug = () => {
     landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
     photoreal: photoreal ? photoreal.debugState() : null, // photoreal.js (or its boot stand-in)
-    render: renderer ? { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles } : null,
+    render: debugScreen?.renderInfo(renderer) ?? null, // ?debug (debugScreen.js): draw calls, triangles
   };
 };
 

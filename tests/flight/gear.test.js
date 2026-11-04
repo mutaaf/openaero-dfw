@@ -192,7 +192,9 @@ describe('parked in a 25 kt METAR wind with the brakes set (ticket 0106)', () =>
         expect(Math.hypot(b.pos.x - x0, b.pos.z - z0)).toBeLessThan(0.3);
         expect(Math.abs(e.y - yaw0) / DEG_TO_RAD).toBeLessThan(2);
         expect(Math.abs(attitude(b).bankRightDeg - hdg0.bankRightDeg)).toBeLessThan(2);
-        expect(b.wheelLoads.every((l) => l > 0)).toBe(true);
+        // Three wheels on the runway; the C172's tail contact (0144, wheelLoads[3]) clear of it.
+        expect(b.wheelLoads.slice(0, 3).every((l) => l > 0)).toBe(true);
+        expect(b.wheelLoads[3] ?? 0).toBe(0);
       });
     }
   }

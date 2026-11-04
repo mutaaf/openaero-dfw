@@ -245,10 +245,11 @@ export function stepFlightModel(body, spec, dt) {
   ).normalize();
   body.quat.multiply(deltaRot).normalize();
 
-  // On the ground the gear and tail limit pitch: no rotating past the tailstrike angle.
+  // On the ground the gear and tail limit pitch: no rotating past the tailstrike angle. An
+  // airframe with a tail contact (gear.js, 0144) is held there by it, in the air too.
   if (body.onGround) {
     _euler.setFromQuaternion(body.quat, 'YXZ');
-    const maxP = (spec.maxGroundPitchDeg ?? 15) * DEG_TO_RAD;
+    const maxP = spec.gear?.tail ? 2 : (spec.maxGroundPitchDeg ?? 15) * DEG_TO_RAD;
     // With struts the nose gear holds the nose up; the floor is only a backstop.
     const minP = struts ? -0.12 : -0.05;
     if (_euler.x > maxP || _euler.x < minP) {

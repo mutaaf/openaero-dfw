@@ -24,6 +24,7 @@ import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
 import { DEADSTICK_KEY, createDeadStick, deadStickPrompt, kidGuide } from '../../src/deadStick.js';
 import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from '../../src/trim.js';
+import { radioAltitudeM } from '../../src/gear.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -767,6 +768,66 @@ describe('Cessna 172S stick-fixed takeoff (flightModel, ticket 0090)', () => {
   });
 });
 
+// Full aft stick at Vr (ticket 0144): a keyboard or touch player yanks the stick fully back the
+// moment the Cessna reaches 55 KIAS (through the game's 10/s stick lag) and holds it. The rotation
+// rate is the elevator against the mains' weight (gear.js tailVsMainsAccel) and the pitch damping;
+// the cross-check is our JSBSim C172 (Roskam's Cmδe −1.28, Cmq −12.4) flying the same step. The
+// tail (gear.js spec.gear.tail, JSBSim's TAIL contact) meets the runway at 15° about the mains:
+// before 0144 nothing stopped the rotation once the mains were up (pitch was clamped only while
+// a wheel touched, and snapped from ~45° back to 15° on the next touch), so the tail went ~2.1 m
+// into the runway at ~57°. The tail point here is a literal, so the card holds against old code.
+const TAIL_AFT_M = 3.297, TAIL_UP_M = 0.884; // c172.xml TAIL vs the main tyres' contact
+const _tail = new Vector3();
+function fullAftAtVr(flaps, seconds = 8) {
+  const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: takeoffTrimAoaDeg(c172, flaps) });
+  let t0 = null, rotQ = 0, lowTailM = Infinity, peakLowDeg = 0;
+  fly(b, c172, 40 + seconds, (x, dt) => {
+    if (t0 === null && x.iasKts >= c172.vrKts) t0 = x.t;
+    x.elevInput += ((t0 === null ? 0 : -1) - x.elevInput) * Math.min(1, dt * 10);
+  }, (x) => {
+    if (t0 === null) return false;
+    const pitch = attitude(x).pitchDeg;
+    // The rotation on the runway: the pitch rate until the nose is 12° up (short of the tail).
+    if (pitch < 12) rotQ = Math.max(rotQ, x.angVel.x * 180 / Math.PI);
+    if (radioAltitudeM(x, c172) < 5 / M_TO_FT) peakLowDeg = Math.max(peakLowDeg, pitch);
+    if (!noseWheelOn(x) && x.wheelLoads) {
+      _tail.set(0, -(c172.gearHeight + c172.gear.strokeM) + TAIL_UP_M, c172.gear.mainZ + TAIL_AFT_M).applyQuaternion(x.quat);
+      lowTailM = Math.min(lowTailM, x.pos.y + _tail.y - x.groundY);
+    }
+    return x.t - t0 >= seconds;
+  });
+  return { rotQ, lowTailM, peakLowDeg };
+}
+
+describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
+  afterAll(() => useFdm(null));
+  for (const flaps of [0, 1]) {
+    it(`flaps ${flaps * 10}: the rotation's pitch rate is within 30% of JSBSim's C172 for the same step`, async () => {
+      useFdm(null);
+      const fm = fullAftAtVr(flaps, 1.5);
+      useFdm(await nodeJsbsim());
+      const jsb = fullAftAtVr(flaps, 1.5);
+      useFdm(null);
+      console.log(`[c172] full aft at Vr flaps ${flaps * 10}: rotation ${fm.rotQ.toFixed(1)}°/s, JSBSim ${jsb.rotQ.toFixed(1)}°/s`);
+      within(fm.rotQ, jsb.rotQ, 0.3);
+    }, 30000);
+    it(`flaps ${flaps * 10}: held for 8 s, the tail meets the runway and stops there (never 10 cm into it; 2.1 m before 0144)`, () => {
+      useFdm(null);
+      const r = fullAftAtVr(flaps);
+      console.log(`[c172 flightModel] full aft at Vr flaps ${flaps * 10}: tail ${(r.lowTailM * 100).toFixed(1)} cm from the runway at its lowest, peak pitch ${r.peakLowDeg.toFixed(1)}° with the wheels under 5 ft`);
+      expect(r.lowTailM).toBeGreaterThan(-0.1);
+    });
+    // Both models then pitch on past 30° a few feet up (JSBSim ~37-42°, flightModel.js ~43°): the
+    // elevator's full 36.7° of α past the trim on Roskam's linear Cmα/Cmδe, which neither model
+    // breaks past the stall. A real 172's elevator runs out near the stall; that needs a cited
+    // post-stall pitching moment (ticket 0109).
+    it.fails(`KNOWN GAP (0109): flaps ${flaps * 10}, held: peak pitch under 20° while the wheels are under 5 ft`, () => {
+      useFdm(null);
+      expect(fullAftAtVr(flaps).peakLowDeg).toBeLessThan(20);
+    });
+  }
+});
+
 // Takeoff trim, hands off after the rotation (ticket 0141). Cessna 172S POH Section 4: the
 // before-takeoff checklist sets the elevator trim for takeoff; Normal Takeoff rotates at 55 KIAS
 // and climbs at 70-80 KIAS; Vy 74 KIAS (flaps up, sea level). The pilot flies Pilot as main.js
@@ -824,12 +885,38 @@ describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, t
     }
   });
   // Flaps 10 keeps 1.2 Vr (trim.js): Vy's lower nose leaves a held partial pull (touch, gamepad)
-  // short of speed and back on the runway (device panel, #177) until 0144 stops the over-rotation.
+  // short of speed and back on the runway (device panel, #177). 0144's tail contact stops the
+  // rotation on the runway, not the climb past 20° a few feet up: that waits on 0109.
   it('logs flaps 10 and the over-rotations (10-12°) it does not card', () => {
     for (const [flaps, pitches] of [[1, [6, 7, 8, 9, 10, 11, 12]], [0, [10, 11, 12]]]) for (const pitchDeg of pitches) {
       const r = handsOffTakeoff(flaps, pitchDeg);
       console.log(`[c172 flightModel] hands-off takeoff flaps ${flaps} ${pitchDeg}° (not carded): ${fmtTakeoff(r)}`);
       expect(r.rel).not.toBeNull();
+    }
+  });
+});
+
+// A held partial pull (touch, gamepad; 0144's criterion, still open): 40-60% of the stick held
+// from Vr until "positive rate" (wheels > 5 ft, > 300 fpm), then let go, on Vy's trim at flaps 10.
+// Measured after 0144: 40% back on the runway, 50-60% a stall warning and back on it (the nose
+// passes 25-32° first). The held stick's α past the stall is ticket 0109's post-stall pitch break.
+function heldPullTakeoff(pull, flaps) {
+  const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: trimAoaDeg(c172, POH_VY_KTS * KTS_TO_MPS, flaps) });
+  const warnKts = stallWarningKts(c172, flaps);
+  let rel = null, warned = false, landed = false;
+  fly(b, c172, 150, (x, dt) => {
+    if (rel === null && !x.onGround && radioAltitudeM(x, c172) * M_TO_FT > 5 && vsFpm(x) > 300) rel = x.t;
+    x.elevInput += ((rel === null && x.iasKts >= c172.vrKts ? -pull : 0) - x.elevInput) * Math.min(1, dt * 10);
+    if (rel !== null) { warned ||= isStallWarning(x.iasKts, warnKts, x.onGround); landed ||= x.onGround; }
+  }, (x) => rel !== null && x.t - rel >= 60);
+  return { rel, warned, landed };
+}
+describe('Cessna 172S held partial pull at Vr, flaps 10 on Vy trim (flightModel, ticket 0144)', () => {
+  it.fails('KNOWN GAP (0109): a 40-60% pull held to positive rate, then let go, climbs away without a stall warning', () => {
+    for (const pull of [0.4, 0.5, 0.6]) {
+      const r = heldPullTakeoff(pull, 1);
+      expect(r.rel).not.toBeNull();
+      expect(r.warned || r.landed).toBe(false);
     }
   });
 });

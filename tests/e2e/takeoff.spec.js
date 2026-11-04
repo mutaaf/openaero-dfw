@@ -48,7 +48,7 @@ test('Cessna takeoff with sound off: nothing spoken, rotate and positive rate st
   await page.click('#btnToga');
   await expect.poll(async () => (await debug(page)).takeoffCalls, { timeout: 60_000 }).toEqual(['rotate']);
   // Hold the nose up through the climb: a full aft key over-rotates the Cessna and it hops back on
-  // if let go the moment the wheels leave (0144; a race the CI load decides). Pilot's takeoff trim
+  // if let go the moment the wheels leave (its tail stops the rotation on the runway since 0144, not the climb past 20° a few feet up: 0109; a race the CI load decides). Pilot's takeoff trim
   // flies Vy since 0141, so a normal rotation let go at positive rate climbs away.
   await page.keyboard.down('ArrowUp');
   await expect.poll(async () => (await debug(page)).takeoffCalls, { timeout: 30_000 }).toEqual(['rotate', 'positive rate']);

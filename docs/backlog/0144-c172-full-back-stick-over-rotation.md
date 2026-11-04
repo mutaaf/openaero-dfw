@@ -1,7 +1,7 @@
 ---
 id: 0144
 title: C172 held back stick at Vr pitches up to ~45°/s, to ~57° a foot off the runway, then hops back on
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
@@ -31,12 +31,22 @@ obvious cross-check), and give the airframe a tail contact while the wheels are 
 of the ground (not only `onGround`).
 
 ## Acceptance criteria
-- [ ] Full aft stick held from Vr: peak pitch under ~20° while the wheels are under 5 ft
-- [ ] Within 30% of JSBSim's C172 pitch rate for the same step (new card in tests/flight)
-- [ ] A held 40-60% pull released at positive rate (touch, gamepad) climbs away at flaps 10
-- [ ] Then 0141's Vy takeoff trim can apply with flaps 10 too (trim.js takeoffTrimAoaDeg is flaps
-      up only until then): its hands-off card at flaps 10, held pulls included
-- [ ] Every c172.test.js card, the 0141 hands-off takeoff card and takeoff.spec still pass
+Shipped in part (the tail contact and the rotation rate). Measured: the rotation's pitch rate was
+never the fault: 38-39°/s against JSBSim's 41-43°/s for the same step (the C172 rotates on the
+elevator against the mains' weight in both). What lets the nose run to 40°+ a few feet up is the
+elevator's 36.7° of α past the trim on Roskam's linear Cmα/Cmδe, which our JSBSim C172 shares
+(it peaks at 37-42° under 5 ft too): that needs a cited post-stall pitching moment, ticket 0109,
+which now carries criteria 1, 3 and 4 as known-gap cards.
+- [ ] Full aft stick held from Vr: peak pitch under ~20° while the wheels are under 5 ft (0109;
+      `it.fails` card in c172.test.js, measured 41.6°)
+- [x] Within 30% of JSBSim's C172 pitch rate for the same step (new card in tests/flight)
+- [ ] A held 40-60% pull released at positive rate (touch, gamepad) climbs away at flaps 10 (0109;
+      `it.fails` card, measured: 40% back on the runway, 50-60% a stall warning first)
+- [ ] Then 0141's Vy takeoff trim can apply with flaps 10 too (0109)
+- [x] Every c172.test.js card, the 0141 hands-off takeoff card and takeoff.spec still pass
+- [x] (added) A tail contact while the wheels are near the ground, in the air too (gear.js
+      spec.gear.tail, JSBSim's TAIL point: 15.0° about the mains): the tail stops within 3 cm of
+      the runway; before, it went 2.1 m into it at ~57°
 
 ## Test plan
 tests/flight/c172.test.js: a full-aft-step card at Vr against the JSBSim model's pitch rate, and

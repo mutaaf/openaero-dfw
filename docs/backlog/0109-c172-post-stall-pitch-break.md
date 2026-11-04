@@ -29,6 +29,12 @@ effectiveness that falls with tail α) from it, and the same in public/jsbsim/ i
 - [ ] Full back stick after the stall settles at an α the source supports (flight card)
 - [ ] The stall-recovery cards, the hands-off and phugoid cards and the 0094 trim cards stay green
 
+- [ ] (from 0144) Full aft stick held from Vr: peak pitch under ~20° while the wheels are under
+      5 ft (c172.test.js `KNOWN GAP (0109)` cards, flaps 0 and 10; measured 41.6°, JSBSim 37-42°)
+- [ ] (from 0144) A 40-60% pull held from Vr to positive rate, then let go, climbs away at flaps
+      10 on Vy's trim without a stall warning (`KNOWN GAP (0109)` card); then trim.js
+      takeoffTrimAoaDeg can fly Vy with flaps 10 too
+
 ## Test plan
 Promote the `it.fails` card (α ≤ 40°) or replace its bound with the cited value; tighten the 45° bound on both models.
 
