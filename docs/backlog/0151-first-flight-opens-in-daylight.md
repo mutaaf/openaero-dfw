@@ -1,12 +1,12 @@
 ---
 id: 0151
 title: A first flight never opens in the dark: the preselected When? skips a dark Live
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 187
 ---
 
 ## Why
@@ -28,11 +28,11 @@ mission (night ILS, dusk) keeps its own sky as today (`missionSun`). Nothing is 
 (save data unchanged); a Live sun above -6° keeps Live as the default.
 
 ## Acceptance criteria
-- [ ] With the clock faked to 06:15 and 22:00 Dallas time, the start screen preselects Day and its line says "Today's midday in Dallas"
-- [ ] With the clock faked to 12:00 Dallas time, Live stays preselected and its line says "Live over Dallas"
-- [ ] Tapping Live while it is dark still gives the dark sky, labelled Live
-- [ ] The night and dusk missions are unchanged
-- [ ] Boot JS stays within the budget (move or inline, do not grow)
+- [x] With the clock faked to 06:15 and 22:00 Dallas time, the start screen preselects Day and its line says "Today's midday in Dallas"
+- [x] With the clock faked to 12:00 Dallas time, Live stays preselected and its line says "Live over Dallas"
+- [x] Tapping Live while it is dark still gives the dark sky, labelled Live
+- [x] The night and dusk missions are unchanged
+- [x] Boot JS stays within the budget (move or inline, do not grow)
 
 ## Test plan
 A pure `defaultTimeMode(sunElevationDeg)` unit test (above and below -6°, the edge); an e2e

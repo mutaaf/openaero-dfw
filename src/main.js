@@ -47,7 +47,7 @@ import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from './trim.js'
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
-import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
+import { TIME_MODES, sunPreset, sunDirection, skyForSun, defaultTimeMode } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
@@ -1428,6 +1428,8 @@ const NO_SKY = { nightness: 0, moonIllumination: 0, moonElevationDeg: -90 };
 const _overcast = new THREE.Color();
 const _skyDate = new Date();
 placeSun();
+sim.timeOfDayMode = defaultTimeMode(sun.elevationDeg); // 0151: Day, not a dark Live
+placeSun();
 
 // The sky dome for the sun of the moment, greyed by how much of it a low deck covers, and
 // the haze matched to its horizon. Moonlight lifts the night ambient.
@@ -2689,7 +2691,7 @@ const DALLAS_CLOCK = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chica
 function skyCaption(mode) {
   const st = skyDome?.state ?? NO_SKY;
   const el = Math.round(sun.elevationDeg);
-  const light = el > 6 ? `sun ${el}° up` : el > -1 ? 'sun on the horizon' : el > -6 ? 'twilight' : 'dark';
+  const light = el > 6 ? `sun ${el}° up` : el > -1 ? 'sun on the horizon' : sun.elevationDeg > -6 ? 'twilight' : 'dark';
   const moon = st.moonElevationDeg > 0 ? `Moon ${Math.round(st.moonIllumination * 100)}% lit, ${Math.round(st.moonElevationDeg)}° up` : 'Moon below the horizon';
   const when = mode === 'Now' ? `Live over Dallas, ${DALLAS_CLOCK.format(new Date(sun.at))}` : `Today's ${mode === 'Noon' ? 'midday' : mode.toLowerCase()} in Dallas, ${DALLAS_CLOCK.format(new Date(sun.at))}`;
   return `${when} · ${light} · ${moon}`;

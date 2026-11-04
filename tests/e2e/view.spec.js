@@ -31,6 +31,8 @@ test('clean view by default; H brings the panels back and it is remembered', asy
 });
 
 test('the start screen picks the time of day and says what the sky over Dallas is doing', async ({ page }) => {
+  // By day: a dark live sun preselects Day (0151, tests/e2e/firstFlightDaylight.spec.js).
+  await page.clock.setSystemTime(new Date('2026-11-04T18:00:00Z')); // 12:00 CST
   await page.goto(BASE);
   await expect(page.locator('#timePicker .btnTime.active')).toHaveText(/Live/);
   await expect(page.locator('#txtSkyNow')).toContainText('Live over Dallas');

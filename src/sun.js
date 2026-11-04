@@ -148,3 +148,7 @@ export function skyForSun(elevationDeg) {
   out.fog = out.horizon;
   return out;
 }
+
+// The start screen's When? before the player picks one (0151): a first flight never opens in the
+// dark. Below civil twilight (-6°) it preselects Noon (the Day chip); Live stays one tap away.
+export const defaultTimeMode = (elevationDeg) => (elevationDeg < -6 ? 2 : 0);

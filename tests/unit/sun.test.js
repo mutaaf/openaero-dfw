@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sunPosition, sunDirection, sunPreset, skyForSun, TIME_MODES } from '../../src/sun.js';
+import { sunPosition, sunDirection, sunPreset, skyForSun, TIME_MODES, defaultTimeMode } from '../../src/sun.js';
 
 // KDFW (32.8998 N, -97.0403 W).
 const LAT = 32.8998;
@@ -148,5 +148,26 @@ describe('sunPreset moment', () => {
       const again = sunPosition(new Date(s.at), LAT, LON);
       expect(again.elevationDeg).toBeCloseTo(s.elevationDeg, 6);
     }
+  });
+});
+
+// Ticket 0151: a first flight never opens in the dark. Below civil twilight (sun under -6°,
+// FAA-H-8083-3C teaches the approach by day first) the start screen preselects Day (Noon);
+// at -6° and above it keeps Live (Now).
+describe('defaultTimeMode', () => {
+  it('keeps Live while the sun is up or in civil twilight', () => {
+    for (const el of [60, 10, 0, -3, -6]) expect(TIME_MODES[defaultTimeMode(el)]).toBe('Now');
+  });
+  it('preselects Day once the live sun is below civil twilight', () => {
+    for (const el of [-6.01, -12, -46, -70]) expect(TIME_MODES[defaultTimeMode(el)]).toBe('Noon');
+  });
+  it('treats an unknown sun as daylight-safe Live (no NaN dark default)', () => {
+    expect(TIME_MODES[defaultTimeMode(NaN)]).toBe('Now');
+  });
+  it('at 06:15 and 22:00 Dallas time in November the live sun is dark (Day); at noon it is Live', () => {
+    const at = (iso) => defaultTimeMode(sunPreset('Now', new Date(iso), 32.8998, -97.0403).elevationDeg);
+    expect(TIME_MODES[at('2026-11-04T12:15:00Z')]).toBe('Noon'); // 06:15 CST
+    expect(TIME_MODES[at('2026-11-05T04:00:00Z')]).toBe('Noon'); // 22:00 CST
+    expect(TIME_MODES[at('2026-11-04T18:00:00Z')]).toBe('Now');  // 12:00 CST
   });
 });
