@@ -10,6 +10,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
   let engineOsc = null, engineFilter = null, engineGain = null;
   let windNoiseNode = null, windFilter = null, windGain = null;
   let stallOsc = null, stallGain = null;
+  let voice = null; const v = {}; // engineSound.js (0148, lazy)
 
   function init() {
     if (audioCtx) {
@@ -33,6 +34,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
       engineFilter.connect(engineGain);
       engineGain.connect(audioCtx.destination);
       engineOsc.start();
+      import('./engineSound.js').then((m) => { voice = m.engineVoice; }, () => {});
 
       // Wind rush noise synthesis
       const bufferSize = audioCtx.sampleRate * 2;
@@ -151,10 +153,13 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
     }
     if (!audioCtx || !sim.audioEnabled) return;
     const now = audioCtx.currentTime;
-    const basePitch = sim.aircraftKey === 'c172' ? 65 : 120;
-    const thr = sim.engineFailed ? 0 : sim.throttle; // a dead engine (0036) only windmills
-    engineOsc.frequency.setTargetAtTime(basePitch + thr * 240, now, 0.1);
-    engineGain.gain.setTargetAtTime(0.04 + thr * 0.08, now, 0.1);
+    // The spooled engine's voice (prop rpm, fan N1; 0148), silent the moment its chunk takes to arrive.
+    if (voice) {
+      voice(sim, v);
+      engineOsc.frequency.setTargetAtTime(v.hz, now, 0.1);
+      engineFilter.frequency.setTargetAtTime(v.filterHz, now, 0.1);
+      engineGain.gain.setTargetAtTime(v.gain, now, 0.1);
+    }
     const speedRatio = Math.min(sim.iasKts / 260, 1.6);
     windGain.gain.setTargetAtTime(0.015 + speedRatio * 0.065, now, 0.1);
     const stalling = isStallWarning(sim.iasKts, stallWarningKts(sim.spec, sim.flapsIndex), sim.onGround);
