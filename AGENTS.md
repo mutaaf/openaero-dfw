@@ -168,9 +168,10 @@ src/coach.js        landing coach on every final (0073): gear, flaps, speed, cen
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
 src/takeoffCoach.js the takeoff mission's coach (0093, lazy chunk loaded with the mission, behind the coach
                     checkbox; not on the RTO/engine-failure drills): full power, brakes off, centreline, rotate
-                    at Vr to ROTATE_PITCH_DEG (737 8°, FCTM; F-16 10°, its -1's 8-12°; Cessna 7°, unpublished),
-                    "ease the nose" 1° short of spec.maxGroundPitchDeg under 10 ft, positive rate gear up, the
-                    takeoff trim's climb speed; over at 1,000 ft. Feeds coach.js as s.ds/s.dsGround, adds its
+                    at Vr to ROTATE_PITCH_DEG (737 8°, FCTM; F-16 10°, the -1's 8-12° as quoted second-hand;
+                    Cessna 7°, unpublished), "ease the nose" 1° short of tailStrikeDeg under 10 ft (the 737's 11°,
+                    the Cessna's tail on static struts 13.7°), "slow" under 1.13 Vs, positive rate gear up, climb at
+                    the speed the takeoff trim flies at the flaps set (climbKts; the F-16 an attitude); over at 1,000 ft. Feeds coach.js as s.ds/s.dsGround, adds its
                     words/ranks; a prompt that left can't return for 4 s. Cards: tests/flight/takeoffCoach.test.js
 src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes the pilot's
                     input before stepFlightModel (physics untouched): bank/pitch/AoA

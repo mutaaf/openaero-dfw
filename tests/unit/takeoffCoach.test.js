@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { coachText, coachTarget, createCoach, stepCoach, COACH_MIN_HOLD_S } from '../../src/coach.js';
 import {
-  createTakeoffCoach, takeoffTarget, takeoffPrompt, takeoffWords, ROTATE_PITCH_DEG, REPEAT_S, DONE_FT, OFF_M,
+  createTakeoffCoach, takeoffTarget, takeoffPrompt, takeoffWords, takeoffPromptFor, climbKts, tailStrikeDeg,
+  ROTATE_PITCH_DEG, REPEAT_S, DONE_FT, OFF_M, SLOW_VS, TAIL_MARGIN_DEG,
 } from '../../src/takeoffCoach.js';
+import { stallSpeedKts } from '../../src/aero.js';
+import { trimSpeedKts, takeoffTrimAoaDeg } from '../../src/trim.js';
 
 // Ticket 0093: the takeoff coach, phase by phase, for the three airframes.
 const KEYS = ['c172', 'b738', 'f16'];
@@ -26,7 +29,7 @@ describe('takeoffTarget: the roll', () => {
       expect(takeoffTarget(st, atVr)).toBe('toRotate');
       expect(takeoffTarget(st, { ...atVr, pitchDeg: ROTATE_PITCH_DEG[key] })).toBe('toHold');
       // Near the tail-strike attitude: ease the nose, on the runway and in the first feet.
-      const tail = (spec.maxGroundPitchDeg ?? 15) - 0.5;
+      const tail = tailStrikeDeg(spec) - 0.5;
       expect(takeoffTarget(st, { ...atVr, pitchDeg: tail })).toBe('toEase');
       expect(takeoffTarget(st, { ...atVr, onGround: false, raFt: 4, vsiFpm: 400, pitchDeg: tail })).toBe('toEase');
       // The words carry this airframe's numbers.
@@ -35,32 +38,77 @@ describe('takeoffTarget: the roll', () => {
     });
   }
   it('the rotate pitch clears each airframe\'s tail-strike attitude by 3° or more', () => {
-    for (const key of KEYS) expect((AIRCRAFT_DATABASE[key].maxGroundPitchDeg ?? 15) - ROTATE_PITCH_DEG[key]).toBeGreaterThanOrEqual(3);
+    for (const key of KEYS) expect(tailStrikeDeg(AIRCRAFT_DATABASE[key]) - ROTATE_PITCH_DEG[key]).toBeGreaterThanOrEqual(3);
+  });
+  // Physics panel: the Cessna's tail first touches at ~14.2° on a pull below Vr (static struts,
+  // aircraft.js gear.tail), so its call is a degree short of 13.7°, not of 15°.
+  it('the Cessna is told to ease the nose by 12.7°, the 737 by 10°', () => {
+    expect(createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1).tailDeg).toBeCloseTo(13.7 - TAIL_MARGIN_DEG, 5);
+    expect(createTakeoffCoach('b738', AIRCRAFT_DATABASE.b738, 1).tailDeg).toBe(10);
   });
 });
 
 describe('takeoffTarget: the climb', () => {
   const air = { ...parked, onGround: false, throttle: 1, raFt: 40, aglFt: 50, vsiFpm: 800, pitchDeg: 9 };
-  it('737 and F-16: positive rate, gear up; then the climb speed', () => {
+  it('737 and F-16 (the mission\'s flaps notch 1): positive rate, gear up; then the climb', () => {
     for (const key of ['b738', 'f16']) {
       const spec = AIRCRAFT_DATABASE[key];
-      const st = createTakeoffCoach(key, spec);
-      const climb = { ...air, iasKts: spec.vrKts + 10 };
+      const st = createTakeoffCoach(key, spec, 1);
+      const climb = { ...air, iasKts: spec.vrKts + 15 };
       expect(takeoffTarget(st, climb)).toBe('toGear');
       expect(takeoffTarget(st, { ...climb, raFt: 3 })).toBe('toClimb'); // not before 5 ft
       expect(takeoffTarget(st, { ...climb, vsiFpm: 100 })).toBe('toClimb'); // not before positive rate
       expect(takeoffTarget(st, { ...climb, gearDown: false })).toBe('toClimb');
-      expect(coachText('toClimb')).toContain(`${Math.round(1.2 * spec.vrKts)} kt`);
     }
   });
-  it('Cessna: fixed gear, no gear call; climbs at Vy 74 kt (the takeoff trim, 0141)', () => {
-    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172);
-    expect(takeoffTarget(st, { ...air, iasKts: 65 })).toBe('toClimb');
-    expect(coachText('toClimb')).toContain('74 kt');
+  // Physics panel: the called speed is the one the takeoff trim flies at the flaps set (the Cessna
+  // takes off at flaps 10 here, trimmed for 1.2 Vr = 66 kt; Vy 74 only flaps up), so letting go
+  // agrees with the coach.
+  for (const key of ['c172', 'b738']) {
+    for (const flaps of [0, 1]) {
+      it(`${key} flaps ${flaps}: "hold N kt" is the takeoff trim's speed`, () => {
+        const spec = AIRCRAFT_DATABASE[key];
+        createTakeoffCoach(key, spec, flaps);
+        const trimKts = Math.round(trimSpeedKts(spec, takeoffTrimAoaDeg(spec, flaps), flaps));
+        expect(climbKts(spec, flaps)).toBe(trimKts);
+        expect(coachText('toClimb')).toBe(`Climbing: hold ${trimKts} kt, wings level`);
+      });
+    }
+  }
+  it('Cessna: 74 kt (Vy) flaps up, 66 kt at flaps 10', () => {
+    expect(climbKts(AIRCRAFT_DATABASE.c172, 0)).toBe(74);
+    expect(climbKts(AIRCRAFT_DATABASE.c172, 1)).toBe(66);
   });
-  it('slow after lift-off: lower the nose', () => {
-    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172);
-    expect(takeoffTarget(st, { ...air, iasKts: 50 })).toBe('toSlow');
+  it('F-16 (fly-by-wire: the trim holds no speed): an attitude, not a speed', () => {
+    createTakeoffCoach('f16', AIRCRAFT_DATABASE.f16, 1);
+    expect(climbKts(AIRCRAFT_DATABASE.f16, 1)).toBeNull();
+    expect(coachText('toClimb')).toBe('Climbing: nose 10° up, wings level');
+  });
+  it('Cessna: fixed gear, no gear call', () => {
+    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1);
+    expect(takeoffTarget(st, { ...air, iasKts: 65 })).toBe('toClimb');
+  });
+  // Physics panel: Vr - 3 was ~1.05 Vs; "Slow" now starts at 1.13 Vs (V2's floor) for the flaps set.
+  for (const key of KEYS) {
+    it(`${key}: "Slow" from below 1.13 Vs at the flaps set`, () => {
+      const spec = AIRCRAFT_DATABASE[key];
+      const st = createTakeoffCoach(key, spec, 1);
+      const floor = SLOW_VS * stallSpeedKts(spec, 1);
+      expect(st.slowKts).toBeGreaterThanOrEqual(floor);
+      expect(takeoffTarget(st, { ...air, iasKts: floor - 1 })).toBe('toSlow');
+      expect(takeoffTarget(st, { ...air, iasKts: Math.max(floor, spec.vrKts) + 1, vsiFpm: 100 })).toBe('toClimb');
+    });
+  }
+  it('a flap notch changed on the roll re-words the climb speed (main.js passes the sim)', () => {
+    const spec = AIRCRAFT_DATABASE.c172;
+    const st = createTakeoffCoach('c172', spec, 1);
+    const sim = { aircraftKey: 'c172', spec, flapsIndex: 0, onGround: true, raFt: 0, aglFt: 5, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, assist: 'pilot', approach: { crossM: 0 }, simTime: 0 };
+    takeoffPromptFor(st, sim, 0);
+    expect(coachText('toClimb')).toContain('74 kt');
+    sim.aircraftKey = 'b738'; sim.spec = AIRCRAFT_DATABASE.b738; sim.flapsIndex = 1;
+    takeoffPromptFor(st, sim, 0);
+    expect(st.vrKts).toBe(135);
+    expect(coachText('toRoll')).toContain('135 kt');
   });
   it(`over above ${DONE_FT} ft, for good`, () => {
     const st = createTakeoffCoach('b738', AIRCRAFT_DATABASE.b738);
