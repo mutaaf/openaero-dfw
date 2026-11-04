@@ -52,6 +52,12 @@ const FLOOR_BELOW_M = 150;    // Kid ground floor: below ~500 ft no dive steeper
 const FLOOR_GAMMA_DEG = -4;   // …a 4° descent (a 3° glidepath still fits)
 const TAIL_MARGIN_DEG = 2;    // Kid auto-flare keeps the tail this far off the runway
 const GUIDE_RATE_DEG_S = 2;   // Kid hands-off: the held pitch eases toward the guide this fast
+// Kid's de-crab (0100): below the coordination's height (COORD_FROM_M), coming down, the rudder lines the nose up
+// with the ground track: this much rudder per degree of drift, less 0.3 per °/s of yaw rate (DECRAB_DAMP is per
+// rad/s; without the damping it swung against the fin). Tuned headless (tests/flight/pattern.test.js, kidFinal.test.js): from
+// higher up the longer slip sank faster (5 m: ~250-300 fpm against ~205-215).
+const DECRAB_GAIN = 0.4;
+const DECRAB_DAMP = 17;
 
 // departing: Kid left the ground (takeoff or touch-and-go) and has not yet reached 1,000 ft:
 // main.js climbs at full power instead of flying the approach speed and the flare retard.
@@ -71,7 +77,9 @@ export function updateDeparture(st, onGround, aglFt) {
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
 //      localizer bank and glidepath angle on a final), rwyHdgDeg, noseHdgDeg, crossM, crossVelMps,
 //      steerRateDegS (on the runway: its true heading or null off it, the nose's, the offset and
-//      drift right of its centreline, full pedal's steered yaw rate; 0110), noFloor (no engine, 0036: the glide is
+//      drift right of its centreline, full pedal's steered yaw rate; 0110), driftDeg (in the air: the
+//      nose minus the ground track, + = nose right of it, the crab into a wind from the right) and yawRateRight
+//      (rad/s, + = nose right; Kid's de-crab, 0100), noFloor (no engine, 0036: the glide is
 //      steeper than the floor, and holding the floor would only slow it to a mush) }
 // Writes out.elev, out.ail, out.rud (surface commands, -1..1); returns out. No allocation.
 export function shapeControls(cfg, st, s, dt, out) {
@@ -140,7 +148,10 @@ export function shapeControls(cfg, st, s, dt, out) {
   // a positive, from-the-right sideslip).
   // Not with the wheels just off the runway (lift-off, a skip): a crosswind's sideslip there asks for
   // full pedal, which the nose wheel turns into a swerve when they touch again (0110).
+  // Kid's flare, coming down: the rudder lines the nose up with the ground track (0100; FAA-H-8083-3C
+  // ch. 9: the crab is taken out just before touchdown), so the wheels roll where the airplane goes.
   out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn
+    : cfg.autoFlare && s.wheelHeightM < COORD_FROM_M && s.vsMps < 0 ? clamp(-s.driftDeg * DECRAB_GAIN - s.yawRateRight * DECRAB_DAMP, -1, 1)
     : s.wheelHeightM < COORD_FROM_M ? 0 : clamp(s.betaDeg * COORD_GAIN, -1, 1);
   return out;
 }

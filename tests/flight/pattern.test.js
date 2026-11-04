@@ -10,12 +10,13 @@ import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
-import { trimThrottle } from '../../src/flightModel.js';
+import { trimThrottle, dihedralAileron } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
-import { stallAoaDeg } from '../../src/aero.js';
+import { stallAoaDeg, headingError } from '../../src/aero.js';
 import { autothrottleCommand } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, selectActiveRunway } from '../../src/airports.js';
-import { assistConfig, createAssistState, shapeControls, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
+import { driftAngleDeg } from '../../src/landing.js';
 import { missionByKey } from '../../src/missions.js';
 import { PATTERN_KEY, createPattern, kidGuide, patternPrompt, patternLeg, PT_TPA_FT } from '../../src/pattern.js';
 import { makeBody, fly, attitude } from './harness.js';
@@ -25,7 +26,7 @@ const flat = (e) => ({ ...e, thrY: 0 });
 const _e = new Euler();
 
 // Kid, hands off, from the spawn to the touchdown. wind: { fromDeg, kts } (steady).
-function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
+function flyPattern({ fromDeg = 0, kts = 0 } = {}, { rollS = 0 } = {}) {
   const m = missionByKey(PATTERN_KEY);
   const cfg = assistConfig('kid');
   const ast = createAssistState();
@@ -48,6 +49,7 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
   const prompts = [], legs = [];
   const rec = { maxBank: 0, maxDistNm: 0, minIas: Infinity, downwindAlt: [], baseTurnAlongM: null, finalFt: null };
   let td = null;
+  const roll = { maxCrossM: 0 };
   fly(b, c172, 400, (x, dt) => {
     sim.aglFt = (x.pos.y - c172.gearHeight) * M_TO_FT; sim.iasKts = x.iasKts; sim.flapsIndex = x.flapsIndex;
     // main.js picks the runway you're lined up on twice a second.
@@ -65,13 +67,23 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
     if (e) kidFinalGuide(e, ap, -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s);
     kidGuide(st, sim, s);
     Object.assign(s, {
-      pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
-      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: 0, stallAoaDeg: stallAoaDeg(c172, x.flapsIndex),
+      pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, yawRateRight: -x.angVel.y,
+      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * Math.PI / 180), stallAoaDeg: stallAoaDeg(c172, x.flapsIndex),
       tailstrikeDeg: c172.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, wheelHeightM: x.pos.y - c172.gearHeight,
-      airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS,
+      airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, flarePerS: c172.kidFlarePerS,
+      driftDeg: headingError(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI),
     });
+    // main.js runwayUnderWheels (0110): on the runway, Kid's pedals hold its centreline.
+    s.rwyHdgDeg = null;
+    if (x.onGround && ap && Math.abs(ap.crossM) < e.widthM / 2 + 3) {
+      const r = e.hdgT * Math.PI / 180, g = c172.gear;
+      s.rwyHdgDeg = e.hdgT; s.noseHdgDeg = -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI;
+      s.crossM = ap.crossM; s.crossVelMps = x.vel.x * Math.cos(r) + x.vel.z * Math.sin(r);
+      s.steerRateDegS = Math.hypot(x.vel.x, x.vel.z) * Math.tan(g.steerDeg * Math.PI / 180) / (g.noseZ + g.mainZ) * 180 / Math.PI;
+    }
     shapeControls(cfg, ast, s, dt, out);
-    x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
+    x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = slewRudder(x.rudderInput, out.rud, dt);
+    if (td) roll.maxCrossM = Math.max(roll.maxCrossM, Math.abs(ap.crossM));
     if (x.onGround) { x.throttle = 0; x.brakesOn = true; return; }
     // Kid's flaps and power (main.js applyAssists).
     conf.flapsIndex = x.flapsIndex;
@@ -103,12 +115,14 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}) {
   }, (x) => {
     if (x.onGround && !td) {
       const g = approachGeometry(st.end, x.pos);
-      td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t, flaps: x.flapsIndex };
-      return true;
+      const noseDeg = -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI;
+      td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t, flaps: x.flapsIndex,
+        driftDeg: driftAngleDeg(noseDeg, x.vel.x, x.vel.z), bankDeg: attitude(x).bankRightDeg };
+      return rollS <= 0;
     }
-    return false;
+    return td !== null && x.t - td.t >= rollS;
   });
-  return { td, prompts: prompts.filter((p) => p !== null), legs, rec };
+  return { td, prompts: prompts.filter((p) => p !== null), legs, rec, roll };
 }
 
 const XWIND = { fromDeg: 250, kts: 10 };
@@ -146,4 +160,28 @@ describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spaw
       expect(prompts).not.toContain('ptLow');
     });
   }
+});
+
+// Ticket 0100: Kid flew the crab down to the runway (0097: the final flies the ground track) and
+// touched down 9-10° off it in a 10 kt crosswind, 14-15° in 15 kt: the wheels rolled sideways. Kid's
+// rudder now takes the crab out in the last few feet (FAA-H-8083-3C ch. 9: the crosswind flare), and on
+// the runway the pedals hold its centreline (0110), here for 20 s of the rollout (brakes on, idle).
+// The slip costs a little sink (~185 → ~205-220 fpm, inside landing.js's 240 for full rate marks).
+describe('Kid de-crabs the Cessna in a crosswind and holds the centreline on the rollout (flightModel, ticket 0100)', () => {
+  for (const [name, wind] of [['10 kt from the right (250°)', XWIND], ['10 kt from the left (070°)', { fromDeg: 70, kts: 10 }], ['15 kt from the right (250°)', { fromDeg: 250, kts: 15 }]]) {
+    it(`${name}: touches down within 2° of the track, wings near level, and rolls within 8 m of the centreline`, () => {
+      const { td, roll } = flyPattern(wind, { rollS: 20 });
+      console.log(`[c172 flightModel] pattern ${name}: touchdown drift ${td.driftDeg.toFixed(1)}°, bank ${td.bankDeg.toFixed(1)}°, ${td.vsFpm.toFixed(0)} fpm, ${td.crossM.toFixed(1)} m off; rollout 20 s, at most ${roll.maxCrossM.toFixed(1)} m off`);
+      expect(Math.abs(td.driftDeg)).toBeLessThan(2);
+      expect(Math.abs(td.bankDeg)).toBeLessThan(5); // Kid's flare bank cap (a wingtip strikes past ~10°)
+      expect(td.vsFpm).toBeGreaterThan(-240);
+      expect(roll.maxCrossM).toBeLessThan(8);
+    });
+  }
+  it('calm: no rudder to give, the touchdown and rollout are as before', () => {
+    const { td, roll } = flyPattern({}, { rollS: 20 });
+    expect(Math.abs(td.driftDeg)).toBeLessThan(0.5);
+    expect(roll.maxCrossM).toBeLessThan(1);
+    expect(td.vsFpm).toBeGreaterThan(-200); // ~185 fpm, as before 0100
+  });
 });

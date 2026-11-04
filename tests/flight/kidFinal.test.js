@@ -8,12 +8,13 @@ import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
-import { trimThrottle } from '../../src/flightModel.js';
+import { trimThrottle, dihedralAileron } from '../../src/flightModel.js';
+import { driftAngleDeg } from '../../src/landing.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src/airports.js';
-import { assistConfig, createAssistState, shapeControls, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
 import { missionByKey } from '../../src/missions.js';
 import { makeBody, fly, attitude } from './harness.js';
 
@@ -61,12 +62,13 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     kidFinalGuide(end, ap, noseDeg, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s);
     Object.assign(s, {
       pitchIn: stick ? stick(wheelM * M_TO_FT) : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
-      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex),
+      yawRateRight: -x.angVel.y, driftDeg: driftAngleDeg(noseDeg, x.vel.x, x.vel.z),
+      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * DEG_TO_RAD), stallAoaDeg: stallAoaDeg(spec, x.flapsIndex),
       tailstrikeDeg: spec.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, wheelHeightM: wheelM,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, flarePerS: spec.kidFlarePerS,
     });
     shapeControls(cfg, ast, s, dt, out);
-    x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
+    x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = slewRudder(x.rudderInput, out.rud, dt); // main.js applyAssists
     // Kid's gear, flaps and power (main.js applyAssists).
     conf.flapsIndex = x.flapsIndex; conf.gearDown = x.gearDown;
     autoConfigure(spec, { onGround: false, vsiFpm: x.vel.y * M_TO_FT * 60, aglFt: wheelM * M_TO_FT, iasKts: x.iasKts }, conf);
@@ -83,13 +85,14 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   }, (x) => {
     if (!x.onGround) return false;
     const g = approachGeometry(end, x.pos);
-    td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t };
+    td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t,
+      driftDeg: driftAngleDeg(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, x.vel.x, x.vel.z), bankDeg: attitude(x).bankRightDeg };
     return true;
   });
   return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi };
 }
 
-const log = (ac, key, name, { td, thrFt }) => console.log(`[${ac} kid final] ${key} ${name}: threshold ${thrFt?.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, ${td && td.t.toFixed(0)} s`);
+const log = (ac, key, name, { td, thrFt }) => console.log(`[${ac} kid final] ${key} ${name}: threshold ${thrFt?.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, drift ${td && td.driftDeg.toFixed(1)}°, bank ${td && td.bankDeg.toFixed(1)}°, ${td && td.t.toFixed(0)} s`);
 // Down the 3° path, over the threshold near its ~50 ft (AIM 2-1-2: TCH; aim point 1,000 ft in),
 // on the centreline, gently.
 function expectLanded({ td, thrFt }) {
@@ -196,6 +199,28 @@ describe('Kid let go over the runway (flightModel, ticket 0098 panel)', () => {
       const r = flyKidFinal('b738', 'kdfw_35c_final', {}, { pastM: 500, ft });
       expect(r.minVsFpm).toBeGreaterThan(-500);
       if (r.td) expect(r.td.pastThrM).toBeGreaterThan(4084); // never touches down on what's left of 35C
+    });
+  }
+});
+
+// Ticket 0100: the straight-in finals in a crosswind. Without the de-crab the Cessna touched down
+// 9-10° off its track in 10 kt (~19° in 20 kt) and the 737 3.5-7.5° (10-20 kt).
+describe('Kid de-crabs before touchdown in a crosswind (flightModel, ticket 0100)', () => {
+  for (const [ac, key, name, wind] of [
+    ['c172', 'kads_16_final', '10 kt from the right (250°)', { fromDeg: 250, kts: 10 }],
+    ['c172', 'kads_16_final', '20 kt from the left (090°)', { fromDeg: 90, kts: 20 }],
+    ['b738', 'kdfw_35c_final', '10 kt from the left (270°)', { fromDeg: 270, kts: 10 }],
+    ['b738', 'kdfw_35c_final', '15 kt quartering tailwind (250°)', { fromDeg: 250, kts: 15 }],
+    ['b738', 'kdfw_35c_final', '20 kt from the right (090°)', { fromDeg: 90, kts: 20 }],
+  ]) {
+    it(`${ac} ${key}, ${name}: wheels within ${ac === 'c172' && wind.kts > 15 ? 3 : 2}° of the track, gently, on the centreline`, () => {
+      const r = flyKidFinal(ac, key, wind);
+      log(ac, key, name, r);
+      expectLanded(r);
+      // 20 kt is past the C172's 15 kt demonstrated crosswind (POH Sec. 4): within 3°.
+      expect(Math.abs(r.td.driftDeg)).toBeLessThan(ac === 'c172' && wind.kts > 15 ? 3 : 2);
+      expect(Math.abs(r.td.bankDeg)).toBeLessThan(5);
+      expect(r.td.vsFpm).toBeGreaterThan(-240);
     });
   }
 });
