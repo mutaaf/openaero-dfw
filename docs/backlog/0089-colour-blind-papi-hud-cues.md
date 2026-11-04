@@ -1,12 +1,12 @@
 ---
 id: 0089
 title: Colour-blind and low-vision pass on the PAPI and HUD cues
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: accessibility
 created: 2026-10-24
-pr:
+pr: 184
 ---
 
 ## Why
