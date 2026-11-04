@@ -2691,7 +2691,7 @@ const DALLAS_CLOCK = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chica
 function skyCaption(mode) {
   const st = skyDome?.state ?? NO_SKY;
   const el = Math.round(sun.elevationDeg);
-  const light = el > 6 ? `sun ${el}° up` : el > -1 ? 'sun on the horizon' : el > -6 ? 'twilight' : 'dark';
+  const light = el > 6 ? `sun ${el}° up` : el > -1 ? 'sun on the horizon' : sun.elevationDeg > -6 ? 'twilight' : 'dark';
   const moon = st.moonElevationDeg > 0 ? `Moon ${Math.round(st.moonIllumination * 100)}% lit, ${Math.round(st.moonElevationDeg)}° up` : 'Moon below the horizon';
   const when = mode === 'Now' ? `Live over Dallas, ${DALLAS_CLOCK.format(new Date(sun.at))}` : `Today's ${mode === 'Noon' ? 'midday' : mode.toLowerCase()} in Dallas, ${DALLAS_CLOCK.format(new Date(sun.at))}`;
   return `${when} · ${light} · ${moon}`;

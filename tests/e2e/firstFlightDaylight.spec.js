@@ -4,7 +4,7 @@ import { BASE, stubTiles, collectErrors } from './helpers.js';
 // Ticket 0151: a first flight never opens in the dark. With no When? picked this visit and the
 // live sun below civil twilight (-6°), the start screen preselects Day; Live stays one tap away
 // and still gives the real (dark) sky. Dallas is on CST (UTC-6) in November 2026.
-const DARK_MORNING = '2026-11-04T12:15:00Z'; // 06:15 CST, sun ~-12°
+const DARK_MORNING = '2026-11-04T12:15:00Z'; // 06:15 CST, sun ~-7.6° (just past civil twilight's -6°)
 const LATE_EVENING = '2026-11-05T04:00:00Z'; // 22:00 CST
 const NOON = '2026-11-04T18:00:00Z'; // 12:00 CST
 
