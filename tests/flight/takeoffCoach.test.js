@@ -11,7 +11,8 @@ import { elevatorForPitch } from '../../src/autopilot.js';
 import { takeoffTrimAoaDeg } from '../../src/trim.js';
 import { radioAltitudeM } from '../../src/gear.js';
 import { M_TO_FT } from '../../src/constants.js';
-import { ROTATE_PITCH_DEG, TAIL_MARGIN_DEG, createTakeoffCoach, takeoffTarget, tailStrikeDeg } from '../../src/takeoffCoach.js';
+import { ROTATE_PITCH_DEG, TAIL_MARGIN_DEG, createTakeoffCoach, takeoffTarget, tailStrikeDeg, slowKtsFor } from '../../src/takeoffCoach.js';
+import { stallSpeedKts } from '../../src/aero.js';
 import { makeBody, fly, attitude, vsFpm } from './harness.js';
 
 const coachIn = (x, raFt, pitchDeg) => ({
@@ -26,6 +27,7 @@ function coachedTakeoff(key) {
   let vrT = null, liftT = null, liftKts = null, lowPeakDeg = 0, rollFt = 0;
   // The coach watching the same flight (its own logic, not only the attitude): what it said.
   const st = createTakeoffCoach(key, spec, 1);
+  st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1)); // main.js's sim.stallKts
   const said = new Set();
   fly(b, spec, 120, (x, dt) => {
     if (vrT === null && x.iasKts >= spec.vrKts) vrT = x.t;

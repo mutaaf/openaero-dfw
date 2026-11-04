@@ -28,9 +28,19 @@ test('737 takeoff with the coach: full power, rotate to 8°, positive rate gear 
   await expect(page.locator('#txtCoach')).toHaveText(/Full power/, { timeout: 10_000 });
   await page.click('#btnToga');
   await expect.poll(() => page.evaluate(() => window.__coach), { timeout: 90_000 }).toContainEqual('Rotate: nose up (S or ↑) to 8°');
-  await page.keyboard.down('ArrowUp');
-  await expect.poll(async () => (await debug(page)).onGround, { timeout: 20_000 }).toBe(false);
-  await page.keyboard.up('ArrowUp');
+  // Nose up to the attitude and let go there (the takeoff trim climbs it): held to lift-off, a slow
+  // runner's frames over-rotated it past "Too steep" (device panel).
+  // Let go inside the page on the frame it passes 6° (a poll from the test lags by up to a second of a busy
+  // runner's sim time, and the nose went on to "Too steep": a true call for that pull, device panel).
+  await page.evaluate(() => new Promise((done) => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowUp', key: 'ArrowUp' }));
+    const watch = () => {
+      if (window.openaeroDebug().pitchDeg > 6) { window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowUp', key: 'ArrowUp' })); done(); }
+      else requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+  }));
+  await expect.poll(async () => (await debug(page)).onGround, { timeout: 30_000 }).toBe(false);
   await expect.poll(() => page.evaluate(() => window.__coach), { timeout: 30_000 }).toContainEqual('Positive rate: gear up (G)');
   const shown = await page.evaluate(() => window.__coach);
   const i = (re) => shown.findIndex((t) => re.test(t));

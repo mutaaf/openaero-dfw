@@ -3,13 +3,15 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { coachText, coachTarget, createCoach, stepCoach, COACH_MIN_HOLD_S } from '../../src/coach.js';
 import {
   createTakeoffCoach, takeoffTarget, takeoffPrompt, takeoffWords, takeoffPromptFor, climbKts, tailStrikeDeg,
-  ROTATE_PITCH_DEG, REPEAT_S, DONE_FT, OFF_M, SLOW_VS, TAIL_MARGIN_DEG,
+  ROTATE_PITCH_DEG, REPEAT_S, DONE_FT, OFF_M, SLOW_VS, TAIL_MARGIN_DEG, slowKtsFor,
 } from '../../src/takeoffCoach.js';
 import { stallSpeedKts } from '../../src/aero.js';
 import { trimSpeedKts, takeoffTrimAoaDeg } from '../../src/trim.js';
 
 // Ticket 0093: the takeoff coach, phase by phase, for the three airframes.
 const KEYS = ['c172', 'b738', 'f16'];
+// A coach past its takeoff roll (the climb's prompts need one) and past its first quiet frame.
+const rolled = (st) => Object.assign(st, { rolled: true, blank: false });
 const parked = { onGround: true, raFt: 0, aglFt: 5, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, kid: false, crossM: 0, crossRateMps: 0, halfWidthM: 23, pitchDeg: 0, pitchRateDegS: 0, autoSteer: false };
 
 describe('takeoffTarget: the roll', () => {
@@ -56,7 +58,7 @@ describe('takeoffTarget: the climb', () => {
   it('737 and F-16 (the mission\'s flaps notch 1): positive rate, gear up; then the climb', () => {
     for (const key of ['b738', 'f16']) {
       const spec = AIRCRAFT_DATABASE[key];
-      const st = createTakeoffCoach(key, spec, 1);
+      const st = rolled(createTakeoffCoach(key, spec, 1));
       const climb = { ...air, iasKts: spec.vrKts + 15 };
       expect(takeoffTarget(st, climb)).toBe('toGear');
       expect(takeoffTarget(st, { ...climb, raFt: 3 })).toBe('toClimb'); // not before 5 ft
@@ -88,14 +90,15 @@ describe('takeoffTarget: the climb', () => {
     expect(coachText('toClimb')).toBe('Climbing: nose 10° up, wings level');
   });
   it('Cessna: fixed gear, no gear call', () => {
-    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1);
+    const st = rolled(createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1));
     expect(takeoffTarget(st, { ...air, iasKts: 65 })).toBe('toClimb');
   });
   // Physics panel: Vr - 3 was ~1.05 Vs; "Slow" now starts at 1.13 Vs (V2's floor) for the flaps set.
   for (const key of KEYS) {
     it(`${key}: "Slow" from below 1.13 Vs at the flaps set`, () => {
       const spec = AIRCRAFT_DATABASE[key];
-      const st = createTakeoffCoach(key, spec, 1);
+      const st = rolled(createTakeoffCoach(key, spec, 1));
+      st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1)); // as takeoffPromptFor reads sim.stallKts
       const floor = SLOW_VS * stallSpeedKts(spec, 1);
       expect(st.slowKts).toBeGreaterThanOrEqual(floor);
       expect(takeoffTarget(st, { ...air, iasKts: floor - 1 })).toBe('toSlow');
@@ -157,7 +160,7 @@ describe('words', () => {
 describe('takeoffPrompt: no repeat within 4 s', () => {
   it('a prompt that just left holds the one showing instead of coming back', () => {
     const spec = AIRCRAFT_DATABASE.b738;
-    const st = createTakeoffCoach('b738', spec);
+    const st = Object.assign(createTakeoffCoach('b738', spec), { blank: false });
     const roll = { ...parked, throttle: 1, iasKts: 60, gsKts: 60 };
     const off = { ...roll, crossM: OFF_M + 1 };
     expect(takeoffPrompt(st, off, 10)).toBe('toRight');
@@ -167,10 +170,11 @@ describe('takeoffPrompt: no repeat within 4 s', () => {
   });
   it('the tail-strike call is never held back', () => {
     const spec = AIRCRAFT_DATABASE.b738;
-    const st = createTakeoffCoach('b738', spec);
+    const st = Object.assign(createTakeoffCoach('b738', spec), { blank: false });
     const atVr = { ...parked, throttle: 1, iasKts: spec.vrKts, gsKts: spec.vrKts };
     expect(takeoffPrompt(st, { ...atVr, pitchDeg: 10.5 }, 20)).toBe('toEase');
-    expect(takeoffPrompt(st, { ...atVr, pitchDeg: 8 }, 20.5)).toBe('toHold');
+    expect(takeoffPrompt(st, { ...atVr, pitchDeg: 8 }, 20.5)).toBeNull(); // the card clears at once
+    expect(takeoffPrompt(st, { ...atVr, pitchDeg: 8 }, 20.6)).toBe('toHold');
     expect(takeoffPrompt(st, { ...atVr, pitchDeg: 10.5 }, 21)).toBe('toEase');
   });
 });
@@ -178,7 +182,7 @@ describe('takeoffPrompt: no repeat within 4 s', () => {
 describe('through coach.js (the card main.js shows)', () => {
   it('the roll then the rotation: debounced and rotate interrupts at once', () => {
     const spec = AIRCRAFT_DATABASE.c172;
-    const st = createTakeoffCoach('c172', spec);
+    const st = Object.assign(createTakeoffCoach('c172', spec), { blank: false });
     const c = createCoach();
     const step = (s, t, dt) => { const k = takeoffPrompt(st, s, t); return stepCoach(c, { ...s, autopilot: false, ds: k, dsGround: s.onGround ? k : null }, dt); };
     step(parked, 0, 0.1);
@@ -225,13 +229,14 @@ describe('first-timer panel', () => {
     expect(takeoffTarget(st, { ...roll, crossM: 8, autoSteer: true, kid: true })).toBe('toKidRoll');
   });
   it('too steep after lift-off (a held pull): nose down, above the gear call', () => {
-    const st = createTakeoffCoach('b738', spec, 1);
-    const air = { ...parked, onGround: false, throttle: 1, raFt: 40, aglFt: 50, vsiFpm: 3000, iasKts: 160, pitchDeg: 30 };
-    expect(takeoffTarget(st, air)).toBe('toSteep');
+    const st = rolled(createTakeoffCoach('b738', spec, 1));
+    const air = { ...parked, onGround: false, throttle: 1, raFt: 40, aglFt: 50, vsiFpm: 3000, iasKts: 150, pitchDeg: 30 };
+    expect(takeoffTarget(st, air)).toBe('toSteep'); // 30° and 12 kt short of 162: the speed is going
     expect(takeoffTarget(st, { ...air, pitchDeg: 15 })).toBe('toGear'); // a 737's normal climb attitude
+    expect(takeoffTarget(st, { ...air, pitchDeg: 19, iasKts: 162 })).toBe('toGear'); // trimmed at takeoff thrust: steep, not slow
   });
   it('a hop back onto the runway ends it: the landing grade has the card, not "rotate"', () => {
-    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1);
+    const st = rolled(createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1));
     takeoffTarget(st, { ...parked, onGround: false, throttle: 1, raFt: 8, aglFt: 12, iasKts: 60, gsKts: 60, vsiFpm: 300, pitchDeg: 7 });
     expect(takeoffTarget(st, { ...parked, throttle: 1, iasKts: 60, gsKts: 60 })).toBeNull();
     expect(st.over).toBe(true);
@@ -255,5 +260,33 @@ describe('first-timer panel', () => {
     expect(w.keys.toRotate).toMatch(/S or ↑/);
     expect(w.keys.toKidPower).toMatch(/Shift/);
     expect(w.keys.toLeft).toMatch(/\(E\)/);
+  });
+});
+
+describe('device panel', () => {
+  it('no air prompts before a takeoff roll (an airframe swapped in drops onto its struts)', () => {
+    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1);
+    expect(takeoffTarget(st, { ...parked, onGround: false, raFt: 20, aglFt: 25 })).toBeNull();
+    expect(st.flew).toBe(false);
+    expect(takeoffTarget(st, parked)).toBe('toPower');
+  });
+  it('the tail call clears at once into the climb (a lower rank would linger 1.5 s)', () => {
+    const spec = AIRCRAFT_DATABASE.b738;
+    const st = Object.assign(createTakeoffCoach('b738', spec, 1), { blank: false, rolled: true });
+    const lift = { ...parked, onGround: false, throttle: 1, raFt: 6, aglFt: 15, iasKts: 150, gsKts: 150, vsiFpm: 1500, pitchDeg: 10.5 };
+    expect(takeoffPrompt(st, lift, 30)).toBe('toEase');
+    expect(takeoffPrompt(st, { ...lift, raFt: 12, pitchDeg: 12 }, 30.1)).toBeNull();
+    expect(takeoffPrompt(st, { ...lift, raFt: 13, pitchDeg: 12 }, 30.2)).toBe('toGear');
+  });
+  it('another airframe mid-mission is a new takeoff with its own words, after one quiet frame', () => {
+    const st = createTakeoffCoach('b738', AIRCRAFT_DATABASE.b738, 1);
+    const sim = { aircraftKey: 'b738', spec: AIRCRAFT_DATABASE.b738, flapsIndex: 1, onGround: true, raFt: 0, aglFt: 10, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, assist: 'pilot', approach: { crossM: 0 }, simTime: 1 };
+    expect(takeoffPromptFor(st, sim, 0)).toBeNull(); // the quiet frame
+    expect(takeoffPromptFor(st, { ...sim, simTime: 1.1 }, 0)).toBe('toPower');
+    st.over = true;
+    expect(takeoffPromptFor(st, { ...sim, aircraftKey: 'c172', spec: AIRCRAFT_DATABASE.c172, simTime: 2 }, 0)).toBeNull();
+    expect(st.over).toBe(false);
+    expect(takeoffPromptFor(st, { ...sim, aircraftKey: 'c172', spec: AIRCRAFT_DATABASE.c172, simTime: 2.1 }, 0)).toBe('toPower');
+    expect(coachText('toRoll')).toContain('55 kt');
   });
 });

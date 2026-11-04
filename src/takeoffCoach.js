@@ -7,7 +7,6 @@
 // card do the rest. Pure: no THREE, no DOM. Tested in tests/unit/takeoffCoach.test.js; the
 // attitudes are flown headless in tests/flight/takeoffCoach.test.js.
 import { DRILL_TEXT, RANK, TOUCH_WORDS } from './coach.js';
-import { stallSpeedKts } from './aero.js';
 
 // The lift-off attitude the coach asks for at Vr, degrees nose up:
 // - 737-800: "around 8.5°" for a flaps 1 takeoff and 8.2° at flaps 5 (Boeing FCTM, quoted by
@@ -25,8 +24,10 @@ export const TAIL_MARGIN_DEG = 1;
 export const STATIC_TAIL_DEG = 13.7;
 export const tailStrikeDeg = (spec) => spec.maxGroundPitchDeg ?? (spec.gear?.tail ? STATIC_TAIL_DEG : 15);
 // "Slow" in the climb below 1.13 Vs at the flaps set: the floor of V2 (14 CFR 25.107(b)), and no
-// lower than Vr - 3 kt.
+// lower than Vr - 3 kt. Vs is main.js's sim.stallKts (aero.js stallSpeedKts at the flaps, the tape's
+// band; null for the F-16, whose 1.13 Vs is its Vr - 3 anyway): importing aero.js here cost boot bytes.
 export const SLOW_VS = 1.13;
+export const slowKtsFor = (spec, stallKts) => Math.max(spec.vrKts - 3, SLOW_VS * (stallKts ?? 0));
 export const TAIL_FT = 10;
 // The tail call looks this far ahead at the pitch rate: a firm pull passes 1° inside a frame of
 // the card (first-timer panel: the warning first showed past the tail, 15.6° in the Cessna).
@@ -35,8 +36,11 @@ export const TAIL_LEAD_S = 0.5;
 // swerve back across it is "drifting left", not "right of the centreline").
 export const OFF_M = 4;
 export const OFF_LEAD_S = 2;
-// Too steep after lift-off: more than this above the rotate attitude (a 737 climbs at ~15°).
+// Too steep after lift-off: more than this above the rotate attitude and STEEP_KTS under the climb
+// speed. Steep alone is no fault: the 737's trim holds its 162 kt at takeoff thrust at ~18-20° nose
+// up (a held pull let go at 6° settled there and the call never cleared, e2e under load).
 export const STEEP_DEG = 9;
+export const STEEP_KTS = 5;
 // A prompt that just left does not come back for this long (it holds the one showing instead);
 // the safety calls (rank 4: the tail, off the runway) are exempt.
 export const REPEAT_S = 4;
@@ -47,7 +51,7 @@ export const DONE_FT = 1000;
 Object.assign(RANK, {
   toRoll: 1, toLeft: 1, toRight: 1, toClimb: 1, toKidRoll: 1, toKidClimb: 1,
   toPower: 2, toBrakes: 2, toHold: 2, toGear: 2, toKidPower: 2, toStop: 2,
-  toRotate: 3, toSlow: 3, toKidRotate: 3, toSteep: 3, toEase: 4, toKidEase: 4, toOff: 4,
+  toRotate: 3, toSlow: 3, toKidRotate: 3, toSteep: 4, toEase: 4, toKidEase: 4, toOff: 4,
 });
 
 // The climb speed the coach calls: the speed the takeoff trim (trim.js takeoffTrimAoaDeg, 0141)
@@ -113,13 +117,17 @@ export function configureTakeoffCoach(st, key, spec, flapsIndex = 0) {
   st.pitchDeg = ROTATE_PITCH_DEG[key] ?? 8;
   st.tailDeg = tailStrikeDeg(spec) - TAIL_MARGIN_DEG;
   st.vrKts = spec.vrKts;
-  st.slowKts = Math.max(spec.vrKts - 3, SLOW_VS * stallSpeedKts(spec, flapsIndex));
+  st.slowKts = slowKtsFor(spec, null);
   st.retractable = !spec.fixedGear;
+  st.climbKts = climbKts(spec, flapsIndex) ?? spec.vrKts * 1.2;
+  st.blank = true; // one quiet frame: main.js re-reads the words only when the prompt changes (device panel)
   return st;
 }
+// A new airframe on the runway is a new takeoff (setAircraft re-seats it: a bounce is not a flight).
+const resetFlight = (st) => { st.over = false; st.rolled = false; st.rejected = false; st.flew = false; st.last = null; st.left = {}; };
 
 export const createTakeoffCoach = (key, spec, flapsIndex = 0) => configureTakeoffCoach({
-  over: false, rolled: false, rejected: false, flew: false, last: null, left: {}, prevCross: null, prevT: 0, crossRate: 0, touch: null,
+  over: false, rolled: false, rejected: false, flew: false, last: null, left: {}, blank: false, prevCross: null, prevT: 0, crossRate: 0, touch: null,
   prompt(sim, pitchDeg) { return takeoffPromptFor(this, sim, pitchDeg); }, // main.js calls it (no lib handle on the boot side)
 }, key, spec, flapsIndex);
 
@@ -130,8 +138,10 @@ export const createTakeoffCoach = (key, spec, flapsIndex = 0) => configureTakeof
 // over 40 kt, assists.js groundSteerRudder / input.js touchGroundRudder) }.
 export function takeoffTarget(st, s) {
   if (st.over || s.aglFt > DONE_FT) { st.over = true; return null; }
+  // Off the wheels before any takeoff roll (an airframe swapped in drops onto its struts): nothing.
+  if (!s.onGround && !st.rolled) return null;
   if (!s.onGround && s.raFt > 5) st.flew = true;
-  // Back on the runway after flying (a hop, a landing): the landing coach and the grade take it.
+  // Back on the runway after flying (a hop, a landing): the landing grade takes it, the coach is done.
   else if (s.onGround && st.flew) { st.over = true; return null; }
   const low = s.onGround || s.raFt < TAIL_FT;
   if (low && s.pitchDeg + Math.max(0, s.pitchRateDegS ?? 0) * TAIL_LEAD_S > st.tailDeg) return s.kid ? 'toKidEase' : 'toEase';
@@ -153,7 +163,7 @@ export function takeoffTarget(st, s) {
   }
   if (s.kid) return 'toKidClimb';
   if (s.raFt > 5 && s.iasKts < st.slowKts) return 'toSlow';
-  if (s.pitchDeg > st.pitchDeg + STEEP_DEG) return 'toSteep';
+  if (s.pitchDeg > st.pitchDeg + STEEP_DEG && s.iasKts < st.climbKts - STEEP_KTS) return 'toSteep';
   if (st.retractable && s.gearDown && s.raFt > 5 && s.vsiFpm > 300) return 'toGear';
   return 'toClimb';
 }
@@ -162,6 +172,10 @@ export function takeoffTarget(st, s) {
 // one showing instead of coming back (no "left, right, left" flicker on the roll). t: sim time.
 export function takeoffPrompt(st, s, t) {
   let k = takeoffTarget(st, s);
+  // One null frame clears the card at once (coach.js), where a lower rank would wait 1.5 s: after the
+  // tail call (it lingered to ~90 ft into the climb, device panel), and after new words (configure).
+  const easing = st.last === 'toEase' || st.last === 'toKidEase';
+  if (st.blank || (easing && k !== st.last && (RANK[k] ?? 1) < 4)) { st.blank = false; st.last = null; return null; }
   if (k !== st.last && k !== null && st.last !== null && (RANK[k] ?? 1) < 4 && t - (st.left[k] ?? -Infinity) < REPEAT_S) k = st.last;
   if (k !== st.last && st.last !== null) st.left[st.last] = t;
   st.last = k;
@@ -175,6 +189,7 @@ const _in = {
 };
 export function takeoffPromptFor(st, sim, pitchDeg) {
   // Another airframe or flap notch picked: its numbers and words (the climb speed is the flaps').
+  if (st.key !== sim.aircraftKey) resetFlight(st);
   if (st.key !== sim.aircraftKey || st.flaps !== sim.flapsIndex) configureTakeoffCoach(st, sim.aircraftKey, sim.spec, sim.flapsIndex);
   st.touch ??= globalThis.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false; // main.js touchOnly's test
   const t = sim.simTime, cross = sim.approach.crossM, dt = t - st.prevT;
@@ -186,5 +201,6 @@ export function takeoffPromptFor(st, sim, pitchDeg) {
   _in.halfWidthM = (sim.activeEnd?.widthM ?? 0) / 2;
   _in.pitchRateDegS = (sim.angVel?.x ?? 0) * 180 / Math.PI;
   _in.autoSteer = sim.assist !== 'pilot' || (st.touch && sim.gsKts > 40);
+  st.slowKts = slowKtsFor(sim.spec, sim.stallKts);
   return takeoffPrompt(st, _in, t);
 }
