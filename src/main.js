@@ -1842,24 +1842,17 @@ function updatePapi() {
   });
   papiLamps.geometry.attributes.color.needsUpdate = true;
 
+  // The HUD's word; its colour, fly-to glyph (▲▲ ▲ ◆ ▼ ▼▼) and lamp row are styles.css's, keyed on data-papi
+  // (0089: never colour alone). Written only when the reading changes.
+  const white = sim.activeEnd ? papiWhite(sim.activeEnd, sim.pos, sim.approach.distM) : null;
+  sim.papiWhite = white;
   const txt = byId('txtPapiStatus');
-  sim.papiWhite = null;
-  if (!sim.activeEnd) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
-  const ap = sim.approach;
-  const numWhite = papiWhite(sim.activeEnd, sim.pos, ap.distM);
-  sim.papiWhite = numWhite;
-  if (numWhite === null) { txt.textContent = '—'; txt.className = 'text-slate-400 font-bold ml-1'; return; }
-  if (numWhite === 2) {
-    txt.textContent = 'ON GLIDESLOPE';
-    txt.className = 'text-emerald-400 font-bold ml-1';
-  } else if (numWhite > 2) {
-    txt.textContent = numWhite === 4 ? 'HIGH' : 'SLIGHTLY HIGH';
-    txt.className = 'text-sky-300 font-bold ml-1';
-  } else {
-    txt.textContent = numWhite === 0 ? 'LOW' : 'SLIGHTLY LOW';
-    txt.className = 'text-amber-400 font-bold ml-1';
+  if (txt.dataset.papi !== `${white ?? ''}`) {
+    txt.dataset.papi = white ?? '';
+    txt.textContent = PAPI_WORDS[white] ?? '—';
   }
 }
+const PAPI_WORDS = ['LOW', 'SLIGHTLY LOW', 'ON GLIDESLOPE', 'SLIGHTLY HIGH', 'HIGH'];
 
 // Re-pick the runway you're flying to (twice a second) and cache its approach geometry.
 function updateActiveRunway(dt) {
@@ -2826,8 +2819,10 @@ function syncUI() {
   byId('txtPhoneConfig').textContent = `${sim.spec.fixedGear ? 'FIXED' : locked ? 'DN' : transit ? '···' : 'UP'} · ${flapText()}`;
   const papi = byId('txtPapiStatus');
   const phonePapi = byId('txtPhonePapi');
-  phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
-  phonePapi.className = papi.className.replace('ml-1', '');
+  if (phonePapi.dataset.papi !== papi.dataset.papi) {
+    phonePapi.dataset.papi = papi.dataset.papi; // the glyph tells LOW from SLIGHTLY LOW (styles.css)
+    phonePapi.textContent = papi.textContent.replace('ON GLIDESLOPE', 'ON GS').replace('SLIGHTLY ', '');
+  }
 }
 
 function handleResize() {

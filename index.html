@@ -216,7 +216,7 @@
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">IAS</div><b id="txtPhoneIas" class="text-slate-100">140</b></div>
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap"><span class="plainWord tracking-tight">GROUND</span><span class="pilotWord">AGL</span> FT</div><b id="txtPhoneAgl" class="text-emerald-300">1270</b></div>
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">V/S FPM</div><b id="txtPhoneVs" class="text-sky-300">-700</b></div>
-        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">PAPI</div><b id="txtPhonePapi" class="text-emerald-400">ON GS</b></div>
+        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">PAPI</div><b id="txtPhonePapi" class="papi-cue" data-papi="2">ON GS</b></div>
         <div class="hidden lg:block"><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">POWER</div><b id="txtPhoneThr" class="text-emerald-300">44%</b></div>
         <div class="hidden lg:block"><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">GEAR · FLAPS</div><b id="txtPhoneConfig" class="text-slate-100">DN · 30°</b></div>
       </div>
@@ -392,7 +392,7 @@
       </div>
       <div class="bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1">
         <span class="text-slate-400 text-[10px]">PAPI:</span>
-        <span id="txtPapiStatus" class="text-emerald-400 font-bold ml-1">ON GLIDESLOPE</span>
+        <span id="txtPapiStatus" class="papi-cue font-bold ml-1" data-papi="2">ON GLIDESLOPE</span><span class="papi-lamps" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
       </div>
       <button id="btnCenterWings" class="hud-btn px-2 py-1 rounded text-[10px] text-slate-200">Center Stick (Space)</button>
     </div>
