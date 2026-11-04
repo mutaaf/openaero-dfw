@@ -6,13 +6,16 @@
 // Our JSBSim prop (public/jsbsim/engine/prop76.xml: McCauley 76 in, 2 blades, C_POWER vs
 // J = V/(nD), pinned to the POH) absorbs P = Cp(J)·ρ·n³·D⁵; the IO-360-L2A (io360.xml) makes
 // 180 hp at 2700 rpm, taken as a constant torque per throttle (power ∝ rpm at a fixed
-// manifold pressure), scaled by the Gagg-Farrar altitude lapse σ − (1 − σ)/7.55 (engine.js
-// cites it). Balance: Cp(J)·ρ·n²·D⁵ = 2π·Q, solved by bisection (no allocation). Static full
+// manifold pressure), scaled by the Gagg-Farrar altitude lapse σ − (1 − σ)/7.55 (2-3% above
+// engine.js pistonPowerLapse at 8,000 ft: ~1% of rpm, and it needs no pressure or temperature). Balance: Cp(J)·ρ·n²·D⁵ = 2π·Q, solved by bisection (no allocation). Static full
 // power lands on ~2300 rpm (POH Section 4: 2300-2420 at full throttle) and the prop unloads
-// to ~2700 at the 126 KTAS maximum (POH Section 1). A running engine never turns below its
+// to ~2700 at the 126 KTAS maximum (POH Section 1). Not an independent check: prop76.xml's
+// Cp was fitted from the engine power at those points, so this confirms the table holds them. A running engine never turns below its
 // 650 rpm idle; a dead one windmills where Cp crosses zero (J ≈ 1.1) and stops with the air.
-// The voice is the blade-pass tone, rpm × 2 blades / 60 (a 2-blade prop on a 4-cylinder
-// four-stroke: the firing rate is the same, two a revolution).
+// That ignores the dead engine's friction and compression, so it windmills high (~1,000 rpm at
+// 68 kt); a real one turns slower and can stop in a slow glide. Fine for a sound.
+// The voice follows the blade-pass, rpm × 2 blades / 60 (a 2-blade prop on a 4-cylinder
+// four-stroke: the firing rate is the same, two a revolution), sounded two octaves up.
 //
 // Turbofan: thrust goes roughly as N1² (fan speed), so N1 = √(idle + (1 − idle)·n): 20% at
 // the 737's and F-16's 4% idle thrust, 100% at full. The whine's pitch and its low-pass
@@ -61,9 +64,11 @@ export function engineVoice(sim, out) {
   const n = sim.engineN ?? 0;
   if (e.type === 'piston-prop') {
     const rpm = engineRpm(n, (sim.tasKts || 0) * 0.514444, sim.sigma ?? 1, !sim.engineFailed);
-    out.hz = (rpm * 2) / 60;
-    out.gain = 0.04 + (sim.engineFailed ? 0 : n) * 0.08;
-    out.filterHz = 450;
+    // Voiced two octaves up (4 × blade-pass, 87-360 Hz): a phone speaker plays little under
+    // ~250 Hz, so the blade-pass itself (22-90 Hz) would be near silent. The ratio is kept.
+    out.hz = Math.max(20, (rpm * 8) / 60);
+    out.gain = rpm < 1 ? 0 : 0.04 + (sim.engineFailed ? 0 : n) * 0.08;
+    out.filterHz = 1200;
     return out;
   }
   const n1 = sim.engineFailed ? Math.sqrt(n) : fanN1(e, n);

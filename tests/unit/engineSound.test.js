@@ -70,9 +70,18 @@ describe('engineVoice follows the engine, not the lever (0148)', () => {
     expect(out.filterHz).toBeGreaterThan(b.filterHz);
   });
 
-  it('the Cessna: blade-pass at 2 blades × rpm / 60', () => {
+  it('the Cessna: blade-pass (2 blades × rpm / 60) two octaves up, audible on a phone even at idle', () => {
     engineVoice({ spec: c172, engineN: 1, tasKts: 0, sigma: 1 }, out);
-    expect(out.hz).toBeCloseTo((engineRpm(1, 0, 1, true) * 2) / 60, 6);
+    expect(out.hz).toBeCloseTo(4 * (engineRpm(1, 0, 1, true) * 2) / 60, 6);
+    engineVoice({ spec: c172, engineN: 0, tasKts: 0, sigma: 1 }, out);
+    expect(out.hz).toBeGreaterThanOrEqual(80);
+    expect(out.gain).toBeGreaterThan(0);
+  });
+
+  it('a dead, stopped prop is silent, not a 0 Hz drone', () => {
+    engineVoice({ spec: c172, engineN: 0, tasKts: 0, sigma: 1, engineFailed: true }, out);
+    expect(out.gain).toBe(0);
+    expect(out.hz).toBeGreaterThan(0);
   });
 
   it('allocates nothing: writes into the object it is given', () => {
@@ -140,9 +149,22 @@ describe('audio.js drives the engine voice from the spool (0148)', () => {
     audio.update(false);
     const windmill = osc.frequency.targets.at(-1);
     expect(windmill).toBeLessThan(running);
-    expect(windmill).toBeCloseTo((engineRpm(0, 68 * KT, 1, false) * 2) / 60, 6);
+    expect(windmill).toBeCloseTo((engineRpm(0, 68 * KT, 1, false) * 8) / 60, 6);
     expect(windmill).toBeGreaterThan(20);
     expect(gain.gain.targets.at(-1)).toBeGreaterThan(0);
+  });
+
+  it('without its chunk (a failed import) the engine still drones, never silent', async () => {
+    const { Ctx, made } = fakeAudio();
+    vi.stubGlobal('window', { AudioContext: Ctx });
+    const sim = simFor('c172', { throttle: 1 });
+    const audio = createAudio(sim, () => {});
+    audio.init();
+    audio.update(false); // before the chunk arrives
+    vi.unstubAllGlobals();
+    expect(made.osc[0].frequency.targets.at(-1)).toBe(150);
+    expect(made.gains[0].gain.targets.at(-1)).toBeGreaterThan(0.05);
+    await vi.dynamicImportSettled();
   });
 
   it('sound off and mute() still silence it', async () => {
