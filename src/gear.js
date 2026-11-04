@@ -12,7 +12,9 @@
 //
 // spec.gear: { noseZ (m ahead of the CG, positive), mainZ (m aft), trackM (between the
 // mains), strokeM (static compression of the struts), zeta (damping ratio),
-// steerDeg (pedal nose-wheel steering) }. The wheels hang so that standing still, level,
+// steerDeg (pedal nose-wheel steering), tail (optional, 0144: the tail's lowest point, [m aft,
+// m up] from the main tyres' contact, a stiff structural contact: it carries load, scrapes and
+// stops the rotation, in the air too, not a pitch clamp) }. The wheels hang so that standing still, level,
 // the CG sits spec.gearHeight above the ground (spawns and tests rely on it).
 // spec.inertia: { pitch, roll, yaw } kg·m² for the gear's moments.
 import { Vector3, Quaternion } from 'three';
@@ -47,6 +49,16 @@ export function gearConstants(spec) {
     new Vector3(-g.trackM / 2, y, g.mainZ),
     new Vector3(g.trackM / 2, y, g.mainZ),
   ];
+  if (g.tail) {
+    wheels.push(new Vector3(0, y + g.tail[1], g.mainZ + g.tail[0]));
+    // Its spring: our JSBSim C172's TAIL contact (20,000 lb/ft, ~2.9e5 N/m). Its damper is
+    // softer than JSBSim's 1,000 lb/ft/s (1.5e4 N·s/m, stable at JSBSim's own 1/120 s): the
+    // tail moves only ~120 kg of effective mass (its 3.7 m arm on the pitch inertia), and at
+    // the game's 1/60 s sub-step cap that damper overshot and threw the nose down at 260°/s.
+    // 4e3 (ζ ~0.34, no oleo rebound factor) damps in one step at 1/60 s.
+    k.push(29e4);
+    d.push(4e3);
+  }
   c = { wheelbase, noseShare, k, d, wheels, maxStroke: g.strokeM * 2.5 };
   cache.set(spec, c);
   return c;
@@ -54,15 +66,15 @@ export function gearConstants(spec) {
 
 // Sums the struts' forces into `force` (world, N) and their moments about the CG into
 // `moment` (body axes, N·m), for a body whose ground is at groundY. Writes body.wheelLoads
-// [nose, left, right] (N) and returns the total normal force.
+// [nose, left, right, tail if any] (N) and returns the wheels' total normal force.
 export function gearForces(body, spec, force, moment) {
   const c = gearConstants(spec);
   _omega.copy(body.angVel).applyQuaternion(body.quat); // body rates → world
   _qi.copy(body.quat).invert();
   let total = 0;
   body.mainPitchMomentNm = 0; // the mains' nose-down moment (N·m), for the tail to work against
-  const loads = body.wheelLoads || (body.wheelLoads = [0, 0, 0]);
-  for (let i = 0; i < 3; i++) {
+  const loads = body.wheelLoads || (body.wheelLoads = c.wheels.map(() => 0));
+  for (let i = 0; i < c.wheels.length; i++) {
     _r.copy(c.wheels[i]).applyQuaternion(body.quat);  // CG → axle, world
     const wy = body.pos.y + _r.y;
     const comp = body.groundY - wy;                   // how far the strut is pushed in
@@ -71,18 +83,18 @@ export function gearForces(body, spec, force, moment) {
     _w.copy(_omega).cross(_r).add(body.vel);
     // Oleos damp the rebound (extending, axle rising) harder than the compression: the
     // struts settle instead of springing the airframe off the runway.
-    const damp = c.d[i] * (_w.y > 0 ? REBOUND : 1);
+    const damp = c.d[i] * (_w.y > 0 && i < 3 ? REBOUND : 1);
     // Past its full stroke a strut is bottomed: a stiff stop (10× the spring), not slack,
     // so hard braking can't fold the nose down onto the pitch floor (0082).
     const n = Math.max(0, c.k[i] * (Math.min(comp, c.maxStroke) + BUMP_STOP * Math.max(0, comp - c.maxStroke)) - damp * _w.y);
     loads[i] = n;
-    total += n;
+    if (i < 3) total += n; // the wheels: a tail scrape alone is not on the ground
     force.y += n;
     // Moment of an upward force at the axle, into body axes.
     _f.set(0, n, 0);
     _m.copy(_r).cross(_f).applyQuaternion(_qi);
     moment.add(_m);
-    if (i > 0) body.mainPitchMomentNm -= _m.x;
+    if (i && i < 3) body.mainPitchMomentNm -= _m.x;
   }
   return total;
 }
@@ -110,9 +122,10 @@ export function gearFriction(body, spec, fwd, vAlong, force, moment) {
   const c = gearConstants(spec);
   _qi.copy(body.quat).invert();
   const s = -Math.sign(vAlong);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < c.wheels.length; i++) {
+    // The tail scrapes at JSBSim's structural μ 0.5.
     if (!(loads[i] > 0)) continue;
-    const f = s * (i === 0 ? ROLLING_MU : braked) * loads[i];
+    const f = s * (i ? i < 3 ? braked : 0.5 : ROLLING_MU) * loads[i];
     _f.set(fwd.x * f, 0, fwd.z * f);
     force.x += _f.x;
     force.z += _f.z;
