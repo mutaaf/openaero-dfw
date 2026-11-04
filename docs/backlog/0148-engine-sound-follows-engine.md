@@ -1,12 +1,12 @@
 ---
 id: 0148
 title: The engine sound follows the real engine: prop RPM and jet spool, per aircraft
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 182
 ---
 
 ## Why
