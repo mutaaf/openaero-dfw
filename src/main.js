@@ -1356,8 +1356,8 @@ function updateCoach(dt) {
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   byId('txtCoach').textContent = text;
   placeCoach();
-  // Spoken too when sound is on; the GPWS callouts own the last 100 ft.
-  if (sim.aglFt > 100 || sim.onGround) audio.teach(text);
+  // Spoken too when sound is on; the GPWS callouts own the last 100 ft (not a takeoff's first 100, 0093).
+  if (sim.aglFt > 100 || sim.onGround || sim.toCoach) audio.teach(text);
   if (!coachMarked) {
     coachMarked = true;
     try { markCoachSeen(window.localStorage); } catch { /* storage unavailable */ }

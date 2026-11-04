@@ -10,7 +10,7 @@ const debug = (page) => page.evaluate(() => window.openaeroDebug());
 // Ticket 0093: the takeoff mission with the coach on: full power, the roll, "Rotate" with the
 // 737's lift-off attitude at Vr, then positive rate, gear up. Each prompt is recorded as it shows
 // (a short-lived line is read from its history, LESSONS 2026-11-01), and spoken once.
-test('737 takeoff with the coach: full power, rotate to 8°, positive rate gear up', async ({ page }) => {
+test('737 takeoff with the coach: full power, rotate to 8°, positive rate gear up, spoken under 100 ft too', async ({ page }) => {
   test.setTimeout(180_000);
   await page.addInitScript(() => {
     window.__spoken = [];
@@ -27,7 +27,7 @@ test('737 takeoff with the coach: full power, rotate to 8°, positive rate gear 
   });
   await expect(page.locator('#txtCoach')).toHaveText(/Full power/, { timeout: 10_000 });
   await page.click('#btnToga');
-  await expect.poll(() => page.evaluate(() => window.__coach), { timeout: 90_000 }).toContainEqual(expect.stringMatching(/^Rotate: ease back to 8° nose up$/));
+  await expect.poll(() => page.evaluate(() => window.__coach), { timeout: 90_000 }).toContainEqual('Rotate: nose up (S or ↑) to 8°');
   await page.keyboard.down('ArrowUp');
   await expect.poll(async () => (await debug(page)).onGround, { timeout: 20_000 }).toBe(false);
   await page.keyboard.up('ArrowUp');
@@ -39,9 +39,11 @@ test('737 takeoff with the coach: full power, rotate to 8°, positive rate gear 
   expect(i(/^Positive rate/)).toBeGreaterThan(i(/^Rotate/));
   // Spoken (sound on), each prompt once, never cutting off a takeoff callout.
   const spoken = await page.evaluate(() => window.__spoken);
-  expect(spoken).toContain('Rotate: ease back to 8° nose up');
+  expect(spoken).toContain('Rotate: nose up (S or ↑) to 8°');
   expect(spoken.filter((t) => t.startsWith('Rotate:'))).toHaveLength(1);
   expect(spoken).toContain('rotate');
+  // The climb-out's first prompt comes under 100 ft, where a final's GPWS heights would be (first-timer panel).
+  expect(spoken).toContain('Positive rate: gear up (G)');
 });
 
 // Sound off: the card still coaches, nothing is spoken. Skip hides it for the flight.

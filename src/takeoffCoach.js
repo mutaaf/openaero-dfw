@@ -28,10 +28,17 @@ export const tailStrikeDeg = (spec) => spec.maxGroundPitchDeg ?? (spec.gear?.tai
 // lower than Vr - 3 kt.
 export const SLOW_VS = 1.13;
 export const TAIL_FT = 10;
-// Off the centreline by more than this on the roll (a 737's mains are 2.9 m either side of it).
+// The tail call looks this far ahead at the pitch rate: a firm pull passes 1° inside a frame of
+// the card (first-timer panel: the warning first showed past the tail, 15.6° in the Cessna).
+export const TAIL_LEAD_S = 0.5;
+// Drifting off the centreline: more than this, now or OFF_LEAD_S ahead at the drift rate (a
+// swerve back across it is "drifting left", not "right of the centreline").
 export const OFF_M = 4;
+export const OFF_LEAD_S = 2;
+// Too steep after lift-off: more than this above the rotate attitude (a 737 climbs at ~15°).
+export const STEEP_DEG = 9;
 // A prompt that just left does not come back for this long (it holds the one showing instead);
-// the safety call (rank 4: the nose near the tail-strike attitude) is exempt.
+// the safety calls (rank 4: the tail, off the runway) are exempt.
 export const REPEAT_S = 4;
 // Over at 1,000 ft above the runway: the climb-out is done, and the card goes away.
 export const DONE_FT = 1000;
@@ -39,48 +46,60 @@ export const DONE_FT = 1000;
 // Ranks (coach.js: a higher one interrupts at once, the same or lower holds 1.5 s first).
 Object.assign(RANK, {
   toRoll: 1, toLeft: 1, toRight: 1, toClimb: 1, toKidRoll: 1, toKidClimb: 1,
-  toPower: 2, toBrakes: 2, toHold: 2, toGear: 2, toKidPower: 2,
-  toRotate: 3, toSlow: 3, toKidRotate: 3, toEase: 4,
+  toPower: 2, toBrakes: 2, toHold: 2, toGear: 2, toKidPower: 2, toStop: 2,
+  toRotate: 3, toSlow: 3, toKidRotate: 3, toSteep: 3, toEase: 4, toKidEase: 4, toOff: 4,
 });
 
 // The climb speed the coach calls: the speed the takeoff trim (trim.js takeoffTrimAoaDeg, 0141)
 // flies at these flaps (flaps up Vy where published, else 1.2 Vr; trim.js's own rule, written out:
-// importing trim.js split it out of the boot chunk, +620 B; a unit test holds the two equal). null for a fly-by-wire
-// airframe (the F-16's pitchFbw carries the trim with α, so a released stick holds no speed, and
-// full power runs it past 300 kt in the first 1,000 ft: panel): it is told an attitude instead.
+// importing trim.js split it out of the boot chunk, +620 B; a unit test holds the two equal). null for
+// a fly-by-wire airframe (the F-16's pitchFbw carries the trim with α, so a released stick holds no
+// speed, and full power runs it past 300 kt in the first 1,000 ft: panel): it is told an attitude.
 export const climbKts = (spec, flapsIndex) => (spec.pitchFbw ? null
   : Math.round(!flapsIndex && spec.vyKts || 1.2 * spec.vrKts));
 
 // Words with this airframe's numbers at these flaps (the card reads coach.js coachText:
-// TOUCH_WORDS on a touch screen, else DRILL_TEXT).
+// TOUCH_WORDS on a touch screen, else DRILL_TEXT). The keyboard's nose up is S or ↑ and power is
+// Shift (the top bar's POWER reads it); the touch stick is "drag up to raise the nose" (index.html),
+// so a touch word never says "pull back" (first-timer panel: dragged towards you, the nose went down).
 export function takeoffWords(key, spec, flapsIndex = 0) {
   const pitch = ROTATE_PITCH_DEG[key] ?? 8;
   const vr = Math.round(spec.vrKts);
   const climb = climbKts(spec, flapsIndex);
   return {
     keys: {
-      toPower: 'Full power: hold Shift to the top',
+      toPower: 'Full power: hold Shift until POWER 100%',
       toBrakes: 'Brakes off (B): let it roll',
       toRoll: `On the centreline: rotate at ${vr} kt`,
-      toLeft: 'Left of the centreline: rudder right (E)',
-      toRight: 'Right of the centreline: rudder left (Q)',
-      toRotate: `Rotate: ease back to ${pitch}° nose up`,
+      toLeft: 'Drifting left: rudder right (E)',
+      toRight: 'Drifting right: rudder left (Q)',
+      toOff: 'Off the runway: power idle, brakes (B)',
+      toStop: 'Stopping: brakes on (B)',
+      toRotate: `Rotate: nose up (S or ↑) to ${pitch}°`,
       toHold: `Hold ${pitch}°: it lifts off by itself`,
       toEase: 'Ease the nose down: the tail is close',
+      toSteep: 'Too steep: nose down a little',
       toSlow: 'Slow: lower the nose a little',
       toGear: 'Positive rate: gear up (G)',
       toClimb: climb ? `Climbing: hold ${climb} kt, wings level` : `Climbing: nose ${pitch}° up, wings level`,
-      toKidPower: 'Push the throttle to the top',
-      toKidRoll: `Let it roll: pull back at ${vr} kt`,
-      toKidRotate: 'Pull back gently: the nose comes up',
+      toKidPower: 'Hold Shift: power up to 100%',
+      toKidRoll: `Let it roll: nose up (↑) at ${vr} kt`,
+      toKidRotate: 'Hold ↑ gently: the nose comes up',
+      toKidEase: 'Not so high! Let the nose down a bit',
       toKidClimb: 'Let go: the plane climbs by itself',
     },
     touch: {
       toPower: 'Full power: slide the throttle to the top',
       toBrakes: 'Tap BRAKES to let it roll',
-      toLeft: 'Left of the centreline: steer right',
-      toRight: 'Right of the centreline: steer left',
+      toLeft: 'Drifting left: stick right to steer',
+      toRight: 'Drifting right: stick left to steer',
+      toOff: 'Off the runway: power idle, tap BRAKES',
+      toStop: 'Stopping: tap BRAKES',
+      toRotate: `Rotate: stick up to ${pitch}° nose up`,
       toGear: 'Positive rate: tap GEAR to raise it',
+      toKidPower: 'Push the throttle to the top',
+      toKidRoll: `Let it roll: stick up at ${vr} kt`,
+      toKidRotate: 'Slide the stick up gently: nose up',
     },
   };
 }
@@ -100,26 +119,41 @@ export function configureTakeoffCoach(st, key, spec, flapsIndex = 0) {
 }
 
 export const createTakeoffCoach = (key, spec, flapsIndex = 0) => configureTakeoffCoach({
-  over: false, last: null, left: {},
+  over: false, rolled: false, rejected: false, flew: false, last: null, left: {}, prevCross: null, prevT: 0, crossRate: 0, touch: null,
   prompt(sim, pitchDeg) { return takeoffPromptFor(this, sim, pitchDeg); }, // main.js calls it (no lib handle on the boot side)
 }, key, spec, flapsIndex);
 
 // The prompt the roll or the climb asks for now (null: nothing to say). s: { onGround, raFt (the
 // wheels' height), aglFt, iasKts, gsKts, vsiFpm, throttle, brakesOn, gearDown, kid, crossM (+ =
-// right of the centreline), pitchDeg }.
+// right of the centreline), crossRateMps (its rate), halfWidthM (the runway's; 0 unknown), pitchDeg,
+// pitchRateDegS (+ = nose up), autoSteer (the game holds the centreline: Kid and Learner, or touch
+// over 40 kt, assists.js groundSteerRudder / input.js touchGroundRudder) }.
 export function takeoffTarget(st, s) {
   if (st.over || s.aglFt > DONE_FT) { st.over = true; return null; }
+  if (!s.onGround && s.raFt > 5) st.flew = true;
+  // Back on the runway after flying (a hop, a landing): the landing coach and the grade take it.
+  else if (s.onGround && st.flew) { st.over = true; return null; }
   const low = s.onGround || s.raFt < TAIL_FT;
-  if (low && s.pitchDeg > st.tailDeg) return 'toEase';
+  if (low && s.pitchDeg + Math.max(0, s.pitchRateDegS ?? 0) * TAIL_LEAD_S > st.tailDeg) return s.kid ? 'toKidEase' : 'toEase';
   if (s.onGround) {
+    if (s.halfWidthM > 0 && Math.abs(s.crossM) > s.halfWidthM) return 'toOff';
+    if (s.throttle >= 0.9 && s.iasKts > 30) st.rolled = true;
+    // The power back on a roll that was set: a rejected takeoff. Brakes, then quiet; never "full power" again.
+    if (st.rolled && s.throttle < 0.5 && s.iasKts < st.vrKts) st.rejected = true;
+    if (st.rejected) {
+      if (s.gsKts < 3) { st.over = true; return null; }
+      return s.brakesOn ? null : 'toStop';
+    }
     if (s.iasKts >= st.vrKts) return s.kid ? 'toKidRotate' : s.pitchDeg < st.pitchDeg - 1 ? 'toRotate' : 'toHold';
     if (s.throttle < 0.9 && s.iasKts < 30) return s.kid ? 'toKidPower' : 'toPower';
     if (s.brakesOn) return 'toBrakes';
-    if (s.gsKts > 5 && Math.abs(s.crossM) > OFF_M) return s.crossM > 0 ? 'toRight' : 'toLeft';
+    const ahead = s.crossM + (s.crossRateMps ?? 0) * OFF_LEAD_S;
+    if (!s.autoSteer && s.gsKts > 5 && Math.abs(ahead) > OFF_M) return ahead > 0 ? 'toRight' : 'toLeft';
     return s.kid ? 'toKidRoll' : 'toRoll';
   }
   if (s.kid) return 'toKidClimb';
   if (s.raFt > 5 && s.iasKts < st.slowKts) return 'toSlow';
+  if (s.pitchDeg > st.pitchDeg + STEEP_DEG) return 'toSteep';
   if (st.retractable && s.gearDown && s.raFt > 5 && s.vsiFpm > 300) return 'toGear';
   return 'toClimb';
 }
@@ -135,12 +169,22 @@ export function takeoffPrompt(st, s, t) {
 }
 
 // The game's input, from main.js's sim (no allocation: one object reused per coach).
-const _in = { onGround: true, raFt: 0, aglFt: 0, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, kid: false, crossM: 0, pitchDeg: 0 };
+const _in = {
+  onGround: true, raFt: 0, aglFt: 0, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, kid: false,
+  crossM: 0, crossRateMps: 0, halfWidthM: 0, pitchDeg: 0, pitchRateDegS: 0, autoSteer: false,
+};
 export function takeoffPromptFor(st, sim, pitchDeg) {
   // Another airframe or flap notch picked: its numbers and words (the climb speed is the flaps').
   if (st.key !== sim.aircraftKey || st.flaps !== sim.flapsIndex) configureTakeoffCoach(st, sim.aircraftKey, sim.spec, sim.flapsIndex);
+  st.touch ??= globalThis.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false; // main.js touchOnly's test
+  const t = sim.simTime, cross = sim.approach.crossM, dt = t - st.prevT;
+  if (st.prevCross !== null && dt > 0 && dt < 1) st.crossRate += ((cross - st.prevCross) / dt - st.crossRate) * Math.min(1, dt * 5);
+  st.prevCross = cross; st.prevT = t;
   _in.onGround = sim.onGround; _in.raFt = sim.raFt; _in.aglFt = sim.aglFt; _in.iasKts = sim.iasKts; _in.gsKts = sim.gsKts;
   _in.vsiFpm = sim.vsiFpm; _in.throttle = sim.throttle; _in.brakesOn = sim.brakesOn; _in.gearDown = sim.gearDown;
-  _in.kid = sim.assist === 'kid'; _in.crossM = sim.approach.crossM; _in.pitchDeg = pitchDeg;
-  return takeoffPrompt(st, _in, sim.simTime);
+  _in.kid = sim.assist === 'kid'; _in.crossM = cross; _in.crossRateMps = st.crossRate; _in.pitchDeg = pitchDeg;
+  _in.halfWidthM = (sim.activeEnd?.widthM ?? 0) / 2;
+  _in.pitchRateDegS = (sim.angVel?.x ?? 0) * 180 / Math.PI;
+  _in.autoSteer = sim.assist !== 'pilot' || (st.touch && sim.gsKts > 40);
+  return takeoffPrompt(st, _in, t);
 }

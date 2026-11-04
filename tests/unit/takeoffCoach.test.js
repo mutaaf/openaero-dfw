@@ -10,7 +10,7 @@ import { trimSpeedKts, takeoffTrimAoaDeg } from '../../src/trim.js';
 
 // Ticket 0093: the takeoff coach, phase by phase, for the three airframes.
 const KEYS = ['c172', 'b738', 'f16'];
-const parked = { onGround: true, raFt: 0, aglFt: 5, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, kid: false, crossM: 0, pitchDeg: 0 };
+const parked = { onGround: true, raFt: 0, aglFt: 5, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, kid: false, crossM: 0, crossRateMps: 0, halfWidthM: 23, pitchDeg: 0, pitchRateDegS: 0, autoSteer: false };
 
 describe('takeoffTarget: the roll', () => {
   for (const key of KEYS) {
@@ -32,6 +32,9 @@ describe('takeoffTarget: the roll', () => {
       const tail = tailStrikeDeg(spec) - 0.5;
       expect(takeoffTarget(st, { ...atVr, pitchDeg: tail })).toBe('toEase');
       expect(takeoffTarget(st, { ...atVr, onGround: false, raFt: 4, vsiFpm: 400, pitchDeg: tail })).toBe('toEase');
+      // A firm pull is called half a second ahead (first-timer panel: 1° passes inside a frame).
+      expect(takeoffTarget(st, { ...atVr, pitchDeg: tail - 2, pitchRateDegS: 5 })).toBe('toEase');
+      expect(takeoffTarget(st, { ...atVr, pitchDeg: tail - 2, pitchRateDegS: 1 })).not.toBe('toEase');
       // The words carry this airframe's numbers.
       expect(coachText('toRoll')).toContain(`${spec.vrKts} kt`);
       expect(coachText('toRotate')).toContain(`${ROTATE_PITCH_DEG[key]}°`);
@@ -187,5 +190,70 @@ describe('through coach.js (the card main.js shows)', () => {
     expect(c.prompt).toBe('toRoll');
     step({ ...roll, iasKts: 55, gsKts: 55 }, 5, 0.016);
     expect(c.prompt).toBe('toRotate'); // a higher rank at once
+  });
+});
+
+describe('first-timer panel', () => {
+  const spec = AIRCRAFT_DATABASE.b738;
+  const roll = { ...parked, throttle: 1, iasKts: 100, gsKts: 100 };
+  it('a rejected takeoff: brakes, then quiet to the stop, and never "full power" again', () => {
+    const st = createTakeoffCoach('b738', spec, 1);
+    expect(takeoffTarget(st, roll)).toBe('toRoll');
+    expect(takeoffTarget(st, { ...roll, throttle: 0 })).toBe('toStop');
+    expect(takeoffTarget(st, { ...roll, throttle: 0, brakesOn: true })).toBeNull();
+    expect(takeoffTarget(st, { ...roll, throttle: 0, iasKts: 20, gsKts: 20 })).toBe('toStop'); // not toPower
+    expect(takeoffTarget(st, { ...roll, throttle: 0, iasKts: 0, gsKts: 1 })).toBeNull();
+    expect(st.over).toBe(true);
+    // The power coming up at the start is not a reject.
+    const st2 = createTakeoffCoach('b738', spec, 1);
+    expect(takeoffTarget(st2, { ...parked, throttle: 0.3, iasKts: 5, gsKts: 5 })).toBe('toPower');
+  });
+  it('off the runway: idle and brakes, never "rotate" in the grass', () => {
+    const st = createTakeoffCoach('b738', spec, 1);
+    expect(takeoffTarget(st, { ...roll, iasKts: 140, gsKts: 140, crossM: -40 })).toBe('toOff');
+    expect(coachText('toOff')).toMatch(/power idle/);
+  });
+  it('drifting: by where it is heading, so a swerve back across the line is named the way it goes', () => {
+    const st = createTakeoffCoach('b738', spec, 1);
+    expect(takeoffTarget(st, { ...roll, crossM: 6, crossRateMps: -8 })).toBe('toLeft'); // right of it, swerving left fast
+    expect(takeoffTarget(st, { ...roll, crossM: 6, crossRateMps: 0 })).toBe('toRight');
+    expect(takeoffTarget(st, { ...roll, crossM: 2, crossRateMps: 2 })).toBe('toRight'); // 6 m right in 2 s
+  });
+  it('no steering words when the game holds the centreline (Kid, Learner, touch over 40 kt)', () => {
+    const st = createTakeoffCoach('b738', spec, 1);
+    expect(takeoffTarget(st, { ...roll, crossM: 8, autoSteer: true })).toBe('toRoll');
+    expect(takeoffTarget(st, { ...roll, crossM: 8, autoSteer: true, kid: true })).toBe('toKidRoll');
+  });
+  it('too steep after lift-off (a held pull): nose down, above the gear call', () => {
+    const st = createTakeoffCoach('b738', spec, 1);
+    const air = { ...parked, onGround: false, throttle: 1, raFt: 40, aglFt: 50, vsiFpm: 3000, iasKts: 160, pitchDeg: 30 };
+    expect(takeoffTarget(st, air)).toBe('toSteep');
+    expect(takeoffTarget(st, { ...air, pitchDeg: 15 })).toBe('toGear'); // a 737's normal climb attitude
+  });
+  it('a hop back onto the runway ends it: the landing grade has the card, not "rotate"', () => {
+    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1);
+    takeoffTarget(st, { ...parked, onGround: false, throttle: 1, raFt: 8, aglFt: 12, iasKts: 60, gsKts: 60, vsiFpm: 300, pitchDeg: 7 });
+    expect(takeoffTarget(st, { ...parked, throttle: 1, iasKts: 60, gsKts: 60 })).toBeNull();
+    expect(st.over).toBe(true);
+  });
+  it('Kid near the tail hears plain words', () => {
+    const st = createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1);
+    expect(takeoffTarget(st, { ...parked, kid: true, throttle: 1, iasKts: 55, gsKts: 55, pitchDeg: 13 })).toBe('toKidEase');
+    expect(coachText('toKidEase')).toMatch(/not so high/i);
+  });
+  it('a touch word never says pull or back: the touch stick goes up for nose up', () => {
+    for (const key of KEYS) {
+      const w = takeoffWords(key, AIRCRAFT_DATABASE[key], 1);
+      for (const k of Object.keys(w.keys)) {
+        const touchText = w.touch[k] ?? w.keys[k];
+        expect(touchText, k).not.toMatch(/pull|ease back|Shift|\(.\)|↑/i);
+      }
+    }
+  });
+  it('the keyboard words name the keys the game binds (S/↑ nose up, Shift power, E/Q rudder)', () => {
+    const w = takeoffWords('b738', spec, 1);
+    expect(w.keys.toRotate).toMatch(/S or ↑/);
+    expect(w.keys.toKidPower).toMatch(/Shift/);
+    expect(w.keys.toLeft).toMatch(/\(E\)/);
   });
 });
