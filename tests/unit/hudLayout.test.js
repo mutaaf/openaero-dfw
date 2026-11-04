@@ -334,3 +334,76 @@ describe('gateVerdictRect (0137)', () => {
     expect(r.y + r.h - 360).toBe(GATE_VERDICT_BOTTOM);
   });
 });
+
+// Ticket 0140: Kid and Learner read plain words for the same two numbers: "SEA LVL" under the
+// altitude readout, "GROUND" on the top bar; Pilot keeps MSL / AGL byte for byte. The wider tab
+// still sits under the readout box, inside its column, past the ticks, off the speed tape and wind box.
+import { altLabels, drawAltCaption } from '../../src/gateVerdict.js';
+import { ALT_CAPTION_W } from '../../src/hudLayout.js';
+describe('altLabels and drawAltCaption (0140)', () => {
+  const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const fakeCtx = () => {
+    const calls = [];
+    return { calls, set font(f) { calls.push(['font', f]); }, fillRect: (...a) => calls.push(['rect', ...a]), fillText: (...a) => calls.push(['text', ...a]) };
+  };
+  it('Pilot keeps MSL and AGL, at the 0132 tab width', () => {
+    expect(altLabels('pilot')).toEqual({ alt: ALT_CAPTION, altW: ALT_CAPTION_W, agl: 'AGL' });
+  });
+  for (const level of ['kid', 'learner']) {
+    it(`${level} reads SEA LVL and GROUND`, () => {
+      expect(altLabels(level).alt).toBe('SEA LVL');
+      expect(altLabels(level).agl).toBe('GROUND');
+    });
+  }
+  it('the plain tab holds seven bold 11 px monospace glyphs (0.6 em) with a margin', () => {
+    expect(altLabels('learner').altW).toBeGreaterThanOrEqual(7 * 11 * 0.6 + 4);
+  });
+  for (const [w, h] of [[1280, 720], [390, 844], [844, 390], [820, 1180], [375, 548], [360, 800], [568, 320]]) {
+    it(`${w}x${h}: the SEA LVL tab stays under the readout box, inside its column, off the speed tape and wind box`, () => {
+      const cx = w / 2, cy = h / 2, x = cx + ALT_TAPE_X;
+      const r = altCaptionRect(cx, cy, {});
+      const ctx = fakeCtx();
+      drawAltCaption(ctx, r, 'kid', w);
+      const font = ctx.calls.find((c) => c[0] === 'font')[1];
+      const box = { x: x + ALT_BOX.dx, y: cy - ALT_BOX.h / 2, w: ALT_BOX.w, h: ALT_BOX.h };
+      // Full width at 11 px wherever the readout box is on screen; at 375 and 360 px (the box runs past
+      // the edge) a 9 px word squeezed at most 10%.
+      if (box.x + box.w <= w) {
+        expect(r.w).toBe(altLabels('kid').altW);
+        expect(font).toBe('bold 11px monospace');
+      } else {
+        expect(font).toBe('bold 9px monospace');
+        expect(r.w - 2).toBeGreaterThanOrEqual(7 * 9 * 0.6 * 0.9);
+      }
+      expect(overlaps(r, box), 'readout box').toBe(false);
+      expect(r.x).toBeGreaterThan(x + 9);
+      expect(r.x + r.w).toBeLessThanOrEqual(box.x + box.w);
+      expect(r.x + r.w).toBeLessThanOrEqual(w);
+      expect(r.y + r.h).toBeLessThanOrEqual(cy - TAPE_TOP);
+      const speed = { x: cx + SPEED_TAPE_X - 60, y: cy + TAPE_TOP, w: 60, h: -2 * TAPE_TOP };
+      expect(overlaps(r, speed), 'speed tape').toBe(false);
+      expect(overlaps(r, windBoxRect(w, h)), 'wind box').toBe(false);
+    });
+  }
+  it('Pilot\'s MSL tab is 0132\'s at any width (not clamped, as before)', () => {
+    for (const w of [320, 360, 375, 1280]) {
+      const r = altCaptionRect(w / 2, 400, {});
+      drawAltCaption(fakeCtx(), r, 'pilot', w);
+      expect(r.w).toBe(ALT_CAPTION_W);
+    }
+  });
+  for (const [level, word] of [['pilot', 'MSL'], ['learner', 'SEA LVL'], ['kid', 'SEA LVL']]) {
+    it(`${level}: draws the tab and "${word}" centred in it, never wider than the tab`, () => {
+      const ctx = fakeCtx();
+      const r = altCaptionRect(640, 360, {});
+      drawAltCaption(ctx, r, level, 1280);
+      expect(r.text).toBe(word);
+      const [, rx, ry, rw, rh] = ctx.calls.find((c) => c[0] === 'rect');
+      expect([rx, ry, rw, rh]).toEqual([r.x, r.y, r.w, r.h]);
+      const [, text, tx, , maxW] = ctx.calls.find((c) => c[0] === 'text');
+      expect(text).toBe(word);
+      expect(tx).toBe(r.x + r.w / 2);
+      expect(maxW).toBeLessThan(r.w);
+    });
+  }
+});

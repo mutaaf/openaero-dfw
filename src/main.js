@@ -53,7 +53,7 @@ import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, altCaptionRect, ALT_CAPTION, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
+  windBoxRect, altCaptionRect, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
   ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
@@ -1990,20 +1990,11 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false, clea
 }
 
 // "MSL" under the altitude readout (0132, hudLayout.js altCaptionRect): the tape is the CG's height
-// above sea level, the top bar's AGL the main wheels' radio altitude (sim.raFt). An opaque-enough tab keeps 4.5:1 over bright imagery.
-const _altCap = altCaptionRect(0, 0, {});
+// above sea level, the top bar's AGL the main wheels' radio altitude (sim.raFt). gateVerdict.js (lazy)
+// draws it, in plain words for Kid and Learner (0140).
+const _altCap = {};
 // The scale's numbers (text ty - 4 … ty + 3.5) stay off the tab's rows.
 const ALT_CAPTION_CLEAR = ALT_BOX.h / 2 + 2 + ALT_CAPTION_H + 4;
-function drawAltCaption(cx, cy) {
-  const r = altCaptionRect(cx, cy, _altCap);
-  hudCtx.fillStyle = 'rgba(2, 6, 23, 0.85)';
-  hudCtx.fillRect(r.x, r.y, r.w, r.h);
-  hudCtx.fillStyle = '#e0f2fe';
-  hudCtx.font = 'bold 11px monospace';
-  hudCtx.textAlign = 'center';
-  hudCtx.fillText(ALT_CAPTION, r.x + r.w / 2, r.y + r.h - 2.5);
-  hudCtx.textAlign = 'left';
-}
 
 function renderHud() {
   const w = hudCanvas.width;
@@ -2092,7 +2083,7 @@ function renderHud() {
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
   drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
   drawTape(cx + ALT_TAPE_X, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
-  drawAltCaption(cx, cy);
+  gateVerdict?.drawAltCaption(hudCtx, altCaptionRect(cx, cy, _altCap), sim.assist, w);
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
   if (sim.stallKts && !sim.onGround) drawStallBand(cx - 131, cy);
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
@@ -3489,7 +3480,7 @@ window.openaeroDebug = () => {
     activeRunway: sim.activeEnd?.id ?? null,
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
-    hudAltCaption: { text: ALT_CAPTION, ..._altCap }, // the altitude tape's MSL tab (0132), canvas px
+    hudAltCaption: { ..._altCap }, // the altitude tape's MSL / SEA LVL tab (0132, 0140), canvas px
     runwayScreen: debugScreen?.runwayScreen(sim.activeEnd, camera, simCanvas, ground) ?? null,
     headingDeg: hdg,
     pitchDeg: _euler.x * RAD_TO_DEG,
@@ -3627,6 +3618,7 @@ function setAssist(level, remember = true) {
     btn.setAttribute('aria-pressed', String(on));
   }
   document.body.classList.toggle('assist-kid', level === 'kid');
+  document.body.classList.toggle('assist-pilot', level === 'pilot'); // the top bar's AGL / GROUND (index.html, 0140)
   resetAssistState(assistState);
   if (remember) { try { saveAssist(window.localStorage, level); } catch { /* storage unavailable */ } }
   refreshMissionBests();

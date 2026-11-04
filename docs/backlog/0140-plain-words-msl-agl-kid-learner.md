@@ -1,12 +1,12 @@
 ---
 id: 0140
 title: Kid and Learner see "above sea level" / "above ground" instead of MSL and AGL
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: accessibility
 created: 2026-11-03
-pr:
+pr: 181
 ---
 
 ## Why

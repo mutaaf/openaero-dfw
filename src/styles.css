@@ -339,3 +339,6 @@ details[open] > summary::before { transform: rotate(90deg); }
   mask-image: linear-gradient(to bottom, #000 calc(100% - 1.75rem), transparent);
 }
 #resultsBody:focus-visible { outline: 2px solid #38bdf8; outline-offset: -2px; }
+
+/* The top bar's height word (0140): Pilot reads AGL, Kid and Learner GROUND (main.js setAssist's .assist-pilot). */
+.assist-pilot .plainWord, body:not(.assist-pilot) .pilotWord { display: none; }

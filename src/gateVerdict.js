@@ -1,5 +1,6 @@
 // The stabilized gate's verdict on the HUD (0020; a lazy chunk main.js fetches after boot, 0137):
 // STABILIZED / UNSTABILIZED and the failing items, three a line, for a few seconds after the gate.
+// Also the altitude tape's caption and its plain words for Kid and Learner (0140), off the boot JS.
 
 // Where (pure, tested): 24 px + 16 a line of failing items (two at most), cy + 76 down, 240 px across,
 // under the boresight between the tapes. On a screen held upright too short for that over the touch
@@ -35,4 +36,34 @@ export function drawGateVerdict(ctx, sim, w, h, captionOn) {
   ctx.fillText(g.stable ? 'STABILIZED' : 'UNSTABILIZED', cx, y + 1);
   // At most 3 items a line (≤ 26 characters, ~205 px): the box holds them, squeezed on a 320 px phone.
   for (let i = 0; i < lines; i++) ctx.fillText(sim.gateLines[i], cx, y + 18 + i * 16, r.w - 8);
+}
+
+// The altitude words (0140): Pilot reads MSL under the tape's readout and AGL on the phone's top bar
+// (0132); Kid and Learner read plain words for the same numbers, "SEA LVL" and "GROUND". The tab
+// (hudLayout.js altCaptionRect, 26 px for MSL) is 51 px for the plain word: seven 11 px monospace
+// glyphs (~46 px) and a margin, still inside the readout box's column. The top bar's word is index.html's
+// (.assist-pilot shows AGL, else GROUND), so the boot JS carries none of them. Pure, tested.
+const PILOT_WORDS = { alt: 'MSL', altW: 26, agl: 'AGL' };
+const PLAIN_WORDS = { alt: 'SEA LVL', altW: 51, agl: 'GROUND' };
+export function altLabels(level) {
+  return level === 'pilot' ? PILOT_WORDS : PLAIN_WORDS;
+}
+
+// Draws the tab main.js placed (`r`, from altCaptionRect) with the level's word, and writes its width
+// and text into `r` (the ?debug snapshot reads them). On a phone under ~390 px across the readout box
+// itself runs past the screen's edge: the tab stops at it (screenW) and the word drops to 9 px (seven
+// glyphs ~38 px: whole at 375 px, ~5% squeezed by maxWidth at 360 px; at 320 px the box and both
+// tabs are cut by the edge, as MSL was before).
+// An opaque-enough tab keeps 4.5:1 over bright imagery.
+export function drawAltCaption(ctx, r, level, screenW) {
+  const words = altLabels(level);
+  r.w = level === 'pilot' ? words.altW : Math.min(words.altW, Math.floor(screenW - r.x)); // Pilot's tab is 0132's
+  r.text = words.alt;
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.fillStyle = '#e0f2fe';
+  ctx.font = r.w < words.altW ? 'bold 9px monospace' : 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(words.alt, r.x + r.w / 2, r.y + r.h - 2.5, r.w - 2);
+  ctx.textAlign = 'left';
 }
