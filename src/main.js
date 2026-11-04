@@ -1842,7 +1842,7 @@ function updatePapi() {
   });
   papiLamps.geometry.attributes.color.needsUpdate = true;
 
-  // The HUD's word; its colour, glyph (▼▼ ▼ ▬ ▲ ▲▲) and lamp row are styles.css's, keyed on data-papi
+  // The HUD's word; its colour, fly-to glyph (▲▲ ▲ ◆ ▼ ▼▼) and lamp row are styles.css's, keyed on data-papi
   // (0089: never colour alone). Written only when the reading changes.
   const white = sim.activeEnd ? papiWhite(sim.activeEnd, sim.pos, sim.approach.distM) : null;
   sim.papiWhite = white;

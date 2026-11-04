@@ -5,7 +5,7 @@ import { BASE, stubTiles, collectErrors } from './helpers.js';
 // PAPI line, the coach's count and the active runway's four 3D lamps are one reading (airports.js
 // papiWhite): sampled on the default final and as the nose is pulled up off the path, they agree.
 const TEXT = ['LOW', 'SLIGHTLY LOW', 'ON GLIDESLOPE', 'SLIGHTLY HIGH', 'HIGH'];
-const GLYPH = ['▼▼', '▼', '▬', '▲', '▲▲'];
+const GLYPH = ['▲▲', '▲', '◆', '▼', '▼▼']; // the way to fly (0089)
 
 test('the HUD PAPI line and the 3D lamps agree on and off the 3° path (0131)', async ({ page }) => {
   test.setTimeout(90_000);
@@ -61,7 +61,7 @@ test('the PAPI reads without colour: glyph, word and lamp shapes under deuterano
     const el = document.getElementById('txtPapiStatus');
     return { glyph: getComputedStyle(el, '::before').content, text: el.textContent, phone: document.getElementById('txtPhonePapi').dataset.papi };
   });
-  expect(r.glyph).toContain('▬');
+  expect(r.glyph).toContain('◆');
   expect(r).toMatchObject({ text: 'ON GLIDESLOPE', phone: '2' });
   await info.attach('papi-deuteranopia', { body: await box.screenshot(), contentType: 'image/png' });
   // Every reading's glyph is distinct, as the phone strip shows it (word + glyph, no colour needed).

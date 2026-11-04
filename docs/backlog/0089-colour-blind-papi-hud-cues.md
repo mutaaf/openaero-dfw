@@ -23,9 +23,9 @@ shape difference between the red and white PAPI lamps' HUD icons. Add a `?cvd` t
 only if needed for tests; no setting UI unless the audit says it is required.
 
 ## Acceptance criteria
-- [ ] Every HUD state that is red/amber/green also differs by glyph or text (audit table in the PR)
-- [ ] A simulated deuteranopia screenshot of the final shows the PAPI state is still readable from the HUD
-- [ ] Contrast stays at least 4.5:1 on HUD backgrounds; no layout shift at 390x844
+- [x] Every HUD state that is red/amber/green also differs by glyph or text (audit table in the PR)
+- [x] A simulated deuteranopia screenshot of the final shows the PAPI state is still readable from the HUD
+- [x] Contrast stays at least 4.5:1 on HUD backgrounds; no layout shift at 390x844
 
 ## Test plan
 Unit test that each PAPI state maps to a distinct glyph; e2e screenshot under CDP

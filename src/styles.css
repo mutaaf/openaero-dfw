@@ -344,19 +344,22 @@ details[open] > summary::before { transform: rotate(90deg); }
 .assist-pilot .plainWord, body:not(.assist-pilot) .pilotWord { display: none; }
 
 /* The PAPI reading (0089): never colour alone (WCAG 1.4.1). main.js sets data-papi to the white-lamp
-   count (0-4, '' with no runway ahead); the colour, a glyph (▼▼ low, ▼ slightly low, ▬ on, ▲ slightly
-   high, ▲▲ high: where you are against the path) and, on the desktop panel, the four lamps as the pilot
-   sees them (white rings on the left, red squares on the right) all follow it. The glyph is decoration
-   for screen readers ("/ ''"); the word says it. */
+   count (0-4, '' with no runway ahead); the colour, a glyph and, on the desktop panel, the four lamps as
+   the pilot sees them (white rings on the left, red squares on the right) all follow it. The glyph is the
+   way to fly, like every other arrow on this HUD (▲ FLARE ▲, the coach's "You're low: raise the nose"):
+   ▲▲ low, ▲ slightly low, ◆ on the path, ▼ slightly high, ▼▼ high. It is decoration for screen readers
+   ("/ ''"; the word says it), larger than the word, in a fixed-width box so the readout never shifts. */
 .papi-cue { color: #94a3b8; white-space: nowrap; }
 .papi-cue[data-papi="2"] { color: #34d399; }
 .papi-cue:is([data-papi="3"], [data-papi="4"]) { color: #7dd3fc; }
 .papi-cue:is([data-papi="0"], [data-papi="1"]) { color: #fbbf24; }
-.papi-cue[data-papi="0"]::before { content: '▼▼ '; content: '▼▼ ' / ''; }
-.papi-cue[data-papi="1"]::before { content: '▼ '; content: '▼ ' / ''; }
-.papi-cue[data-papi="2"]::before { content: '▬ '; content: '▬ ' / ''; }
-.papi-cue[data-papi="3"]::before { content: '▲ '; content: '▲ ' / ''; }
-.papi-cue[data-papi="4"]::before { content: '▲▲ '; content: '▲▲ ' / ''; }
+.papi-cue::before { display: inline-block; width: 1.7em; font-size: 1.2em; line-height: 1; text-align: center; letter-spacing: -0.1em; }
+.papi-cue[data-papi=""]::before { content: none; }
+.papi-cue[data-papi="0"]::before { content: '▲▲'; content: '▲▲' / ''; }
+.papi-cue[data-papi="1"]::before { content: '▲'; content: '▲' / ''; }
+.papi-cue[data-papi="2"]::before { content: '◆'; content: '◆' / ''; }
+.papi-cue[data-papi="3"]::before { content: '▼'; content: '▼' / ''; }
+.papi-cue[data-papi="4"]::before { content: '▼▼'; content: '▼▼' / ''; }
 .papi-lamps { display: inline-flex; gap: 3px; margin-left: 0.4rem; vertical-align: middle; }
 .papi-lamps i { width: 7px; height: 7px; background: #f87171; }
 .papi-cue[data-papi=""] + .papi-lamps { visibility: hidden; }
