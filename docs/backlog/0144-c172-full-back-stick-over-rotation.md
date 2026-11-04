@@ -1,7 +1,7 @@
 ---
 id: 0144
 title: C172 held back stick at Vr pitches up to ~45°/s, to ~57° a foot off the runway, then hops back on
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
