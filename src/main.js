@@ -1579,9 +1579,7 @@ function syncWeatherUI(dt) {
   if (wx !== sim.wx) refreshWeather();
   const badge = byId('wxBadge');
   badge.textContent = wx.live ? 'LIVE METAR' : 'SCENARIO WX';
-  badge.className = wx.live
-    ? 'px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-400 text-emerald-300 font-bold text-[9px] shrink-0'
-    : 'px-1.5 py-0.5 rounded bg-slate-900 border border-slate-500 text-slate-300 font-bold text-[9px] shrink-0';
+  badge.toggleAttribute('data-live', wx.live); // index.html's data-[live]: colours (off the boot JS, 0100)
   const age = wx.live && wx.obsTime ? ` · ${metarAgeMinutes(wx.obsTime, Date.now() / 1000)} min ago` : '';
   // Remarks (RMK …) are for forecasters; drop them so the age stays visible.
   byId('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
