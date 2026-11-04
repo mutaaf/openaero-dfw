@@ -50,17 +50,19 @@ export function altLabels(level) {
 }
 
 // Draws the tab main.js placed (`r`, from altCaptionRect) with the level's word, and writes its width
-// and text into `r` (the ?debug snapshot reads them). On a 375 px phone the readout box itself runs
-// past the screen's edge: the tab stops at it (screenW) and the word is squeezed to fit (~10%).
+// and text into `r` (the ?debug snapshot reads them). On a phone under ~390 px across the readout box
+// itself runs past the screen's edge: the tab stops at it (screenW) and the word drops to 9 px (seven
+// glyphs ~38 px: whole at 375 px, ~5% squeezed by maxWidth at 360 px; at 320 px the box and both
+// tabs are cut by the edge, as MSL was before).
 // An opaque-enough tab keeps 4.5:1 over bright imagery.
 export function drawAltCaption(ctx, r, level, screenW) {
   const words = altLabels(level);
-  r.w = Math.min(words.altW, Math.floor(screenW - r.x));
+  r.w = level === 'pilot' ? words.altW : Math.min(words.altW, Math.floor(screenW - r.x)); // Pilot's tab is 0132's
   r.text = words.alt;
   ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#e0f2fe';
-  ctx.font = 'bold 11px monospace';
+  ctx.font = r.w < words.altW ? 'bold 9px monospace' : 'bold 11px monospace';
   ctx.textAlign = 'center';
   ctx.fillText(words.alt, r.x + r.w / 2, r.y + r.h - 2.5, r.w - 2);
   ctx.textAlign = 'left';

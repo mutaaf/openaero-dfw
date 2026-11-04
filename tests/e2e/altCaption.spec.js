@@ -69,6 +69,11 @@ for (const v of CASES) {
         const lb = await label.boundingBox(), cell = await label.locator('xpath=..').boundingBox();
         expect(lb.x + lb.width, 'the word stays in its cell').toBeLessThanOrEqual(cell.x + cell.width + 0.5);
       }
+      // The desktop instrument panel names the same two numbers with the same words (it may be folded:
+      // read which of its two spans the level's CSS shows).
+      const panelWords = await page.evaluate(() => ['txtAltMsl', 'txtAltAgl'].map((id) => [...document.getElementById(id).previousElementSibling.querySelectorAll('span')]
+        .filter((el) => getComputedStyle(el).display !== 'none').map((el) => el.textContent).join('|')));
+      expect(panelWords).toEqual(v.level === 'pilot' ? ['MSL', 'RADAR AGL'] : ['SEA LVL', 'ABOVE GROUND']);
       expect(errors).toEqual([]);
     });
   });

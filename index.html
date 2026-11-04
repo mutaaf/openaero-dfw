@@ -214,7 +214,7 @@
       <!-- Phone telemetry strip (the EICAS and moving map are desktop-only) -->
       <div id="phoneTelemetry" class="flex-1 hud-glass pointer-events-auto rounded-xl px-2 py-1 grid grid-cols-4 lg:grid-cols-6 gap-1 text-center font-mono text-[10px]">
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">IAS</div><b id="txtPhoneIas" class="text-slate-100">140</b></div>
-        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap"><span class="plainWord">GROUND</span><span class="pilotWord">AGL</span> FT</div><b id="txtPhoneAgl" class="text-emerald-300">1270</b></div>
+        <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap"><span class="plainWord tracking-tight">GROUND</span><span class="pilotWord">AGL</span> FT</div><b id="txtPhoneAgl" class="text-emerald-300">1270</b></div>
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">V/S FPM</div><b id="txtPhoneVs" class="text-sky-300">-700</b></div>
         <div><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">PAPI</div><b id="txtPhonePapi" class="text-emerald-400">ON GS</b></div>
         <div class="hidden lg:block"><div class="text-slate-400 text-[10px] leading-none whitespace-nowrap">POWER</div><b id="txtPhoneThr" class="text-emerald-300">44%</b></div>
@@ -422,11 +422,11 @@
         <div id="txtIasGs" class="text-slate-200 font-bold">140/122K</div>
       </div>
       <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
-        <div class="text-slate-400 text-[10px]">ALT (MSL)</div>
+        <div class="text-slate-400 text-[10px]">ALT (<span class="plainWord">SEA LVL</span><span class="pilotWord">MSL</span>)</div>
         <div id="txtAltMsl" class="text-sky-300 font-bold">1880 FT</div>
       </div>
       <div class="bg-slate-900/90 rounded p-1 border border-slate-800">
-        <div class="text-slate-400 text-[10px]">RADAR AGL</div>
+        <div class="text-slate-400 text-[10px]"><span class="plainWord">ABOVE GROUND</span><span class="pilotWord">RADAR AGL</span></div>
         <div id="txtAltAgl" class="text-emerald-300 font-bold">1274 FT</div>
       </div>
     </div>
