@@ -47,17 +47,19 @@ test('the coach coaches finals only and steps aside for the autopilot', async ({
   await page.click('#btnApMaster'); // ILS on set AP master; both off hands the aircraft back
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
   await expect(page.locator('#txtCoachLabel')).toHaveText('Coach');
-  // Every final is coached now (0073); a takeoff is not.
+  // Every final is coached now (0073), and the takeoff too (0093); a tour is not.
   await page.selectOption('#selScenario', 'kdfw_17c_final');
   await expect(page.locator('#coach')).toBeVisible({ timeout: 5_000 });
   await page.selectOption('#selScenario', 'kdfw_takeoff');
+  await expect(page.locator('#txtCoach')).toHaveText(/Full power/, { timeout: 5_000 });
+  await page.selectOption('#selScenario', 'downtown_skyline');
   await page.waitForTimeout(2_000);
   await expect(page.locator('#coach')).toBeHidden();
 });
 
 test('Skip works while paused, and picking another mission first does not burn the first visit', async ({ page }) => {
   await page.goto(BASE);
-  await page.locator('.btnMission[data-scenario="kdfw_takeoff"]').click();
+  await page.locator('.btnMission[data-scenario="downtown_skyline"]').click(); // a tour: not coached
   await page.locator('#btnStartFlight').click();
   await page.waitForTimeout(500);
   await expect(page.locator('#coach')).toBeHidden();

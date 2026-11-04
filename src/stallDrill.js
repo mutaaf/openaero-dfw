@@ -6,7 +6,7 @@
 // height loss is secondary until the recovery is positive). Pure: no THREE, no DOM. Tested in
 // tests/unit/stallDrill.test.js and flown headless in tests/flight/c172.test.js.
 import { curve, letterGrade } from './landing.js';
-import { DRILL_TEXT } from './coach.js';
+import { DRILL_TEXT, RANK } from './coach.js';
 
 export const STALL_KEY = 'c172_stall_recovery';
 // The coach's words for the drill (coach.js ranks and picks the keys: stallTarget).
@@ -21,6 +21,7 @@ export const STALL_TEXT = {
   stKid: 'Stall! The plane noses down and climbs away',
 };
 Object.assign(DRILL_TEXT, STALL_TEXT);
+Object.assign(RANK, { stIdle: 4, stSlow: 4, stKidSlow: 4, stPower: 4, stWings: 4, stClimb: 4, stNose: 5, stKid: 5 });
 // The stall warning sounds 5 kt above the stall (aero.js stallWarningKts): on the C172's lift
 // curve that is ~3° of angle of attack below the stall angle (CL ∝ 1/V², (53/58)² of CLmax).
 // Below it the wing is flying again: "unstalled".
