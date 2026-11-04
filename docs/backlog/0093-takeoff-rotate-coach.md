@@ -1,12 +1,12 @@
 ---
 id: 0093
 title: Takeoff coach: keep it straight, rotate smoothly, then climb
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-10-26
-pr:
+pr: 183
 ---
 
 ## Why

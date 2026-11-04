@@ -236,3 +236,21 @@ test('caption, GPWS box, gate verdict and coach never stack over the horizon (01
   for (const c of ['unstabilized, go around', 'five hundred', 'sink rate']) expect(seen).toContain(c);
   expect(errors).toEqual([]);
 });
+
+// Ticket 0093: the takeoff coach uses the same card, parked on the runway with its first prompt in
+// the touch words (the throttle slider, not Shift): clear of the tapes, the horizon and every
+// touch control at every size, Skip a 44 px target.
+test('the takeoff coach card clears the horizon and the touch controls at every size (0093)', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto(`${BASE}?mission=kdfw_takeoff`);
+  await page.locator('#btnStartFlight').tap();
+  await expect(page.locator('#txtCoach')).toHaveText('Full power: slide the throttle to the top', { timeout: 10_000 });
+  for (const [w, h] of SIZES) {
+    await page.setViewportSize({ width: w, height: h });
+    await expect.poll(async () => (await boxes(page)).h).toBe(h);
+    await page.waitForTimeout(100);
+    expectClear(await boxes(page), `takeoff ${w}x${h}`);
+    await page.screenshot({ path: test.info().outputPath(`takeoff-coach-${w}x${h}.png`) });
+  }
+  expect(errors).toEqual([]);
+});

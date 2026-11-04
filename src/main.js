@@ -1010,6 +1010,9 @@ function startDrills(mission) {
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
   if (mission.engineOutFt) loadDrill(mission, eoLib, () => import('./engineOut.js'), (lib) => { eoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.engineOut = lib.createEngineOut(mission); });
   if (mission.rto) loadDrill(mission, rtoLib, () => import('./rto.js'), (lib) => { rtoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.rto = lib.createRto(); });
+  // The takeoff mission's coach (0093), behind the coach checkbox; its drills have their own.
+  sim.toCoach = null;
+  if (mission.kind === 'takeoff' && !drillCoach) loadDrill(mission, null, () => import('./takeoffCoach.js'), (lib) => { sim.toCoach = lib.createTakeoffCoach(sim.aircraftKey, sim.spec); });
   if (mission.windshear) loadDrill(mission, wsLib, () => import('./windshear.js'), (lib) => { wsLib = lib; if (sim.aircraftKey === mission.aircraft) { const d = courseVector(runwayEnd(mission.airport, mission.rwy).hdgT); sim.windshear = lib.createShear(d.x, d.z); } });
 }
 
@@ -1276,7 +1279,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover)) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1303,8 +1306,9 @@ function updateCoach(dt) {
     coachInput.stall = sim.stallDrill?.phase ?? null;
     coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
       : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim)
-      : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim) : null;
-    coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto) ? coachInput.ds : null;
+      : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
+      : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
+    coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach) ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
@@ -1315,6 +1319,7 @@ function updateCoach(dt) {
     r.canReverse = !!systemsOf(sim.spec).reverser;
     r.reverserPos = sim.reverserPos ?? 0;
     r.braking = sim.brakesOn || sim.autobrakeActive;
+    if (sim.toCoach) coach.flown = false; // a hop on the rotation is not a landing (0093)
     stepCoach(coach, coachInput, dt);
     if (coach.done) coachDoneS += dt;
     // After the landing the rollout prompts run to the stop; "Stopped" then fades.

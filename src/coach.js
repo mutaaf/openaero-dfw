@@ -45,13 +45,11 @@ export const COACH_PROMPTS = {
   bounceGa: 'Bounced again: go around! Full power',
   bounceHigh: 'Big bounce: go around! Full power', // AFH: a severe bounce is not saved
   bounceKid: 'Bounced! Let go: the plane lands itself', // Kid: the autothrottle has the power
-  // The go-around (0047, after the gate called it): power, pitch, flaps a notch, gear, climb.
-  gaFlaps: 'Flaps up one notch: press F',
 };
-// The drills' own prompts are ranked here and worded in their lazy chunks (no boot bytes),
-// which add their words to DRILL_TEXT when they load: the go-around's ga* (goAround.js
-// GA_TEXT; gaFlaps stays here, it has numbers), the stall drill's st* (stallDrill.js
-// STALL_TEXT), the dead-stick's ds* (deadStick.js DS_TEXT, rank 1) and the traffic pattern's
+// The drills' own prompts are worded and ranked in their lazy chunks (no boot bytes), which
+// add their words to DRILL_TEXT and their ranks to RANK when they load: the go-around's ga*
+// (goAround.js GA_TEXT; coachText words gaFlaps with its numbers), the stall drill's st*
+// (stallDrill.js STALL_TEXT), the dead-stick's ds* (deadStick.js DS_TEXT, rank 1) and the traffic pattern's
 // pt* (pattern.js PT_TEXT, rank 1, through s.ds).
 export const DRILL_TEXT = {};
 // Higher rank interrupts at once; guidance about the path and the centreline shares a rank.
@@ -59,8 +57,6 @@ export const RANK = {
   papi: 1, wet: 1, high: 1, low: 1, kid: 1, fast: 1, offLeft: 1, offRight: 1,
   slow: 2, flaps: 2, sink: 2, gear: 3, flare: 3, decrab: 3, idle: 4,
   done: 5, brake: 5, reverse: 5, stow: 5, stopped: 6, bounce: 5, bounceGa: 5, bounceHigh: 5, bounceKid: 5,
-  gaPower: 4, gaPitch: 4, gaFlaps: 4, gaGear: 4, gaClimb: 4, gaKid: 4,
-  stIdle: 4, stSlow: 4, stKidSlow: 4, stPower: 4, stWings: 4, stClimb: 4, stNose: 5, stKid: 5,
 };
 
 // On a touch screen the keys are buttons (a drill's chunk adds its own, e.g. windshear.js).
@@ -69,8 +65,6 @@ export const TOUCH_WORDS = {
   reverse: 'Reverse thrust: tap REV, then add power',
   brake: 'Tap BRAKES to stop',
   stow: 'Tap REV to stow the reversers, 60 kt',
-  gaFlaps: 'Flaps up one notch: tap FLAPS',
-  gaGear: 'Positive rate: tap GEAR to raise it',
 };
 
 // Words with numbers for the prompts that have them (the card and the voice); built only
