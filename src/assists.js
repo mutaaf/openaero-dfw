@@ -52,13 +52,17 @@ const FLOOR_BELOW_M = 150;    // Kid ground floor: below ~500 ft no dive steeper
 const FLOOR_GAMMA_DEG = -4;   // …a 4° descent (a 3° glidepath still fits)
 const TAIL_MARGIN_DEG = 2;    // Kid auto-flare keeps the tail this far off the runway
 const GUIDE_RATE_DEG_S = 2;   // Kid hands-off: the held pitch eases toward the guide this fast
-// Kid's de-crab (0100): below the coordination's height (COORD_FROM_M), coming down, the rudder lines the nose up
-// with the ground track: this much rudder per degree of drift, less 0.3 per °/s of yaw rate (DECRAB_DAMP is per
-// rad/s; without the damping it swung against the fin). Tuned headless (tests/flight/pattern.test.js, kidFinal.test.js): from
-// higher up the longer slip sank faster (5 m: ~250-300 fpm against ~205-215).
-const DECRAB_GAIN = 0.4;
+// Kid's de-crab (0100): under DECRAB_FROM_M, coming down (not climbing away: a float or a bounce in ground effect
+// keeps it), the rudder lines the nose up with the ground track: this much rudder per degree of drift, less 0.3
+// per °/s of yaw rate (DECRAB_DAMP is per rad/s; without the damping it swung against the fin). Tuned headless
+// (tests/flight/kidFinal.test.js, pattern.test.js) for the grade too: the slip's drag sinks the Cessna, and from
+// 3 m (gain 0.4) its ~205-225 fpm cost the hands-off crosswind landing its S (first-timer panel); from 2.5 m it
+// lands at ~186-197 fpm, as in calm air.
+const DECRAB_FROM_M = 2.5;
+const DECRAB_GAIN = 0.7;
+const MAINS_GAIN = 0.4; // on the mains (below): 0.7 swung the F-16's nose ±6° there
 const DECRAB_DAMP = 17;
-const decrabRudder = (offDeg, s) => clamp(-offDeg * DECRAB_GAIN - s.yawRateRight * DECRAB_DAMP, -1, 1);
+const decrabRudder = (offDeg, s, gain) => clamp(-offDeg * gain - s.yawRateRight * DECRAB_DAMP, -1, 1);
 
 // departing: Kid left the ground (takeoff or touch-and-go) and has not yet reached 1,000 ft:
 // main.js climbs at full power instead of flying the approach speed and the flare retard.
@@ -89,13 +93,13 @@ export function shapeControls(cfg, st, s, dt, out) {
     // The pedals too, when they use them; when they don't, the nose wheel holds the centreline
     // of the runway it is on (0110), never the sideslip's coordination (it would steer into the wind).
     // Kid on the mains with the nose wheel still up (a 737 derotates for over a second, a kid may hold
-    // the stick back): the nose wheel can't steer yet, so the rudder, at the de-crab's gains, turns the nose
-    // to the runway hold's heading (0100 panel: the hold's pedal, sized for the nose wheel, let the wind
+    // the stick back): the nose wheel can't steer yet, so the rudder, as in the de-crab, turns the nose
+    // to the runway hold's heading, at a softer gain (0100 panel: the hold's pedal, sized for the nose wheel, let the wind
     // yaw it back to ~5° within 1.5 s).
     st.pitchHoldDeg = null;
     out.elev = s.pitchIn; out.ail = s.rollIn;
     out.rud = Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null ? s.yawIn
-      : cfg.autoFlare && s.noseWheelDown === false ? decrabRudder(headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps)), s)
+      : cfg.autoFlare && s.noseWheelDown === false ? decrabRudder(headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps)), s, MAINS_GAIN)
       : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS);
     return out;
   }
@@ -158,7 +162,7 @@ export function shapeControls(cfg, st, s, dt, out) {
   // Kid's flare, coming down: the rudder lines the nose up with the ground track (0100; FAA-H-8083-3C
   // ch. 9: the crab is taken out just before touchdown), so the wheels roll where the airplane goes.
   out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn
-    : cfg.autoFlare && s.wheelHeightM < COORD_FROM_M && s.vsMps < 0 ? decrabRudder(s.driftDeg, s)
+    : cfg.autoFlare && !st.departing && s.wheelHeightM < DECRAB_FROM_M && s.vsMps < 1 ? decrabRudder(s.driftDeg, s, DECRAB_GAIN)
     : s.wheelHeightM < COORD_FROM_M ? 0 : clamp(s.betaDeg * COORD_GAIN, -1, 1);
   return out;
 }

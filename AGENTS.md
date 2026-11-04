@@ -170,7 +170,9 @@ src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes 
                     input before stepFlightModel (physics untouched): bank/pitch/AoA
                     envelope, auto-trim, auto-coordination; Kid adds hands-off line-up,
                     no-dive floor, auto-flare (sink profile per airframe: spec.kidFlarePerS, the 737's quicker, 0101) and its de-crab
-                    (0100: under 3 m, coming down, rudder lines the nose up with the track: driftDeg, yawRateRight); kidFinalGuide is Kid's hands-off final (the
+                    (0100: under 2.5 m, not climbing away, rudder lines the nose up with the track: driftDeg, yawRateRight; on the mains
+                    with the nose wheel up, noseWheelDown false, the rudder turns it to the runway hold's heading; kidFinalGuide's line-up
+                    banks low over the whole runway); kidFinalGuide is Kid's hands-off final (the
                     3° path, past the threshold only low over the first third, ≤ 2°, 0098;
                     flight cards in tests/flight/kidFinal.test.js); main.js adds Kid's autothrottle, gear/flaps
                     and soft landing. On the runway Kid and Learner hold its centreline with the

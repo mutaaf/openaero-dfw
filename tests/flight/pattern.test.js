@@ -166,8 +166,8 @@ describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spaw
 // touched down 9-10° off it in a 10 kt crosswind, 14-15° in 15 kt: the wheels rolled sideways. Kid's
 // rudder now takes the crab out in the last few feet (FAA-H-8083-3C ch. 9: the crosswind flare), and on
 // the runway the pedals hold its centreline (0110), here for 20 s of the rollout (brakes on, idle).
-// The slip costs the Cessna a little sink (~185 → ~205-220 fpm; landing.js's rate score ~86 → ~80-82 of 100,
-// full marks being 120 fpm or less); the 737's and F-16's sink is unchanged.
+// Started at 2.5 m the slip costs the Cessna almost no sink (~185 → ~189-195 fpm; the grade card is in
+// kidFinal.test.js); from 3 m it was ~205-220 and cost the hands-off landing its S.
 describe('Kid de-crabs the Cessna in a crosswind and holds the centreline on the rollout (flightModel, ticket 0100)', () => {
   for (const [name, wind] of [['10 kt from the right (250°)', XWIND], ['10 kt from the left (070°)', { fromDeg: 70, kts: 10 }], ['15 kt from the right (250°)', { fromDeg: 250, kts: 15 }]]) {
     it(`${name}: touches down within 2° of the track, wings near level, and rolls within 8 m of the centreline`, () => {

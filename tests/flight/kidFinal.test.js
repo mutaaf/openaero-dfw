@@ -9,7 +9,7 @@ import { Vector3, Quaternion, Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { trimThrottle, dihedralAileron } from '../../src/flightModel.js';
-import { driftAngleDeg } from '../../src/landing.js';
+import { driftAngleDeg, gradeLanding } from '../../src/landing.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
@@ -100,7 +100,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     if (!x.onGround) return false;
     const g = approachGeometry(end, x.pos);
     td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t,
-      driftDeg: driftAngleDeg(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, x.vel.x, x.vel.z), bankDeg: attitude(x).bankRightDeg };
+      driftDeg: driftAngleDeg(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, x.vel.x, x.vel.z), bankDeg: attitude(x).bankRightDeg, pitchDeg: attitude(x).pitchDeg, widthM: end.widthM };
     return rollS <= 0;
   });
   return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi, roll };
@@ -256,10 +256,10 @@ describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticke
     });
   }
   // The runway hold itself aims up to 3° off the runway to steer back to the centreline (groundSteerRudder),
-  // so a wider bound here is the hold, not a crab: the 737 in 25 kt at the wheels within 4°, the F-16 in 20 kt
-  // within 3° (the physics panel's sweep, 10-25 kt: touchdown drift 3.7-9.4° in the 737 and 4.2-10.5° in the F-16
+  // so a wider bound here is the hold, not a crab: the 737 in 25 kt at the wheels and the F-16 in 20 kt within
+  // 4° (3.2°, 3.8°) (the physics panel's sweep, 10-25 kt: touchdown drift 3.7-9.4° in the 737 and 4.2-10.5° in the F-16
   // without the de-crab).
-  for (const [ac, wind, bound] of [['b738', { fromDeg: 90, kts: 25 }, 4], ['f16', { fromDeg: 270, kts: 20 }, 3]]) {
+  for (const [ac, wind, bound] of [['b738', { fromDeg: 90, kts: 25 }, 4], ['f16', { fromDeg: 270, kts: 20 }, 4]]) {
     it(`${ac} kdfw_35c_final, ${wind.kts} kt from ${wind.fromDeg}°: the nose stays within ${bound}° of the runway for 3 s after touchdown`, () => {
       const r = flyKidFinal(ac, 'kdfw_35c_final', wind, null, null, 3);
       logRoll(ac, 'kdfw_35c_final', wind, r);
@@ -273,8 +273,9 @@ describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticke
     const r = flyKidFinal('b738', 'kdfw_35c_final', { fromDeg: 270, kts: 15 }, null, (ft) => (ft < 20 ? -0.75 : 0), 20);
     logRoll('b738', 'kdfw_35c_final float', { fromDeg: 270, kts: 15 }, r);
     expect(Math.abs(r.td.crossM)).toBeLessThan(6);
-    expect(r.roll.maxCrossM).toBeLessThan(8);
+    expect(r.roll.maxCrossM).toBeLessThan(8); // 4.0 m; without the mains' rudder the held-up nose ran it off the side
     expect(Math.abs(r.td.driftDeg)).toBeLessThan(3);
+    expect(r.roll.maxNoseOff3sDeg).toBeLessThan(5); // 4.9°: the hold steering back from 4 m, not a crab
   });
   // 20 kt at the wheels (a ~25 kt METAR in the game, weather.js surfaceWindFactor): the touchdown is
   // straight (1.6° drift, 1.9° in 3 s; was 7.4°), but the rollout's hold can't keep the 737 on 35C.
@@ -290,4 +291,21 @@ describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticke
     logRoll('b738', 'kdfw_35c_final', XW20, r);
     expect(r.roll.maxCrossM).toBeLessThan(8);
   });
+});
+
+// First-timer panel: the hands-off Cessna lands calm at ~186 fpm, an S (95) on landing.js's line, and the
+// de-crab's slip first cost every crosswind landing that S (204-226 fpm, A 92-94). Started at 2.5 m it keeps it
+// through 15 kt; at 20 kt it is an A 94, as it was before the de-crab (its crab cost the same points).
+describe('Kid hands off in a crosswind grades as well as in calm air (flightModel, ticket 0100)', () => {
+  const grade = (spec, r) => gradeLanding({ vsFpm: r.td.vsFpm, crossM: r.td.crossM, bankDeg: r.td.bankDeg, pastThresholdM: r.td.pastThrM,
+    pitchDeg: r.td.pitchDeg, runwayWidthM: r.td.widthM, iasKts: r.td.iasKts, vrefKts: spec.vrefKts });
+  const calm = grade(AIRCRAFT_DATABASE.c172, flyKidFinal('c172', 'kads_16_final'));
+  for (const wind of [{ fromDeg: 250, kts: 10 }, { fromDeg: 70, kts: 15 }]) {
+    it(`c172 kads_16_final, ${wind.kts} kt from ${wind.fromDeg}°: the same grade as calm (${calm.grade} ${calm.score})`, () => {
+      const g = grade(AIRCRAFT_DATABASE.c172, flyKidFinal('c172', 'kads_16_final', wind));
+      console.log(`[c172 kid final] grade calm ${calm.grade} ${calm.score}, ${wind.kts} kt ${g.grade} ${g.score}`);
+      expect(g.grade).toBe(calm.grade);
+      expect(g.score).toBeGreaterThanOrEqual(calm.score - 0.5);
+    });
+  }
 });

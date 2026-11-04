@@ -1,12 +1,12 @@
 ---
 id: 0100
 title: Kid de-crabs in the flare and holds the centreline on the rollout in a crosswind
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-10-27
-pr:
+pr: 179
 ---
 
 ## Why
