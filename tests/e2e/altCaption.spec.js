@@ -1,26 +1,32 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 import { ALT_TAPE_X, SPEED_TAPE_X, ALT_BOX, TAPE_TOP, windBoxRect } from '../../src/hudLayout.js';
+import { altLabels } from '../../src/gateVerdict.js';
 
 // Ticket 0132: the altitude tape reads above sea level and says so ("MSL" under its readout box),
 // while the top bar's AGL is the height above the ground. The caption is drawn in the HUD canvas,
 // clear of the box's digits, the tape's ticks, the speed tape, the wind box and every DOM panel.
+// Ticket 0140: Pilot reads MSL / AGL; Kid and Learner (a first visit flies Learner) read SEA LVL / GROUND.
 const PANELS = ['#topRow', '#coach', '#touchThrottle', '#touchStick', '#touchButtons', '#touchTrim', '#keyHints', '#calloutCaption'];
 const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, height: 844, touch: true }, { width: 844, height: 390, touch: true }, { width: 568, height: 320, touch: true }]) {
-  test.describe(`${v.width}x${v.height}`, () => {
+const VIEWS = [{ width: 1280, height: 720, touch: false }, { width: 390, height: 844, touch: true }, { width: 844, height: 390, touch: true }, { width: 568, height: 320, touch: true }];
+const CASES = VIEWS.flatMap((v) => [{ ...v, level: 'pilot' }, { ...v, level: 'learner' }]).concat([{ ...VIEWS[1], level: 'kid' }]);
+for (const v of CASES) {
+  const words = altLabels(v.level);
+  test.describe(`${v.width}x${v.height} ${v.level}`, () => {
     test.use({ viewport: { width: v.width, height: v.height }, hasTouch: v.touch, isMobile: v.touch, storageState: { cookies: [], origins: [] } });
 
-    test('the altitude tape says MSL, clear of everything else; the top bar says AGL', async ({ page }) => {
+    test(`the altitude tape says ${words.alt}, clear of everything else; the top bar says ${words.agl}`, async ({ page }) => {
       const errors = collectErrors(page);
       await stubTiles(page);
       await page.goto(BASE);
+      if (v.level !== 'learner') await page.locator(`#assistPicker .btnAssist[data-assist="${v.level}"]`).click();
       await page.locator('#btnStartFlight').click();
       await expect(page.locator('#onboardingModal')).toBeHidden();
       await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudAltCaption?.w ?? 0, { timeout: 10_000 }).toBeGreaterThan(0);
       const d = await page.evaluate(() => window.openaeroDebug());
-      expect(d.hudAltCaption.text).toBe('MSL');
+      expect(d.hudAltCaption.text).toBe(words.alt);
       const r = { x: d.hudAltCaption.x, y: d.hudAltCaption.y, width: d.hudAltCaption.w, height: d.hudAltCaption.h };
       const cx = v.width / 2, cy = v.height / 2, x = cx + ALT_TAPE_X;
       expect(r.x).toBeGreaterThanOrEqual(0);
@@ -49,12 +55,20 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
           if (img[i + 3] > 180) opaque++;
           if (img[i + 3] > 180 && img[i] > 150 && img[i + 2] > 180) light++;
         }
-        return { opaque, light, n: img.length / 4 };
-      }, r);
+        const ctx = c.getContext('2d');
+        ctx.font = 'bold 11px monospace';
+        return { opaque, light, n: img.length / 4, textW: ctx.measureText(rr.text).width };
+      }, { ...r, text: words.alt });
       expect(px.opaque / px.n, 'the tab is drawn').toBeGreaterThan(0.9);
       expect(px.light, 'the letters are drawn').toBeGreaterThan(8);
-      // The top bar's height is labelled AGL wherever it shows.
-      if (v.width < 1024) await expect(page.locator('#txtPhoneAgl').locator('xpath=..')).toContainText('AGL');
+      expect(px.textW, 'the word fits its tab unsqueezed').toBeLessThanOrEqual(r.width - 2);
+      // The top bar's height is labelled with the level's word wherever it shows, and only that word.
+      if (v.width < 1024) {
+        const label = page.locator('#txtPhoneAgl').locator('xpath=..').locator('div').first();
+        await expect(label).toHaveText(`${words.agl} FT`, { useInnerText: true });
+        const lb = await label.boundingBox(), cell = await label.locator('xpath=..').boundingBox();
+        expect(lb.x + lb.width, 'the word stays in its cell').toBeLessThanOrEqual(cell.x + cell.width + 0.5);
+      }
       expect(errors).toEqual([]);
     });
   });
