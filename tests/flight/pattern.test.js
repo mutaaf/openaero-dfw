@@ -69,7 +69,7 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}, { rollS = 0 } = {}) {
     Object.assign(s, {
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, yawRateRight: -x.angVel.y,
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * Math.PI / 180), stallAoaDeg: stallAoaDeg(c172, x.flapsIndex),
-      tailstrikeDeg: c172.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, wheelHeightM: x.pos.y - c172.gearHeight,
+      tailstrikeDeg: c172.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, noseWheelDown: x.wheelLoads?.[0] > 0, wheelHeightM: x.pos.y - c172.gearHeight,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, flarePerS: c172.kidFlarePerS,
       driftDeg: headingError(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI),
     });
@@ -166,7 +166,8 @@ describe('Cessna 172S traffic pattern at Addison 16, Kid hands off from the spaw
 // touched down 9-10° off it in a 10 kt crosswind, 14-15° in 15 kt: the wheels rolled sideways. Kid's
 // rudder now takes the crab out in the last few feet (FAA-H-8083-3C ch. 9: the crosswind flare), and on
 // the runway the pedals hold its centreline (0110), here for 20 s of the rollout (brakes on, idle).
-// The slip costs a little sink (~185 → ~205-220 fpm, inside landing.js's 240 for full rate marks).
+// The slip costs the Cessna a little sink (~185 → ~205-220 fpm; landing.js's rate score ~86 → ~80-82 of 100,
+// full marks being 120 fpm or less); the 737's and F-16's sink is unchanged.
 describe('Kid de-crabs the Cessna in a crosswind and holds the centreline on the rollout (flightModel, ticket 0100)', () => {
   for (const [name, wind] of [['10 kt from the right (250°)', XWIND], ['10 kt from the left (070°)', { fromDeg: 70, kts: 10 }], ['15 kt from the right (250°)', { fromDeg: 250, kts: 15 }]]) {
     it(`${name}: touches down within 2° of the track, wings near level, and rolls within 8 m of the centreline`, () => {

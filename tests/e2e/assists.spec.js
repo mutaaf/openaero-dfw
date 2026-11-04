@@ -239,9 +239,9 @@ test.describe(() => {
     expect(short.crossM).toBeLessThan(6);
     expect(((short.headingDeg - short.runwayHdgT + 540) % 360) - 180).toBeLessThan(-2);
     // Ticket 0100: Kid's rudder takes the crab out in the last few feet: the wheels meet the runway
-    // pointing down it (the crab here was ~4-5° on main before; the nose wheel then holds it, 0110).
-    await expect.poll(async () => (await debug(page)).onGround, { timeout: 60_000, intervals: [50] }).toBe(true);
-    const wheels = await debug(page);
+    // pointing down it (the crab here was ~4-5° before; on the mains the de-crab keeps the rudder until the nose wheel is down).
+    // Sampled in the page on the first frame on the wheels (a poll's round trip on CI is ~2-3 frames).
+    const wheels = await page.evaluate(() => new Promise((r) => { const f = () => { const d = window.openaeroDebug(); if (d.onGround) r(d); else requestAnimationFrame(f); }; f(); }));
     const tdNoseDeg = ((wheels.headingDeg - wheels.runwayHdgT + 540) % 360) - 180;
     await expect.poll(async () => (await debug(page)).lastLanding, { timeout: 60_000, intervals: [250] }).not.toBeNull();
     const td = (await debug(page)).lastLanding;

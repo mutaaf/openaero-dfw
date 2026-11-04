@@ -22,7 +22,8 @@ const _e = new Euler(0, 0, 0, 'YXZ');
 
 // Kid, hands off, from the mission's spawn to the touchdown. wind: { fromDeg, kts } (steady).
 // stick(ft): the kid's fore/aft stick at a wheel height (+ = push), else hands off.
-function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null) {
+// rollS: keep rolling that long past the touchdown (idle, no brakes, Kid's pedals: main.js runwayUnderWheels).
+function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0) {
   const spec = AIRCRAFT_DATABASE[acKey];
   const m = missionByKey(missionKey);
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
@@ -49,6 +50,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   const cfg = assistConfig('kid'), ast = createAssistState();
   const s = {}, out = {}, conf = { gearDown: true, flapsIndex: 2 }, at = { trim: 0 };
   let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
+  const roll = { maxNoseOff3sDeg: 0, maxCrossM: 0 };
   const papi = [0, 0, 0, 0, 0]; // samples by white lamps (main.js updatePapi: the CG to the box), 200 ft up and higher
   fly(b, spec, 240, (x, dt) => {
     const ap = approachGeometry(end, x.pos);
@@ -64,9 +66,20 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
       pitchIn: stick ? stick(wheelM * M_TO_FT) : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
       yawRateRight: -x.angVel.y, driftDeg: driftAngleDeg(noseDeg, x.vel.x, x.vel.z),
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * DEG_TO_RAD), stallAoaDeg: stallAoaDeg(spec, x.flapsIndex),
-      tailstrikeDeg: spec.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, wheelHeightM: wheelM,
+      tailstrikeDeg: spec.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, noseWheelDown: x.wheelLoads?.[0] > 0, wheelHeightM: wheelM,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, flarePerS: spec.kidFlarePerS,
     });
+    s.rwyHdgDeg = null;
+    if (x.onGround && Math.abs(ap.crossM) < end.widthM / 2 + 3) {
+      const r = end.hdgT * DEG_TO_RAD, g = spec.gear;
+      Object.assign(s, { rwyHdgDeg: end.hdgT, noseHdgDeg: noseDeg, crossM: ap.crossM, crossVelMps: x.vel.x * Math.cos(r) + x.vel.z * Math.sin(r),
+        steerRateDegS: Math.hypot(x.vel.x, x.vel.z) * Math.tan(g.steerDeg * DEG_TO_RAD) / (g.noseZ + g.mainZ) * 180 / Math.PI });
+    }
+    if (td) {
+      const off = Math.abs(((noseDeg - end.hdgT) % 360 + 540) % 360 - 180);
+      if (x.t - td.t <= 3) roll.maxNoseOff3sDeg = Math.max(roll.maxNoseOff3sDeg, off);
+      roll.maxCrossM = Math.max(roll.maxCrossM, Math.abs(ap.crossM));
+    }
     shapeControls(cfg, ast, s, dt, out);
     x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = slewRudder(x.rudderInput, out.rud, dt); // main.js applyAssists
     // Kid's gear, flaps and power (main.js applyAssists).
@@ -83,13 +96,14 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     } else x.throttle = Math.max(0, x.throttle - dt * 0.5);
     lastVs = x.vel.y;
   }, (x) => {
+    if (td) return x.t - td.t >= rollS;
     if (!x.onGround) return false;
     const g = approachGeometry(end, x.pos);
     td = { pastThrM: -g.distM, crossM: g.crossM, vsFpm: lastVs * M_TO_FT * 60, iasKts: x.iasKts, t: x.t,
       driftDeg: driftAngleDeg(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, x.vel.x, x.vel.z), bankDeg: attitude(x).bankRightDeg };
-    return true;
+    return rollS <= 0;
   });
-  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi };
+  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi, roll };
 }
 
 const log = (ac, key, name, { td, thrFt }) => console.log(`[${ac} kid final] ${key} ${name}: threshold ${thrFt?.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, drift ${td && td.driftDeg.toFixed(1)}°, bank ${td && td.bankDeg.toFixed(1)}°, ${td && td.t.toFixed(0)} s`);
@@ -204,23 +218,76 @@ describe('Kid let go over the runway (flightModel, ticket 0098 panel)', () => {
 });
 
 // Ticket 0100: the straight-in finals in a crosswind. Without the de-crab the Cessna touched down
-// 9-10° off its track in 10 kt (~19° in 20 kt) and the 737 3.5-7.5° (10-20 kt).
+// 9-10° off its track in 10 kt (~20° in 20 kt) and the 737 3.5-7.5° (10-20 kt). The de-crab is a slip
+// with the wings near level; the line-up's bank (into the wind) holds the centreline through it.
 describe('Kid de-crabs before touchdown in a crosswind (flightModel, ticket 0100)', () => {
   for (const [ac, key, name, wind] of [
     ['c172', 'kads_16_final', '10 kt from the right (250°)', { fromDeg: 250, kts: 10 }],
-    ['c172', 'kads_16_final', '20 kt from the left (090°)', { fromDeg: 90, kts: 20 }],
+    ['c172', 'kads_16_final', '20 kt straight across from the right (250°)', { fromDeg: 250, kts: 20 }],
     ['b738', 'kdfw_35c_final', '10 kt from the left (270°)', { fromDeg: 270, kts: 10 }],
     ['b738', 'kdfw_35c_final', '15 kt quartering tailwind (250°)', { fromDeg: 250, kts: 15 }],
     ['b738', 'kdfw_35c_final', '20 kt from the right (090°)', { fromDeg: 90, kts: 20 }],
   ]) {
-    it(`${ac} ${key}, ${name}: wheels within ${ac === 'c172' && wind.kts > 15 ? 3 : 2}° of the track, gently, on the centreline`, () => {
+    it(`${ac} ${key}, ${name}: wheels within ${ac === 'c172' && wind.kts > 15 ? 3.5 : 2}° of the track, gently, on the centreline`, () => {
       const r = flyKidFinal(ac, key, wind);
       log(ac, key, name, r);
       expectLanded(r);
-      // 20 kt is past the C172's 15 kt demonstrated crosswind (POH Sec. 4): within 3°.
-      expect(Math.abs(r.td.driftDeg)).toBeLessThan(ac === 'c172' && wind.kts > 15 ? 3 : 2);
+      // 20 kt straight across is past the C172's 15 kt demonstrated crosswind (POH Sec. 4): ~3°, bounded at
+      // 3.5°. The rudder is full over for the whole ~3 s under 3 m, so what is left is time, not gain.
+      expect(Math.abs(r.td.driftDeg)).toBeLessThan(ac === 'c172' && wind.kts > 15 ? 3.5 : 2);
       expect(Math.abs(r.td.bankDeg)).toBeLessThan(5);
       expect(r.td.vsFpm).toBeGreaterThan(-240);
     });
   }
+});
+
+// 0100 panel: the 737 lands on its mains and holds the nose wheel up for over a second; the runway hold's
+// pedal, sized for the nose wheel's steering, let the wind yaw it back into the crab (~5° at +1.5 s, as
+// without the de-crab). Until the nose tyre carries weight Kid's de-crab keeps the rudder.
+describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticket 0100)', () => {
+  const logRoll = (ac, key, wind, r) => console.log(`[${ac} kid final] ${key} ${wind.kts} kt from ${wind.fromDeg}: drift ${r.td.driftDeg.toFixed(1)}°, nose off the runway at most ${r.roll.maxNoseOff3sDeg.toFixed(1)}° in 3 s, ${r.roll.maxCrossM.toFixed(1)} m off in 20 s`);
+  // Before this: 15 kt 4.9-5.5° off in 3 s and 8.7-9.0 m off; the Cessna 14.7° and 11.9 m.
+  for (const [ac, key, wind] of [['b738', 'kdfw_35c_final', { fromDeg: 270, kts: 15 }], ['c172', 'kads_16_final', { fromDeg: 250, kts: 15 }]]) {
+    it(`${ac} ${key}, ${wind.kts} kt from ${wind.fromDeg}°: the nose stays within 2.5° of the runway for 3 s after touchdown, on the centreline for 20 s`, () => {
+      const r = flyKidFinal(ac, key, wind, null, null, 20);
+      logRoll(ac, key, wind, r);
+      expect(r.roll.maxNoseOff3sDeg).toBeLessThan(2.5);
+      expect(r.roll.maxCrossM).toBeLessThan(8);
+    });
+  }
+  // The runway hold itself aims up to 3° off the runway to steer back to the centreline (groundSteerRudder),
+  // so a wider bound here is the hold, not a crab: the 737 in 25 kt at the wheels within 4°, the F-16 in 20 kt
+  // within 3° (the physics panel's sweep, 10-25 kt: touchdown drift 3.7-9.4° in the 737 and 4.2-10.5° in the F-16
+  // without the de-crab).
+  for (const [ac, wind, bound] of [['b738', { fromDeg: 90, kts: 25 }, 4], ['f16', { fromDeg: 270, kts: 20 }, 3]]) {
+    it(`${ac} kdfw_35c_final, ${wind.kts} kt from ${wind.fromDeg}°: the nose stays within ${bound}° of the runway for 3 s after touchdown`, () => {
+      const r = flyKidFinal(ac, 'kdfw_35c_final', wind, null, null, 3);
+      logRoll(ac, 'kdfw_35c_final', wind, r);
+      expect(Math.abs(r.td.driftDeg)).toBeLessThan(2.5);
+      expect(r.roll.maxNoseOff3sDeg).toBeLessThan(bound);
+    });
+  }
+  // Physics panel: a kid who pulls under 20 ft and floats (~7 s under 3 m) slipped 12.5 m downwind, wings level,
+  // because past the runway's first third nothing banked into the wind (5.4 m without the de-crab).
+  it('b738 kdfw_35c_final, a 0.75 pull under 20 ft in 15 kt from 270°: the long float stays on the centreline', () => {
+    const r = flyKidFinal('b738', 'kdfw_35c_final', { fromDeg: 270, kts: 15 }, null, (ft) => (ft < 20 ? -0.75 : 0), 20);
+    logRoll('b738', 'kdfw_35c_final float', { fromDeg: 270, kts: 15 }, r);
+    expect(Math.abs(r.td.crossM)).toBeLessThan(6);
+    expect(r.roll.maxCrossM).toBeLessThan(8);
+    expect(Math.abs(r.td.driftDeg)).toBeLessThan(3);
+  });
+  // 20 kt at the wheels (a ~25 kt METAR in the game, weather.js surfaceWindFactor): the touchdown is
+  // straight (1.6° drift, 1.9° in 3 s; was 7.4°), but the rollout's hold can't keep the 737 on 35C.
+  const XW20 = { fromDeg: 90, kts: 20 };
+  it('b738 kdfw_35c_final, 20 kt from 90°: the nose stays within 2.5° of the runway for 3 s after touchdown', () => {
+    const r = flyKidFinal('b738', 'kdfw_35c_final', XW20, null, null, 3);
+    logRoll('b738', 'kdfw_35c_final', XW20, r);
+    expect(r.roll.maxNoseOff3sDeg).toBeLessThan(2.5);
+  });
+  // KNOWN GAP (ticket 0150): 83 m off in 20 s (159 m before 0100); the 0110 hold gives up off the pavement.
+  it.fails('b738 kdfw_35c_final, 20 kt from 90°: on the centreline for 20 s of rollout (KNOWN GAP, 0150)', () => {
+    const r = flyKidFinal('b738', 'kdfw_35c_final', XW20, null, null, 20);
+    logRoll('b738', 'kdfw_35c_final', XW20, r);
+    expect(r.roll.maxCrossM).toBeLessThan(8);
+  });
 });

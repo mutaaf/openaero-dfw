@@ -2443,6 +2443,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex);
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;
+  _assistIn.noseWheelDown = !(sim.wheelLoads?.[0] <= 0); // JSBSim reports no wheel loads: its nose wheel steers
   _assistIn.wheelHeightM = wheelHeightM;
   _assistIn.airspeedMps = sim.tasKts * KTS_TO_MPS;
   _assistIn.flarePerS = spec.kidFlarePerS;

@@ -58,6 +58,7 @@ const GUIDE_RATE_DEG_S = 2;   // Kid hands-off: the held pitch eases toward the 
 // higher up the longer slip sank faster (5 m: ~250-300 fpm against ~205-215).
 const DECRAB_GAIN = 0.4;
 const DECRAB_DAMP = 17;
+const decrabRudder = (offDeg, s) => clamp(-offDeg * DECRAB_GAIN - s.yawRateRight * DECRAB_DAMP, -1, 1);
 
 // departing: Kid left the ground (takeoff or touch-and-go) and has not yet reached 1,000 ft:
 // main.js climbs at full power instead of flying the approach speed and the flare retard.
@@ -79,7 +80,7 @@ export function updateDeparture(st, onGround, aglFt) {
 //      steerRateDegS (on the runway: its true heading or null off it, the nose's, the offset and
 //      drift right of its centreline, full pedal's steered yaw rate; 0110), driftDeg (in the air: the
 //      nose minus the ground track, + = nose right of it, the crab into a wind from the right) and yawRateRight
-//      (rad/s, + = nose right; Kid's de-crab, 0100), noFloor (no engine, 0036: the glide is
+//      (rad/s, + = nose right; Kid's de-crab, 0100), noseWheelDown (the nose tyre carries weight), noFloor (no engine, 0036: the glide is
 //      steeper than the floor, and holding the floor would only slow it to a mush) }
 // Writes out.elev, out.ail, out.rud (surface commands, -1..1); returns out. No allocation.
 export function shapeControls(cfg, st, s, dt, out) {
@@ -87,9 +88,14 @@ export function shapeControls(cfg, st, s, dt, out) {
     // On the runway the stick is the pilot's (rotation, taxi): the envelope starts at lift-off.
     // The pedals too, when they use them; when they don't, the nose wheel holds the centreline
     // of the runway it is on (0110), never the sideslip's coordination (it would steer into the wind).
+    // Kid on the mains with the nose wheel still up (a 737 derotates for over a second, a kid may hold
+    // the stick back): the nose wheel can't steer yet, so the rudder, at the de-crab's gains, turns the nose
+    // to the runway hold's heading (0100 panel: the hold's pedal, sized for the nose wheel, let the wind
+    // yaw it back to ~5° within 1.5 s).
     st.pitchHoldDeg = null;
     out.elev = s.pitchIn; out.ail = s.rollIn;
     out.rud = Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null ? s.yawIn
+      : cfg.autoFlare && s.noseWheelDown === false ? decrabRudder(headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps)), s)
       : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS);
     return out;
   }
@@ -147,11 +153,12 @@ export function shapeControls(cfg, st, s, dt, out) {
   // Yaw: the pilot's rudder if they use it, else coordinate (rudder + = yaw right cancels
   // a positive, from-the-right sideslip).
   // Not with the wheels just off the runway (lift-off, a skip): a crosswind's sideslip there asks for
-  // full pedal, which the nose wheel turns into a swerve when they touch again (0110).
+  // full pedal, which the nose wheel turns into a swerve when they touch again (0110). Kid's de-crab does
+  // apply there coming down (a skip): it lines the nose up with the track, which the nose wheel rolls along.
   // Kid's flare, coming down: the rudder lines the nose up with the ground track (0100; FAA-H-8083-3C
   // ch. 9: the crab is taken out just before touchdown), so the wheels roll where the airplane goes.
   out.rud = Math.abs(s.yawIn) > DEAD ? s.yawIn
-    : cfg.autoFlare && s.wheelHeightM < COORD_FROM_M && s.vsMps < 0 ? clamp(-s.driftDeg * DECRAB_GAIN - s.yawRateRight * DECRAB_DAMP, -1, 1)
+    : cfg.autoFlare && s.wheelHeightM < COORD_FROM_M && s.vsMps < 0 ? decrabRudder(s.driftDeg, s)
     : s.wheelHeightM < COORD_FROM_M ? 0 : clamp(s.betaDeg * COORD_GAIN, -1, 1);
   return out;
 }
@@ -168,8 +175,9 @@ export const slewRudder = (cur, cmd, dt) => cur + clamp(cmd - cur, -RUDDER_SLEW_
 // steers at this groundspeed (v·tan δ / wheelbase, main.js), so the pedal it asks is the rate it
 // wants: gentle at landing speeds, full at a walk.
 const GROUND_TURN_DEG_S = 4;
+const groundTargetHdg = (rwyHdgDeg, crossM, crossVelMps) => rwyHdgDeg - clamp(crossM * 0.5 + crossVelMps, -3, 3);
 export function groundSteerRudder(rwyHdgDeg, noseHdgDeg, crossM, crossVelMps, steerRateDegS) {
-  const target = rwyHdgDeg - clamp(crossM * 0.5 + crossVelMps, -3, 3);
+  const target = groundTargetHdg(rwyHdgDeg, crossM, crossVelMps);
   const want = clamp(headingError(target, noseHdgDeg) * 0.5, -GROUND_TURN_DEG_S, GROUND_TURN_DEG_S);
   return clamp(want / Math.max(0.5, steerRateDegS), -1, 1);
 }
@@ -193,9 +201,12 @@ export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
 // alone (level flight) off the final.
 export function kidFinalGuide(end, ap, noseDeg, trackDeg, out) {
   const past = ap.distM < 0;
-  if (past && (ap.heightAbovePathM + ap.pathHeightM > 30 || -ap.distM > (end.lengthM - end.displacedM) / 3)) return;
+  if (past && ap.heightAbovePathM + ap.pathHeightM > 30) return;
   if (ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(end.hdgT, noseDeg)) < 45) {
+    // The line-up holds the centreline low over all the runway (0100 panel: the de-crab's slip drifted a long
+    // float 12 m downwind; the bank, under the flare's 5° cap, puts the wing down into the wind).
     out.guideBankDeg = kidLocalizerBankDeg(end.hdgT, trackDeg, ap.crossM);
+    if (past && -ap.distM > (end.lengthM - end.displacedM) / 3) return; // no path to dive at past the first third
     out.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM);
     if (past) out.guideGammaDeg = Math.max(out.guideGammaDeg, -2);
   }
