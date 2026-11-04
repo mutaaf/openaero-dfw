@@ -1579,9 +1579,7 @@ function syncWeatherUI(dt) {
   if (wx !== sim.wx) refreshWeather();
   const badge = byId('wxBadge');
   badge.textContent = wx.live ? 'LIVE METAR' : 'SCENARIO WX';
-  badge.className = wx.live
-    ? 'px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-400 text-emerald-300 font-bold text-[9px] shrink-0'
-    : 'px-1.5 py-0.5 rounded bg-slate-900 border border-slate-500 text-slate-300 font-bold text-[9px] shrink-0';
+  badge.toggleAttribute('data-live', wx.live); // index.html's data-[live]: colours (off the boot JS, 0100)
   const age = wx.live && wx.obsTime ? ` · ${metarAgeMinutes(wx.obsTime, Date.now() / 1000)} min ago` : '';
   // Remarks (RMK …) are for forecasters; drop them so the age stays visible.
   byId('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
@@ -2432,6 +2430,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.bankRightDeg = -_euler.z * RAD_TO_DEG;
   _assistIn.pitchRateUp = sim.angVel.x;
   _assistIn.rollRateRight = -sim.angVel.z;
+  _assistIn.yawRateRight = -sim.angVel.y;
+  const noseDeg = -_euler.y * RAD_TO_DEG, trackDeg = Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG;
+  _assistIn.driftDeg = headingError(noseDeg, trackDeg); // Kid's de-crab (0100)
   _assistIn.aoaDeg = sim.aoaDeg;
   _assistIn.betaDeg = sim.betaDeg;
   _assistIn.dihedralAil = dihedralAileron(spec, sim.betaDeg * DEG_TO_RAD);
@@ -2440,6 +2441,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex);
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;
+  _assistIn.noseWheelDown = !(sim.wheelLoads?.[0] <= 0); // JSBSim reports no wheel loads: its nose wheel steers
   _assistIn.wheelHeightM = wheelHeightM;
   _assistIn.airspeedMps = sim.tasKts * KTS_TO_MPS;
   _assistIn.flarePerS = spec.kidFlarePerS;
@@ -2458,7 +2460,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   } else if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
-    kidFinalGuide(sim.activeEnd, ap, -_euler.y * RAD_TO_DEG, Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG, _assistIn);
+    kidFinalGuide(sim.activeEnd, ap, noseDeg, trackDeg, _assistIn);
   }
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
   // Addison, not a glidepath it can't hold (deadStick.js kidGuide).
@@ -2469,7 +2471,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   _assistIn.noFloor = sim.engineFailed;
   // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
-  runwayUnderWheels(gsMps, -_euler.y * RAD_TO_DEG);
+  runwayUnderWheels(gsMps, noseDeg);
   shapeControls(cfg, assistState, _assistIn, dt, _assistOut);
   if (sim.onGround) {
     // The takeoff roll's stick, power and the stop are the player's, smoothed like Pilot's.
@@ -3080,7 +3082,7 @@ document.addEventListener('visibilitychange', () => {
 const gfxLostEl = byId('gfxLost');
 const gfxPanel = byId('gfxLostPanel');
 const txtGfxLost = byId('txtGfxLost');
-const gfxWaitText = txtGfxLost.textContent; // index.html's first line
+const gfxWaitText = txtGfxLost.textContent; // index.html's first line; its other lines are data-* there (off the boot JS, 0100)
 const txtGfxLostTitle = byId('txtGfxLostTitle');
 const btnGfxResume = byId('btnGfxResume');
 const btnGfxReload = byId('btnGfxReload');
@@ -3107,7 +3109,7 @@ simCanvas.addEventListener('webglcontextlost', (e) => {
   clearTimeout(gfx.reloadTimer);
   gfx.reloadTimer = setTimeout(() => {
     if (!gfx.lost) return;
-    txtGfxLost.textContent = 'The graphics did not come back. Reload to start a new flight (your best scores are saved).';
+    txtGfxLost.textContent = txtGfxLost.dataset.gone;
     btnGfxReload.classList.remove('hidden');
     btnGfxReload.focus();
   }, 5000);
@@ -3116,7 +3118,7 @@ simCanvas.addEventListener('webglcontextrestored', () => {
   gfx.lost = false;
   clearTimeout(gfx.reloadTimer);
   txtGfxLostTitle.textContent = 'Graphics are back';
-  txtGfxLost.textContent = gfx.pausedIt ? 'Ready when you are.' : 'Your flight is still paused, as you left it.';
+  txtGfxLost.textContent = txtGfxLost.dataset[gfx.pausedIt ? 'ready' : 'held'];
   btnGfxResume.textContent = gfx.pausedIt ? 'RESUME FLIGHT' : 'CONTINUE';
   btnGfxReload.classList.add('hidden');
   btnGfxResume.classList.remove('hidden');

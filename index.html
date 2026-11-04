@@ -79,7 +79,7 @@
   <div id="gfxLost" class="hidden absolute inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/85" role="alertdialog" aria-modal="true" aria-labelledby="txtGfxLostTitle" aria-describedby="txtGfxLost">
     <div id="gfxLostPanel" tabindex="-1" class="max-w-sm w-full hud-glass rounded-2xl p-4 font-mono text-slate-200 border-amber-300/50 shadow-2xl text-center outline-none">
       <div id="txtGfxLostTitle" class="text-sm font-bold text-amber-300 uppercase tracking-widest">Graphics paused</div>
-      <p id="txtGfxLost" class="text-xs text-slate-200 pt-2" aria-live="polite">Your device needed its graphics chip for a moment. Hang on, it should be right back…</p>
+      <p id="txtGfxLost" class="text-xs text-slate-200 pt-2" aria-live="polite" data-gone="The graphics did not come back. Reload to start a new flight (your best scores are saved)." data-ready="Ready when you are." data-held="Your flight is still paused, as you left it.">Your device needed its graphics chip for a moment. Hang on, it should be right back…</p>
       <div class="grid gap-2 pt-3">
         <button id="btnGfxResume" class="hidden hud-btn active rounded-xl min-h-[44px] text-xs font-bold">RESUME FLIGHT</button>
         <button id="btnGfxReload" class="hidden hud-btn rounded-xl min-h-[44px] text-xs font-bold">RELOAD</button>
@@ -291,7 +291,7 @@
     <!-- Live METAR Weather Status Ribbon -->
     <div class="hud-glass pointer-events-auto rounded-xl px-3 py-1 flex items-center justify-between text-[11px] font-mono border-sky-500/40">
       <div class="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
-        <span id="wxBadge" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-500 text-slate-300 font-bold text-[9px] shrink-0">SCENARIO WX</span>
+        <span id="wxBadge" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-500 text-slate-300 font-bold text-[9px] shrink-0 data-[live]:bg-emerald-950 data-[live]:border-emerald-400 data-[live]:text-emerald-300">SCENARIO WX</span>
         <span id="txtMetarString" class="text-emerald-300 truncate">SCENARIO KDFW 35010KT 10SM FEW050 18/08 A3000</span>
       </div>
       <div class="hidden md:flex items-center gap-3 text-slate-300 text-[10px] shrink-0">

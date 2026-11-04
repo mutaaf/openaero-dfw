@@ -40,6 +40,7 @@ test.describe('lost WebGL context', () => {
     await expect(page.locator('#btnGfxResume')).toBeVisible();
     await expect(page.locator('#btnGfxResume')).toBeFocused();
     expect((await debug(page)).gfxLost).toBe(false);
+    await expect(page.locator('#txtGfxLost')).toHaveText('Ready when you are.'); // index.html data-ready (0100)
     await page.keyboard.press('Enter'); // a keyboard path to resume
     await expect(page.locator('#gfxLost')).toBeHidden();
     expect((await debug(page)).paused).toBe(false);
@@ -58,6 +59,7 @@ test.describe('lost WebGL context', () => {
     await expect(page.locator('#gfxLost')).toBeVisible();
     await restoreContext(page);
     await expect(page.locator('#btnGfxResume')).toHaveText('CONTINUE'); // it won't fly for them
+    await expect(page.locator('#txtGfxLost')).toHaveText('Your flight is still paused, as you left it.'); // index.html data-held (0100)
     await page.locator('#btnGfxResume').click();
     await expect(page.locator('#gfxLost')).toBeHidden();
     expect((await debug(page)).paused).toBe(true);

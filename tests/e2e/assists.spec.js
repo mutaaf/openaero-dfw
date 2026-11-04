@@ -221,7 +221,7 @@ test.describe(() => {
   // A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
   test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
-  test('Kid hands off in a 15 kt crosswind lands on the centreline, crabbed', async ({ page }) => {
+  test('Kid hands off in a 15 kt crosswind lands on the centreline, crabbed, and de-crabs for the touchdown', async ({ page }) => {
     test.setTimeout(180_000);
     await page.unroute('**/openaero/api/metar*');
     await stubMetar(page, [{ ...TEST_METAR, wdir: 270, wspd: 15, rawOb: 'METAR KDFW 161953Z 27015KT 10SM FEW250 24/10 A3002' }]);
@@ -238,8 +238,15 @@ test.describe(() => {
     expect(short.crossM).toBeGreaterThan(-6);
     expect(short.crossM).toBeLessThan(6);
     expect(((short.headingDeg - short.runwayHdgT + 540) % 360) - 180).toBeLessThan(-2);
+    // Ticket 0100: Kid's rudder takes the crab out in the last few feet: the wheels meet the runway
+    // pointing down it (the crab here was ~4-5° before; on the mains the de-crab keeps the rudder until the nose wheel is down).
+    // Sampled in the page on the first frame on the wheels (a poll's round trip on CI is ~2-3 frames).
+    const wheels = await page.evaluate(() => new Promise((r) => { const f = () => { const d = window.openaeroDebug(); if (d.onGround) r(d); else requestAnimationFrame(f); }; f(); }));
+    const tdNoseDeg = ((wheels.headingDeg - wheels.runwayHdgT + 540) % 360) - 180;
     await expect.poll(async () => (await debug(page)).lastLanding, { timeout: 60_000, intervals: [250] }).not.toBeNull();
     const td = (await debug(page)).lastLanding;
+    console.log(`[0100] nose at touchdown ${tdNoseDeg.toFixed(1)}° off the runway`);
+    expect(Math.abs(tdNoseDeg)).toBeLessThan(2.5);
     console.log(`[0097] short final ${short.crossM.toFixed(1)} m, nose ${(((short.headingDeg - short.runwayHdgT + 540) % 360) - 180).toFixed(1)}°; touchdown ${td.crossM.toFixed(1)} m off, ${td.pastThresholdM.toFixed(0)} m past, ${td.vsFpm.toFixed(0)} fpm, ${td.grade}`);
     expect(Math.abs(td.crossM)).toBeLessThan(8);
     expect(td.grade).not.toBe('CRASH');

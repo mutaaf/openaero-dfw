@@ -249,7 +249,8 @@ describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {
   it('leaves level flight off the final: past the first third, high over the runway, far out, wide or not lined up', () => {
     const third = (end.lengthM - end.displacedM) / 3;
     // A go-around or takeoff climbing through 1,000 ft over its runway is not dived back at it (panel).
-    for (const o of [out(at(third + 20, 0, 3)), out(at(end.lengthM + 100)), out(at(100, 0, 35)), out(at(1500, 0, 305)),
+    // (Low past the first third it lines up but flies no path: the 0100 case below.)
+    for (const o of [out(at(100, 0, 35)), out(at(1500, 0, 305)),
       out(at(-25000)), out(at(-3000, 1600, 160)), out(at(-3000, 0, 160), end.hdgT + 60)]) {
       expect(o).toEqual({ guideBankDeg: 0, guideGammaDeg: 0 });
     }
@@ -257,6 +258,14 @@ describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {
   it('steers back to the centreline past the threshold too', () => {
     expect(out(at(200, 20)).guideBankDeg).toBeLessThan(0); // right of it: bank left
     expect(out(at(200, -20)).guideBankDeg).toBeGreaterThan(0);
+  });
+  // 0100 panel: low over the rest of the runway (a long float) it still lines up, never dives.
+  it('past the first third, low, it steers back to the centreline with no path to fly', () => {
+    const third = (end.lengthM - end.displacedM) / 3;
+    const o = out(at(third + 50, 10, 3));
+    expect(o.guideBankDeg).toBeLessThan(0);
+    expect(o.guideGammaDeg).toBe(0);
+    expect(out(at(third + 50, 10, 35))).toEqual({ guideBankDeg: 0, guideGammaDeg: 0 }); // high: level flight, as before
   });
 });
 
