@@ -424,7 +424,9 @@ src/controlsSheet.js controls cheat sheet (0049, lazy): "?" or Controls (menu/to
                     keyboard / gamepad / touch rows (touch first on a touch screen); pauses the flight while
                     open unless it already was, owns the keyboard (Esc / "?" close, Tab trapped). Its rows are
                     data a unit test holds to every key, pad button and touch control the code binds
-src/styles.css      Tailwind entry + ported custom HUD styles
+src/styles.css      Tailwind entry + ported custom HUD styles; the PAPI cue (0089): main.js writes the HUD word and data-papi
+                    (white-lamp count), styles.css draws its colour, a glyph (▼▼ ▼ ▬ ▲ ▲▲) and the lamp row (white
+                    rings, red squares), so the reading never rests on colour alone (zero boot JS)
 src/worker/         edge Worker (runs only for /openaero/api/*, see wrangler.jsonc):
                     GET /openaero/api/metar?ids=KDFW,… → aviationweather.gov METARs,
                     validated ids, trimmed JSON, 5-min edge cache.

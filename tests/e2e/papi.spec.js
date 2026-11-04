@@ -5,6 +5,7 @@ import { BASE, stubTiles, collectErrors } from './helpers.js';
 // PAPI line, the coach's count and the active runway's four 3D lamps are one reading (airports.js
 // papiWhite): sampled on the default final and as the nose is pulled up off the path, they agree.
 const TEXT = ['LOW', 'SLIGHTLY LOW', 'ON GLIDESLOPE', 'SLIGHTLY HIGH', 'HIGH'];
+const GLYPH = ['▼▼', '▼', '▬', '▲', '▲▲'];
 
 test('the HUD PAPI line and the 3D lamps agree on and off the 3° path (0131)', async ({ page }) => {
   test.setTimeout(90_000);
@@ -15,7 +16,11 @@ test('the HUD PAPI line and the 3D lamps agree on and off the 3° path (0131)', 
   await expect(page.locator('#onboardingModal')).toBeHidden();
   const read = () => page.evaluate(() => {
     const s = window.openaeroDebug();
-    return { white: s.papiWhite, lamps: s.papiLampsWhite, text: document.getElementById('txtPapiStatus').textContent, hgt: s.heightAbovePathM, dist: s.distM };
+    const el = document.getElementById('txtPapiStatus');
+    const glyph = getComputedStyle(el, '::before').content.replace(/^"|"$/g, '').split('"')[0].trim();
+    const rings = [...document.querySelectorAll('.papi-lamps i')].map((i) => getComputedStyle(i).borderRadius === '50%');
+    const phone = document.getElementById('txtPhonePapi');
+    return { white: s.papiWhite, lamps: s.papiLampsWhite, text: el.textContent, glyph, rings, phone: phone.textContent, phoneData: phone.dataset.papi, hgt: s.heightAbovePathM, dist: s.distM };
   });
   await expect.poll(async () => (await read()).lamps).not.toBeNull();
   const first = await read();
@@ -28,10 +33,45 @@ test('the HUD PAPI line and the 3D lamps agree on and off the 3° path (0131)', 
     const r = await read();
     expect(r.lamps, JSON.stringify(r)).toBe(r.white);
     expect(r.text, JSON.stringify(r)).toBe(TEXT[r.white]);
+    // 0089: the glyph and the lamp row say the same without colour (white lamps are rings, left first).
+    expect(r.glyph, JSON.stringify(r)).toBe(GLYPH[r.white]);
+    expect(r.rings, JSON.stringify(r)).toEqual([0, 1, 2, 3].map((i) => i < r.white));
     seen.add(r.white);
     await page.waitForTimeout(200);
   }
   await page.keyboard.up('ArrowUp');
   expect(seen.has(2) && seen.size >= 3, [...seen].join()).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+// Ticket 0089: with deuteranopia emulated (CDP), the final's PAPI still reads from the HUD by glyph,
+// word and lamp shape; the phone strip's short word keeps LOW and SLIGHTLY LOW apart by the glyph.
+test('the PAPI reads without colour: glyph, word and lamp shapes under deuteranopia (0089)', async ({ page }, info) => {
+  const errors = collectErrors(page);
+  await stubTiles(page);
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setEmulatedVisionDeficiency', { type: 'deuteranopia' });
+  await page.goto(`${BASE}?debug`);
+  await page.locator('#btnStartFlight').click();
+  await expect(page.locator('#onboardingModal')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.openaeroDebug().papiWhite)).toBe(2);
+  const box = page.locator('#txtPapiStatus').locator('..');
+  await expect(box).toBeVisible();
+  const r = await page.evaluate(() => {
+    const el = document.getElementById('txtPapiStatus');
+    return { glyph: getComputedStyle(el, '::before').content, text: el.textContent, phone: document.getElementById('txtPhonePapi').dataset.papi };
+  });
+  expect(r.glyph).toContain('▬');
+  expect(r).toMatchObject({ text: 'ON GLIDESLOPE', phone: '2' });
+  await info.attach('papi-deuteranopia', { body: await box.screenshot(), contentType: 'image/png' });
+  // Every reading's glyph is distinct, as the phone strip shows it (word + glyph, no colour needed).
+  const seen = await page.evaluate(() => {
+    const el = document.getElementById('txtPhonePapi');
+    const keep = el.dataset.papi;
+    const out = [0, 1, 2, 3, 4].map((n) => { el.dataset.papi = n; return getComputedStyle(el, '::before').content; });
+    el.dataset.papi = keep;
+    return out;
+  });
+  expect(new Set(seen).size).toBe(5);
   expect(errors).toEqual([]);
 });
