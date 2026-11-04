@@ -33,6 +33,7 @@ import { M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
 import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { makeBody, fly, attitude, vsFpm, loadFactorMeter } from './harness.js';
+import { checkLevelTurn } from './turnCard.js';
 
 const f16 = AIRCRAFT_DATABASE.f16;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -330,4 +331,18 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
     expect(last).toBeLessThanOrEqual(1.3);
     expect(last).toBeGreaterThan(0.7);
   });
+});
+
+// Level turns (ticket 0152): FAA-H-8083-25B ch. 5, rate = 1091·tan(bank)/V[kt TAS] °/s and load
+// factor 1/cos(bank) in a level coordinated turn. Kinematics, so it needs none of the restricted
+// T.O.'s turn data (which is why the header lists no turn-performance card: this is not one, it
+// checks the model obeys the turn's physics, not how hard the jet can turn). Flown by harness.js
+// levelTurn (pitch for altitude, throttle for speed, rudder for the ball) through the fly-by-wire
+// (pitchFbw, the 0121 limiter); flightModel.js only, JSBSim has no F-16. Bands are the ticket's.
+describe('F-16C level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', () => {
+  for (const bank of [30, 45]) {
+    it(`350 KIAS, 10,000 ft, ${bank}° bank: turns at 1091·tan(bank)/TAS °/s (±8%) and reads 1/cos(bank) g (±3%)`, () => {
+      checkLevelTurn('f16', f16, bank, 350, { altM: 10000 / M_TO_FT });
+    });
+  }
 });

@@ -1,7 +1,7 @@
 ---
 id: 0152
 title: Turn-rate cards for the 737 and the F-16: a bank gives the rate the FAA formula says
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
@@ -27,10 +27,10 @@ flaps 30 / 150 KIAS. Anything outside the band becomes an `it.fails` KNOWN GAP w
 ticket; do not detune a model to pass.
 
 ## Acceptance criteria
-- [ ] Cards for the 737 (clean, flaps 30) and the F-16 at two bank angles each, citing FAA-H-8083-25B
-- [ ] Each passes or is an `it.fails` KNOWN GAP with a ticket, the measured number in the title
-- [ ] A held 60° bank on the 737 reads about 2 g and does not stall at 250 KIAS
-- [ ] Both flight models (flightModel.js and the JSBSim path where they run) are carded as the Cessna's are
+- [x] Cards for the 737 (clean, flaps 30) and the F-16 at two bank angles each, citing FAA-H-8083-25B
+- [x] Each passes or is an `it.fails` KNOWN GAP with a ticket, the measured number in the title
+- [x] A held 60° bank on the 737 reads about 2 g and does not stall at 250 KIAS
+- [x] Both flight models (flightModel.js and the JSBSim path where they run) are carded as the Cessna's are
 
 ## Test plan
 The cards above, run by `npm run test:flight`; the harness already provides trim and a bank
@@ -38,3 +38,15 @@ hold (see the Cessna turn card for the pattern).
 
 ## Out of scope
 Roll rate and aileron authority (no cited source yet); the autopilot's bank limits.
+
+## Shipped notes
+- All seven cards pass (worst 1.0% on rate, 0.6% on g): 737 clean 250 KIAS / 10,000 ft at 30°, 45°
+  and a held 60° (2.00 g, α 8.7° vs the 14.8° stall); 737 flaps 30 at Vref (150 KIAS) at 15° and 30°;
+  F-16 350 KIAS / 10,000 ft at 30° and 45°. No KNOWN GAP needed.
+- Flaps 30 flies 15° and 30°, not 45°: at Vref = 1.23 Vs a 45° bank (1.41 g) is a few percent from
+  the 1.51 g stall, and the harness pilot stalls it: the stall's edge, not the turn's.
+- JSBSim has only the Cessna (public/jsbsim/aircraft/c172), so the 737 and F-16 are carded on
+  flightModel.js only.
+- The ticket's "standard rate at 15-25° bank at 250 kt" is wrong for 250 KIAS at 10,000 ft
+  (291 KTAS): 3°/s needs ~39°. Nothing asserts it.
+

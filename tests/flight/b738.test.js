@@ -19,6 +19,7 @@ import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor }
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { makeBody, fly, attitude, vsFpm, speedHoldPilot } from './harness.js';
+import { checkLevelTurn } from './turnCard.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
 const vApp = (b738.vrefKts + 5) * 0.514444;
@@ -627,5 +628,37 @@ describe('Boeing 737-800 climb (EUROCONTROL APD; 0134)', () => {
   it.fails('KNOWN GAP (0139): on 290 KCAS then Mach 0.78, max climb thrust, it climbs from FL240 to FL350 within ±20% of the APD nominal Mach-climb rate, 1,500 ft/min', () => {
     const { fpm } = machClimb(true);
     within(fpm[0], 1500, 0.2);
+  });
+});
+
+// Level turns (ticket 0152). FAA Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25B)
+// ch. 5: in a level coordinated turn the rate is g·tan(bank)/V (= 1091·tan(bank)/V[kt TAS] °/s)
+// and the load factor 1/cos(bank). Pure kinematics, so it needs no Boeing data: the model must
+// turn like that at any weight. harness.js levelTurn rolls in at 10°/s, holds altitude with
+// pitch, speed with thrust, the ball with the rudder, and averages from 25 s to 45 s; V is the
+// true airspeed and the bank the one flown. Bands are the ticket's: rate ±8%, seat and HUD g ±3%.
+// JSBSim (?fdm=jsbsim) flies only the Cessna (public/jsbsim/aircraft/c172), so these cards fly
+// flightModel.js alone. Flaps 30 is flown at 15° and 30°, the banks of a normal approach:
+// at Vref (1.23 Vs) a 45° bank (1.41 g) is a few percent from the 1.51 g stall, the stall's edge
+// rather than the turn's, and this pilot does stall it there.
+describe('Boeing 737-800 level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', () => {
+  const ALT_10K = 10000 / M_TO_FT;
+  for (const bank of [30, 45]) {
+    it(`clean, 250 KIAS, 10,000 ft, ${bank}° bank: turns at 1091·tan(bank)/TAS °/s (±8%) and reads 1/cos(bank) g (±3%)`, () => {
+      checkLevelTurn('b738 clean', b738, bank, 250, { altM: ALT_10K });
+    });
+  }
+  for (const bank of [15, 30]) {
+    it(`flaps 30, 150 KIAS (Vref), 3,000 ft, ${bank}° bank: turns at 1091·tan(bank)/TAS °/s (±8%) and reads 1/cos(bank) g (±3%)`, () => {
+      checkLevelTurn('b738 flaps 30', b738, bank, 150, { altM: 3000 / M_TO_FT, flaps: FLAPS_30 });
+    });
+  }
+  // A held 60° bank is 2 g (1/cos 60°). At 250 KIAS the clean wing is far from its stall there:
+  // the √n rule puts the 2 g stall at √2 × Vs = ~197 KIAS.
+  it('a held 60° bank, clean, 250 KIAS, 10,000 ft reads about 2 g (±3%) and does not stall', () => {
+    const r = checkLevelTurn('b738 clean', b738, 60, 250, { altM: ALT_10K });
+    within(r.loadG, 2, 0.03);
+    expect(r.maxAoaDeg).toBeLessThan(stallAoaDeg(b738, 0) - 2);
+    expect(Math.sqrt(2) * stallSpeedKts(b738, 0)).toBeLessThan(250 * 0.85);
   });
 });
