@@ -47,7 +47,7 @@ import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from './trim.js'
 import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
-import { TIME_MODES, sunPreset, sunDirection, skyForSun } from './sun.js';
+import { TIME_MODES, sunPreset, sunDirection, skyForSun, defaultTimeMode } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
@@ -1427,6 +1427,8 @@ const OVERCAST_GREY = new THREE.Color(0x9aa5b1);
 const NO_SKY = { nightness: 0, moonIllumination: 0, moonElevationDeg: -90 };
 const _overcast = new THREE.Color();
 const _skyDate = new Date();
+placeSun();
+sim.timeOfDayMode = defaultTimeMode(sun.elevationDeg); // 0151: Day, not a dark Live
 placeSun();
 
 // The sky dome for the sun of the moment, greyed by how much of it a low deck covers, and

@@ -44,6 +44,8 @@ test.beforeEach(async ({ page }) => {
 
 test('defaults to the real sun and cycles Now / Dawn / Noon / Dusk / Night', async ({ page }) => {
   const errors = collectErrors(page);
+  // By day: a dark live sun preselects Day (0151, tests/e2e/firstFlightDaylight.spec.js).
+  await page.clock.setSystemTime(new Date('2026-11-04T18:00:00Z')); // 12:00 CST
   await enterCockpit(page);
   await expect(page.locator('#txtTimeBadge')).toHaveText('Now');
   expect((await snap(page)).sun.mode).toBe('Now');
