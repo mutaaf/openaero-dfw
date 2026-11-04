@@ -433,33 +433,40 @@ export function shortFieldLanding(spec, { isaDevC = 0, brakeDelayS = 0.5, kts = 
   };
 }
 
-// A level coordinated turn (ticket 0152), the Cessna turn card's pilot for any airframe:
-// roll in at 10°/s to `bankDeg` and hold it (a slow integral trims the steady bank error), hold
-// the altitude with pitch, the speed with the throttle, and centre the ball with the rudder (no
-// sideways specific force, the turn the handbook's formula assumes). After `settleS` it averages,
-// over the rest of `seconds`: the turn rate (heading of the flight path, °/s), the true airspeed,
-// tan of the bank flown, the ball, the seat's load factor (loadFactorMeter's body-up g, measured
-// against the true g) and the HUD's G (body.loadFactor, flightModel.js's own meter, 0121).
-export function levelTurn(spec, bankDeg, kts, { altM = 1500, flaps = 0, gearDown = false, throttle = 0.6, seconds = 45, settleS = 25 } = {}) {
+// A level coordinated turn (ticket 0152), the Cessna turn card's pilot for any airframe: roll in
+// at 10°/s, slowing to 2°/s over the last 10° (no overshoot), and hold the bank (a slow integral
+// trims the steady error); hold the altitude with pitch, the speed with the throttle, and centre
+// the ball with the rudder (no sideways specific force, the turn the handbook's formula assumes).
+// The pitch is capped so α stays 3° under the stall (a pilot easing off as the buffet starts), so
+// a sag on the roll-in is not pulled into a stall. After `settleS` it averages, over the rest of
+// `seconds`: the turn rate (heading of the flight path, °/s, + = right), the true and indicated
+// airspeed, tan of the bank flown, the ball, the seat's load factor (loadFactorMeter's body-up g,
+// against the true g) and the HUD's G (body.loadFactor, flightModel.js's own meter, 0121). maxAoaDeg
+// is over the whole flight, roll-in included.
+export function levelTurn(spec, bankDeg, kts, { altM = 1500, flaps = 0, gearDown = false, throttle = 0.6, seconds = 70, settleS = 40 } = {}) {
   const b = makeBody(spec, { kts, altM, flaps, gearDown, throttle });
   const alt0 = b.pos.y;
-  let heading0 = null, t0 = null, tasSum = 0, tanSum = 0, ballSum = 0, nSum = 0, hudSum = 0, n = 0, rudInt = 0, bankInt = 0, thrInt = throttle;
+  const aoaCap = stallAoaDeg(spec, flaps) - 3;
+  let heading0 = null, t0 = null, tasSum = 0, iasSum = 0, tanSum = 0, ballSum = 0, nSum = 0, hudSum = 0, n = 0;
+  let rudInt = 0, bankInt = 0, thrInt = throttle, bankCmd = 0;
   let minAltErrM = 0, maxAltErrM = 0, maxAoaDeg = -Infinity, ball = 0;
   const prevVel = b.vel.clone(), f = new Vector3(), inv = new Quaternion();
   const meter = loadFactorMeter();
   meter(b);
   const headingDeg = (x) => Math.atan2(x.vel.x, -x.vel.z) * RAD_TO_DEG;
   let unwrapped = 0, last = headingDeg(b);
-  const rollInS = bankDeg / 10;
   fly(b, spec, seconds, (x, dt) => {
-    const bank = Math.min(bankDeg, x.t * 10);
+    bankCmd = Math.min(bankDeg, bankCmd + Math.max(2, Math.min(10, bankDeg - bankCmd)) * dt);
     const { pitchDeg, bankRightDeg } = attitude(x);
     const vsErr = x.vel.y * M_TO_FT * 60;
     x.pitchTrim = (x.pitchTrim ?? x.pitchCmd) + ((alt0 - x.pos.y) * 0.002 - vsErr * 0.00005) * dt * 20;
-    x.pitchCmd = Math.max(-5, Math.min(25, x.pitchTrim + (alt0 - x.pos.y) * 0.02 - vsErr * 0.001));
+    let pitch = Math.max(-5, Math.min(25, x.pitchTrim + (alt0 - x.pos.y) * 0.02 - vsErr * 0.001));
+    const over = (x.aoaDeg ?? 0) - aoaCap;
+    if (over > 0) { pitch = Math.min(pitch, pitchDeg - over * 2); x.pitchTrim = Math.min(x.pitchTrim, pitch); }
+    x.pitchCmd = pitch;
     x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
-    if (x.t > rollInS) bankInt = Math.max(-10, Math.min(10, bankInt + (bank - bankRightDeg) * 0.5 * dt));
-    x.aileronInput = aileronForBank(bank + bankInt, bankRightDeg, -x.angVel.z);
+    if (bankCmd >= bankDeg) bankInt = Math.max(-10, Math.min(10, bankInt + (bankCmd - bankRightDeg) * 0.5 * dt));
+    x.aileronInput = aileronForBank(bankCmd + bankInt, bankRightDeg, -x.angVel.z);
     f.subVectors(x.vel, prevVel).divideScalar(dt);
     f.y += GRAVITY;
     prevVel.copy(x.vel);
@@ -474,17 +481,18 @@ export function levelTurn(spec, bankDeg, kts, { altM = 1500, flaps = 0, gearDown
     unwrapped += d; last = h;
   }, (x) => {
     const g = meter(x);
+    maxAoaDeg = Math.max(maxAoaDeg, x.aoaDeg ?? -Infinity);
     if (x.t > settleS) {
       if (heading0 === null) { heading0 = unwrapped; t0 = x.t; }
-      tasSum += x.tasKts; tanSum += Math.tan(attitude(x).bankRightDeg * DEG_TO_RAD);
+      tasSum += x.tasKts; iasSum += x.iasKts; tanSum += Math.tan(attitude(x).bankRightDeg * DEG_TO_RAD);
       ballSum += ball; nSum += g; hudSum += x.loadFactor; n++;
       minAltErrM = Math.min(minAltErrM, x.pos.y - alt0); maxAltErrM = Math.max(maxAltErrM, x.pos.y - alt0);
-      maxAoaDeg = Math.max(maxAoaDeg, x.aoaDeg ?? -Infinity);
     }
     return false;
   });
   return {
-    rateDegS: (unwrapped - heading0) / (b.t - t0), tasKts: tasSum / n, tanBank: tanSum / n, bankDeg: Math.atan(tanSum / n) * RAD_TO_DEG,
-    ballG: ballSum / n, loadG: nSum / n, hudG: hudSum / n, minAltErrM, maxAltErrM, maxAoaDeg, throttle: b.throttle, body: b,
+    rateDegS: (unwrapped - heading0) / (b.t - t0), tasKts: tasSum / n, iasKts: iasSum / n, tanBank: tanSum / n,
+    bankDeg: Math.atan(tanSum / n) * RAD_TO_DEG, ballG: ballSum / n, loadG: nSum / n, hudG: hudSum / n,
+    minAltErrM, maxAltErrM, maxAoaDeg, throttle: b.throttle, body: b,
   };
 }

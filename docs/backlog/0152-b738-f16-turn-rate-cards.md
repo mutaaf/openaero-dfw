@@ -40,13 +40,12 @@ hold (see the Cessna turn card for the pattern).
 Roll rate and aileron authority (no cited source yet); the autopilot's bank limits.
 
 ## Shipped notes
-- All seven cards pass (worst 1.0% on rate, 0.6% on g): 737 clean 250 KIAS / 10,000 ft at 30°, 45°
-  and a held 60° (2.00 g, α 8.7° vs the 14.8° stall); 737 flaps 30 at Vref (150 KIAS) at 15° and 30°;
-  F-16 350 KIAS / 10,000 ft at 30° and 45°. No KNOWN GAP needed.
-- Flaps 30 flies 15° and 30°, not 45°: at Vref = 1.23 Vs a 45° bank (1.41 g) is a few percent from
-  the 1.51 g stall, and the harness pilot stalls it: the stall's edge, not the turn's.
+- Seven cards, all pass (rate within 1%, g within 1.6%): 737 clean 250 KIAS / 10,000 ft at 30°, 45° and
+  a held 60° (1.97 g, max α 11.5° against the 14.8° stall, roll-in included); 737 flaps 30 at Vref
+  (150 KIAS) at 15° and 30°; F-16 350 KIAS / 10,000 ft at 30° and 45°. No KNOWN GAP needed.
+- Rate band ±3%, tighter than the ±8% asked for (the physics panel showed ±8% let a 7% TAS error pass).
+- Flaps 30 flies 15° and 30°, not 45°: at Vref a level 45° (1.41 g against the 1.51 g stall) needs
+  more than 11° of α against the 14.1° stall. With the pitch capped at 11.1° it sinks ~760 m; uncapped,
+  the first pilot overshot the bank, pulled for the height and stalled. That is the stall margin, not the turn.
 - JSBSim has only the Cessna (public/jsbsim/aircraft/c172), so the 737 and F-16 are carded on
   flightModel.js only.
-- The ticket's "standard rate at 15-25° bank at 250 kt" is wrong for 250 KIAS at 10,000 ft
-  (291 KTAS): 3°/s needs ~39°. Nothing asserts it.
-
