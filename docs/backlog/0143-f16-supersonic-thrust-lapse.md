@@ -1,7 +1,7 @@
 ---
 id: 0143
 title: F-16's afterburner thrust stops growing past Mach 2 at altitude, so it settles in the Mach 2 class
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
