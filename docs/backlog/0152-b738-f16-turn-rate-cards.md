@@ -15,8 +15,8 @@ and the stall speed in a banked turn, tests/flight/c172.test.js, FAA-H-8083-25B)
 the F-16 have none, although the pillar says every aircraft's claims are checkable. A turn
 rate is pure kinematics in coordinated level flight, so it needs no proprietary data: ω =
 g·tan(φ)/V (FAA-H-8083-25B ch. 5, the
-load factor 1/cos φ). A standard-rate turn is 3°/s, which is what a 737 crew flies at about
-a 15-25° bank at 250 kt and what the autopilot's HDG mode should show.
+load factor 1/cos φ). A standard-rate turn is 3°/s. (Corrected at ship: this said a 737 flies standard rate at a
+15-25° bank at 250 kt; at 250 KIAS / 10,000 ft, 291 KTAS, it takes ~39°.)
 
 ## What
 `tests/flight/b738.test.js` and `f16.test.js`: trim level at 250 KIAS / 10,000 ft (737, 65 t,
@@ -30,7 +30,7 @@ ticket; do not detune a model to pass.
 - [x] Cards for the 737 (clean, flaps 30) and the F-16 at two bank angles each, citing FAA-H-8083-25B
 - [x] Each passes or is an `it.fails` KNOWN GAP with a ticket, the measured number in the title
 - [x] A held 60° bank on the 737 reads about 2 g and does not stall at 250 KIAS
-- [x] Both flight models (flightModel.js and the JSBSim path where they run) are carded as the Cessna's are
+- [x] Both flight models where they run: flightModel.js carded; JSBSim N/A (it has only the C172, public/jsbsim/aircraft/c172)
 
 ## Test plan
 The cards above, run by `npm run test:flight`; the harness already provides trim and a bank
