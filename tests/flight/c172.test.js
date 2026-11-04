@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
-import { trimThrottle } from '../../src/flightModel.js';
+import { trimThrottle, stepFlightModel } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts, stallSpeedKts, isStallWarning } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
@@ -811,11 +811,37 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
       console.log(`[c172] full aft at Vr flaps ${flaps * 10}: rotation ${fm.rotQ.toFixed(1)}°/s, JSBSim ${jsb.rotQ.toFixed(1)}°/s`);
       within(fm.rotQ, jsb.rotQ, 0.3);
     }, 30000);
-    it(`flaps ${flaps * 10}: held for 8 s, the tail meets the runway and stops there (never 10 cm into it; 2.1 m before 0144)`, () => {
+    it(`flaps ${flaps * 10}: held for 8 s, the tail meets the runway and stops there (never 15 cm into it; 2.1 m before 0144)`, () => {
       useFdm(null);
       const r = fullAftAtVr(flaps);
       console.log(`[c172 flightModel] full aft at Vr flaps ${flaps * 10}: tail ${(r.lowTailM * 100).toFixed(1)} cm from the runway at its lowest, peak pitch ${r.peakLowDeg.toFixed(1)}° with the wheels under 5 ft`);
-      expect(r.lowTailM).toBeGreaterThan(-0.1);
+      // JSBSim's 20,000 lb/ft spring under a ~40 kN strike off a stalled hop: ~11 cm.
+      expect(r.lowTailM).toBeGreaterThan(-0.15);
+    });
+    // The game's sub-step runs 1/180 s at 60 fps down to 1/60 s on a slow phone (main.js): a
+    // tail damper stiff for its ~120 kg of effective mass overshot at 1/60 s (device panel: the
+    // nose thrown down at 260°/s, 112 kN on the tail). The same yank flies the same at both.
+    it(`flaps ${flaps * 10}: the tail strike is the same at 1/60 s and 1/180 s sub-steps (no energy gained on a slow phone)`, () => {
+      useFdm(null);
+      const strike = (dt) => {
+        const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: takeoffTrimAoaDeg(c172, flaps) });
+        let t = 0, t0 = null, tailN = 0, downQ = 0;
+        while (t0 === null || t - t0 < 8) {
+          if (t0 === null && b.iasKts >= c172.vrKts) t0 = t;
+          b.elevInput += ((t0 === null ? 0 : -1) - b.elevInput) * Math.min(1, dt * 10);
+          stepFlightModel(b, c172, dt);
+          t += dt;
+          tailN = Math.max(tailN, b.wheelLoads?.[3] ?? 0);
+          downQ = Math.min(downQ, b.angVel.x * 180 / Math.PI);
+        }
+        return { tailN, downQ };
+      };
+      const fine = strike(1 / 180), slow = strike(1 / 60);
+      console.log(`[c172 flightModel] tail strike flaps ${flaps * 10}: 1/180 s ${(fine.tailN / 1000).toFixed(1)} kN, ${fine.downQ.toFixed(0)}°/s; 1/60 s ${(slow.tailN / 1000).toFixed(1)} kN, ${slow.downQ.toFixed(0)}°/s`);
+      expect(fine.tailN).toBeGreaterThan(0);
+      // The hops diverge with the step, so the peaks differ either way; gaining energy is worse at 1/60 s.
+      expect(slow.tailN).toBeLessThan(1.3 * fine.tailN);
+      expect(-slow.downQ).toBeLessThan(1.3 * -fine.downQ);
     });
     // Both models then pitch on past 30° a few feet up (JSBSim ~37-42°, flightModel.js ~43°): the
     // elevator's full 36.7° of α past the trim on Roskam's linear Cmα/Cmδe, which neither model

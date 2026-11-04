@@ -367,7 +367,8 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
                     idle thrust, and its heading up to the tyres' scrub moment (wheelScrubYawHold, 0106)
                     spec.gear.tail (0144, the C172): a stiff structural tail contact at our JSBSim C172's TAIL
                     point (15.0° about the mains) in the same loop, wheelLoads[3]: it carries load, scrapes (μ 0.5)
-                    and stops the rotation in the air too; flightModel.js's onGround pitch clamp is off for it
+                    and stops the rotation in the air too, but alone it is not onGround (no grade, bounce or
+                    horn from it); flightModel.js's onGround pitch clamp is off for it; damper sized for 1/60 s sub-steps
                     radioAltitudeM (0122): the lowest main wheel's height (struts out, 0 at touchdown) =
                     sim.raFt, what the GPWS heights, retard, sink rate / pull up and too low gear read
                     (audio.js, main.js), as do the RADAR AGL box, the phone's AGL, the HUD FLARE/IDLE cue

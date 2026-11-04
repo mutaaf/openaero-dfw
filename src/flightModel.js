@@ -222,7 +222,8 @@ export function stepFlightModel(body, spec, dt) {
 
   // The struts' moments (body axes: x pitch, y yaw, z roll) through the airframe's inertia,
   // and the pedals steering the nose wheel while it carries weight.
-  if (struts && body.onGround) {
+  // (A tail-only contact, 0144, turns it without putting it on the ground: _gearM is zero clear of it.)
+  if (struts) {
     body.angVel.x += (_gearM.x / spec.inertia.pitch + tailVsMainsAccel(body, spec, body.iasKts)) * dt;
     body.angVel.y += (_gearM.y / spec.inertia.yaw) * dt;
     body.angVel.z += (_gearM.z / spec.inertia.roll) * dt;
@@ -249,7 +250,7 @@ export function stepFlightModel(body, spec, dt) {
   // airframe with a tail contact (gear.js, 0144) is held there by it, in the air too.
   if (body.onGround) {
     _euler.setFromQuaternion(body.quat, 'YXZ');
-    const maxP = spec.gear?.tail ? 2 : (spec.maxGroundPitchDeg ?? 15) * DEG_TO_RAD;
+    const maxP = spec.gear?.tail ? 2 /* rad: no clamp */ : (spec.maxGroundPitchDeg ?? 15) * DEG_TO_RAD;
     // With struts the nose gear holds the nose up; the floor is only a backstop.
     const minP = struts ? -0.12 : -0.05;
     if (_euler.x > maxP || _euler.x < minP) {

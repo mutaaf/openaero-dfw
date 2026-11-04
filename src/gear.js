@@ -51,9 +51,13 @@ export function gearConstants(spec) {
   ];
   if (g.tail) {
     wheels.push(new Vector3(0, y + g.tail[1], g.mainZ + g.tail[0]));
-    // Its spring and damper: our JSBSim C172's TAIL contact (20,000 lb/ft, 1,000 lb/ft/s, ~2.9e5 N/m, ~1.5e4 N·s/m).
+    // Its spring: our JSBSim C172's TAIL contact (20,000 lb/ft, ~2.9e5 N/m). Its damper is
+    // softer than JSBSim's 1,000 lb/ft/s (1.5e4 N·s/m, stable at JSBSim's own 1/120 s): the
+    // tail moves only ~120 kg of effective mass (its 3.7 m arm on the pitch inertia), and at
+    // the game's 1/60 s sub-step cap that damper overshot and threw the nose down at 260°/s.
+    // 4e3 (ζ ~0.34, no oleo rebound factor) damps in one step at 1/60 s.
     k.push(29e4);
-    d.push(15e3);
+    d.push(4e3);
   }
   c = { wheelbase, noseShare, k, d, wheels, maxStroke: g.strokeM * 2.5 };
   cache.set(spec, c);
@@ -62,7 +66,7 @@ export function gearConstants(spec) {
 
 // Sums the struts' forces into `force` (world, N) and their moments about the CG into
 // `moment` (body axes, N·m), for a body whose ground is at groundY. Writes body.wheelLoads
-// [nose, left, right, tail if any] (N) and returns the total normal force.
+// [nose, left, right, tail if any] (N) and returns the wheels' total normal force.
 export function gearForces(body, spec, force, moment) {
   const c = gearConstants(spec);
   _omega.copy(body.angVel).applyQuaternion(body.quat); // body rates → world
@@ -79,12 +83,12 @@ export function gearForces(body, spec, force, moment) {
     _w.copy(_omega).cross(_r).add(body.vel);
     // Oleos damp the rebound (extending, axle rising) harder than the compression: the
     // struts settle instead of springing the airframe off the runway.
-    const damp = c.d[i] * (_w.y > 0 ? REBOUND : 1);
+    const damp = c.d[i] * (_w.y > 0 && i < 3 ? REBOUND : 1);
     // Past its full stroke a strut is bottomed: a stiff stop (10× the spring), not slack,
     // so hard braking can't fold the nose down onto the pitch floor (0082).
     const n = Math.max(0, c.k[i] * (Math.min(comp, c.maxStroke) + BUMP_STOP * Math.max(0, comp - c.maxStroke)) - damp * _w.y);
     loads[i] = n;
-    total += n;
+    if (i < 3) total += n; // the wheels: a tail scrape alone is not on the ground
     force.y += n;
     // Moment of an upward force at the axle, into body axes.
     _f.set(0, n, 0);

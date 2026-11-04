@@ -208,7 +208,8 @@ export const AIRCRAFT_DATABASE = {
     // estimates; ±10° pedal nose-wheel steering (POH Section 7). Inertia: JSBSim c172x (948 /
     // 1346 / 1967 slug·ft²). The tail (0144): our JSBSim C172's TAIL contact (public/jsbsim/,
     // station 188 in, 34.8 in above the main tyres' contact at 58.2 in): it meets the runway at
-    // 15.0° rotated about the mains, the assists' default tailstrike angle.
+    // 15.0° rotated about the mains (~13.7° on static struts), the assists' default tailstrike angle.
+    // That point was written for our JSBSim model, not read off the POH: a better source is welcome.
     gear: { noseZ: 1.214, mainZ: 0.437, trackM: 2.54, strokeM: 0.08, zeta: 0.6, steerDeg: 10, tail: [3.297, 0.884] },
     inertia: { roll: 1285, pitch: 1825, yaw: 2667 },
     eyeOffset: new Vector3(0, 1.85, -1.3),
