@@ -1,7 +1,7 @@
 ---
 id: 0138
 title: F-16 fly-by-wire limits a push too (negative g and AoA)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity

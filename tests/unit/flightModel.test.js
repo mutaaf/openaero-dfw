@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
 import { stepFlightModel } from '../../src/flightModel.js';
-import { fbwLoadLimit } from '../../src/fbw.js';
+import { fbwLoadLimit, fbwPushLimit } from '../../src/fbw.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { dynamicPressure, liftCoefficient, dragCoefficient } from '../../src/aero.js';
 import { DEG_TO_RAD } from '../../src/constants.js';
@@ -136,6 +136,22 @@ describe('F-16 g and AoA limiter (TP-1538 Fig. 63)', () => {
     expect(fbwLoadLimit(a1g)).toBeCloseTo(1, 6);
     expect(a1g).toBeGreaterThan(24.5);
     expect(a1g).toBeLessThan(25.5);
+  });
+});
+
+// Ticket 0138: TP-1538 Fig. 62(b), the negative "g" limit (an increment on 1 g) against q̄: −1 g to
+// ~1.55 kN/m², a straight line to −4 g at ~8.75 kN/m², flat above. As load factors: 0 g, then −3 g.
+describe('F-16 push limit (TP-1538 Fig. 62(b))', () => {
+  it('is 0 g (−1 g incremental) at low dynamic pressure, up to 1.55 kN/m²', () => {
+    for (const q of [0, 800, 1550]) expect(fbwPushLimit(q)).toBeCloseTo(0, 6);
+  });
+  it('falls on a straight line to −3 g (−4 g incremental) at 8.75 kN/m²', () => {
+    expect(fbwPushLimit(5150)).toBeCloseTo(-1.5, 6); // halfway
+    expect(fbwPushLimit(4000)).toBeCloseTo(-3 * (4000 - 1550) / 7200, 6);
+    expect(fbwPushLimit(8750)).toBeCloseTo(-3, 6);
+  });
+  it('is −3 g above that, at any speed (434 KEAS is ~30 kN/m²)', () => {
+    for (const q of [10000, 30500, 60000]) expect(fbwPushLimit(q)).toBeCloseTo(-3, 6);
   });
 });
 
