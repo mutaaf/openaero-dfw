@@ -1,12 +1,12 @@
 ---
 id: 0154
 title: Cessna card: the best angle of climb (Vx) beats Vy on gradient, from the POH table
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-05
-pr:
+pr: 190
 ---
 
 ## Why

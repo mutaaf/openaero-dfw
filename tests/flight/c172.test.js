@@ -210,6 +210,74 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
   });
 });
 
+// Best angle vs best rate of climb (ticket 0154). C172S POH Section 4, "Airspeeds for Normal
+// Operation" (a table, no figure number): best angle of climb (Vx) 62 KIAS and best rate of
+// climb (Vy) 74 KIAS at sea level, 2,550 lb, flaps up. FAA-H-8083-3C (Airplane Flying
+// Handbook) ch. 6: Vx gives the most height per distance, Vy the most per time. The POH
+// publishes no climb rate or gradient at Vx (Fig. 5-6 is at Vy only), so these cards check
+// the order and where the peaks fall, not a number at Vx.
+//
+// Each speed: full throttle, flaps up, ISA, spawned at 500 ft (a spawn at 1 m starts on the
+// runway's height and, at some speeds, the first pitch swing puts the tail on the ground),
+// 40 s to settle and 10 s measured. Gradient = height gained / distance flown (still air).
+//
+// Measured (KIAS: fpm, gradient %), flightModel.js / JSBSim:
+//   56: 468 8.2 / 439 7.7   62: 560 8.9 / 531 8.4   68: 633 9.1 / 604 8.7
+//   74: 687 9.1 / 661 8.8   80: 700 8.6 / 690 8.5
+// Both models put the best gradient near 72 KIAS and the best rate near 82-86, about 10 kt
+// above the POH's. flightModel.js's full-throttle thrust is flat from 0 to 74 kt (aircraft.js
+// thrustTableN 2070 → 2105 N), so its excess thrust peaks at the minimum-drag speed, not below
+// it; JSBSim's prop is not yet diagnosed. KNOWN GAP (0157). A mutation (thrust falling from
+// 3,000 N static to 1,700 N at 97 kt) turned the vxGradient and vyPeak cards green.
+const climbAt = (kts) => {
+  const b = makeBody(c172, { kts, altM: 500 / M_TO_FT, throttle: 1 });
+  const pilot = speedHoldPilot(() => kts);
+  fly(b, c172, 40, pilot);
+  const h0 = b.pos.y, d0 = b.distM;
+  let fpm = 0, ias = 0, n = 0;
+  fly(b, c172, 10, (x, dt) => { pilot(x, dt); fpm += vsFpm(x); ias += x.iasKts; n++; });
+  return { fpm: fpm / n, ias: ias / n, gradient: (b.pos.y - h0) / (b.distM - d0) };
+};
+
+const VX_GAPS = {
+  flightModel: new Set(['vxGradient', 'vxPeak', 'vyPeak']),
+  jsbsim: new Set(['vxGradient', 'vxPeak', 'vyPeak']),
+};
+
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, POH Section 4 (${model})`, () => {
+  const card = (id) => (VX_GAPS[model].has(id) ? it.fails : it);
+  const c = {};
+  beforeAll(async () => {
+    useFdm(model === 'jsbsim' ? await nodeJsbsim() : null);
+    for (const kts of [56, 62, 68, 74, 80]) c[kts] = climbAt(kts);
+    console.log(`[c172 ${model}] climb (KIAS: fpm, gradient %): ${Object.entries(c)
+      .map(([k, r]) => `${k}: ${r.fpm.toFixed(0)} ${(100 * r.gradient).toFixed(2)}`).join(', ')}`);
+  }, 120000);
+  afterAll(() => useFdm(null));
+
+  it('the pilot holds each climb speed within 1 kt (the cards below compare like with like)', () => {
+    for (const [kts, r] of Object.entries(c)) expect(Math.abs(r.ias - Number(kts))).toBeLessThan(1);
+  });
+
+  it('climbs faster at Vy (74 KIAS) than at Vx (62 KIAS)', () => {
+    expect(c[74].fpm).toBeGreaterThan(c[62].fpm);
+  });
+
+  card('vxGradient')('climbs steeper at Vx (62 KIAS) than at Vy (74 KIAS)', () => {
+    expect(c[62].gradient).toBeGreaterThan(c[74].gradient);
+  });
+
+  card('vxPeak')('the best angle is at Vx: 62 KIAS out-climbs 56 and 68 KIAS on gradient', () => {
+    expect(c[62].gradient).toBeGreaterThan(c[56].gradient);
+    expect(c[62].gradient).toBeGreaterThan(c[68].gradient);
+  });
+
+  card('vyPeak')('the best rate is at Vy: 74 KIAS out-climbs 68 and 80 KIAS', () => {
+    expect(c[74].fpm).toBeGreaterThan(c[68].fpm);
+    expect(c[74].fpm).toBeGreaterThan(c[80].fpm);
+  });
+});
+
 // Wind down the runway (ticket 0103). The airplane lifts off and touches down at an airspeed,
 // so a headwind takes groundspeed off both ends of the roll and a tailwind adds it. The wind is
 // body.windVec, where main.js puts the METAR's. Two references:
