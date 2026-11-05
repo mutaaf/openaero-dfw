@@ -672,7 +672,7 @@ describe('Boeing 737-800 level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 
 // flaps 30 stall angle (14.12°), the speed tape's red band at 1 g.
 describe('Boeing 737-800 accelerated stall vs the FAA handbook (FAA-H-8083-3C ch. 5; 0159)', () => {
   for (const bank of [45, 60]) {
-    it(`flaps 30, 3,000 ft: reaches its 14.12° stall angle in a level ${bank}° turn at the 1-g stall speed × √(1/cos ${bank}°) (±8%; √n law and lift line ±3%)`, () => {
+    it(`flaps 30, 3,000 ft: reaches its 14.12° stall angle in a level ${bank}° turn at the 1-g stall speed × √(1/cos ${bank}°) (±8%; √n law ±3%, lift line ±1%)`, () => {
       checkStallInTurn('b738 flaps 30', b738, bank, stallAoaDeg(b738, FLAPS_30), { flaps: FLAPS_30, altM: 3000 / M_TO_FT });
     });
   }

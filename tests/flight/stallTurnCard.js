@@ -10,9 +10,13 @@
 //     (a lift that scaled like n^0.4 would break ~7% low at 60°);
 //  3. the wing's own lift line: the speed at which the spec's straight CL line at `breakAoa`
 //     (cl0 + clAlpha·α + flaps, what the speed tape's red band reads, aero.js stallSpeedKts)
-//     carries the load the wing holds (harness nWing: the load less the thrust's lift), ±3%.
-//     The first two are ratios of the same flight model, so a lift model 10% low everywhere
-//     passes them; this one fails it (the PR shows the mutation).
+//     carries the load the wing holds (harness nWing: the load less the thrust's lift), ±1%
+//     (measured within 0.2%). The first two are ratios of the same flight model, so a lift
+//     code 10% low everywhere passes them; this one fails it (the PR shows the mutation). It
+//     reads the same spec data as the model, so a wrong CLmax in the data (cl0, clAlpha, flap
+//     increment, stall angle) passes it: the stall speed itself is anchored by each airframe's
+//     own cards (the 737's wings-level stall vs the red band and Boeing's Vref; the F-16's CL
+//     vs TP-1538).
 // `breakAoa` is the stall angle where the wing can reach it. Every speed is IAS (EAS here).
 import { expect } from 'vitest';
 import { DEG_TO_RAD, GRAVITY, RHO_SEA_LEVEL } from '../../src/constants.js';
@@ -45,7 +49,9 @@ export function checkStallInTurn(tag, spec, bank, breakAoa, { flaps = 0, altM })
     + `${r.n.toFixed(3)} g (wing ${r.nWing.toFixed(3)}), bank ${r.bankDeg.toFixed(1)}°, β ${r.betaDeg.toFixed(2)}°, alt ${r.altErrM.toFixed(1)} m, bleed ${r.bleedKtsS.toFixed(2)} kt/s`);
   // It flew the turn: the bank asked for, coordinated, level, bleeding about 1 kt/s, and both
   // runs reached the break. The load is the body bank's 1/cos within 5%: at high α the wind-axis
-  // bank is a little under the body's (a 60° body bank at α 20° is ~58.5°, 1.91 g).
+  // bank is a little under the body's (a 60° body bank at α 20° is ~58.5°, 1.91 g). The book
+  // check uses the body bank, so that geometry (not the physics) is most of the F-16's −2.9%
+  // at 60°; the √n check uses the load actually flown.
   expect(r0.kts).not.toBeNull();
   expect(r.kts).not.toBeNull();
   expect(Math.abs(r.bankDeg - bank)).toBeLessThan(2);
@@ -56,8 +62,8 @@ export function checkStallInTurn(tag, spec, bank, breakAoa, { flaps = 0, altM })
   expect(r.bleedKtsS).toBeLessThan(1.5);
   within(r.kts, book, 0.08);
   within(r.kts, sqrtLaw, 0.03);
-  within(r.kts, line, 0.03);
+  within(r.kts, line, 0.01);
   // The 1-g break holds the same check (so a wings-level error cannot hide in both ratios).
-  within(r0.kts, lineSpeedKts(spec, flaps, breakAoa) * Math.sqrt(r0.nWing), 0.03);
+  within(r0.kts, lineSpeedKts(spec, flaps, breakAoa) * Math.sqrt(r0.nWing), 0.01);
   return r;
 }

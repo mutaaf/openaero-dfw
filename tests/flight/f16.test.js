@@ -475,11 +475,13 @@ describe('F-16C level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', (
 // stall, and in a turn it binds earlier (2 g at ~24.4°, less with its α-rate lead: flown to 24°,
 // the 60° turn sagged to 1.67 g and broke 9% under the book). So the card measures the same law
 // where the limiter lets the wing work: the speed at which a level turn needs 20° of α, just under
-// Fig. 63's 20.4° knee, where the limiter allows 7.3 g (and where TP-1538's CL card above sits).
-// Clean, 15,000 ft. The afterburner lifts too (T·sin α); the lift-line check takes it out.
+// Fig. 63's 20.4° knee, where the limiter allows 7.4 g (and where TP-1538's CL card above sits).
+// Clean, 15,000 ft. The afterburner lifts too (T·sin α); the lift-line check takes it out. The
+// book check (1/cos of the body bank) reads ~2% low at 60°: FAA's bank is the lift vector's, and
+// at α 20° a 60° body bank is a ~58.5° wind-axis bank (stallTurnCard.js); the √n check is exact.
 describe('F-16C accelerated stall vs the FAA handbook (FAA-H-8083-3C ch. 5; 0159)', () => {
   for (const bank of [45, 60]) {
-    it(`clean, 15,000 ft: reaches 20° α in a level ${bank}° turn at the 1-g speed × √(1/cos ${bank}°) (±8%; √n law and lift line ±3%)`, () => {
+    it(`clean, 15,000 ft: reaches 20° α in a level ${bank}° turn at the 1-g speed × √(1/cos ${bank}°) (±8%; √n law ±3%, lift line ±1%)`, () => {
       checkStallInTurn('f16 clean', f16, bank, 20, { altM: 15000 / M_TO_FT });
     });
   }
