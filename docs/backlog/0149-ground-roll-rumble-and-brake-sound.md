@@ -1,7 +1,7 @@
 ---
 id: 0149
 title: Tyre rumble and brake sound on the ground roll
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: player-feel
