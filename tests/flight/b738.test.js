@@ -20,6 +20,7 @@ import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilo
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { makeBody, fly, attitude, vsFpm, speedHoldPilot, steadyRoll } from './harness.js';
 import { checkLevelTurn } from './turnCard.js';
+import { checkStallInTurn } from './stallTurnCard.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
 const vApp = (b738.vrefKts + 5) * 0.514444;
@@ -663,6 +664,18 @@ describe('Boeing 737-800 level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 
     within(r.loadG, 2, 0.03);
     expect(r.maxAoaDeg).toBeLessThan(stallAoaDeg(b738, 0) - 1); // roll-in included
   });
+});
+
+// Accelerated stall (ticket 0159): stall speed × √(load factor), FAA-H-8083-3C ch. 5 "Load Factor
+// and Stalling Speed" (stallTurnCard.js says what each check catches). Flaps 30, the approach
+// configuration that is flown banked onto every final, at 3,000 ft. The break is the wing's own
+// flaps 30 stall angle (14.12°), the speed tape's red band at 1 g.
+describe('Boeing 737-800 accelerated stall vs the FAA handbook (FAA-H-8083-3C ch. 5; 0159)', () => {
+  for (const bank of [45, 60]) {
+    it(`flaps 30, 3,000 ft: stalls in a level ${bank}° turn at the 1-g stall × √(1/cos ${bank}°) (±8%; √n law and lift line ±3%)`, () => {
+      checkStallInTurn('b738 flaps 30', b738, bank, stallAoaDeg(b738, FLAPS_30), { flaps: FLAPS_30, altM: 3000 / M_TO_FT });
+    });
+  }
 });
 
 // Roll rate (ticket 0153): logged, not carded. No open source gives the 737's roll rate or its
