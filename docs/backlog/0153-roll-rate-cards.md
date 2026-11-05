@@ -1,6 +1,6 @@
 ---
 id: 0153
-title: Roll-rate cards: the Cessna and the F-16 roll at the rate their aileron data says
+title: Roll-rate cards for the Cessna and the F-16 (both KNOWN GAPs, fixed by 0156)
 status: shipped
 priority: P1
 size: M
@@ -33,7 +33,7 @@ model to pass. Touches tests and, only if a card fails, `src/flightModel.js` rol
 - [x] `npm run check:fast` green; no src change unless a card exposed a real gap
 
 ## Test plan
-The two new `it` cards above, plus the mutation check recorded in the PR body.
+The new cards above (the two rate cards are `it.fails` KNOWN GAPs), plus the mutation check recorded in the PR body.
 
 ## Out of scope
 Aileron adverse yaw, roll-in time constants, autopilot bank limits, the 737 card.

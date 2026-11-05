@@ -1048,7 +1048,8 @@ describe('Cessna 172S dead-stick challenge at Addison (flightModel, ticket 0036)
 // aileron throw (0.3054 rad) against roll damping Clp −0.47 per unit p·b/2V. With no other
 // rolling moment, the steady rate is p = Clδa·δa/(−Clp) · 2V/b (V true airspeed, b 36.1 ft =
 // 11.0 m): at 90 KIAS and 5,000 ft ISA (σ 0.862, 96.9 KTAS, 49.9 m/s) that is
-// 0.178 × 0.3054 / 0.47 × 2 × 49.9 / 11.0 = 1.05 rad/s, 60°/s. The first card checks JSBSim flies
+// 0.178 × 0.3054 / 0.47 × 2 × 49.9 / 11.0 = 1.05 rad/s, 60°/s: a linear quasi-steady estimate from
+// cruise derivatives (no hinge-moment or stick-force limit); no flight-test roll rate for the 172 has been found yet. The first card checks JSBSim flies
 // its own derivatives (so the reference is the arithmetic, not a black box); the second checks the
 // game's flightModel.js against it, for the same roll: full aileron from 75° left bank through
 // level, pitch held, ball centred with the rudder (harness.js steadyRoll).
@@ -1064,6 +1065,7 @@ describe('Cessna 172S full-aileron roll rate vs JSBSim / Roskam (ticket 0153)', 
     useFdm(null);
     console.log(`[c172 JSBSim] full aileron at ${KTS} KIAS, 5,000 ft: ${jsb.rateDegS.toFixed(1)}°/s (Roskam strip estimate ${strip.toFixed(1)}°/s), β ≤ ${jsb.betaMaxDeg.toFixed(1)}°`);
     expect(jsb.samples).toBeGreaterThan(20);
+    expect(jsb.betaMaxDeg).toBeLessThan(5);
     within(jsb.rateDegS, strip, 0.1);
   }, 30000);
 

@@ -355,7 +355,7 @@ describe('F-16C level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', (
 // The bare airframe can make that rate at this card's 350 KIAS / 10,000 ft (σ 0.738, 407 KTAS,
 // 209 m/s; 1 g at ~2° α): TP-1538 Table III's roll damping Clp −0.43 there and its aileron
 // increment ΔCl,δa=20° 0.051 (as transcribed in Stevens & Lewis, Aircraft Control and Simulation,
-// App. A, and JSBSim f16.xml; aircraft.js reads cyBeta the same way), scaled to the 21.5° limit
+// App. A, and JSBSim f16.xml; the PDF's table scans don't OCR), scaled to the 21.5° limit
 // (0.055), give p = ΔCl/(−Clp) · 2V/b = 0.055 / 0.43 × 2 × 209 / 9.144 (Table I's 30 ft span) =
 // 5.8 rad/s, ~334°/s, with the aileron alone. So full lateral stick is the command's 308°/s.
 // The card flies harness.js steadyRoll: full stick from 75° left bank through level, pitch held,
