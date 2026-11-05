@@ -351,7 +351,7 @@ src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear 
                     spec.pitchFbw (F-16) carry the trim with α; Pilot's is the spawn's (or the
                     autopilot's), moved only by a held stick (main.js, ~8 s, 4° short of the stall).
                     body.loadFactor (0121): the seat's g along the body up axis, the HUD's G-LOAD
-src/fbw.js          the F-16's g/AoA limiter (0121, lazy chunk right after boot; tests/flight/harness.js
+src/fbw.js          the F-16's g/AoA limiter (0121; a push stops at TP-1538 Fig. 62(b)'s 0 to −3 g by q̄, 0138; lazy chunk right after boot; tests/flight/harness.js
                     imports it): installs spec.fbw on pitchFbw airframes, which flightModel.js calls in
                     the air. NASA TP-1538 App. A + Fig. 63: the stick commands 1 g + 8 g × the pull,
                     capped at 9 g less 0.322 g/° past α 15° and 1.322 g/° past 20.4° (1 g at ~25°)

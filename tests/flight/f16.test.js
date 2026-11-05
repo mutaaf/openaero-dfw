@@ -22,15 +22,18 @@
 //    max thrust the model has little of the table's ram rise with Mach: Tmax at sea level is
 //    28,886 lbf at M 1.0 vs 21,420 at M 0.2 there, 1.35 ×; 1.05 × in the model.)
 //  - the flight-control system: TP-1538 App. A's g and AoA limiter (Fig. 63) is modelled (0121) and
-//    carded with 0118's full pulls below; its gains and filters are not (only the limit's shape).
+//    carded with 0118's full pulls below, and its negative g limit (Fig. 62(b)) with the pushes
+//    (0138); its gains and filters are not (only the limits' shape). It has no negative-AoA limit.
 //  - induced drag: aspectRatio 3.2 is the bare 31 ft wing (9.449² / 27.87); the span card
 //    checks the USAF span, which (we infer) includes the wingtip missile rails.
 //
 // A card the model does not yet meet is a KNOWN GAP: `it.fails` with its ticket, never a
 // looser tolerance. The fixing PR promotes it to `it`.
 import { describe, it, expect } from 'vitest';
+import { Quaternion, Vector3 } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
+import { M_TO_FT, DEG_TO_RAD, KTS_TO_MPS } from '../../src/constants.js';
+import { fbwPushLimit } from '../../src/fbw.js';
 import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { makeBody, fly, attitude, vsFpm, loadFactorMeter, steadyRoll } from './harness.js';
@@ -326,6 +329,123 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
     }, (x) => {
       last = meter(x);
       if (released === null && last >= 5) released = x.t;
+      return released !== null && x.t >= released + 6;
+    });
+    expect(released).not.toBeNull();
+    expect(last).toBeLessThanOrEqual(1.3);
+    expect(last).toBeGreaterThan(0.7);
+  });
+});
+
+// Ticket 0138: what a push does. TP-1538 Fig. 62(b) (App. A's pitch CAS): the commanded increment
+// on 1 g has a lower limit scheduled with dynamic pressure, −1 g up to ~1.55 kN/m² and −4 g from
+// ~8.75 kN/m², so full forward stick is 0 g slow and −3 g at combat speeds (src/fbw.js fbwPushLimit).
+// TP-1538 has no negative-AoA limit (its α signal is clipped at −5°, but nothing holds α there), so
+// the AoA bounds below are not a source's: they say the nose does not go over (before the floor,
+// full forward stick at 434 KEAS pulled −11.5 g and α ran to −90°, the airplane tumbling; at
+// 150 kt, upright or inverted, the same). The floor is checked at every sample's own q̄: a slow
+// push dives, gains speed, and the floor falls with it (150 → ~225 KEAS in 6 s). `stick` is
+// elevInput (+ = nose down); `inverted` starts rolled 180° and holds no aileron.
+const fullPush = (kts, { seconds = 5, stick = 1, inverted = false } = {}) => {
+  const b = makeBody(f16, { kts, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
+  if (inverted) b.quat.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI));
+  const meter = loadFactorMeter();
+  meter(b);
+  let minG = Infinity, minAoa = Infinity, margin = Infinity, lateLo = Infinity, lateHi = -Infinity;
+  fly(b, f16, seconds, (x) => {
+    x.elevInput = stick;
+    x.aileronInput = inverted ? 0 : aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+  }, (x) => {
+    const n = meter(x);
+    const qDyn = 0.5 * 1.225 * (x.iasKts * KTS_TO_MPS) ** 2; // the model's indicated speed is EAS
+    minG = Math.min(minG, n);
+    minAoa = Math.min(minAoa, x.aoaDeg);
+    margin = Math.min(margin, n - fbwPushLimit(qDyn));
+    if (x.t >= 2) { lateLo = Math.min(lateLo, n); lateHi = Math.max(lateHi, n); }
+    return false;
+  });
+  return { minG, minAoa, margin, lateLo, lateHi };
+};
+
+describe('F-16C full push vs the negative g limit (TP-1538 Fig. 62(b); 0138)', () => {
+  it('full forward stick at 434 KEAS, 15,000 ft is a hard push: below −2.5 g within 5 s', () => {
+    expect(fullPush(434).minG).toBeLessThanOrEqual(-2.5);
+  });
+
+  it('the same push stays at or above −3.3 g (the −3 g limit and a transient), held at −2.7 to −3.3 g from 2 s', () => {
+    const { minG, lateLo, lateHi } = fullPush(434);
+    expect(minG).toBeGreaterThanOrEqual(-3.3);
+    expect(lateLo).toBeGreaterThanOrEqual(-3.3);
+    expect(lateHi).toBeLessThanOrEqual(-2.7);
+  });
+
+  // −3 g at ~30 kN/m² needs α ~9° below the trim α by the spec's lift slope (4 g / (3.6 per rad ×
+  // q̄S/W)): the nose stops there, a 2° transient allowed, not at −90°.
+  it('the same push keeps α above −11°: the nose does not go over', () => {
+    expect(fullPush(434).minAoa).toBeGreaterThanOrEqual(-11);
+  });
+
+  // Half forward stick is half the way to the floor (1 g + (−3 − 1) × 0.5 = −1 g; the gradient is the
+  // game's, as for the pull: TP-1538 Fig. 62(e) is a force gradient the side-stick's travel lacks).
+  it('half forward stick at 434 KEAS is a moderate push: −0.7 to −1.3 g held', () => {
+    const { lateLo, lateHi } = fullPush(434, { stick: 0.5 });
+    expect(lateLo).toBeGreaterThanOrEqual(-1.3);
+    expect(lateHi).toBeLessThanOrEqual(-0.7);
+  });
+
+  for (const inverted of [false, true]) {
+    const how = inverted ? 'inverted' : 'upright';
+    it(`a full push at 150 kt, 15,000 ft, ${how}, held 6 s: never more than 0.3 g past the floor at its q̄, α above −30°`, () => {
+      const { margin, minAoa } = fullPush(150, { seconds: 6, inverted });
+      expect(margin).toBeGreaterThanOrEqual(-0.3);
+      expect(minAoa).toBeGreaterThanOrEqual(-30);
+    });
+  }
+
+  // The sloped part of Fig. 62(b), read off the figure (not fbwPushLimit, so a moved breakpoint turns it
+  // red; physics panel): 200 KEAS at 15,000 ft is q̄ ≈ 6.5 kN/m², where the line reads ≈ −3.05 g
+  // incremental, −2.05 g. Full forward stick reaches it within 2 s, before the dive builds speed: the
+  // lowest load factor by then is −2.05 ± 0.3 g.
+  it('full forward stick at 200 KEAS, 15,000 ft (q̄ ≈ 6.5 kN/m², the sloped part) bottoms at −2.05 ± 0.3 g within 2 s', () => {
+    expect(fullPush(200, { seconds: 2 }).minG).toBeGreaterThanOrEqual(-2.35);
+    expect(fullPush(200, { seconds: 2 }).minG).toBeLessThanOrEqual(-1.75);
+  });
+
+  // A stick a hair forward of centre is a hair of push, not a pull (device panel: the push gradient
+  // started at +1 g, so inverted at ~−0.9 g, elevInput 0.005 pulled the jet to +1 g towards the ground;
+  // main.js eases the stick back to centre, so it sits there after every push). Inverted at 350 kt,
+  // 15,000 ft, 3 s: 0.005 and 0.02 of push end within 0.2 g of the released stick, and not above it.
+  it('inverted at 350 kt, a stick just forward of centre flies like a released one (within 0.2 g, no pull)', () => {
+    const endG = (stick) => {
+      const b = makeBody(f16, { kts: 350, altM: 15000 / M_TO_FT, throttle: 0.7, gearDown: false });
+      b.quat.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI));
+      const meter = loadFactorMeter();
+      meter(b);
+      let n = 0;
+      fly(b, f16, 3, (x) => { x.elevInput = stick; x.aileronInput = 0; }, (x) => { n = meter(x); return false; });
+      return n;
+    };
+    const released = endG(0);
+    for (const stick of [0.005, 0.02]) {
+      const n = endG(stick);
+      expect(Math.abs(n - released)).toBeLessThan(0.2);
+      expect(n).toBeLessThanOrEqual(released + 0.05);
+    }
+  });
+
+  // Let go from a push: like a released pull (0090), the nose holds where it is and the seat
+  // returns towards 1 g within 6 s.
+  it('a stick released from a −2 g push at 450 KEAS returns towards 1 g (0.7-1.3 g within 6 s)', () => {
+    const b = makeBody(f16, { kts: 450, altM: 15000 / M_TO_FT, throttle: 1, gearDown: false });
+    const meter = loadFactorMeter();
+    meter(b);
+    let released = null, last = 0;
+    fly(b, f16, 10, (x) => {
+      x.elevInput = released === null ? 0.8 : 0;
+      x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z);
+    }, (x) => {
+      last = meter(x);
+      if (released === null && last <= -2) released = x.t;
       return released !== null && x.t >= released + 6;
     });
     expect(released).not.toBeNull();

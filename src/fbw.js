@@ -1,4 +1,4 @@
-// The F-16's fly-by-wire g and AoA limiter (ticket 0121), a lazy chunk main.js loads right after
+// The F-16's fly-by-wire g and AoA limiter (tickets 0121, 0138 for the push), a lazy chunk main.js loads right after
 // boot (tests/flight/harness.js imports it): loading it gives every spec.pitchFbw airframe its
 // spec.fbw, which flightModel.js calls in the air; until then the stick is the raw pitch command.
 import { Vector3 } from 'three';
@@ -42,14 +42,45 @@ export function fbwPitchRateCap(spec, pull, aoaRad, nNow, upY, tasMps, qDyn, qBo
   return pathRate + (FBW_ALPHA_GAIN / lagS) * alphaGap;
 }
 
+// The push side (ticket 0138), NASA TP-1538 Fig. 62(b), "Schedule of negative 'g' limit with q̄": the
+// lower bound of the commanded incremental normal acceleration is −1 g up to q̄ ~1.55 kN/m², falling
+// linearly to −4 g at ~8.75 kN/m² and flat above (read off the figure; the feedback is aₙ − 1, the
+// same increment as Fig. 63's 8 g). So full forward stick is 0 g slow and −3 g at combat speeds.
+// TP-1538 gives no negative-AoA limit (the α signal into the limiter is clipped at −5°, Fig. 62(a),
+// but nothing limits α below it), so this g floor is the only push limit. Returns the load factor (g).
+export function fbwPushLimit(qDynPa) {
+  return 1 + (-1 - 3 * Math.min(Math.max((qDynPa - 1550) / 7200, 0), 1)); // 1 g + the increment
+}
+
+// The most nose-down pitch rate (rad/s) the limiter lets the stick command: fbwPitchRateCap's
+// mirror, towards the α where n meets the push's command. `push` (0-1, forward stick) commands
+// 1 g down to the Fig. 62(b) floor in a straight line (the game's gradient, as for the pull); a
+// released stick (push ≤ 0) is held only to the floor. A push's gradient never raises the nose past
+// a released stick's hold (pitch rate 0): inverted at −1 g, a stick eased just forward of centre
+// (main.js lerps it back) would otherwise command +1 g and pull the jet towards the ground (device
+// panel).
+export function fbwPitchRateFloor(spec, push, aoaRad, nNow, upY, tasMps, qDyn, qBody, lagS) {
+  const nPerRad = (spec.clAlpha * qDyn * spec.wingAreaM2) / (spec.massKg * GRAVITY);
+  const pathRate = (GRAVITY * (nNow - upY)) / tasMps;
+  const lead = (qBody - pathRate) * lagS;
+  const nLimit = fbwPushLimit(qDyn);
+  const rateTo = (n) => pathRate + (FBW_ALPHA_GAIN / lagS) * (n - nNow - nPerRad * lead) / nPerRad;
+  const atLimit = rateTo(nLimit);
+  return push > 0 ? Math.min(rateTo(1 + (nLimit - 1) * Math.min(push, 1)), Math.max(0, atLimit)) : atLimit;
+}
+
 // flightModel.js's hook: the stick's pitch-rate command `qCmd` (rad/s), capped by the limiter in the
 // air (above 20 m/s; on the wheels the stick is the stabilator, as before). `liftN` is the aero force
 // along the body's up axis (N), so the seat's load factor is liftN / weight. Never more nose-down
 // than full forward stick (the stabilator's own limit).
 export function fbwPitch(body, spec, qCmd, aoaRad, liftN, tasMps, qDyn) {
   if (body.onGround || tasMps <= 20) return qCmd;
-  return Math.min(qCmd, Math.max(-(spec.pitchAuthority ?? 1.8) / spec.pitchDamping, fbwPitchRateCap(spec, -body.elevInput, aoaRad, liftN / (spec.massKg * GRAVITY),
-    liftUpY(body), tasMps, qDyn, body.angVel.x, 120 / (spec.pitchDamping * tasMps))));
+  const n = liftN / (spec.massKg * GRAVITY), upY = liftUpY(body), lagS = 120 / (spec.pitchDamping * tasMps);
+  const cap = fbwPitchRateCap(spec, -body.elevInput, aoaRad, n, upY, tasMps, qDyn, body.angVel.x, lagS);
+  const floor = fbwPitchRateFloor(spec, body.elevInput, aoaRad, n, upY, tasMps, qDyn, body.angVel.x, lagS);
+  // The AoA limiter (the cap) wins over the push floor, as Fig. 62(a)'s α feedback acts after the
+  // command limiter.
+  return Math.max(-(spec.pitchAuthority ?? 1.8) / spec.pitchDamping, Math.min(Math.max(qCmd, floor), cap));
 }
 
 // The world-vertical part of the lift direction (body x axis × the air-relative velocity, as

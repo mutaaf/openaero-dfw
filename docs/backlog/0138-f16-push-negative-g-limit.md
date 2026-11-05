@@ -1,12 +1,12 @@
 ---
 id: 0138
 title: F-16 fly-by-wire limits a push too (negative g and AoA)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-03
-pr:
+pr: 193
 ---
 
 ## Why
@@ -23,9 +23,11 @@ Find a cited negative-g command limit and negative-AoA limit for the F-16's flig
 `src/fbw.js` the way 0121 applies Fig. 63 to a pull.
 
 ## Acceptance criteria
-- [ ] A card: full forward stick at 434 KEAS, 15,000 ft stays within the cited negative-g limit and
-      α never passes the cited negative AoA limit
-- [ ] Every 0121 and 0118 card still passes; released-stick behaviour (0090) unchanged
+- [x] A card: full forward stick at 434 KEAS, 15,000 ft stays within the cited negative-g limit
+      (TP-1538 Fig. 62(b): −3 g) and α does not go over (shipped: TP-1538 cites no negative-AoA limit,
+      only a −5° clip on the α signal, so the α bounds, −11° at 434 KEAS and −30° slow, are the game's;
+      a slow full push reaches α ~−23°)
+- [x] Every 0121 and 0118 card still passes; released-stick behaviour (0090) unchanged
 
 ## Test plan
 Flight cards in `tests/flight/f16.test.js` beside 0121's.
