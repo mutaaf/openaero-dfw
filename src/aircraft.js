@@ -278,7 +278,7 @@ export const AIRCRAFT_DATABASE = {
     // 308°/s at full lateral stick (NASA TP-1538 App. A, p. 34), as far as the airframe can make it:
     // TP-1538 Table III's ΔCl at the 21.5° aileron limit (0.055) over Clp −0.43 (as transcribed in
     // Stevens & Lewis App. A) is p·b/2V 0.128 on Table I's 30 ft (9.144 m) span, so ~124°/s at
-    // 150 KTAS and the full command from ~300 KTAS. Low-α cruise derivatives: an estimate on approach.
+    // 150 KTAS and the full command from ~375 KTAS. Low-α cruise derivatives: an estimate on approach.
     rollPerTas: 0.02798, // 0.055 / 0.43 × 2 / 9.144 m
     rollCmdRad: 5.376, // 308°/s
     yawDamping: 2.2,

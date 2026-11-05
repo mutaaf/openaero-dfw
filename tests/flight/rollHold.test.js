@@ -6,6 +6,7 @@
 // and Learner's (assists.js shapeControls) at 1/60 s across each airframe's envelope, the F-16's high-q
 // corner (600 KIAS at 2,000 ft) included: the bank settles, steady within 1°, with no limit cycle.
 import { describe, it, expect } from 'vitest';
+import { Quaternion, Vector3 } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { trimThrottle, rollHoldScale, dihedralAileron } from '../../src/flightModel.js';
@@ -142,7 +143,7 @@ function flyPilot(spec, kts, altFt, rollAt, source, seconds, fps = 60) {
 
 describe('Pilot on a touch screen and keys: the F-16\'s roll command is flyable (0156)', () => {
   it('half the touch stick rolls the F-16 at no more than ~90°/s (350 KIAS, 10,000 ft)', () => {
-    const r = flyPilot(f16, 350, 10000, () => 0.5, 'stick', 0.6);
+    const r = flyPilot(f16, 350, 10000, () => 0.5, 'stick', 1.5);
     console.log(`[rollHold] f16 half stick: ${r.peakP.toFixed(0)}°/s`);
     expect(r.peakP).toBeLessThan(90);
     expect(r.peakP).toBeGreaterThan(60);
@@ -157,8 +158,19 @@ describe('Pilot on a touch screen and keys: the F-16\'s roll command is flyable 
     }
   });
 
+  it('a 0.2 s full flick of the touch stick banks the F-16 under 35°, not a snap (350 and 500 KIAS, 60 and 30 fps)', () => {
+    for (const kts of [350, 500]) {
+      for (const fps of [60, 30]) {
+        const r = flyPilot(f16, kts, 10000, (t) => (t < 0.2 ? 1 : 0), 'stick', 1.5, fps);
+        console.log(`[rollHold] f16 0.2 s touch flick at ${kts} KIAS, ${fps} fps: bank ${r.bankDeg.toFixed(1)}°, peak ${r.peakP.toFixed(0)}°/s`);
+        expect(r.bankDeg).toBeGreaterThan(3);
+        expect(r.bankDeg).toBeLessThan(35); // was 60-66° with the plain 10/s smoothing (device panel)
+      }
+    }
+  });
+
   it('full touch stick rolls the F-16 several times faster than the Cessna at their cruise speeds', () => {
-    const f = flyPilot(f16, 350, 10000, () => 1, 'stick', 1).peakP;
+    const f = flyPilot(f16, 350, 10000, () => 1, 'stick', 1.5).peakP;
     const c = flyPilot(c172, 110, 5000, () => 1, 'stick', 3).peakP;
     console.log(`[rollHold] full stick: f16 ${f.toFixed(0)}°/s, c172 ${c.toFixed(0)}°/s`);
     expect(f).toBeGreaterThan(250);
@@ -168,7 +180,9 @@ describe('Pilot on a touch screen and keys: the F-16\'s roll command is flyable 
   it('the Cessna\'s stick is as before: linear, no curve (it commands aileron, not a rate)', () => {
     expect(pilotRoll(0, 0.5, 1, undefined, 'stick')).toBe(0.5);
     expect(pilotRoll(0, 1, 0.05, undefined, 'keyboard')).toBeCloseTo(0.5, 9);
-    expect(pilotRoll(0, 0.5, 1, f16.rollCmdRad, 'stick')).toBeCloseTo(0.275, 9);
+    expect(pilotRoll(0, 0.5, 1, f16.rollCmdRad, 'stick')).toBeCloseTo(0.275, 9); // a 1 s frame reaches it
+    expect(pilotRoll(0, 1, 0.05, f16.rollCmdRad, 'stick')).toBeCloseTo(0.15, 9); // rolls in at 3/s
+    expect(pilotRoll(1, 0, 0.05, f16.rollCmdRad, 'stick')).toBeCloseTo(0.5, 9); // lets go at 10/s
     expect(pilotRoll(0, -1, 1, f16.rollCmdRad, 'gamepad')).toBe(-1);
   });
 });
@@ -189,5 +203,38 @@ describe('a held stick on the takeoff roll doesn\'t roll the airplane over (0156
       console.log(`[rollHold] ${name} ground roll ${kts} kt, full stick 1.5 s: max bank ${maxBank.toFixed(1)}°, on ground ${b.onGround}`);
       expect(maxBank).toBeLessThan(10);
     });
+  }
+});
+
+// Kid and Learner over their cap (a gust, an upset): assists.js rolls it back at the old full-aileron
+// rate (−sign·min(1, rollHoldScale)), not the F-16's 308°/s, which overshot by ~30° (physics panel).
+describe('Kid and Learner roll back from past the cap without overshoot (0156)', () => {
+  for (const level of ['kid', 'learner']) {
+    for (const [name, spec, kts, altFt] of [['f16', f16, 350, 10000], ['f16', f16, 600, 2000], ['c172', c172, 90, 5000]]) {
+      it(`${level}, ${name} ${kts} KIAS, from 60° of bank hands off: rolled back at under 100°/s, not a 308°/s snap, never past wings level by more than 3°, no wobble`, () => {
+        const cfg = assistConfig(level), st = createAssistState(), out = {};
+        const altM = altFt / M_TO_FT;
+        const b = makeBody(spec, { kts, altM });
+        b.throttle = b.engineN = Math.min(1, trimThrottle(spec, kts * KTS_TO_MPS, 0, 0, false, airAt(altM)) * 1.2);
+        b.apMaster = false; b.autoTrim = true;
+        b.quat.premultiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -60 * Math.PI / 180)); // 60° right
+        let minBank = 90, peakP = 0; const tail = [];
+        fly(b, spec, 8, (x, h) => {
+          shapeControls(cfg, st, assistInput(spec, x, 0), h, out);
+          x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud;
+        }, (x) => {
+          const bank = attitude(x).bankRightDeg;
+          minBank = Math.min(minBank, bank);
+          peakP = Math.max(peakP, Math.abs(x.angVel.z) * 180 / Math.PI);
+          if (x.t > 6) tail.push(bank);
+          return false;
+        }, DT60);
+        console.log(`[rollHold] ${level} ${name} ${kts} KIAS from 60°: peak roll ${peakP.toFixed(0)}°/s, lowest bank ${minBank.toFixed(1)}°, settled ${tail.at(-1).toFixed(1)}°`);
+        expect(peakP).toBeLessThan(100); // measured 33-71°/s; with a full-stick rollback the F-16 cards fail
+        expect(minBank).toBeGreaterThan(-3);
+        expect(Math.max(...tail) - Math.min(...tail)).toBeLessThan(1);
+        expect(Math.abs(tail.at(-1))).toBeLessThan(2);
+      });
+    }
   }
 });

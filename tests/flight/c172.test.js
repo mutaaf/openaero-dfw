@@ -1177,7 +1177,8 @@ describe('Cessna 172S full-aileron roll rate vs JSBSim / Roskam (ticket 0153)', 
 
   // Closed by 0156 (was a KNOWN GAP at −45%: the old law's steady rate was rollAuthority / rollDamping,
   // 38°/s at any speed). flightModel.js rollRateGain now rolls at aircraft.js c172.rollPerTas × TAS,
-  // the same Roskam p·b/2V. Mutation: halving the damping term flies ~+8% and the settled check fails.
+  // the same Roskam p·b/2V. The damping now sets only the roll-in lag (no card times it; out of scope), so
+  // the mutation that catches a regression is the old law (rollPerTas ignored): these cards go red.
   // The sweep enters at 60, 90 and 110 KIAS (JSBSim's own rate grows with the speed, 52-75°/s), each
   // compared with JSBSim's roll power at the model's window TAS, ball centred through the window
   // (entered at 60 KIAS from 120° of bank the pitch pull-out slips ~6° on the way in, outside it).

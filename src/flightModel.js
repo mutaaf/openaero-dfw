@@ -237,7 +237,8 @@ export function stepFlightModel(body, spec, dt) {
     if (steer !== null) body.angVel.y += (held ? wheelScrubYawHold : noseWheelYawHold)(body, spec, steer - body.angVel.y, dt);
   }
 
-  if (Math.abs(body.aileronInput) < 0.05 && !body.apMaster) {
+  // Hands off (under 0.05 of the old full rate, 0156: on the F-16 0.05 of stick is 15°/s), the roll dies away.
+  if (Math.abs(body.aileronInput) * rg < 0.05 * legacyRollRate(spec) && !body.apMaster) {
     body.angVel.z -= body.angVel.z * 1.5 * dt;
   }
 
@@ -273,7 +274,7 @@ export function stepFlightModel(body, spec, dt) {
 // aileronForBank) multiplies its aileron by, so its loop and its gentle rate are the same at any
 // speed on any airframe (tests/flight/rollHold.test.js flies them at a slow phone's 1/60 s sub-steps).
 const legacyRollRate = (spec) => (spec.rollAuthority ?? 2.8) / spec.rollDamping;
-export const rollRateGain = (spec, tasMps) => (false
+export const rollRateGain = (spec, tasMps) => (spec.rollPerTas
   ? Math.min(spec.rollCmdRad ?? 9, spec.rollPerTas * tasMps)
   : legacyRollRate(spec));
 export const rollHoldScale = (spec, tasMps) => Math.min(4, legacyRollRate(spec) / Math.max(0.01, rollRateGain(spec, tasMps)));

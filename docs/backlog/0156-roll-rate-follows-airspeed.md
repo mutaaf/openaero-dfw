@@ -92,7 +92,7 @@ Adverse yaw, the roll-in time constant as a carded number, the 737's roll card (
   The ticket's emulated limit cycle (old gains, ×10 authority, 1/60 s) did not reproduce on the real model (bank 24.99°,
   0 rate reversals), so the scale is there to keep the loop and its gentle rate, not as a stability fix.
 - Pilot: the F-16's stick (fbw.js pilotRoll, installed as spec.pilotRoll) is an expo curve on touch/gamepad (half stick
-  0.275 of the command: 83°/s at 350 KIAS) and a ~0.5 s ramp on the keys (a 0.2 s tap banks 20° at 60 fps, 24° at 30 fps).
+  0.275 of the command: 83°/s at 350 KIAS, rolled in at 3/s) and a ~0.5 s ramp on the keys (a 0.2 s tap banks 20° at 60 fps, 24° at 30 fps).
   The Cessna's stick is unchanged (linear).
 - The C172 card's pilot (harness.js steadyRoll) gained a stability-axis rudder feed-forward and pitch-rate damping; the
   60 KIAS slip (8°) was the pitch pull-out from 120° of bank (α swung to −19°), outside the window, so the sweep checks
@@ -105,4 +105,11 @@ Adverse yaw, the roll-in time constant as a carded number, the 737's roll card (
 - First-timer panel: on the wheels the roll gain is capped at the old constant rate (a game choice, no source): a stick held
   over for 1.5 s on the F-16's takeoff roll banked it 28° at 140 kt and cartwheeled it off at Vr; now 1.5° (rollHold.test.js
   ground cards). The mouse yoke (M) now goes through the F-16's stick curve too (it wrote the aileron directly).
+- Device panel: a full touch-stick flick snapped 60-66° in 0.2 s (the absolute stick jumps); the F-16's stick now rolls in
+  at 3/s (keys 2/s), letting go at 10/s: a 0.2 s flick banks 28-34°, half stick still 83°/s steady. The phone e2e samples
+  from the first frame with the stick over and reports a rate over the sim time covered (it read 39° vs 42° under load).
+- Physics panel: Kid/Learner's over-cap rollback is carded by its peak rate (33-71°/s; a full-stick rollback fails the
+  F-16 cards); the hands-off roll damping (|aileron| < 0.05) is now a rate (under 0.05 of the old full rate), as 0.05 of
+  the F-16's stick is 15°/s; the F-16 reaches its command from ~375 KTAS (comment said 300). A reviewer's mutation of
+  rollRateGain was committed in cfe053d (shared tree) and restored in the next commit; the roll cards were red there.
 - Boot JS 200.97 kB: paid for by moving the speed tape's trim bug and low-speed band drawing into gateVerdict.js.
