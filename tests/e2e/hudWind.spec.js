@@ -53,6 +53,19 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
         ['horizon band', { x: v.width * 0.3, y: v.height * 0.35, width: v.width * 0.4, height: v.height * 0.3 }],
       ];
       for (const [name, r] of clear) expect(overlaps(box, r), `wind box vs ${name}`).toBe(false);
+      // 0142: a first visit flies Learner, so the plain words show beside it, clear of the same things.
+      await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudWind.plain, { timeout: 10_000 })
+        .toEqual(['BLOWN LEFT', 'STEER RIGHT']);
+      const pb = (await page.evaluate(() => window.openaeroDebug())).hudWind.plainBox;
+      const plain = { x: pb.x, y: pb.y, width: pb.w, height: pb.h };
+      expect(plain.x + plain.width).toBeLessThanOrEqual(v.width);
+      expect(plain.y).toBeGreaterThanOrEqual(0);
+      expect(overlaps(plain, box), 'plain words vs wind box').toBe(false);
+      for (const id of PANELS) {
+        const b = await page.locator(id).boundingBox();
+        if (b) expect(overlaps(plain, b), `plain words vs ${id}`).toBe(false);
+      }
+      for (const [name, r] of clear) expect(overlaps(plain, r), `plain words vs ${name}`).toBe(false);
       // Nothing in the DOM sits on top of it: the HUD canvas is what is under its centre.
       const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [box.x + box.width / 2, box.y + box.height / 2]);
       expect(['simCanvas', 'hudCanvas']).toContain(top);
@@ -60,6 +73,19 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
     });
   });
 }
+
+test.describe('plain words (0142)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('Pilot keeps the numbers alone', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('openaero_assist_v1', '{"v":1,"level":"pilot","at":0}'));
+    await fly(page, [XW_METAR]);
+    await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudWind.xw, { timeout: 10_000 }).toBe('XW 12R');
+    await page.waitForTimeout(500);
+    const d = await page.evaluate(() => window.openaeroDebug());
+    expect(d.hudWind.plain ?? null).toBeNull();
+  });
+});
 
 test.describe('honest labels', () => {
   test.use({ storageState: { cookies: [], origins: [] } });

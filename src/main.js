@@ -2083,7 +2083,7 @@ function renderHud() {
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
   drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
   drawTape(cx + ALT_TAPE_X, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
-  gateVerdict?.drawAltCaption(hudCtx, altCaptionRect(cx, cy, _altCap), sim.assist, w);
+  gateVerdict?.drawAltCaption(hudCtx, altCaptionRect(cx, cy, _altCap), sim.assist, w, sim.hudWind, _windBox); // + the wind box's plain words (0142)
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
   if (sim.stallKts && !sim.onGround) drawStallBand(cx - 131, cy);
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);

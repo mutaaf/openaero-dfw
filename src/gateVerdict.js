@@ -55,7 +55,10 @@ export function altLabels(level) {
 // glyphs ~38 px: whole at 375 px, ~5% squeezed by maxWidth at 360 px; at 320 px the box and both
 // tabs are cut by the edge, as MSL was before).
 // An opaque-enough tab keeps 4.5:1 over bright imagery.
-export function drawAltCaption(ctx, r, level, screenW) {
+// The same call draws the wind box's plain words (0142) when main.js passes sim.hudWind and the wind box
+// (one call from the boot chunk for both: its budget has no room for a second).
+export function drawAltCaption(ctx, r, level, screenW, hw, windBox) {
+  if (hw) drawWind(ctx, windBox, hw, level);
   const words = altLabels(level);
   r.w = level === 'pilot' ? words.altW : Math.min(words.altW, Math.floor(screenW - r.x)); // Pilot's tab is 0132's
   r.text = words.alt;
@@ -66,4 +69,54 @@ export function drawAltCaption(ctx, r, level, screenW) {
   ctx.textAlign = 'center';
   ctx.fillText(words.alt, r.x + r.w / 2, r.y + r.h - 2.5, r.w - 2);
   ctx.textAlign = 'left';
+}
+
+// The wind box's plain words (0142): Kid and Learner read what the wind does and which way to steer,
+// low near the runway, where the box shows its XW/HW numbers (hudLayout.js windReadout). The FAA's
+// Airplane Flying Handbook (FAA-H-8083-3C, ch. 8, crosswind approach and landing) corrects into the
+// wind: a wind from the right drifts the airplane left, so it is steered right. A crosswind of 3 kt or
+// more takes the words unless a stronger tailwind does; a tailwind floats you long (amber, as the box's
+// TW); a headwind slows you over the ground. Under 3 kt either way there are no words. Pure, tested;
+// the lines are constants (nothing allocated per frame). xwKts > 0 is a wind from the right.
+const WIND_WORDS = {
+  right: ['BLOWN LEFT', 'STEER RIGHT'], left: ['BLOWN RIGHT', 'STEER LEFT'],
+  tail: ['TAILWIND', 'LANDS LONG'], head: ['HEADWIND', 'SLOWS YOU'],
+};
+export function windPlainWords(xwKts, hwKts) {
+  if (xwKts === null || hwKts === null) return null;
+  const x = Math.abs(xwKts);
+  if (x >= 3 && x >= -hwKts) return xwKts > 0 ? WIND_WORDS.right : WIND_WORDS.left;
+  if (hwKts <= -3) return WIND_WORDS.tail;
+  return hwKts >= 3 ? WIND_WORDS.head : null;
+}
+
+// Their strip: as wide as the wind box (`box`, hudLayout.js windBoxRect), 24 px, two 9 px lines (11
+// glyphs, ~60 px, fit its 68). Over the box where that stays under the top bar (72 px, hudLayout.js
+// BELOW_TOP_BAR): the box's foot is the line it keeps off the tapes and horizon. Else (a phone held
+// sideways, where the box sits right of the altitude tape under the top bar) under it. Writes `out`.
+export const WIND_PLAIN_H = 24;
+export function windPlainRect(box, out) {
+  out.x = box.x;
+  out.w = box.w;
+  out.h = WIND_PLAIN_H;
+  out.y = box.y - WIND_PLAIN_H - 2 >= 72 ? box.y - WIND_PLAIN_H - 2 : box.y + box.h + 2;
+  return out;
+}
+
+// drawAltCaption calls this every frame with the wind box (hudLayout.js windBoxRect, main.js _windBox) and the level; it writes the words
+// and the strip into `hw` (sim.hudWind: the ?debug snapshot reads plain/plainBox), null for Pilot.
+const _plain = {};
+export function drawWind(ctx, box, hw, level) {
+  const words = level === 'pilot' ? null : windPlainWords(hw.xwKts, hw.hwKts);
+  hw.plain = words;
+  hw.plainBox = words && windPlainRect(box, _plain);
+  if (!words) return;
+  const r = _plain;
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = words === WIND_WORDS.tail ? '#fcd34d' : '#e0f2fe';
+  ctx.fillText(words[0], r.x + 3, r.y + 10, r.w - 6);
+  ctx.fillText(words[1], r.x + 3, r.y + 21, r.w - 6);
 }
