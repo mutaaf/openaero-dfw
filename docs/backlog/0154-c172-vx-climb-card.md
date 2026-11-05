@@ -1,12 +1,12 @@
 ---
 id: 0154
 title: Cessna card: the best angle of climb (Vx) beats Vy on gradient, from the POH table
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-05
-pr:
+pr: 190
 ---
 
 ## Why
@@ -25,10 +25,18 @@ fly Vx and Vy for 60 s each. Assert (1) the climb gradient at the POH's Vx is hi
 rate/TAS at Vx. No `src/` change unless a card fails (then a KNOWN GAP and a ticket).
 
 ## Acceptance criteria
-- [ ] The POH Vx and its figure number are in the test comment
-- [ ] Gradient(Vx) > gradient(Vy) and rate(Vy) > rate(Vx) at sea level
-- [ ] Vx gradient within ±15% of the POH
-- [ ] `npm run check:fast` green
+- [x] The POH Vx and its figure number are in the test comment
+- [x] Gradient(Vx) > gradient(Vy) and rate(Vy) > rate(Vx) at sea level (rate passes; gradient is KNOWN GAP 0157)
+- [ ] Vx gradient within ±15% of the POH (dropped, see Deviations)
+- [x] `npm run check:fast` green
+
+## Deviations (as shipped, #190)
+- Vx and Vy are in POH **Section 4**, Airspeeds for Normal Operation, a table with no figure number.
+- The POH gives no climb rate or gradient at Vx (Fig. 5-6 is at Vy only), so the ±15% card has no
+  reference. Two peak cards replace it: 62 beats 56 and 68 on gradient, 74 beats 68 and 80 on rate.
+- Flown from 500 ft (40 s settle, 10 s measured), not from lift-off: a 1 m spawn can put the tail on
+  the runway in the first pitch swing (docs/LESSONS.md).
+- Gradient, vxPeak and vyPeak fail in both models: KNOWN GAP 0157.
 
 ## Test plan
 One new describe block using the existing climb harness.
