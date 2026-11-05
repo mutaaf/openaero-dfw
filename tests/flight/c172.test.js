@@ -221,14 +221,19 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 // runway's height and, at some speeds, the first pitch swing puts the tail on the ground),
 // 40 s to settle and 10 s measured. Gradient = height gained / distance flown (still air).
 //
+// The model has no instrument error, so these IAS are flown as CAS (the POH's 62 KIAS is ~1-2 kt
+// more CAS; no verdict here moves on that). The pilot holds each speed 0.1-0.4 kt low.
+//
 // Measured (KIAS: fpm, gradient %), flightModel.js / JSBSim:
 //   56: 468 8.2 / 439 7.7   62: 560 8.9 / 531 8.4   68: 633 9.1 / 604 8.7
 //   74: 687 9.1 / 661 8.8   80: 700 8.6 / 690 8.5
-// Both models put the best gradient near 72 KIAS and the best rate near 82-86, about 10 kt
-// above the POH's. flightModel.js's full-throttle thrust is flat from 0 to 74 kt (aircraft.js
-// thrustTableN 2070 → 2105 N), so its excess thrust peaks at the minimum-drag speed, not below
-// it; JSBSim's prop is not yet diagnosed. KNOWN GAP (0157). A mutation (thrust falling from
-// 3,000 N static to 1,700 N at 97 kt) turned the vxGradient and vyPeak cards green.
+// A 2 kt sweep from 56 to 90 KIAS (same protocol, not carded) puts the best gradient at 70-74 KIAS
+// in both models and the best rate near 81 (flightModel.js) and 85 KIAS (JSBSim): Vx about 10 kt
+// and Vy 7-11 kt above the POH's. flightModel.js's full-throttle thrust is flat from 0 to 38 m/s
+// (aircraft.js thrustTableN 2070 → 2105 N), so its excess thrust peaks at the minimum-drag speed,
+// not below it; JSBSim's prop is not yet diagnosed. KNOWN GAP (0157). A mutation (thrust falling
+// from 3,000 N static to 1,700 N at 50 m/s) turned vxGradient and vyPeak green, but not vxPeak, and
+// took the 729 fpm Vy card out of its band: the shape needs a source, not a guess.
 const climbAt = (kts) => {
   const b = makeBody(c172, { kts, altM: 500 / M_TO_FT, throttle: 1 });
   const pilot = speedHoldPilot(() => kts);
@@ -239,6 +244,8 @@ const climbAt = (kts) => {
   return { fpm: fpm / n, ias: ias / n, gradient: (b.pos.y - h0) / (b.distM - d0) };
 };
 
+// If one of these flips green, promote it per 0157. flightModel.js's vyPeak misses by only 13 fpm
+// (687 at 74 vs 700 at 80, a flat curve), so a fix should show a clear peak at 74, not a 1 fpm win.
 const VX_GAPS = {
   flightModel: new Set(['vxGradient', 'vxPeak', 'vyPeak']),
   jsbsim: new Set(['vxGradient', 'vxPeak', 'vyPeak']),
