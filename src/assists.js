@@ -92,15 +92,27 @@ export function shapeControls(cfg, st, s, dt, out) {
     // On the runway the stick is the pilot's (rotation, taxi): the envelope starts at lift-off.
     // The pedals too, when they use them; when they don't, the nose wheel holds the centreline
     // of the runway it is on (0110), never the sideslip's coordination (it would steer into the wind).
-    // Kid on the mains with the nose wheel still up (a 737 derotates for over a second, a kid may hold
+    // Kid or Learner on the mains with the nose wheel still up (a 737 derotates for over a second, a kid may hold
     // the stick back): the nose wheel can't steer yet, so the rudder, as in the de-crab, turns the nose
     // to the runway hold's heading, at a softer gain (0100 panel: the hold's pedal, sized for the nose wheel, let the wind
     // yaw it back to ~5° within 1.5 s).
     st.pitchHoldDeg = null;
     out.elev = s.pitchIn; out.ail = s.rollIn;
-    out.rud = Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null ? s.yawIn
-      : cfg.autoFlare && s.noseWheelDown === false ? decrabRudder(headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps)), s, MAINS_GAIN)
-      : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS);
+    // Learner too lands on the mains (crabbed: it has no de-crab), and gets the same rudder there (0150 panel).
+    // With the nose wheel down, at landing speeds the hold asks more pedal per degree (0150): the nose tyre's side grip
+    // (gear.js noseWheelYawHold) can't out-turn the fin's weathervaning in a strong crosswind (a 737 at ~135 kt, 20 kt
+    // across: ~0.19 vs ~0.25 rad/s²), the rudder surface has to help, and the hold's 0.5°/s per degree, sized for the
+    // nose wheel's steered rate, asked a tenth of a pedal while the nose sat 2.5° into the wind. Up to 1° of the error
+    // asks 5°/s of steered rate per degree more (5 / steerRateDegS of pedal: the loop through the nose wheel stays at 5/s,
+    // stable at 30 fps), faded out from 31 to 15 m/s of airspeed. No yaw-rate damping: through the nose wheel's steering
+    // it chattered the pedal at the slew limit and slowed a crabbed turn-back (0150 physics panel).
+    if (Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null) out.rud = s.yawIn;
+    else {
+      const off = headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps));
+      out.rud = s.noseWheelDown === false ? decrabRudder(off, s, MAINS_GAIN)
+        : clamp(groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS)
+          - clamp(off, -1, 1) * 5 / Math.max(1, s.steerRateDegS) * clamp(s.airspeedMps / 16 - 0.94, 0, 1), -1, 1);
+    }
     return out;
   }
   if (st.pitchHoldDeg === null) st.pitchHoldDeg = s.pitchDeg;

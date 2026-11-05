@@ -443,7 +443,7 @@ describe('assist level storage and per-level bests', () => {
 describe('on the runway (groundSteerRudder, 0110)', () => {
   const ground = {
     pitchIn: 0, rollIn: 0, yawIn: 0, onGround: true, betaDeg: 20,
-    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, steerRateDegS: 20,
+    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, steerRateDegS: 20, airspeedMps: 60, yawRateRight: 0,
   };
   it('lined up on the centreline: no rudder, whatever the sideslip', () => {
     for (const level of ['kid', 'learner']) {
@@ -460,6 +460,19 @@ describe('on the runway (groundSteerRudder, 0110)', () => {
     expect(groundSteerRudder(350, 320, 0, 0, 200)).toBeCloseTo(0.02, 9); // 30° off at speed: 4°/s of 200
     expect(groundSteerRudder(350, 320, 0, 0, 2)).toBe(1);
     expect(groundSteerRudder(350, 350, 100, 0, 200)).toBeCloseTo(-0.0075, 9); // never more than 3° off: 1.5°/s
+  });
+  // 0150: the nose tyre alone can't hold a 737 against a 20 kt crosswind at landing speed; the hold asks 5°/s more of steered
+  // rate per degree (up to 1°) there, faded out by 15 m/s, where the nose wheel does it alone; no yaw-rate damping (it chattered).
+  it('at landing speed the hold asks more pedal per degree; at a walk the nose wheel alone; no rate damping', () => {
+    const cfg = assistConfig('kid'), off = { ...ground, noseHdgDeg: 350.5, steerRateDegS: 31 };
+    const hold = groundSteerRudder(350, 350.5, 0, 0, 31);
+    const fast = shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 70 }, 1 / 120, {}).rud;
+    expect(fast).toBeCloseTo(hold - 0.5 * 5 / 31, 9); // nose 0.5° right: 2.5°/s more to the left
+    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 10 }, 1 / 120, {}).rud).toBeCloseTo(hold, 9);
+    // Past 1° the extra stays 5°/s (a crabbed touchdown is turned back by the 0110 hold, not slammed).
+    expect(shapeControls(cfg, createAssistState(), { ...off, noseHdgDeg: 5, airspeedMps: 70 }, 1 / 120, {}).rud)
+      .toBeCloseTo(groundSteerRudder(350, 5, 0, 0, 31) - 5 / 31, 9);
+    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 70, yawRateRight: -0.03 }, 1 / 120, {}).rud).toBe(fast);
   });
   it("the player's pedals win; off a runway the rudder is theirs (0 if they leave it)", () => {
     const cfg = assistConfig('learner');

@@ -46,5 +46,16 @@ export function hooks(sim, scenario, arm, dead, ground) {
   window.openaeroDebugDeadStick = (distNm, aglFt) => dead()?.debugFinal(sim, distNm, aglFt, ground);
 }
 
+// The ?debug one-line readout (Google session usage, render scale), moved off the boot budget (0150).
+let overlayEl;
+export function overlay(text) {
+  if (!overlayEl) {
+    overlayEl = document.createElement('div');
+    overlayEl.className = 'debug-overlay'; // styles.css
+    document.body.appendChild(overlayEl);
+  }
+  overlayEl.textContent = text;
+}
+
 // openaeroDebug().render: the last frame's draw calls and triangles (off the boot budget, 0144).
 export const renderInfo = (r) => r && { calls: r.info.render.calls, triangles: r.info.render.triangles };

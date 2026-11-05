@@ -28,7 +28,7 @@ const flaps = (spec) => (spec === c172 ? 0 : 1);
 function assisted(level, spec, st, s, x, dt, { pitchIn = 0 } = {}) {
   const { pitchDeg, bankRightDeg } = attitude(x);
   Object.assign(s, {
-    pitchIn, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+    pitchIn, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, yawRateRight: -x.angVel.y,
     aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex), tailstrikeDeg: spec.maxGroundPitchDeg ?? 15,
     onGround: !!x.onGround, wheelHeightM: x.pos.y - x.groundY - spec.gearHeight, airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS,
     guideBankDeg: 0, guideGammaDeg: 0,
@@ -92,10 +92,10 @@ function skipYaw(spec, metarKts) {
 
 // From a touchdown at Vref on the centreline, crabbed 5° into the wind (Kid and Learner keep the
 // crab to the runway, 0100), idle, brakes from 2 s, hands off, to a stop.
-function assistedRollout(spec, level, metarKts) {
+function assistedRollout(spec, level, metarKts, crabDeg = 5) {
   const b = makeBody(spec, { flaps: 2 });
   const v = spec.vrefKts * KTS_TO_MPS;
-  b.quat.setFromEuler(_e.set(0, -5 * DEG_TO_RAD, 0));
+  b.quat.setFromEuler(_e.set(0, -crabDeg * DEG_TO_RAD, 0));
   b.vel.set(0, 0, -v);
   b.apMaster = false;
   const st = createAssistState(), s = {};
@@ -192,6 +192,19 @@ describe('on the runway in a crosswind (ticket 0110)', () => {
       expect(Math.abs(r.offM) + spec.gear.trackM / 2).toBeLessThan(22.9);
       // Not glued to the line either: the wind is felt (the nose turns into it, the airplane drifts).
       expect(r.maxHdgDeg).toBeGreaterThan(0.2);
+    });
+  }
+});
+
+// 0150 physics panel: a Learner touchdown crabbed 15° (no de-crab) in a 20 kt METAR crosswind. The first cut's yaw-rate damping
+// slowed the turn-back (the 737 27.5-29.6 m off, past a 150 ft runway's 22.9 m half-width; base 20.4 m). Now 7.4 m (737),
+// 8.0 m (F-16), 4.2 m (C172); base 20.4, 20.2, 10.8 m.
+describe('a crabbed touchdown turns back onto the runway (ticket 0150)', () => {
+  for (const k of ['b738', 'f16', 'c172']) {
+    it(`${k} learner, 15° crab at Vref, 20 kt METAR crosswind, brakes from 2 s: within 12 m of the centreline`, () => {
+      const r = assistedRollout(AIRCRAFT_DATABASE[k], 'learner', 20, 15);
+      console.log(`[0150 ${k} learner] 15° crab, 20 kt METAR: ${r.maxOffM.toFixed(1)} m off`);
+      expect(r.maxOffM).toBeLessThan(12);
     });
   }
 });

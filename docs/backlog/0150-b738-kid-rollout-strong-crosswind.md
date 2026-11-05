@@ -1,12 +1,12 @@
 ---
 id: 0150
 title: The 737 at Kid level holds the centreline on a rollout in a strong (20 kt) crosswind
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 191
 ---
 
 ## Why
@@ -24,9 +24,9 @@ loses, nose-wheel authority, the hold's 4°/s cap, or the 3° heading limit. The
 (and Learner's) rollout the authority it needs, in assists.js groundSteerRudder and/or gear.js.
 
 ## Acceptance criteria
-- [ ] The `it.fails` card "b738 … 20 kt from 90° … on the centreline for 20 s" passes (flip it to `it`)
-- [ ] The 0110 groundSteer cards and the 0100 cards still pass
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] The `it.fails` card "b738 … 20 kt from 90° … on the centreline for 20 s" passes (flip it to `it`)
+- [x] The 0110 groundSteer cards and the 0100 cards still pass
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 tests/flight/kidFinal.test.js (rollout card) and tests/flight/groundSteer.test.js.
