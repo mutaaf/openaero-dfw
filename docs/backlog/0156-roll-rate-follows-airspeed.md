@@ -12,12 +12,14 @@ pr:
 ## Why
 0153 carded the roll rate and found two KNOWN GAPs. In `src/flightModel.js` the roll
 acceleration is `(−δa·rollAuthority − p·rollDamping)·(V/120)`, so the steady rate is
-`rollAuthority / rollDamping` at every airspeed: the Cessna rolls 37°/s whether it is at
+`rollAuthority / rollDamping` at every airspeed: the Cessna rolls 37-38°/s whether it is at
 60 or 110 KIAS, and the F-16 31°/s at 350 KIAS. In a real airplane the aileron's moment grows
 with dynamic pressure (∝ V²) and the roll damping with V (Clp·pb/2V), so the steady rate
 is p = Clδa·δa/(−Clp)·2V/b and grows with speed. Our JSBSim C172 (Roskam's derivatives)
-rolls at 45, 60 and 73°/s at 60, 90 and 110 KIAS, so ours is −38% at 90 KIAS against that
-estimate (no flown C172 roll rate is cited yet; look for one before tuning to it). The F-16's
+rolls at 52, 64 and 75°/s entered at 60, 90 and 110 KIAS (0153's card, at its own p·b/2V within
+2%), so ours is −45% at the same TAS against that
+estimate (no flown C172 roll rate is cited yet; look for one before tuning to it, and check
+that c172.xml's "ROSK" lateral set is Roskam's 172 and not his Cessna 182, Airplane A). The F-16's
 flight control computer commands up to 308°/s (NASA TP-1538 App. A, p. 34), ten times what
 the model gives. A trainer that rolls the same lazy rate at every speed, and a fighter
 that rolls like a trainer, both feel wrong to anyone who has flown one.
@@ -48,7 +50,8 @@ that rolls like a trainer, both feel wrong to anyone who has flown one.
   keyboard's ±1 roll get a shaped curve (expo or a rate ramp).
 
 ## Acceptance criteria
-- [ ] `tests/flight/c172.test.js` "KNOWN GAP (0156)" roll card promoted to `it` (±25% of JSBSim at 90 KIAS), plus cards at 60 and 110 KIAS
+- [ ] `tests/flight/c172.test.js` "KNOWN GAP (0156)" roll card promoted to `it` (±25% of JSBSim at 90 KIAS), plus cards at 60 and 110 KIAS (at 60 KIAS steadyRoll's
+  P-only rudder lets β reach ~8° in the model: tighten the rudder loop first)
 - [ ] `tests/flight/f16.test.js` "KNOWN GAP (0156)" roll card promoted to `it`, re-banded one-sided around the command
   ceiling (≥ 260°/s and ≤ 315°/s at 350 KIAS) and started from a bank large enough (e.g. a 360° roll, the steady
   part measured) that a realistic 0.3-0.4 s roll-in can pass; plus an approach card (~150 KIAS, gear down) at a

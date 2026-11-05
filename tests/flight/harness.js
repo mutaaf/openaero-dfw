@@ -498,29 +498,51 @@ export function levelTurn(spec, bankDeg, kts, { altM = 1500, flaps = 0, gearDown
 }
 
 // Full-aileron roll (ticket 0153): from `fromDeg` of left bank at `kts` indicated and `altM`, the
-// stick held full right (aileronInput +1) through the wings-level point, the pitch attitude held
-// with the elevator and the sideslip held near zero with the rudder (the coordinated roll the
-// ticket asks for). The steady roll rate is the mean body roll rate p (°/s, + = right) while the
-// bank is within ±`windowDeg` of level: by then the roll mode has settled (our model's lag is
-// ~0.6 s for the Cessna; JSBSim's ~0.2 s) and gravity has had a second or two to bend the path.
-// Also returns the IAS and sideslip over that window. Flies whichever model useFdm set.
-export function steadyRoll(spec, kts, altM, { fromDeg = 75, windowDeg = 20, flaps = 0 } = {}) {
+// stick held full right (aileronInput +1) through the wings-level point. The start is banked about
+// the velocity vector (no sideslip from a body-axis bank at trim α) and already turning at the rate
+// that bank's lift gives (g·sin φ / V), so gravity doesn't slip it. The elevator holds the trim angle
+// of attack (an attitude hold reverses past 90° of bank) and the rudder holds the sideslip near zero
+// with a β-rate term (the coordinated roll the ticket asks for). The steady roll rate is the mean body
+// roll rate p (°/s, + = right) while the bank is within ±`windowDeg` of level; the run-up from 120° is
+// ~3 roll-mode lags of the model's Cessna (τ ~0.6 s at 38°/s) and the window's entry and exit rates
+// are returned so a card can check the roll had settled (a transient mean is not the steady rate:
+// the physics panel measured the card 18% low on a τ 0.27 s roll from 75°). Also the window's IAS,
+// TAS and the worst sideslip from the stick going in. Flies whichever model useFdm set.
+export function steadyRoll(spec, kts, altM, { fromDeg = 120, windowDeg = 20, flaps = 0 } = {}) {
   const b = makeBody(spec, { kts, altM, flaps, gearDown: !!spec.fixedGear, throttle: 0 });
   b.throttle = b.engineN = Math.max(0, Math.min(1, trimThrottle(spec, kts * KTS_TO_MPS, flaps, 0, !!spec.fixedGear, airAt(altM))));
   b.apMaster = false;
-  const pitch0 = attitude(b).pitchDeg;
-  b.quat.setFromEuler(_e.set(pitch0 * DEG_TO_RAD, 0, fromDeg * DEG_TO_RAD));
-  let pSum = 0, iasSum = 0, betaMax = 0, n = 0;
-  fly(b, spec, 4 * fromDeg / 10, (x) => {
-    x.elevInput = elevatorForPitch(pitch0, attitude(x).pitchDeg, x.angVel.x);
+  const aoaCmd = trimAoaDeg(spec, kts * KTS_TO_MPS, flaps);
+  const aoaZero = trimAoaDeg(spec, kts * KTS_TO_MPS * 1e3, flaps); // the zero-lift α (the trim α a thousand times faster)
+  // Bank left about the flight path (−Z, north): a world rotation about +Z by +fromDeg.
+  b.quat.premultiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), fromDeg * DEG_TO_RAD));
+  // The turn that bank's lift (1 g along the wings' up) makes, as a body rate. Banked left, it turns left.
+  const turn = GRAVITY * Math.cos(fromDeg * DEG_TO_RAD) * Math.sin(fromDeg * DEG_TO_RAD) / b.vel.length();
+  b.angVel.set(0, turn, 0).applyQuaternion(b.quat.clone().invert());
+  let pSum = 0, iasSum = 0, tasSum = 0, betaMax = 0, n = 0, pEntry = null, pExit = null;
+  let elevTrim = 0, lastBeta = null;
+  fly(b, spec, 6 * fromDeg / 10, (x, dt) => {
+    // Lift n = cos φ (g): its upward part cos² φ never pulls the path down, so gravity steepens it
+    // by sin² φ·g, not (1 − cos φ)·g as a held 1 g does past 90° (the speed ran 90 → 111 KIAS).
+    const cmd = aoaZero + (aoaCmd - aoaZero) * Math.cos(attitude(x).bankRightDeg * DEG_TO_RAD);
+    const aoaErr = (x.aoaDeg ?? cmd) - cmd;
+    elevTrim = Math.max(-1, Math.min(1, elevTrim + aoaErr * 0.15 * dt));
+    x.elevInput = Math.max(-1, Math.min(1, elevTrim + aoaErr * 0.22));
     x.aileronInput = 1;
-    x.rudderInput = Math.max(-1, Math.min(1, (x.betaDeg ?? 0) * RUDDER_PER_BETA));
+    const beta = x.betaDeg ?? 0;
+    const betaRate = lastBeta === null ? 0 : (beta - lastBeta) / dt;
+    lastBeta = beta;
+    x.rudderInput = Math.max(-1, Math.min(1, beta * RUDDER_PER_BETA + betaRate * 0.1));
   }, (x) => {
     const bank = attitude(x).bankRightDeg;
+    const p = -x.angVel.z * RAD_TO_DEG;
+    betaMax = Math.max(betaMax, Math.abs(x.betaDeg ?? 0));
     if (Math.abs(bank) <= windowDeg) {
-      pSum += -x.angVel.z * RAD_TO_DEG; iasSum += x.iasKts; betaMax = Math.max(betaMax, Math.abs(x.betaDeg ?? 0)); n++;
+      if (pEntry === null) pEntry = p;
+      pExit = p;
+      pSum += p; iasSum += x.iasKts; tasSum += x.tasKts; n++;
     }
-    return bank > windowDeg;
+    return bank > windowDeg && bank < 90;
   });
-  return { rateDegS: n ? pSum / n : NaN, iasKts: iasSum / n, betaMaxDeg: betaMax, samples: n };
+  return { rateDegS: n ? pSum / n : NaN, pEntry, pExit, iasKts: iasSum / n, tasKts: tasSum / n, betaMaxDeg: betaMax, samples: n };
 }

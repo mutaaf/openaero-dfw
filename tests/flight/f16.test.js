@@ -30,8 +30,7 @@
 // looser tolerance. The fixing PR promotes it to `it`.
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { M_TO_FT, DEG_TO_RAD, KTS_TO_MPS } from '../../src/constants.js';
-import { airAt, tasFromIas } from '../../src/atmosphere.js';
+import { M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
 import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { makeBody, fly, attitude, vsFpm, loadFactorMeter, steadyRoll } from './harness.js';
@@ -349,38 +348,37 @@ describe('F-16C level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', (
   }
 });
 
-// Roll rate (ticket 0153). TP-1538 App. A (p. 34, Lateral): "The system incorporated a roll-rate
-// command feature whereby the pilot commanded roll rates up to a maximum 308°/sec through the
-// force-sensing control stick" (ailerons ±21.5° with the differential tail at 4:1, below α 29°).
-// The bare airframe can make that rate at this card's 350 KIAS / 10,000 ft (σ 0.738, 407 KTAS,
-// 209 m/s; 1 g at ~2° α): TP-1538 Table III's roll damping Clp −0.43 there and its aileron
-// increment ΔCl,δa=20° 0.051 (as transcribed in Stevens & Lewis, Aircraft Control and Simulation,
-// App. A, and JSBSim f16.xml; the PDF's table scans don't OCR), scaled to the 21.5° limit
-// (0.055), give p = ΔCl/(−Clp) · 2V/b = 0.055 / 0.43 × 2 × 209 / 9.144 (Table I's 30 ft span) =
-// 5.8 rad/s, ~334°/s, with the aileron alone. So full lateral stick is the command's 308°/s.
-// The card flies harness.js steadyRoll: full stick from 75° left bank through level, pitch held,
-// ball centred; flightModel.js only (JSBSim has no F-16 here).
+// Roll rate (ticket 0153). TP-1538 App. A (p. 34, Lateral; also p. 18): "The system incorporated a
+// roll-rate command feature whereby the pilot commanded roll rates up to a maximum 308°/sec through
+// the force-sensing control stick" (ailerons ±21.5° with the differential tail at 4:1, below α 29°;
+// control system B's q reduction acts only below 10,500 N/m², ~250 KIAS). That is the flight control
+// system NASA modelled for the 1979 study, not a measured rate of the jet. The bare airframe can make
+// it at this card's 350 KIAS / 10,000 ft (σ 0.738; ~407 KTAS by tasFromIas, ~1.4% less with
+// compressibility; Mach ~0.63, just past the low-speed data's 0.6; trim α ~1°): TP-1538 Table III's
+// roll damping Clp −0.43 near there and its aileron increment ΔCl,δa=20° 0.051, as transcribed and
+// normalised per 20° of aileron in Stevens & Lewis, Aircraft Control and Simulation, App. A (the
+// PDF's table scans don't OCR; JSBSim f16.xml carries the same table but applies it per radian),
+// scaled to the 21.5° limit (0.055), give p = ΔCl/(−Clp)·2V/b = 0.055 / 0.43 × 2 × 207 / 9.144
+// (Table I's 30 ft span) ≈ 5.7 rad/s, ~330°/s, with the aileron alone. So full lateral stick is the
+// command's 308°/s. The card (harness.js steadyRoll) enters at 350 KIAS from 170° of left bank so a
+// roll-rate command's realistic 0.3-0.5 s roll-in has settled by the ±30° window (the physics panel:
+// from 75° a τ 0.4 s roll that settles at 308 reads 227); flightModel.js only (JSBSim has no F-16 here).
 describe('F-16C full-stick roll rate vs NASA TP-1538 (ticket 0153)', () => {
   const KTS = 350, ALT_M = 10000 / M_TO_FT;
-  const tasMps = tasFromIas(KTS * KTS_TO_MPS, airAt(ALT_M).sigma);
-  const bareDegS = (0.0514 * 21.5 / 20 / 0.434) * (2 * tasMps / 9.144) * 180 / Math.PI;
+  const roll = () => steadyRoll(f16, KTS, ALT_M, { fromDeg: 170, windowDeg: 30 });
 
-  it(`the derivative estimate (${bareDegS.toFixed(0)}°/s) is above the roll-rate command's 308°/s, so 308 is the reference`, () => {
-    expect(bareDegS).toBeGreaterThan(308);
-  });
-
-  it(`the roll card's pilot flies the F-16's roll: through level, ball centred (|β| < 3°), speed held`, () => {
-    const r = steadyRoll(f16, KTS, ALT_M);
-    console.log(`[f16] full stick at ${KTS} KIAS, 10,000 ft: ${r.rateDegS.toFixed(1)}°/s (TP-1538's command 308°/s), β ≤ ${r.betaMaxDeg.toFixed(1)}°`);
+  it(`the roll card's pilot flies the F-16's roll: settled through level, ball centred (|β| < 3°)`, () => {
+    const r = roll();
+    console.log(`[f16] full stick entered at ${KTS} KIAS, 10,000 ft: ${r.rateDegS.toFixed(1)}°/s (in ${r.pEntry.toFixed(1)}, out ${r.pExit.toFixed(1)}) at ${r.iasKts.toFixed(0)} KIAS (TP-1538's command 308°/s), β ≤ ${r.betaMaxDeg.toFixed(1)}°`);
     expect(r.samples).toBeGreaterThan(5);
     expect(r.betaMaxDeg).toBeLessThan(3);
-    expect(Math.abs(r.iasKts - KTS)).toBeLessThan(5);
+    expect(Math.abs(r.pExit - r.pEntry) / r.rateDegS).toBeLessThan(0.03);
   });
 
-  // KNOWN GAP (0156): flightModel.js's steady rate is rollAuthority / rollDamping (2.8 / 5.2 rad/s)
-  // at any speed, 31°/s, a tenth of the command. Mutation: halving the damping flies 62°/s, still
-  // far out of the band, so this card cannot see a damping error of that size (the C172's can).
-  it.fails(`KNOWN GAP (0156): full lateral stick at ${KTS} KIAS, 10,000 ft rolls at TP-1538's 308°/s (±25%)`, () => {
-    within(steadyRoll(f16, KTS, ALT_M).rateDegS, 308, 0.25);
+  // KNOWN GAP (0156): flightModel.js's steady rate is rollAuthority / rollDamping (2.8 / 5.2 rad/s,
+  // 30.9°/s) at any speed, a tenth of the command. On a ~10x gap no plausible damping error (under ~8x)
+  // can turn this card red; the C172's card is the one that sees the damping.
+  it.fails(`KNOWN GAP (0156): full lateral stick entered at ${KTS} KIAS, 10,000 ft rolls at TP-1538's 308°/s (±25%)`, () => {
+    within(roll().rateDegS, 308, 0.25);
   });
 });

@@ -39,9 +39,12 @@ The new cards above (the two rate cards are `it.fails` KNOWN GAPs), plus the mut
 Aileron adverse yaw, roll-in time constants, autopilot bank limits, the 737 card.
 
 ## Shipped notes
-Both cards are KNOWN GAPs (0156): the model rolls 37°/s at 90 KIAS where JSBSim's C172 rolls 60°/s
-(−38%), and the F-16 rolls 31°/s against TP-1538's 308°/s roll-rate command. JSBSim's C172 is carded to
-its own Roskam derivatives (59.6 vs 60.1°/s). The 737 logs 17.8°/s at 250 KIAS and 17.7°/s at 160
-KIAS. Mutation (roll damping halved): the C172 gap card goes red (60°/s, inside the band); the F-16's stays
-out of band (62°/s), as it would for any damping change under ~8x. The ticket said c172p; the oracle is our
-own JSBSim C172 (public/jsbsim/), as in jsbsimNode.js.
+Both rate cards are KNOWN GAPs (0156). The C172 card enters a full-aileron roll at 90 KIAS from 120° of left bank
+(the window flies faster: gravity steepens the path), so each model is compared at the TAS it flew: JSBSim's
+C172 rolls at its own Roskam p·b/2V within 1.8% (63.7 vs 64.9°/s at 104.7 KTAS), and flightModel.js rolls 38.0°/s
+where JSBSim's roll power gives 68.5°/s at the model's 112.7 KTAS (−45%). The F-16 rolls 30.9°/s against TP-1538's
+308°/s roll-rate command (entered from 170° so a realistic 0.3-0.5 s roll-in reads within 14%). The 737 logs
+17.9°/s at 250 KIAS and 17.8°/s at 160 KIAS. Mutation (roll damping halved): the C172 gap card goes red (69 vs 64°/s,
++8%); the F-16's stays out of band (62°/s), as it would for any damping change under ~8x. The ticket said c172p;
+the oracle is our own JSBSim C172 (public/jsbsim/), as in jsbsimNode.js. The physics panel found the first cut's
+window (from 75°) was not settled and its mutation result an artefact of the roll-in lag; fixed before merge.
