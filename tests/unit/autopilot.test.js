@@ -3,6 +3,7 @@ import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
   flareSinkMps, elevatorForPitch, throttleForSpeed, sideslipYawAccel, trimAoaDeg,
 } from '../../src/autopilot.js';
+import { rollRateGain, rollHoldScale } from '../../src/flightModel.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 
 // Sign conventions (see AGENTS.md): aileron + = roll right, elevator + = nose down,
@@ -21,6 +22,14 @@ describe('lateral laws', () => {
     expect(aileronForBank(20, 0, 0)).toBeGreaterThan(0);
     expect(aileronForBank(5, 0, 0.5)).toBeLessThan(aileronForBank(5, 0, 0));
     expect(Math.abs(aileronForBank(180, -180, 0))).toBeLessThanOrEqual(0.6);
+  });
+  // 0156: k (flightModel.js rollHoldScale) scales the hold for an airframe that rolls faster per aileron,
+  // after the ±0.6 clamp, so the most roll rate it asks is the old one's; never past full aileron.
+  it('the hold scale multiplies the clamped aileron and never passes full throw', () => {
+    expect(aileronForBank(10, 0, 0, 0.1)).toBeCloseTo(aileronForBank(10, 0, 0) * 0.1, 12);
+    expect(aileronForBank(180, -180, 0, 0.1)).toBeCloseTo(0.06, 12);
+    expect(aileronForBank(180, -180, 0, 4)).toBe(1);
+    expect(aileronForBank(-180, 180, 0, 4)).toBe(-1);
   });
 });
 
@@ -92,5 +101,23 @@ describe('autothrottle with feed-forward', () => {
     const st = { trim: 0 };
     for (let i = 0; i < 1000000; i++) autothrottleCommand(0.3, st, 131, 141, 0, 0.01);
     expect(st.trim).toBeCloseTo(0.3, 6);
+  });
+});
+
+// 0156: the roll rate per aileron (flightModel.js rollRateGain) and the bank hold's scale.
+describe('rollRateGain / rollHoldScale (0156)', () => {
+  it('the 737 keeps its old constant rate and an unscaled hold', () => {
+    expect(rollRateGain(AIRCRAFT_DATABASE.b738, 40)).toBeCloseTo(rollRateGain(AIRCRAFT_DATABASE.b738, 120), 12);
+    expect(rollHoldScale(AIRCRAFT_DATABASE.b738, 80)).toBeCloseTo(1, 12);
+  });
+  it('the Cessna rolls in proportion to its true airspeed (Roskam p·b/2V 0.116 on 11.0 m)', () => {
+    expect(rollRateGain(AIRCRAFT_DATABASE.c172, 50)).toBeCloseTo(0.116 * 2 * 50 / 11.0, 2);
+    expect(rollRateGain(AIRCRAFT_DATABASE.c172, 60) / rollRateGain(AIRCRAFT_DATABASE.c172, 30)).toBeCloseTo(2, 12);
+  });
+  it('the F-16 is capped by its 308°/s command, and the hold scale is the old rate over the new', () => {
+    expect(rollRateGain(AIRCRAFT_DATABASE.f16, 300) * 180 / Math.PI).toBeCloseTo(308, 0);
+    expect(rollRateGain(AIRCRAFT_DATABASE.f16, 80) * 180 / Math.PI).toBeLessThan(150);
+    expect(rollHoldScale(AIRCRAFT_DATABASE.f16, 300) * rollRateGain(AIRCRAFT_DATABASE.f16, 300)).toBeCloseTo(2.8 / 5.2, 9);
+    expect(rollHoldScale(AIRCRAFT_DATABASE.f16, 0)).toBe(4); // capped (on the ground the hold's output is clamped anyway)
   });
 });

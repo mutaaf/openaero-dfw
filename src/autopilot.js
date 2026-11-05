@@ -20,9 +20,11 @@ const HDG_RATE = 0.33;
 export const bankCommandForHeading = (hdgErrDeg, tasMps = 75) =>
   clamp(Math.atan((tasMps * hdgErrDeg * HDG_RATE * Math.PI / 180) / 9.80665) * 180 / Math.PI, -25, 25);
 
-// Bank hold: aileron from bank error with roll-rate damping (rate in rad/s).
-export const aileronForBank = (bankCmdDeg, bankRightDeg, rollRateRight) =>
-  clamp((bankCmdDeg - bankRightDeg) * 0.05 - rollRateRight * 0.8, -0.6, 0.6);
+// Bank hold: aileron from bank error with roll-rate damping (rate in rad/s). `k` (flightModel.js
+// rollHoldScale) scales it for an airframe whose roll rate per aileron is not the one these gains
+// were tuned on (0156), so the loop and its most rate (±0.6 of the old roll) are the same.
+export const aileronForBank = (bankCmdDeg, bankRightDeg, rollRateRight, k = 1) =>
+  clamp(clamp((bankCmdDeg - bankRightDeg) * 0.05 - rollRateRight * 0.8, -0.6, 0.6) * k, -1, 1);
 
 // Glideslope: flight-path angle command (deg) from height above the 3° path (m), plus a
 // small integral (m·s) that trims out a standing offset.

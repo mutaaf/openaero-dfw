@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
-import { trimThrottle, dihedralAileron } from '../../src/flightModel.js';
+import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { driftAngleDeg, gradeLanding } from '../../src/landing.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
@@ -54,6 +54,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   const s = {}, out = {}, conf = { gearDown: true, flapsIndex: 2 }, at = { trim: 0 };
   let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
   const roll = { maxNoseOff3sDeg: 0, maxCrossM: 0, yawSq: 0, n: 0, rudFlips: 0 };
+  const bank = { maxDeg: 0, flips: 0, lastP: 0 };
   let step = 0, lastRud = 0, lastStep = 0;
   const papi = [0, 0, 0, 0, 0]; // samples by white lamps (main.js updatePapi: the CG to the box), 200 ft up and higher
   fly(b, spec, 240, (x, dt) => {
@@ -68,7 +69,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     const noseDeg = -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI;
     kidFinalGuide(end, ap, noseDeg, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s);
     Object.assign(s, {
-      pitchIn: stick ? stick(wheelM * M_TO_FT) : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+      pitchIn: stick ? stick(wheelM * M_TO_FT) : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS),
       yawRateRight: -x.angVel.y, driftDeg: driftAngleDeg(noseDeg, x.vel.x, x.vel.z),
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * DEG_TO_RAD), stallAoaDeg: stallAoaDeg(spec, x.flapsIndex),
       tailstrikeDeg: spec.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, noseWheelDown: x.wheelLoads?.[0] > 0, wheelHeightM: wheelM,
@@ -93,6 +94,12 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
       if (d) lastStep = d;
     }
     lastRud = out.rud;
+    if (!td && wheelM * M_TO_FT > 50) { // the bank above 50 ft: its largest and its roll-rate reversals (0156)
+      const p = -x.angVel.z;
+      bank.maxDeg = Math.max(bank.maxDeg, Math.abs(bankRightDeg));
+      if (Math.abs(p) > 0.02 && bank.lastP && Math.sign(p) !== Math.sign(bank.lastP)) bank.flips++;
+      if (Math.abs(p) > 0.02) bank.lastP = p;
+    }
     x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = slewRudder(x.rudderInput, out.rud, dt); // main.js applyAssists
     // Kid's gear, flaps and power (main.js applyAssists).
     conf.flapsIndex = x.flapsIndex; conf.gearDown = x.gearDown;
@@ -115,7 +122,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
       driftDeg: driftAngleDeg(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, x.vel.x, x.vel.z), bankDeg: attitude(x).bankRightDeg, pitchDeg: attitude(x).pitchDeg, widthM: end.widthM };
     return rollS <= 0;
   });
-  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi, roll };
+  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi, roll, bank };
 }
 
 const log = (ac, key, name, { td, thrFt }) => console.log(`[${ac} kid final] ${key} ${name}: threshold ${thrFt?.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, drift ${td && td.driftDeg.toFixed(1)}°, bank ${td && td.bankDeg.toFixed(1)}°, ${td && td.t.toFixed(0)} s`);
@@ -357,6 +364,22 @@ describe('Kid hands off in a crosswind grades as well as in calm air (flightMode
       console.log(`[c172 kid final] grade calm ${calm.grade} ${calm.score}, ${wind.kts} kt ${g.grade} ${g.score}`);
       expect(g.grade).toBe(calm.grade);
       expect(g.score).toBeGreaterThanOrEqual(calm.score - 0.5);
+    });
+  }
+});
+
+// The F-16's stick commands up to 308°/s now (0156), ten times the rate Kid's bank hold was tuned
+// on; assists.js scales the hold by flightModel.js rollHoldScale. Kid hands off on DFW's final in a
+// 15 kt crosswind, the assist run once a frame at 60 and 30 fps: the bank stays small and the
+// roll rate doesn't chatter (one reversal above 50 ft, measured: the guide's turn onto the localizer and out).
+describe('Kid hands off, the F-16 holds its bank on the final without oscillation (0156)', () => {
+  for (const every of [2, 4]) {
+    it(`kdfw_35c_final, 15 kt from 270°, the assist at ${120 / every} fps: bank under 15° (the guide's localizer turn, ~11°), under 6 roll-rate reversals, lands`, () => {
+      const r = flyKidFinal('f16', 'kdfw_35c_final', { fromDeg: 270, kts: 15 }, null, null, 0, 0, every);
+      console.log(`[f16 kid final] bank above 50 ft: max ${r.bank.maxDeg.toFixed(1)}°, ${r.bank.flips} roll-rate reversals`);
+      expect(r.bank.maxDeg).toBeLessThan(15);
+      expect(r.bank.flips).toBeLessThan(6);
+      expectLanded(r);
     });
   }
 });

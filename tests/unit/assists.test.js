@@ -6,7 +6,7 @@ import {
   autoConfigure, groundSteerRudder, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
-import { dihedralAileron } from '../../src/flightModel.js';
+import { dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { Euler } from 'three';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
 
@@ -27,7 +27,7 @@ function flyAssisted(spec, level, { pitchIn = 0, rollIn = 0, yawIn = 0, seconds 
   fly(b, spec, seconds, (x, dt) => {
     const { pitchDeg, bankRightDeg } = attitude(x);
     Object.assign(s, {
-      pitchIn, rollIn, yawIn, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+      pitchIn, rollIn, yawIn, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex), tailstrikeDeg: spec.maxGroundPitchDeg ?? 15,
       onGround: !!x.onGround, wheelHeightM: x.pos.y - spec.gearHeight, airspeedMps: (x.tasKts ?? 0) * 0.514444,
       guideBankDeg: 0, guideGammaDeg: 0,
@@ -87,7 +87,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
     fly(b, spec, 8, (x, dt) => {
       const { pitchDeg, bankRightDeg } = attitude(x);
       Object.assign(s, {
-        pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+        pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
         aoaDeg: x.aoaDeg, betaDeg: x.betaDeg, stallAoaDeg: stallAoaDeg(spec, 0), tailstrikeDeg: 15, onGround: false, wheelHeightM: 1000, airspeedMps: 45,
         guideBankDeg: 0, guideGammaDeg: 0,
       });
@@ -212,7 +212,7 @@ describe('Kid and Learner hold bank against a held rudder (dihedral, 0081)', () 
         fly(b, spec, 20, (x, dt) => {
           const { pitchDeg, bankRightDeg } = attitude(x);
           Object.assign(s, {
-            pitchIn: 0, rollIn: 0, yawIn: 1, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+            pitchIn: 0, rollIn: 0, yawIn: 1, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
             aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * Math.PI / 180),
             stallAoaDeg: stallAoaDeg(spec, 0), tailstrikeDeg: 15, onGround: false, wheelHeightM: 600, airspeedMps: x.vel.length(),
             guideBankDeg: 0, guideGammaDeg: 0,
@@ -282,7 +282,7 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
         e.setFromQuaternion(x.quat, 'YXZ');
         const hdg = (-e.y * 180 / Math.PI + 360) % 360;
         Object.assign(s, {
-          pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+          pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
           aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, 2), tailstrikeDeg: 15,
           onGround: false, wheelHeightM: 400, airspeedMps: 70, guideBankDeg: kidLocalizerBankDeg(0, hdg, x.pos.x), guideGammaDeg: 0,
         });
@@ -312,7 +312,7 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
         hdg = -e.y * 180 / Math.PI;
         const track = Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI;
         Object.assign(s, {
-          pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+          pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
           aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, 2), tailstrikeDeg: 15,
           onGround: false, wheelHeightM: 400, airspeedMps: 70, guideBankDeg: kidLocalizerBankDeg(0, track, x.pos.x), guideGammaDeg: 0,
         });

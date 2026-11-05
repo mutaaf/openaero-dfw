@@ -1,6 +1,8 @@
 // The stabilized gate's verdict on the HUD (0020; a lazy chunk main.js fetches after boot, 0137):
 // STABILIZED / UNSTABILIZED and the failing items, three a line, for a few seconds after the gate.
-// Also the altitude tape's caption and its plain words for Kid and Learner (0140), off the boot JS.
+// Also the altitude tape's caption and its plain words for Kid and Learner (0140), and the speed tape's
+// trim bug and low-speed band (0156), off the boot JS.
+import { stallBand } from './hudLayout.js';
 
 // Where (pure, tested): 24 px + 16 a line of failing items (two at most), cy + 76 down, 240 px across,
 // under the boresight between the tapes. On a screen held upright too short for that over the touch
@@ -209,4 +211,50 @@ function drawBaro(ctx, s, level) {
   ctx.fillText(b.text, r.x + 3, r.y + 12, r.w - 6);
   ctx.font = 'bold 9px monospace';
   ctx.fillText(b.src, r.x + 3, r.y + 23, r.w - 6);
+}
+
+// Trim (0094, Pilot; moved here from main.js, 0156): an amber bug on the speed tape at the speed a
+// released stick flies (`kts`, trim.js trimSpeedKts, null when there is none), and its number in a
+// box under the airspeed readout (inside the tape, which the touch deck keeps clear at every size);
+// the bug parks at the tape's end when off scale. (x, y): the speed tape's centre.
+let trimText = '', trimTextKts = NaN;
+export function drawTrimBug(ctx, x, y, kts, iasKts) {
+  if (kts === null) return;
+  const r = Math.round(kts);
+  if (r !== trimTextKts) { trimTextKts = r; trimText = `T ${r}`; }
+  const by = y - Math.min(88, Math.max(-88, (kts - iasKts) * 2));
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + 11, by); ctx.lineTo(x + 19, by - 5); ctx.lineTo(x + 19, by + 5); ctx.closePath();
+  ctx.stroke();
+  ctx.lineWidth = 1.5;
+  ctx.fillStyle = '#020617'; // opaque: the tape's numbers must not read through it
+  ctx.fillRect(x - 52, y + 13, 44, 15);
+  ctx.fillStyle = '#fcd34d';
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(trimText, x - 30, y + 24);
+  ctx.textAlign = 'left';
+}
+
+// The low-speed band (0128, hudLayout.js stallBand; moved here from main.js, 0156): red from the
+// tape's bottom up to the 1 g stall speed for the flaps, amber up to 1.1 Vs, in the speed limit's
+// column (the two never meet). A dark edge either side keeps it readable over bright ground and to
+// red-green colour blindness (the hue alone was ~1.4:1 against green terrain).
+const _stallBand = { redTop: 0, redBot: 0, red: false, amberTop: 0, amberBot: 0, amber: false };
+export function drawStallBand(ctx, x, y, stallKts, iasKts) {
+  const b = stallBand(y, stallKts, iasKts, _stallBand);
+  if (!b.red && !b.amber) return;
+  const top = b.amber ? b.amberTop : b.redTop;
+  ctx.fillStyle = '#020617';
+  ctx.fillRect(x - 8, top, 5, b.redBot - top);
+  if (b.red) {
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(x - 7, b.redTop, 3, b.redBot - b.redTop);
+  }
+  if (b.amber) {
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(x - 7, b.amberTop, 3, b.amberBot - b.amberTop);
+  }
 }

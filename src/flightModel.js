@@ -211,7 +211,8 @@ export function stepFlightModel(body, spec, dt) {
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
   // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
   const dihedral = dihedralAileron(spec, betaRad);
-  const pRate = (-(body.aileronInput + dihedral) * (spec.rollAuthority ?? 2.8) - body.angVel.z * spec.rollDamping) * (airspeed / 120);
+  // The aileron's steady rate is rollRateGain (0156): it grows with the speed where a source gives it.
+  const pRate = (-(body.aileronInput + dihedral) * rollRateGain(spec, airspeed) - body.angVel.z) * spec.rollDamping * (airspeed / 120);
   // Rudder + directional stability: the nose weathervanes into the relative wind, so a
   // banked aircraft actually turns.
   const rRate = (-body.rudderInput * 1.2 + sideslipYawAccel(betaRad) - body.angVel.y * spec.yawDamping) * (airspeed / 120);
@@ -260,6 +261,19 @@ export function stepFlightModel(body, spec, dt) {
     }
   }
 }
+
+// The steady roll rate (rad/s) per unit of aileron at true airspeed `tasMps` (0156). An airframe with
+// a cited roll power (spec.rollPerTas = Clδa·δa/(−Clp)·2/b, rad/s per m/s: the aileron's moment goes
+// as q and the damping as q·pb/2V, so the rate goes as V) rolls faster the faster it flies, up to a
+// fly-by-wire roll-rate command (spec.rollCmdRad); one without (the 737) keeps the old constant rate,
+// rollAuthority / rollDamping. rollHoldScale is what a bank hold tuned on that old rate (autopilot.js
+// aileronForBank) multiplies its aileron by, so its loop and its gentle rate are the same at any
+// speed on any airframe (tests/flight/rollHold.test.js flies them at a slow phone's 1/60 s sub-steps).
+const legacyRollRate = (spec) => (spec.rollAuthority ?? 2.8) / spec.rollDamping;
+export const rollRateGain = (spec, tasMps) => (spec.rollPerTas
+  ? Math.min(spec.rollCmdRad ?? 9, spec.rollPerTas * tasMps)
+  : legacyRollRate(spec));
+export const rollHoldScale = (spec, tasMps) => Math.min(4, legacyRollRate(spec) / Math.max(0.01, rollRateGain(spec, tasMps)));
 
 // The dihedral effect (Clβ) as the aileron that makes the same rolling moment (Clβ·β / Cl of
 // full aileron), so the two keep their real ratio; + = rolls right. β linear to 20°. The

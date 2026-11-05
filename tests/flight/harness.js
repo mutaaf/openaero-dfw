@@ -15,6 +15,7 @@ import '../../src/supersonic.js';
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');
 const RUDDER_PER_BETA = 0.3;
+const PITCH_DAMP = 1.5; // steadyRoll's pitch-rate damping (elevator per rad/s)
 
 // The flight model under test: null flies flightModel.js; useFdm(jsbsim) flies JSBSim
 // (src/fdm/jsbsim.js, loaded in Node by jsbsimNode.js) through the same cards.
@@ -59,15 +60,17 @@ export const vsFpm = (body) => body.vel.y * M_TO_FT * 60;
 
 // Advance `seconds`, calling pilot(body, dt) before each sub-step. Stops early when
 // until(body) is true. Returns the body.
-export function fly(body, spec, seconds, pilot, until) {
-  const n = Math.round(seconds / DT);
+// `dt` (default DT) flies another sub-step: the game's run 1/180 s at 60 fps and stretch to 1/60 s
+// at 20 fps on a slow phone (main.js step6DofPhysics), so stability cards fly 1/60 s (0156).
+export function fly(body, spec, seconds, pilot, until, dt = DT) {
+  const n = Math.round(seconds / dt);
   for (let i = 0; i < n; i++) {
-    pilot?.(body, DT);
+    pilot?.(body, dt);
     const x0 = body.pos.x, z0 = body.pos.z;
-    if (fdm) fdm.step(body, spec, DT);
-    else stepFlightModel(body, spec, DT);
+    if (fdm) fdm.step(body, spec, dt);
+    else stepFlightModel(body, spec, dt);
     body.distM += Math.hypot(body.pos.x - x0, body.pos.z - z0);
-    body.t += DT;
+    body.t += dt;
     if (until?.(body)) break;
   }
   return body;
@@ -508,9 +511,9 @@ export function levelTurn(spec, bankDeg, kts, { altM = 1500, flaps = 0, gearDown
 // are returned so a card can check the roll had settled (a transient mean is not the steady rate:
 // the physics panel measured the card 18% low on a τ 0.27 s roll from 75°). Also the window's IAS,
 // TAS and the worst sideslip from the stick going in. Flies whichever model useFdm set.
-export function steadyRoll(spec, kts, altM, { fromDeg = 120, windowDeg = 20, flaps = 0 } = {}) {
-  const b = makeBody(spec, { kts, altM, flaps, gearDown: !!spec.fixedGear, throttle: 0 });
-  b.throttle = b.engineN = Math.max(0, Math.min(1, trimThrottle(spec, kts * KTS_TO_MPS, flaps, 0, !!spec.fixedGear, airAt(altM))));
+export function steadyRoll(spec, kts, altM, { fromDeg = 120, windowDeg = 20, flaps = 0, gearDown = !!spec.fixedGear } = {}) {
+  const b = makeBody(spec, { kts, altM, flaps, gearDown, throttle: 0 });
+  b.throttle = b.engineN = Math.max(0, Math.min(1, trimThrottle(spec, kts * KTS_TO_MPS, flaps, 0, gearDown, airAt(altM))));
   b.apMaster = false;
   const aoaCmd = trimAoaDeg(spec, kts * KTS_TO_MPS, flaps);
   const aoaZero = trimAoaDeg(spec, kts * KTS_TO_MPS * 1e3, flaps); // the zero-lift α (the trim α a thousand times faster)
@@ -519,7 +522,7 @@ export function steadyRoll(spec, kts, altM, { fromDeg = 120, windowDeg = 20, fla
   // The turn that bank's lift (1 g along the wings' up) makes, as a body rate. Banked left, it turns left.
   const turn = GRAVITY * Math.cos(fromDeg * DEG_TO_RAD) * Math.sin(fromDeg * DEG_TO_RAD) / b.vel.length();
   b.angVel.set(0, turn, 0).applyQuaternion(b.quat.clone().invert());
-  let pSum = 0, iasSum = 0, tasSum = 0, betaMax = 0, n = 0, pEntry = null, pExit = null;
+  let pSum = 0, iasSum = 0, tasSum = 0, betaMax = 0, betaWin = 0, n = 0, pEntry = null, pExit = null;
   let elevTrim = 0, lastBeta = null;
   fly(b, spec, 6 * fromDeg / 10, (x, dt) => {
     // Lift n = cos φ (g): its upward part cos² φ never pulls the path down, so gravity steepens it
@@ -527,12 +530,19 @@ export function steadyRoll(spec, kts, altM, { fromDeg = 120, windowDeg = 20, fla
     const cmd = aoaZero + (aoaCmd - aoaZero) * Math.cos(attitude(x).bankRightDeg * DEG_TO_RAD);
     const aoaErr = (x.aoaDeg ?? cmd) - cmd;
     elevTrim = Math.max(-1, Math.min(1, elevTrim + aoaErr * 0.15 * dt));
-    x.elevInput = Math.max(-1, Math.min(1, elevTrim + aoaErr * 0.22));
+    // Damped by the pitch rate (0156): undamped, the C172 at 60 KIAS swung α from +10° to −19° in
+    // the first second from 120° of bank, and rolling about the body axis there turned it into 8° of β.
+    x.elevInput = Math.max(-1, Math.min(1, elevTrim + aoaErr * 0.22 + x.angVel.x * PITCH_DAMP));
     x.aileronInput = 1;
     const beta = x.betaDeg ?? 0;
     const betaRate = lastBeta === null ? 0 : (beta - lastBeta) / dt;
     lastBeta = beta;
-    x.rudderInput = Math.max(-1, Math.min(1, beta * RUDDER_PER_BETA + betaRate * 0.1));
+    // Plus the yaw rate a roll about the flight path needs (p·tan α, to the right in a right roll),
+    // fed forward through the rudder's steady yaw rate (1.2 / yawDamping per unit, flightModel.js):
+    // rolling about the body axis at a slow speed's α turns α into β (0156: the P-only loop let
+    // β reach 8° at 60 KIAS). JSBSim flies the same pilot (its rudder is stronger: less β).
+    const ff = (-x.angVel.z) * Math.tan((x.aoaDeg ?? 0) * DEG_TO_RAD) * spec.yawDamping / 1.2;
+    x.rudderInput = Math.max(-1, Math.min(1, ff + beta * RUDDER_PER_BETA + betaRate * 0.1));
   }, (x) => {
     const bank = attitude(x).bankRightDeg;
     const p = -x.angVel.z * RAD_TO_DEG;
@@ -541,8 +551,9 @@ export function steadyRoll(spec, kts, altM, { fromDeg = 120, windowDeg = 20, fla
       if (pEntry === null) pEntry = p;
       pExit = p;
       pSum += p; iasSum += x.iasKts; tasSum += x.tasKts; n++;
+      betaWin = Math.max(betaWin, Math.abs(x.betaDeg ?? 0));
     }
     return bank > windowDeg && bank < 90;
   });
-  return { rateDegS: n ? pSum / n : NaN, pEntry, pExit, iasKts: iasSum / n, tasKts: tasSum / n, betaMaxDeg: betaMax, samples: n };
+  return { rateDegS: n ? pSum / n : NaN, pEntry, pExit, iasKts: iasSum / n, tasKts: tasSum / n, betaMaxDeg: betaMax, betaWindowDeg: betaWin, samples: n };
 }

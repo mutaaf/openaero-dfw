@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
-import { trimThrottle, dihedralAileron } from '../../src/flightModel.js';
+import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
 import { stallAoaDeg, headingError } from '../../src/aero.js';
 import { autothrottleCommand } from '../../src/autopilot.js';
@@ -67,7 +67,7 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}, { rollS = 0 } = {}) {
     if (e) kidFinalGuide(e, ap, -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s);
     kidGuide(st, sim, s);
     Object.assign(s, {
-      pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, yawRateRight: -x.angVel.y,
+      pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(c172, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y,
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * Math.PI / 180), stallAoaDeg: stallAoaDeg(c172, x.flapsIndex),
       tailstrikeDeg: c172.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, noseWheelDown: x.wheelLoads?.[0] > 0, wheelHeightM: x.pos.y - c172.gearHeight,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, flarePerS: c172.kidFlarePerS,
