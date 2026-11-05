@@ -58,7 +58,10 @@ export function altLabels(level) {
 // The same call draws the wind box's plain words (0142) when main.js passes sim and the wind box
 // (one call from the boot chunk for both: its budget has no room for a second).
 export function drawAltCaption(ctx, r, level, screenW, s, windBox) {
-  if (s) drawWind(ctx, windBox, s, level);
+  if (s) {
+    drawWind(ctx, windBox, s, level);
+    drawBaro(ctx, s, level);
+  }
   const words = altLabels(level);
   r.w = level === 'pilot' ? words.altW : Math.min(words.altW, Math.floor(screenW - r.x)); // Pilot's tab is 0132's
   r.text = words.alt;
@@ -132,4 +135,78 @@ export function drawWind(ctx, box, s, level) {
   ctx.fillStyle = words === WIND_WORDS.tail ? '#fcd34d' : '#e0f2fe';
   ctx.fillText(words[0], r.x + 3, r.y + 10, r.w - 6);
   ctx.fillText(words[1], r.x + 3, r.y + 21, r.w - 6);
+}
+
+// The altimeter setting (0146): the number the altimeter is set to (FAA AIM ch. 7 §2, altimeter setting
+// procedures), under the altitude tape, where a glass cockpit's PFD shows it. It is sim.altimInHg (main.js refreshWeather: the flown field's METAR, or
+// DFW's, else the scenario's 30.00): what the sim's air is built from (atmosphere.js airAt: pressure
+// altitude, so density and the engines). The tape itself is true height above sea level (terrain.js
+// yToFtMsl), which a correctly set altimeter reads, so the setting does not move it. Two decimals and IN
+// over its source: METAR when a live METAR gave it, STANDARD when a live METAR had none (weather.js
+// parseMetar's 29.92 literal, which no hPa reading converts to exactly, or a NaN that refreshWeather
+// turns into 29.92; told apart here, so the boot chunk carries no flag), SCENARIO when the weather is not live (the wind box's honesty rule).
+// The source is sim.wx, the same weather the number came from (the wind box's hudWind.live is refreshed
+// once a second and lagged it on the e2e's first frames). The strings are built when the value or
+// source changes, not per frame. Pure, tested.
+export function baroSource(wx) {
+  return !wx?.live ? 'SCENARIO' : wx.altimInHg === 29.92 || !Number.isFinite(wx.altimInHg) ? 'STANDARD' : 'METAR';
+}
+export function baroLabel(inHg, src, out) {
+  const v = Math.round(inHg * 100);
+  if (v !== out.v || src !== out.src) {
+    out.v = v;
+    out.text = `${(v / 100).toFixed(2)} IN`;
+    out.src = src;
+  }
+  return out;
+}
+
+// Its box (canvas px): under the altitude tape's foot (cy + 90, hudLayout.js TAPE_TOP), in the tape's
+// column, 4 px right of its edge (cx + 130, ALT_TAPE_X; inlined: a boot symbol a lazy chunk imports grows
+// the boot chunk), level with the speed tape's SPD label across the screen (baseline cy + 106), kept on a
+// narrow screen. 58 px holds eight bold 11 px monospace glyphs (~53 px). Left out (show false) where it
+// would sit under a touch control or the gate verdict (the device panel):
+// - held upright, too short for it over the touch deck (TOUCH_DECK_H + 40 px of inset, as the verdict);
+// - held sideways: the button row (#touchButtons, ~56 px over the foot plus the home indicator's inset)
+//   ends at cx + 130 from ~660 px across (hence the 4 px), and narrower the stick shrinks and the row runs
+//   right over it (568x320, 640x304): left out under 660 px across (from there the 4 px keeps it clear,
+//   whatever the height or the inset);
+// - under ~375 px across the clamp to the screen's edge pulls it into the verdict (cx + 120): 360, 344.
+// Writes `out`.
+export const BARO_W = 58;
+export const BARO_H = 26;
+export function baroRect(w, h, out) {
+  const cx = w / 2;
+  out.x = Math.min(cx + 134, w - BARO_W - 2);
+  out.y = h / 2 + 94;
+  out.w = BARO_W;
+  out.h = BARO_H;
+  const foot = out.y + BARO_H;
+  out.show = out.x >= cx + 122 && (h > w ? foot <= h - TOUCH_DECK_H - 40 : w >= 660);
+  return out;
+}
+
+// Called by drawAltCaption every frame; writes the text and the box into sim.hudWind (the ?debug
+// snapshot spreads it). Pilot only: Kid and Learner read plain words on this tape (SEA LVL, 0140) and a
+// bare "30.11 IN" gives them nothing to act on (the first-timer panel); null where the box is left out.
+const _baro = {}, _baroBox = {};
+function drawBaro(ctx, s, level) {
+  const hw = s.hudWind;
+  const r = baroRect(ctx.canvas.width, ctx.canvas.height, _baroBox);
+  if (level !== 'pilot' || !r.show || !(s.altimInHg > 0)) {
+    hw.baro = hw.baroSrc = hw.baroBox = null;
+    return;
+  }
+  const b = baroLabel(s.altimInHg, baroSource(s.wx), _baro); // sim.wx is where refreshWeather took altimInHg from
+  hw.baro = b.text;
+  hw.baroSrc = b.src;
+  hw.baroBox = r;
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e0f2fe';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(b.text, r.x + 3, r.y + 12, r.w - 6);
+  ctx.font = 'bold 9px monospace';
+  ctx.fillText(b.src, r.x + 3, r.y + 23, r.w - 6);
 }
