@@ -11,8 +11,9 @@
 //    Stability (the F-16's wind-tunnel data), https://ntrs.nasa.gov/citations/19800005879
 //
 // What the open data does not cover, so there is no card for it (gaps, not guesses):
-//  - climb rate, turn rate, roll rate, takeoff and landing distances, approach speeds: all in
-//    the restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited.
+//  - climb rate, turn rate, takeoff and landing distances, approach speeds: all in the
+//    restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited. (Roll rate is the
+//    exception: TP-1538 App. A gives the roll-rate command's 308°/s limit, carded below, 0153.)
 //  - top speed: USAF gives "Mach 2 at altitude". The model has supersonic wave drag (0133), but
 //    its afterburner thrust keeps growing with Mach, so the Mach 2 card below is a KNOWN GAP
 //    (0143) and the zoom card is a capability bound only.
@@ -32,7 +33,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
 import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, attitude, vsFpm, loadFactorMeter } from './harness.js';
+import { makeBody, fly, attitude, vsFpm, loadFactorMeter, steadyRoll } from './harness.js';
 import { checkLevelTurn } from './turnCard.js';
 
 const f16 = AIRCRAFT_DATABASE.f16;
@@ -345,4 +346,39 @@ describe('F-16C level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', (
       checkLevelTurn('f16', f16, bank, 350, { altM: 10000 / M_TO_FT });
     });
   }
+});
+
+// Roll rate (ticket 0153). TP-1538 App. A (p. 34, Lateral; also p. 18): "The system incorporated a
+// roll-rate command feature whereby the pilot commanded roll rates up to a maximum 308°/sec through
+// the force-sensing control stick" (ailerons ±21.5° with the differential tail at 4:1, below α 29°;
+// control system B's q reduction acts only below 10,500 N/m², ~250 KIAS). That is the flight control
+// system NASA modelled for the 1979 study, not a measured rate of the jet. The bare airframe can make
+// it at this card's 350 KIAS / 10,000 ft (σ 0.738; ~407 KTAS by tasFromIas, ~1.4% less with
+// compressibility; Mach ~0.63, just past the low-speed data's 0.6; trim α ~1°): TP-1538 Table III's
+// roll damping Clp −0.43 near there and its aileron increment ΔCl,δa=20° 0.051, as transcribed and
+// normalised per 20° of aileron in Stevens & Lewis, Aircraft Control and Simulation, App. A (the
+// PDF's table scans don't OCR; JSBSim f16.xml carries the same table but applies it per radian),
+// scaled to the 21.5° limit (0.055), give p = ΔCl/(−Clp)·2V/b = 0.055 / 0.43 × 2 × 207 / 9.144
+// (Table I's 30 ft span) ≈ 5.7 rad/s, ~330°/s, with the aileron alone. So full lateral stick is the
+// command's 308°/s. The card (harness.js steadyRoll) enters at 350 KIAS from 170° of left bank so a
+// roll-rate command's realistic 0.3-0.5 s roll-in has settled by the ±30° window (the physics panel:
+// from 75° a τ 0.4 s roll that settles at 308 reads 227); flightModel.js only (JSBSim has no F-16 here).
+describe('F-16C full-stick roll rate vs NASA TP-1538 (ticket 0153)', () => {
+  const KTS = 350, ALT_M = 10000 / M_TO_FT;
+  const roll = () => steadyRoll(f16, KTS, ALT_M, { fromDeg: 170, windowDeg: 30 });
+
+  it(`the roll card's pilot flies the F-16's roll: settled through level, ball centred (|β| < 3°)`, () => {
+    const r = roll();
+    console.log(`[f16] full stick entered at ${KTS} KIAS, 10,000 ft: ${r.rateDegS.toFixed(1)}°/s (in ${r.pEntry.toFixed(1)}, out ${r.pExit.toFixed(1)}) at ${r.iasKts.toFixed(0)} KIAS (TP-1538's command 308°/s), β ≤ ${r.betaMaxDeg.toFixed(1)}°`);
+    expect(r.samples).toBeGreaterThan(5);
+    expect(r.betaMaxDeg).toBeLessThan(3);
+    expect(Math.abs(r.pExit - r.pEntry) / r.rateDegS).toBeLessThan(0.03);
+  });
+
+  // KNOWN GAP (0156): flightModel.js's steady rate is rollAuthority / rollDamping (2.8 / 5.2 rad/s,
+  // 30.9°/s) at any speed, a tenth of the command. On a ~10x gap no plausible damping error (under ~8x)
+  // can turn this card red; the C172's card is the one that sees the damping.
+  it.fails(`KNOWN GAP (0156): full lateral stick entered at ${KTS} KIAS, 10,000 ft rolls at TP-1538's 308°/s (±25%)`, () => {
+    within(roll().rateDegS, 308, 0.25);
+  });
 });

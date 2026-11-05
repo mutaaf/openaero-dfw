@@ -14,11 +14,11 @@ import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { trimThrottle, stepFlightModel } from '../../src/flightModel.js';
-import { airAt } from '../../src/atmosphere.js';
+import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts, stallSpeedKts, isStallWarning } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
-import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
+import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, steadyRoll } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
@@ -1040,4 +1040,69 @@ describe('Cessna 172S dead-stick challenge at Addison (flightModel, ticket 0036)
     expect(prompts).not.toContain('dsLow');
     expect(prompts).not.toContain('dsTurnR');
   });
+});
+
+// Roll rate (ticket 0153). The POH publishes none, so the reference is our JSBSim C172
+// (public/jsbsim/, the same oracle as the rotation card above), whose roll axis is the file's "ROSK"
+// set (Roskam, Airplane Flight Dynamics, Part I, App. B; the panel suspects some of its lateral
+// values are the book's Cessna 182, unverified: check before 0156 tunes to it): Clδa 0.178 /rad at
+// the POH's 17.5° mean aileron throw (0.3054 rad) against roll damping Clp −0.47 per unit p·b/2V.
+// With no other rolling moment, the steady rate is p = Clδa·δa/(−Clp) · 2V/b (V true airspeed,
+// b 36.1 ft = 11.0 m), a roll power p·b/2V of 0.116 at any speed: at 90 KIAS and 5,000 ft ISA (σ 0.862,
+// 96.9 KTAS, 49.9 m/s) 0.178 × 0.3054 / 0.47 × 2 × 49.9 / 11.0 = 1.05 rad/s, 60°/s. That is a linear
+// quasi-steady estimate from cruise derivatives (no hinge-moment or stick-force limit); no flight-test
+// roll rate for the 172 has been found yet.
+// The roll (harness.js steadyRoll) is entered at 90 KIAS from 120° of left bank and measured through
+// level; gravity steepens the path on the way, so the window is flown faster (JSBSim ~97 KIAS, the
+// model ~105, it rolls slower so it dives longer). The cards therefore compare at the speed each model
+// actually flew: JSBSim against its own derivatives at its window TAS (so the reference is the
+// arithmetic, not a black box), and the game's flightModel.js against JSBSim's measured roll power
+// at the model's window TAS (valid because the first card shows JSBSim's rate goes as 2V/b).
+describe('Cessna 172S full-aileron roll rate vs JSBSim / Roskam (ticket 0153)', () => {
+  const KTS = 90, ALT_M = 5000 / M_TO_FT;
+  const SPAN_M = 36.1 * 0.3048;
+  const HELIX = 0.178 * 0.3054 / 0.47; // p·b/2V
+  const rollPower = (r) => (r.rateDegS * Math.PI / 180) * SPAN_M / (2 * r.tasKts * KTS_TO_MPS);
+  afterAll(() => useFdm(null));
+
+  it(`JSBSim's C172 rolls at its derivatives' p·b/2V = Clδa·δa/(−Clp) = ${HELIX.toFixed(3)} at its window TAS (±3%), ball centred`, async () => {
+    useFdm(await nodeJsbsim());
+    const jsb = steadyRoll(c172, KTS, ALT_M);
+    useFdm(null);
+    const strip = HELIX * 2 * jsb.tasKts * KTS_TO_MPS / SPAN_M * 180 / Math.PI;
+    console.log(`[c172 JSBSim] full aileron entered at ${KTS} KIAS, 5,000 ft: ${jsb.rateDegS.toFixed(1)}°/s at ${jsb.iasKts.toFixed(1)} KIAS / ${jsb.tasKts.toFixed(1)} KTAS (strip ${strip.toFixed(1)}°/s), β ≤ ${jsb.betaMaxDeg.toFixed(1)}°`);
+    expect(jsb.samples).toBeGreaterThan(20);
+    expect(jsb.betaMaxDeg).toBeLessThan(3);
+    within(jsb.rateDegS, strip, 0.03);
+  }, 30000);
+
+  // The pilot is checked on its own (never an it.fails), so the gap card below can only fail on the
+  // rate; and the roll had settled: the rate entering and leaving the window agree within 3% (a mean
+  // over a roll still building up is not the steady rate).
+  it(`the roll card's pilot flies flightModel.js's roll: settled through level, ball centred (|β| < 3°)`, () => {
+    useFdm(null);
+    const fm = steadyRoll(c172, KTS, ALT_M);
+    console.log(`[c172 flightModel] full aileron entered at ${KTS} KIAS: ${fm.rateDegS.toFixed(1)}°/s (in ${fm.pEntry.toFixed(1)}, out ${fm.pExit.toFixed(1)}) at ${fm.iasKts.toFixed(1)} KIAS, β ≤ ${fm.betaMaxDeg.toFixed(1)}°`);
+    expect(fm.samples).toBeGreaterThan(20);
+    expect(fm.betaMaxDeg).toBeLessThan(3);
+    expect(Math.abs(fm.pExit - fm.pEntry) / fm.rateDegS).toBeLessThan(0.03);
+    expect(fm.iasKts).toBeLessThan(KTS + 20);
+  });
+
+  // KNOWN GAP (0156): flightModel.js's roll law (pRate there) multiplies the aileron and the damping
+  // alike by V/120, so its steady rate is rollAuthority / rollDamping (2.8 / 4.2 rad/s = 38.2°/s) at
+  // every speed: measured 38.0°/s where JSBSim's roll power gives ~69°/s at the model's window speed
+  // (−45%). JSBSim's own rate grows with the speed (52, 64, 75°/s entered at 60, 90, 110 KIAS), as
+  // p = …·2V/b says. Mutation: halving the damping term in flightModel.js flies 69°/s against JSBSim's
+  // 64°/s at that speed (+8%), so this card turns red (and the pilot card's settled check, as the lag doubles).
+  it.fails(`KNOWN GAP (0156): flightModel.js's steady roll rate is within ±25% of JSBSim's roll power at the same TAS (entered at ${KTS} KIAS, 5,000 ft)`, async () => {
+    useFdm(null);
+    const fm = steadyRoll(c172, KTS, ALT_M);
+    useFdm(await nodeJsbsim());
+    const jsb = steadyRoll(c172, KTS, ALT_M);
+    useFdm(null);
+    const ref = rollPower(jsb) * 2 * fm.tasKts * KTS_TO_MPS / SPAN_M * 180 / Math.PI;
+    console.log(`[c172] full aileron: flightModel ${fm.rateDegS.toFixed(1)}°/s at ${fm.tasKts.toFixed(1)} KTAS; JSBSim's p·b/2V ${rollPower(jsb).toFixed(3)} there is ${ref.toFixed(1)}°/s (${(100 * (fm.rateDegS / ref - 1)).toFixed(0)}%)`);
+    within(fm.rateDegS, ref, 0.25);
+  }, 30000);
 });
