@@ -245,7 +245,7 @@ describe('Kid de-crabs before touchdown in a crosswind (flightModel, ticket 0100
 // pedal, sized for the nose wheel's steering, let the wind yaw it back into the crab (~5° at +1.5 s, as
 // without the de-crab). Until the nose tyre carries weight Kid's de-crab keeps the rudder.
 describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticket 0100)', () => {
-  const logRoll = (ac, key, wind, r) => console.log(`[${ac} kid final] ${key} ${wind.kts} kt from ${wind.fromDeg}: drift ${r.td.driftDeg.toFixed(1)}°, nose off the runway at most ${r.roll.maxNoseOff3sDeg.toFixed(1)}° in 3 s, ${r.roll.maxCrossM.toFixed(1)} m off in 20 s`);
+  const logRoll = (ac, key, wind, r) => console.log(`[${ac} kid final] ${key} ${wind.kts} kt from ${wind.fromDeg}: drift ${r.td.driftDeg.toFixed(1)}°, nose off the runway at most ${r.roll.maxNoseOff3sDeg.toFixed(1)}° in 3 s, ${r.roll.maxCrossM.toFixed(1)} m off on the rollout`);
   // Before this: 15 kt 4.9-5.5° off in 3 s and 8.7-9.0 m off; the Cessna 14.7° and 11.9 m.
   for (const [ac, key, wind] of [['b738', 'kdfw_35c_final', { fromDeg: 270, kts: 15 }], ['c172', 'kads_16_final', { fromDeg: 250, kts: 15 }]]) {
     it(`${ac} ${key}, ${wind.kts} kt from ${wind.fromDeg}°: the nose stays within 2.5° of the runway for 3 s after touchdown, on the centreline for 20 s`, () => {
@@ -285,12 +285,18 @@ describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticke
     logRoll('b738', 'kdfw_35c_final', XW20, r);
     expect(r.roll.maxNoseOff3sDeg).toBeLessThan(2.5);
   });
-  // KNOWN GAP (ticket 0150): 83 m off in 20 s (159 m before 0100); the 0110 hold gives up off the pavement.
-  it.fails('b738 kdfw_35c_final, 20 kt from 90°: on the centreline for 20 s of rollout (KNOWN GAP, 0150)', () => {
-    const r = flyKidFinal('b738', 'kdfw_35c_final', XW20, null, null, 20);
-    logRoll('b738', 'kdfw_35c_final', XW20, r);
-    expect(r.roll.maxCrossM).toBeLessThan(8);
-  });
+  // Ticket 0150: 83 m off in 20 s (159 m before 0100), 520 m in 40 s. At ~135 kt the fin's weathervaning (~0.25 rad/s²
+  // at 8° of sideslip) out-turned the nose tyre's side grip (~0.19 rad/s², gear.js noseWheelYawHold), and the 0110
+  // hold, sized for nose-wheel steering, asked only -0.09 pedal: the nose sat 2.5° into the wind and rolled off the side.
+  // The rollout rudder (assists.js rolloutRudder) flies the rudder surface on the same heading, as crews do: 1.4 m.
+  // The F-16 (385 m) and the 737 in 25 kt (1,060 m) ran off the same way.
+  for (const [ac, wind] of [['b738', XW20], ['b738', { fromDeg: 270, kts: 20 }], ['b738', { fromDeg: 90, kts: 25 }], ['f16', { fromDeg: 270, kts: 20 }]]) {
+    it(`${ac} kdfw_35c_final, ${wind.kts} kt from ${wind.fromDeg}°: on the centreline for 40 s of rollout (0150)`, () => {
+      const r = flyKidFinal(ac, 'kdfw_35c_final', wind, null, null, 40);
+      logRoll(ac, 'kdfw_35c_final', wind, r);
+      expect(r.roll.maxCrossM).toBeLessThan(8);
+    });
+  }
 });
 
 // First-timer panel: the hands-off Cessna lands calm at ~186 fpm, an S (95) on landing.js's line, and the

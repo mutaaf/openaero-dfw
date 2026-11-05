@@ -443,7 +443,7 @@ describe('assist level storage and per-level bests', () => {
 describe('on the runway (groundSteerRudder, 0110)', () => {
   const ground = {
     pitchIn: 0, rollIn: 0, yawIn: 0, onGround: true, betaDeg: 20,
-    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, steerRateDegS: 20,
+    rwyHdgDeg: 350, noseHdgDeg: 350, crossM: 0, crossVelMps: 0, steerRateDegS: 20, airspeedMps: 60, yawRateRight: 0,
   };
   it('lined up on the centreline: no rudder, whatever the sideslip', () => {
     for (const level of ['kid', 'learner']) {
@@ -460,6 +460,19 @@ describe('on the runway (groundSteerRudder, 0110)', () => {
     expect(groundSteerRudder(350, 320, 0, 0, 200)).toBeCloseTo(0.02, 9); // 30° off at speed: 4°/s of 200
     expect(groundSteerRudder(350, 320, 0, 0, 2)).toBe(1);
     expect(groundSteerRudder(350, 350, 100, 0, 200)).toBeCloseTo(-0.0075, 9); // never more than 3° off: 1.5°/s
+  });
+  // 0150: the nose tyre alone can't hold a 737 against a 20 kt crosswind at landing speed; the rudder surface helps,
+  // on the same target heading, faded out by 15 m/s (where the nose wheel does it alone), at most 2° of error's worth.
+  it('at landing speed the rollout rudder adds the rudder surface on the same heading; at a walk the nose wheel alone', () => {
+    const cfg = assistConfig('kid'), off = { ...ground, noseHdgDeg: 352.5, steerRateDegS: 31 };
+    const fast = shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 70 }, 1 / 120, {}).rud;
+    expect(fast).toBeLessThan(groundSteerRudder(350, 352.5, 0, 0, 31) - 0.5); // nose right: much more left pedal
+    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 10 }, 1 / 120, {}).rud).toBeCloseTo(groundSteerRudder(350, 352.5, 0, 0, 31), 9);
+    // A 15° crab caps at 2°: the same pedal as 2.5°, so a crabbed touchdown is turned back gently (the 0110 skip card).
+    expect(shapeControls(cfg, createAssistState(), { ...off, noseHdgDeg: 5, airspeedMps: 70 }, 1 / 120, {}).rud)
+      .toBeCloseTo(fast + groundSteerRudder(350, 5, 0, 0, 31) - groundSteerRudder(350, 352.5, 0, 0, 31), 9);
+    // A yaw rate already turning the right way takes pedal off (the damping that stops it swinging).
+    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 70, yawRateRight: -0.03 }, 1 / 120, {}).rud).toBeGreaterThan(fast);
   });
   it("the player's pedals win; off a runway the rudder is theirs (0 if they leave it)", () => {
     const cfg = assistConfig('learner');

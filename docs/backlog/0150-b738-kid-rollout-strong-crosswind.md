@@ -1,12 +1,12 @@
 ---
 id: 0150
 title: The 737 at Kid level holds the centreline on a rollout in a strong (20 kt) crosswind
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 191
 ---
 
 ## Why

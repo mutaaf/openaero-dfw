@@ -28,7 +28,7 @@ const flaps = (spec) => (spec === c172 ? 0 : 1);
 function assisted(level, spec, st, s, x, dt, { pitchIn = 0 } = {}) {
   const { pitchDeg, bankRightDeg } = attitude(x);
   Object.assign(s, {
-    pitchIn, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+    pitchIn, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, yawRateRight: -x.angVel.y,
     aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex), tailstrikeDeg: spec.maxGroundPitchDeg ?? 15,
     onGround: !!x.onGround, wheelHeightM: x.pos.y - x.groundY - spec.gearHeight, airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS,
     guideBankDeg: 0, guideGammaDeg: 0,

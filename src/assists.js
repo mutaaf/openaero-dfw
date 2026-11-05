@@ -98,9 +98,18 @@ export function shapeControls(cfg, st, s, dt, out) {
     // yaw it back to ~5° within 1.5 s).
     st.pitchHoldDeg = null;
     out.elev = s.pitchIn; out.ail = s.rollIn;
-    out.rud = Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null ? s.yawIn
-      : cfg.autoFlare && s.noseWheelDown === false ? decrabRudder(headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps)), s, MAINS_GAIN)
-      : groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS);
+    // With the nose wheel down, at landing speeds the rudder surface joins it on the same heading (0150): the nose
+    // tyre's side grip (gear.js noseWheelYawHold) can't out-turn the fin's weathervaning in a strong crosswind (a 737
+    // at ~135 kt, 20 kt across: ~0.19 vs ~0.25 rad/s²), and the hold, sized for nose-wheel steering, asked a tenth of a
+    // pedal while the nose sat 2.5° into the wind. At most 2° of error's worth (a crabbed touchdown turns back at
+    // ~3°/s, the 0110 skip card), faded out from 31 to 15 m/s, where the nose wheel holds it alone.
+    if (Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null) out.rud = s.yawIn;
+    else {
+      const off = headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps));
+      out.rud = cfg.autoFlare && s.noseWheelDown === false ? decrabRudder(off, s, MAINS_GAIN)
+        : clamp(groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS)
+          + decrabRudder(clamp(off, -2, 2), s, MAINS_GAIN) * clamp(s.airspeedMps / 16 - 0.94, 0, 1), -1, 1);
+    }
     return out;
   }
   if (st.pitchHoldDeg === null) st.pitchHoldDeg = s.pitchDeg;

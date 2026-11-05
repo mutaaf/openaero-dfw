@@ -3434,11 +3434,8 @@ function sockWx(icao) {
 }
 
 // ?debug: a one-line usage readout of the Google session (to verify the free tier holds).
-const debugOverlay = new URLSearchParams(window.location.search).has('debug') ? document.createElement('div') : null;
-if (debugOverlay) {
-  debugOverlay.className = 'debug-overlay'; // styles.css
-  document.body.appendChild(debugOverlay);
-}
+// The readout's element and its text are debugScreen.js overlay() (off the boot budget, 0150).
+const debugOverlay = new URLSearchParams(window.location.search).has('debug');
 let debugTimer = 0;
 let debugScreen; // ?debug only: debugScreen.js
 let creditsTimer = 0;
@@ -3448,9 +3445,9 @@ function updateDebugOverlay(dt) {
     const txt = byId('txtGoogleData');
     if (txt.textContent !== photoreal.state.attributions) txt.textContent = photoreal.state.attributions;
   }
-  if (!debugOverlay || (debugTimer -= dt) > 0) return;
+  if (!debugScreen || (debugTimer -= dt) > 0) return;
   debugTimer = 1;
-  debugOverlay.textContent = `${photoreal.debugLine()} · px ${resScale.ratio}`; // photoreal.js has its usage
+  debugScreen.overlay(`${photoreal.debugLine()} · px ${resScale.ratio}`); // photoreal.js has its usage
 }
 
 if (debugOverlay) {
@@ -3487,7 +3484,6 @@ window.openaeroDebug = () => {
     headingDeg: hdg,
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,
-    elevInput: sim.elevInput,
     aileronInput: sim.aileronInput,
     crossM: sim.approach.crossM,
     distM: sim.approach.distM,
