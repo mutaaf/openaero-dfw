@@ -102,4 +102,7 @@ Adverse yaw, the roll-in time constant as a carded number, the 737's roll card (
   was found.
 - Not done here: a devices-project run of the F-16's roll under the 4x CPU throttle on every size (the phone e2e
   tests/e2e/rollRate.mobile.spec.js flies it at 390x844; CI runs the devices probe).
-- Boot JS 200.94 kB: paid for by moving the speed tape's trim bug and low-speed band drawing into gateVerdict.js.
+- First-timer panel: on the wheels the roll gain is capped at the old constant rate (a game choice, no source): a stick held
+  over for 1.5 s on the F-16's takeoff roll banked it 28° at 140 kt and cartwheeled it off at Vr; now 1.5° (rollHold.test.js
+  ground cards). The mouse yoke (M) now goes through the F-16's stick curve too (it wrote the aileron directly).
+- Boot JS 200.97 kB: paid for by moving the speed tape's trim bug and low-speed band drawing into gateVerdict.js.

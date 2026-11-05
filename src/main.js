@@ -1707,7 +1707,7 @@ function integrateSubStep(dt) {
 
   const assist = sim.apMaster ? null : assistConfig(sim.assist);
   if (sim.mouseYoke && targets.source === 'keyboard') {
-    targetRoll = assist ? sim.mouseStick.x : sim.aileronInput;
+    targetRoll = assist || spec.pilotRoll ? sim.mouseStick.x : sim.aileronInput; // the F-16's yoke is shaped below (0156)
     targetPitch = assist ? sim.mouseStick.y : sim.elevInput;
   }
 
@@ -1731,7 +1731,7 @@ function integrateSubStep(dt) {
     resetAssistState(assistState);
     sim.elevInput = THREE.MathUtils.lerp(sim.elevInput, targetPitch, dt * 10);
     // The F-16's roll-rate command shapes the stick (fbw.js pilotRoll, 0156).
-    sim.aileronInput = spec.pilotRoll ? spec.pilotRoll(sim.aileronInput, targetRoll, dt, spec.rollCmdRad, targets.source)
+    sim.aileronInput = spec.pilotRoll ? spec.pilotRoll(sim.aileronInput, targetRoll, dt, spec.rollCmdRad, sim.mouseYoke ? 'stick' : targets.source)
       : THREE.MathUtils.lerp(sim.aileronInput, targetRoll, dt * 10);
     sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, targetYaw, dt * 10);
   }
@@ -3279,7 +3279,7 @@ window.addEventListener('mousemove', e => {
     const normY = (e.clientY / window.innerHeight) * 2 - 1;
     sim.mouseStick.x = THREE.MathUtils.clamp(normX * 1.5, -1, 1);
     sim.mouseStick.y = THREE.MathUtils.clamp(normY * 1.5, -1, 1);
-    if (!assistConfig(sim.assist)) { sim.aileronInput = sim.mouseStick.x; sim.elevInput = sim.mouseStick.y; }
+    if (!assistConfig(sim.assist)) { if (!sim.spec.pilotRoll) sim.aileronInput = sim.mouseStick.x; sim.elevInput = sim.mouseStick.y; }
   } else if (isCanvasOrbiting) {
     const dx = e.clientX - prevMouseX;
     const dy = e.clientY - prevMouseY;

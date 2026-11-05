@@ -65,7 +65,7 @@ test('phone, Pilot, touch: full stick rolls the F-16 faster than the Cessna on t
 });
 
 // Half the stick in the F-16 is 0.275 of the command (fbw.js pilotRoll's curve): on the final ~30°/s.
-test('phone, Pilot, touch: half the stick rolls the F-16 gently (≤ ~90°/s)', async ({ page }) => {
+test('phone, Pilot, touch: half the stick rolls the F-16 gently on the final (the 350 KIAS ≤ 90°/s check is rollHold.test.js)', async ({ page }) => {
   test.setTimeout(90_000);
   const half = await rollFor(page, 'f16', 0.5, await start(page));
   expect(half).toBeGreaterThan(10);

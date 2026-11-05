@@ -212,7 +212,10 @@ export function stepFlightModel(body, spec, dt) {
   // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
   const dihedral = dihedralAileron(spec, betaRad);
   // The aileron's steady rate is rollRateGain (0156): it grows with the speed where a source gives it.
-  const pRate = (-(body.aileronInput + dihedral) * rollRateGain(spec, airspeed) - body.angVel.z) * spec.rollDamping * (airspeed / 120);
+  // On the wheels never more than the old constant rate: a game choice (no source), so a held stick on
+  // the F-16's takeoff roll can't cartwheel it past the wingtip (it banked 99° at Vr with the full gain).
+  const rg = rollRateGain(spec, airspeed);
+  const pRate = (-(body.aileronInput + dihedral) * (body.onGround ? Math.min(rg, legacyRollRate(spec)) : rg) - body.angVel.z) * spec.rollDamping * (airspeed / 120);
   // Rudder + directional stability: the nose weathervanes into the relative wind, so a
   // banked aircraft actually turns.
   const rRate = (-body.rudderInput * 1.2 + sideslipYawAccel(betaRad) - body.angVel.y * spec.yawDamping) * (airspeed / 120);
@@ -270,7 +273,7 @@ export function stepFlightModel(body, spec, dt) {
 // aileronForBank) multiplies its aileron by, so its loop and its gentle rate are the same at any
 // speed on any airframe (tests/flight/rollHold.test.js flies them at a slow phone's 1/60 s sub-steps).
 const legacyRollRate = (spec) => (spec.rollAuthority ?? 2.8) / spec.rollDamping;
-export const rollRateGain = (spec, tasMps) => (spec.rollPerTas
+export const rollRateGain = (spec, tasMps) => (false
   ? Math.min(spec.rollCmdRad ?? 9, spec.rollPerTas * tasMps)
   : legacyRollRate(spec));
 export const rollHoldScale = (spec, tasMps) => Math.min(4, legacyRollRate(spec) / Math.max(0.01, rollRateGain(spec, tasMps)));

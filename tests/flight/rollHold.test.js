@@ -172,3 +172,22 @@ describe('Pilot on a touch screen and keys: the F-16\'s roll command is flyable 
     expect(pilotRoll(0, -1, 1, f16.rollCmdRad, 'gamepad')).toBe(-1);
   });
 });
+
+// On the wheels the roll is never more than the old constant rate (flightModel.js, 0156 first-timer
+// panel): with the full gain, a touch stick held hard over for 1.5 s on the F-16's takeoff roll banked
+// it 18° at 140 KTAS and cartwheeled it to 99° at Vr (155 KIAS), past landing.js's 10° wingtip strike.
+describe('a held stick on the takeoff roll doesn\'t roll the airplane over (0156)', () => {
+  for (const [name, spec, kts] of [['f16', f16, 140], ['f16', f16, 155], ['c172', c172, 50]]) {
+    it(`${name} on the runway at ${kts} kt, full stick for 1.5 s: under 10° of bank`, () => {
+      const b = makeBody(spec, { throttle: 1 });
+      b.throttle = b.engineN = 1;
+      b.apMaster = false;
+      b.vel.set(0, 0, -kts * KTS_TO_MPS); // rolling north along the runway, nose on the ground
+      let maxBank = 0;
+      fly(b, spec, 1.5, (x) => { x.aileronInput = 1; x.elevInput = 0; x.rudderInput = 0; },
+        (x) => { maxBank = Math.max(maxBank, Math.abs(attitude(x).bankRightDeg)); return false; });
+      console.log(`[rollHold] ${name} ground roll ${kts} kt, full stick 1.5 s: max bank ${maxBank.toFixed(1)}°, on ground ${b.onGround}`);
+      expect(maxBank).toBeLessThan(10);
+    });
+  }
+});
