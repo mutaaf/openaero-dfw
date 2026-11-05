@@ -23,7 +23,8 @@ const _e = new Euler(0, 0, 0, 'YXZ');
 // Kid, hands off, from the mission's spawn to the touchdown. wind: { fromDeg, kts } (steady).
 // stick(ft): the kid's fore/aft stick at a wheel height (+ = push), else hands off.
 // rollS: keep rolling that long past the touchdown (idle, no brakes, Kid's pedals: main.js runwayUnderWheels).
-function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0) {
+// learnerBelowM: the player switches to Learner that low (no de-crab: a crabbed touchdown; the rollout is Learner's).
+function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0) {
   const spec = AIRCRAFT_DATABASE[acKey];
   const m = missionByKey(missionKey);
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
@@ -47,7 +48,8 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   const w = fromDeg * Math.PI / 180;
   b.windVec.set(-Math.sin(w) * kts * KTS_TO_MPS, 0, Math.cos(w) * kts * KTS_TO_MPS);
   b.vel.add(b.windVec);
-  const cfg = assistConfig('kid'), ast = createAssistState();
+  let cfg = assistConfig('kid');
+  const ast = createAssistState();
   const s = {}, out = {}, conf = { gearDown: true, flapsIndex: 2 }, at = { trim: 0 };
   let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
   const roll = { maxNoseOff3sDeg: 0, maxCrossM: 0 };
@@ -55,6 +57,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   fly(b, spec, 240, (x, dt) => {
     const ap = approachGeometry(end, x.pos);
     const wheelM = x.pos.y - spec.gearHeight;
+    if (wheelM < learnerBelowM && !x.onGround) cfg = assistConfig('learner');
     if (thrFt === null && ap.distM <= 0) thrFt = wheelM * M_TO_FT;
     if (wheelM * M_TO_FT > 200 && ap.distM > 0) papi[papiWhite(end, x.pos, ap.distM)]++;
     minVs = Math.min(minVs, x.vel.y);
@@ -288,12 +291,22 @@ describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticke
   // Ticket 0150: 83 m off in 20 s (159 m before 0100), 520 m in 40 s. At ~135 kt the fin's weathervaning (~0.25 rad/s²
   // at 8° of sideslip) out-turned the nose tyre's side grip (~0.19 rad/s², gear.js noseWheelYawHold), and the 0110
   // hold, sized for nose-wheel steering, asked only -0.09 pedal: the nose sat 2.5° into the wind and rolled off the side.
-  // The rollout rudder (assists.js rolloutRudder) flies the rudder surface on the same heading, as crews do: 1.4 m.
-  // The F-16 (385 m) and the 737 in 25 kt (1,060 m) ran off the same way.
-  for (const [ac, wind] of [['b738', XW20], ['b738', { fromDeg: 270, kts: 20 }], ['b738', { fromDeg: 90, kts: 25 }], ['f16', { fromDeg: 270, kts: 20 }]]) {
+  // The rollout rudder (assists.js shapeControls, on the runway) flies the rudder surface on the same heading: 1.4 m.
+  // The F-16 (385 m in 20 kt, 1,107 m in 25 kt) and the 737 in 25 kt (1,060 m) ran off the same way.
+  for (const [ac, wind] of [['b738', XW20], ['b738', { fromDeg: 270, kts: 20 }], ['b738', { fromDeg: 90, kts: 25 }], ['f16', { fromDeg: 270, kts: 20 }], ['f16', { fromDeg: 90, kts: 25 }]]) {
     it(`${ac} kdfw_35c_final, ${wind.kts} kt from ${wind.fromDeg}°: on the centreline for 40 s of rollout (0150)`, () => {
       const r = flyKidFinal(ac, 'kdfw_35c_final', wind, null, null, 40);
       logRoll(ac, 'kdfw_35c_final', wind, r);
+      expect(r.roll.maxCrossM).toBeLessThan(8);
+    });
+  }
+  // 0150 panel: Learner has no de-crab, so it lands crabbed (7.5-8.3°); on the mains it now gets Kid's rudder to the hold's
+  // heading too (it had only the nose-wheel hold there: 8.0 m in 20 kt, 12.9 m in 25 kt; 494-1,090 m before 0150).
+  for (const [ac, wind] of [['b738', XW20], ['b738', { fromDeg: 90, kts: 25 }], ['f16', { fromDeg: 270, kts: 20 }]]) {
+    it(`${ac} kdfw_35c_final, ${wind.kts} kt from ${wind.fromDeg}°, Learner from 3 m (a crabbed touchdown): on the centreline for 40 s of rollout (0150)`, () => {
+      const r = flyKidFinal(ac, 'kdfw_35c_final', wind, null, null, 40, 3);
+      logRoll(ac, 'kdfw_35c_final learner', wind, r);
+      expect(Math.abs(r.td.driftDeg)).toBeGreaterThan(5); // it did land crabbed: the card is the rollout's, not the de-crab's
       expect(r.roll.maxCrossM).toBeLessThan(8);
     });
   }

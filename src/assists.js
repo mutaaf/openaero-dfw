@@ -92,21 +92,23 @@ export function shapeControls(cfg, st, s, dt, out) {
     // On the runway the stick is the pilot's (rotation, taxi): the envelope starts at lift-off.
     // The pedals too, when they use them; when they don't, the nose wheel holds the centreline
     // of the runway it is on (0110), never the sideslip's coordination (it would steer into the wind).
-    // Kid on the mains with the nose wheel still up (a 737 derotates for over a second, a kid may hold
+    // Kid or Learner on the mains with the nose wheel still up (a 737 derotates for over a second, a kid may hold
     // the stick back): the nose wheel can't steer yet, so the rudder, as in the de-crab, turns the nose
     // to the runway hold's heading, at a softer gain (0100 panel: the hold's pedal, sized for the nose wheel, let the wind
     // yaw it back to ~5° within 1.5 s).
     st.pitchHoldDeg = null;
     out.elev = s.pitchIn; out.ail = s.rollIn;
+    // Learner too lands on the mains (crabbed: it has no de-crab), and gets the same rudder there (0150 panel).
     // With the nose wheel down, at landing speeds the rudder surface joins it on the same heading (0150): the nose
     // tyre's side grip (gear.js noseWheelYawHold) can't out-turn the fin's weathervaning in a strong crosswind (a 737
     // at ~135 kt, 20 kt across: ~0.19 vs ~0.25 rad/s²), and the hold, sized for nose-wheel steering, asked a tenth of a
-    // pedal while the nose sat 2.5° into the wind. At most 2° of error's worth (a crabbed touchdown turns back at
-    // ~3°/s, the 0110 skip card), faded out from 31 to 15 m/s, where the nose wheel holds it alone.
+    // pedal while the nose sat 2.5° into the wind. Its heading error counts at most 2° (plus the yaw-rate damping), so a
+    // crabbed touchdown turns back at under ~5°/s (the 0110 skip card), faded out from 31 to 15 m/s of airspeed, where
+    // the nose wheel holds it alone.
     if (Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null) out.rud = s.yawIn;
     else {
       const off = headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps));
-      out.rud = cfg.autoFlare && s.noseWheelDown === false ? decrabRudder(off, s, MAINS_GAIN)
+      out.rud = s.noseWheelDown === false ? decrabRudder(off, s, MAINS_GAIN)
         : clamp(groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS)
           + decrabRudder(clamp(off, -2, 2), s, MAINS_GAIN) * clamp(s.airspeedMps / 16 - 0.94, 0, 1), -1, 1);
     }

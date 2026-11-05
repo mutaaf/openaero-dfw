@@ -184,7 +184,8 @@ src/assists.js      assist levels Kid · Learner · Pilot (ticket 0042): shapes 
                     flight cards in tests/flight/kidFinal.test.js); main.js adds Kid's autothrottle, gear/flaps
                     and soft landing. On the runway Kid and Learner hold its centreline with the
                     pedals (groundSteerRudder, 0110), with the rudder surface on the same heading at landing speeds
-                    (rolloutRudder, 0150: the nose tyre's grip can't hold a 737 against 20 kt alone). Pilot never calls in (pure, flown headless in tests).
+                    (0150, in shapeControls: the nose tyre's grip can't hold a 737 against 20 kt alone; Learner gets Kid's
+                    rudder on the mains too). Pilot never calls in (pure, flown headless in tests).
                     A first visit (nothing stored) flies Learner; a stored level wins (0059)
 src/goAround.js     go-around drill (0047, lazy chunk loaded with the mission): pure state
                     machine (unstabilized gate → positive rate through 500 ft = complete,
