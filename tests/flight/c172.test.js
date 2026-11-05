@@ -14,11 +14,11 @@ import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { trimThrottle, stepFlightModel } from '../../src/flightModel.js';
-import { airAt } from '../../src/atmosphere.js';
+import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts, stallSpeedKts, isStallWarning } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
-import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm } from './harness.js';
+import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, steadyRoll } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
@@ -1040,4 +1040,54 @@ describe('Cessna 172S dead-stick challenge at Addison (flightModel, ticket 0036)
     expect(prompts).not.toContain('dsLow');
     expect(prompts).not.toContain('dsTurnR');
   });
+});
+
+// Roll rate (ticket 0153). The POH publishes none, so the reference is our JSBSim C172
+// (public/jsbsim/, the same oracle as the rotation card above), whose roll axis is Roskam's
+// Cessna 172 (Airplane Flight Dynamics, Part I, App. B): Clδa 0.178 /rad at the POH's 17.5° mean
+// aileron throw (0.3054 rad) against roll damping Clp −0.47 per unit p·b/2V. With no other
+// rolling moment, the steady rate is p = Clδa·δa/(−Clp) · 2V/b (V true airspeed, b 36.1 ft =
+// 11.0 m): at 90 KIAS and 5,000 ft ISA (σ 0.862, 96.9 KTAS, 49.9 m/s) that is
+// 0.178 × 0.3054 / 0.47 × 2 × 49.9 / 11.0 = 1.05 rad/s, 60°/s. The first card checks JSBSim flies
+// its own derivatives (so the reference is the arithmetic, not a black box); the second checks the
+// game's flightModel.js against it, for the same roll: full aileron from 75° left bank through
+// level, pitch held, ball centred with the rudder (harness.js steadyRoll).
+describe('Cessna 172S full-aileron roll rate vs JSBSim / Roskam (ticket 0153)', () => {
+  const KTS = 90, ALT_M = 5000 / M_TO_FT;
+  const tasMps = tasFromIas(KTS * KTS_TO_MPS, airAt(ALT_M).sigma);
+  const strip = (0.178 * 0.3054 / 0.47) * (2 * tasMps / (36.1 * 0.3048)) * 180 / Math.PI;
+  afterAll(() => useFdm(null));
+
+  it(`JSBSim's C172 rolls at its derivatives' p = Clδa·δa/(−Clp)·2V/b (${strip.toFixed(0)}°/s at ${KTS} KIAS, 5,000 ft; ±10%)`, async () => {
+    useFdm(await nodeJsbsim());
+    const jsb = steadyRoll(c172, KTS, ALT_M);
+    useFdm(null);
+    console.log(`[c172 JSBSim] full aileron at ${KTS} KIAS, 5,000 ft: ${jsb.rateDegS.toFixed(1)}°/s (Roskam strip estimate ${strip.toFixed(1)}°/s), β ≤ ${jsb.betaMaxDeg.toFixed(1)}°`);
+    expect(jsb.samples).toBeGreaterThan(20);
+    within(jsb.rateDegS, strip, 0.1);
+  }, 30000);
+
+  // The pilot is checked on its own (never an it.fails), so the gap card below can only fail on the rate.
+  it(`the roll card's pilot flies flightModel.js's roll: through level, ball centred (|β| < 3°), speed held`, () => {
+    useFdm(null);
+    const fm = steadyRoll(c172, KTS, ALT_M);
+    expect(fm.samples).toBeGreaterThan(20);
+    expect(fm.betaMaxDeg).toBeLessThan(3);
+    expect(Math.abs(fm.iasKts - KTS)).toBeLessThan(5);
+  });
+
+  // KNOWN GAP (0156): flightModel.js's roll law (pRate there) multiplies both the aileron and the
+  // damping by V/120, so its steady rate is rollAuthority / rollDamping (2.8 / 4.2 rad/s = 38°/s)
+  // at every speed: measured 37°/s at 90 KIAS, −38% against JSBSim's ~60°/s; JSBSim's grows with
+  // the speed (45, 60, 73°/s at 60, 90, 110 KIAS), as p = …·2V/b says. Mutation: halving the
+  // damping term in flightModel.js flies 60°/s, in the band, and this card turns red.
+  it.fails(`KNOWN GAP (0156): flightModel.js's steady roll rate at ${KTS} KIAS, 5,000 ft is within ±25% of JSBSim's for the same full aileron`, async () => {
+    useFdm(null);
+    const fm = steadyRoll(c172, KTS, ALT_M);
+    useFdm(await nodeJsbsim());
+    const jsb = steadyRoll(c172, KTS, ALT_M);
+    useFdm(null);
+    console.log(`[c172] full aileron at ${KTS} KIAS, 5,000 ft: flightModel ${fm.rateDegS.toFixed(1)}°/s, JSBSim ${jsb.rateDegS.toFixed(1)}°/s (${(100 * (fm.rateDegS / jsb.rateDegS - 1)).toFixed(0)}%)`);
+    within(fm.rateDegS, jsb.rateDegS, 0.25);
+  }, 30000);
 });

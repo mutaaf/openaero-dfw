@@ -2,7 +2,7 @@
 // "test pilot" control loops (no DOM, no scene) so test cards can compare the model with
 // published performance data. Ground is flat at y = 0; altitude is sim height in metres.
 import { Vector3, Quaternion, Euler } from 'three';
-import { stepFlightModel } from '../../src/flightModel.js';
+import { stepFlightModel, trimThrottle } from '../../src/flightModel.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank, flareSinkMps } from '../../src/autopilot.js';
 import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT, GRAVITY } from '../../src/constants.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
@@ -495,4 +495,32 @@ export function levelTurn(spec, bankDeg, kts, { altM = 1500, flaps = 0, gearDown
     bankDeg: Math.atan(tanSum / n) * RAD_TO_DEG, ballG: ballSum / n, loadG: nSum / n, hudG: hudSum / n,
     minAltErrM, maxAltErrM, maxAoaDeg, throttle: b.throttle, body: b,
   };
+}
+
+// Full-aileron roll (ticket 0153): from `fromDeg` of left bank at `kts` indicated and `altM`, the
+// stick held full right (aileronInput +1) through the wings-level point, the pitch attitude held
+// with the elevator and the sideslip held near zero with the rudder (the coordinated roll the
+// ticket asks for). The steady roll rate is the mean body roll rate p (°/s, + = right) while the
+// bank is within ±`windowDeg` of level: by then the roll mode has settled (our model's lag is
+// ~0.6 s for the Cessna; JSBSim's ~0.2 s) and gravity has had a second or two to bend the path.
+// Also returns the IAS and sideslip over that window. Flies whichever model useFdm set.
+export function steadyRoll(spec, kts, altM, { fromDeg = 75, windowDeg = 20, flaps = 0 } = {}) {
+  const b = makeBody(spec, { kts, altM, flaps, gearDown: !!spec.fixedGear, throttle: 0 });
+  b.throttle = b.engineN = Math.max(0, Math.min(1, trimThrottle(spec, kts * KTS_TO_MPS, flaps, 0, !!spec.fixedGear, airAt(altM))));
+  b.apMaster = false;
+  const pitch0 = attitude(b).pitchDeg;
+  b.quat.setFromEuler(_e.set(pitch0 * DEG_TO_RAD, 0, fromDeg * DEG_TO_RAD));
+  let pSum = 0, iasSum = 0, betaMax = 0, n = 0;
+  fly(b, spec, 4 * fromDeg / 10, (x) => {
+    x.elevInput = elevatorForPitch(pitch0, attitude(x).pitchDeg, x.angVel.x);
+    x.aileronInput = 1;
+    x.rudderInput = Math.max(-1, Math.min(1, (x.betaDeg ?? 0) * RUDDER_PER_BETA));
+  }, (x) => {
+    const bank = attitude(x).bankRightDeg;
+    if (Math.abs(bank) <= windowDeg) {
+      pSum += -x.angVel.z * RAD_TO_DEG; iasSum += x.iasKts; betaMax = Math.max(betaMax, Math.abs(x.betaDeg ?? 0)); n++;
+    }
+    return bank > windowDeg;
+  });
+  return { rateDegS: n ? pSum / n : NaN, iasKts: iasSum / n, betaMaxDeg: betaMax, samples: n };
 }

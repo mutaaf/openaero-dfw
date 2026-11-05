@@ -18,7 +18,7 @@ import { airAt, ISA_P0 } from '../../src/atmosphere.js';
 import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
-import { makeBody, fly, attitude, vsFpm, speedHoldPilot } from './harness.js';
+import { makeBody, fly, attitude, vsFpm, speedHoldPilot, steadyRoll } from './harness.js';
 import { checkLevelTurn } from './turnCard.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
@@ -663,4 +663,20 @@ describe('Boeing 737-800 level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 
     within(r.loadG, 2, 0.03);
     expect(r.maxAoaDeg).toBeLessThan(stallAoaDeg(b738, 0) - 1); // roll-in included
   });
+});
+
+// Roll rate (ticket 0153): logged, not carded. No open source gives the 737's roll rate or its
+// roll derivatives (JSBSim's 737 is an Aeromatic estimate, not Boeing data), so this records what
+// the model does for a later ticket to source: full wheel from 75° left bank through level,
+// pitch held, ball centred (harness.js steadyRoll). It asserts only that the roll was flown.
+describe('Boeing 737-800 full-wheel roll rate (logged for a later card, 0153)', () => {
+  for (const [kts, altFt, flaps] of [[250, 10000, 0], [160, 3000, 1]]) {
+    it(`${kts} KIAS, ${altFt.toLocaleString('en-US')} ft, flaps index ${flaps}: rolls through level, ball centred`, () => {
+      const r = steadyRoll(b738, kts, altFt / M_TO_FT, { flaps });
+      console.log(`[b738] full wheel at ${kts} KIAS, ${altFt} ft, flaps index ${flaps}: ${r.rateDegS.toFixed(1)}°/s (uncarded), β ≤ ${r.betaMaxDeg.toFixed(1)}°`);
+      expect(r.samples).toBeGreaterThan(20);
+      expect(r.rateDegS).toBeGreaterThan(0);
+      expect(r.betaMaxDeg).toBeLessThan(5);
+    });
+  }
 });
