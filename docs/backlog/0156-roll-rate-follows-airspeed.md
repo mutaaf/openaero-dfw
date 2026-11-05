@@ -1,7 +1,7 @@
 ---
 id: 0156
 title: The roll rate follows the airspeed (aileron ∝ q, damping ∝ V); the F-16 gets its 308°/s roll-rate command
-status: proposed
+status: ready
 priority: P1
 size: L
 lens: authenticity
