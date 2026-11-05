@@ -304,7 +304,10 @@ src/replay.js       landing replay (0019, lazy chunk after boot): main.js record
                     to the card. The HUD and panels hide (body.replaying), the imagery credits stay
 src/debugScreen.js  ?debug only (lazy): openaeroDebug().runwayScreen, the active runway's screen outline, and papiLampsWhite (the 3D PAPI's white lamps);
                     hooks() installs the test hooks openaeroDebugFinal/Hop/DeadStick (0137; openaeroDebugCaption stays in main.js)
-src/gateVerdict.js  the stabilized gate's HUD verdict (0020; lazy, fetched after boot, 0137): gateVerdictRect (pure, tested)
+src/gateVerdict.js  the stabilized gate's HUD verdict (0020; lazy, fetched after boot, 0137): gateVerdictRect (pure, tested); also the
+                    wind box's plain words for Kid/Learner (0142: windPlainWords RIGHT WIND / AIM INTO IT, Kid HANDS OFF, TAILWIND /
+                    FLOATS LONG, HEADWIND / SHORT ROLL; a 24 px strip over the box; not on the ground, under 30 ft RA or under a
+                    .coach-top card), drawn through drawAltCaption's call (main.js passes sim and _windBox)
                     puts it at cy + 76 under the boresight; on a screen held upright too short for that over the touch
                     deck (TOUCH_DECK_H + 40 px of inset) it takes the callout caption's slot under the heading box, as
                     narrow, and gives way while a caption shows (on a 320 px phone its lines are squeezed to fit)

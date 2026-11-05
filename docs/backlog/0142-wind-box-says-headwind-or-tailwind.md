@@ -1,12 +1,12 @@
 ---
 id: 0142
 title: Wind box words the crosswind and tailwind for a kid ("wind from the left, push right")
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-11-03
-pr:
+pr: 194
 ---
 
 ## Why
