@@ -402,6 +402,37 @@ describe('F-16C full push vs the negative g limit (TP-1538 Fig. 62(b); 0138)', (
     });
   }
 
+  // The sloped part of Fig. 62(b), read off the figure (not fbwPushLimit, so a moved breakpoint turns it
+  // red; physics panel): 200 KEAS at 15,000 ft is q̄ ≈ 6.5 kN/m², where the line reads ≈ −3.05 g
+  // incremental, −2.05 g. Full forward stick reaches it within 2 s, before the dive builds speed: the
+  // lowest load factor by then is −2.05 ± 0.3 g.
+  it('full forward stick at 200 KEAS, 15,000 ft (q̄ ≈ 6.5 kN/m², the sloped part) bottoms at −2.05 ± 0.3 g within 2 s', () => {
+    expect(fullPush(200, { seconds: 2 }).minG).toBeGreaterThanOrEqual(-2.35);
+    expect(fullPush(200, { seconds: 2 }).minG).toBeLessThanOrEqual(-1.75);
+  });
+
+  // A stick a hair forward of centre is a hair of push, not a pull (device panel: the push gradient
+  // started at +1 g, so inverted at ~−0.9 g, elevInput 0.005 pulled the jet to +1 g towards the ground;
+  // main.js eases the stick back to centre, so it sits there after every push). Inverted at 350 kt,
+  // 15,000 ft, 3 s: 0.005 and 0.02 of push end within 0.2 g of the released stick, and not above it.
+  it('inverted at 350 kt, a stick just forward of centre flies like a released one (within 0.2 g, no pull)', () => {
+    const endG = (stick) => {
+      const b = makeBody(f16, { kts: 350, altM: 15000 / M_TO_FT, throttle: 0.7, gearDown: false });
+      b.quat.multiply(new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), Math.PI));
+      const meter = loadFactorMeter();
+      meter(b);
+      let n = 0;
+      fly(b, f16, 3, (x) => { x.elevInput = stick; x.aileronInput = 0; }, (x) => { n = meter(x); return false; });
+      return n;
+    };
+    const released = endG(0);
+    for (const stick of [0.005, 0.02]) {
+      const n = endG(stick);
+      expect(Math.abs(n - released)).toBeLessThan(0.2);
+      expect(n).toBeLessThanOrEqual(released + 0.05);
+    }
+  });
+
   // Let go from a push: like a released pull (0090), the nose holds where it is and the seat
   // returns towards 1 g within 6 s.
   it('a stick released from a −2 g push at 450 KEAS returns towards 1 g (0.7-1.3 g within 6 s)', () => {

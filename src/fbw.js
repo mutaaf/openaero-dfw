@@ -55,14 +55,18 @@ export function fbwPushLimit(qDynPa) {
 // The most nose-down pitch rate (rad/s) the limiter lets the stick command: fbwPitchRateCap's
 // mirror, towards the α where n meets the push's command. `push` (0-1, forward stick) commands
 // 1 g down to the Fig. 62(b) floor in a straight line (the game's gradient, as for the pull); a
-// released stick (push ≤ 0) is held only to the floor.
+// released stick (push ≤ 0) is held only to the floor. A push's gradient never raises the nose past
+// a released stick's hold (pitch rate 0): inverted at −1 g, a stick eased just forward of centre
+// (main.js lerps it back) would otherwise command +1 g and pull the jet towards the ground (device
+// panel).
 export function fbwPitchRateFloor(spec, push, aoaRad, nNow, upY, tasMps, qDyn, qBody, lagS) {
   const nPerRad = (spec.clAlpha * qDyn * spec.wingAreaM2) / (spec.massKg * GRAVITY);
   const pathRate = (GRAVITY * (nNow - upY)) / tasMps;
   const lead = (qBody - pathRate) * lagS;
   const nLimit = fbwPushLimit(qDyn);
-  const nTarget = push > 0 ? 1 + (nLimit - 1) * Math.min(push, 1) : nLimit;
-  return pathRate + (FBW_ALPHA_GAIN / lagS) * (nTarget - nNow - nPerRad * lead) / nPerRad;
+  const rateTo = (n) => pathRate + (FBW_ALPHA_GAIN / lagS) * (n - nNow - nPerRad * lead) / nPerRad;
+  const atLimit = rateTo(nLimit);
+  return push > 0 ? Math.min(rateTo(1 + (nLimit - 1) * Math.min(push, 1)), Math.max(0, atLimit)) : atLimit;
 }
 
 // flightModel.js's hook: the stick's pitch-rate command `qCmd` (rad/s), capped by the limiter in the
