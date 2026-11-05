@@ -16,8 +16,8 @@ Pillar 0. Only the C172 has the bank-angle stall card (0067). The 737 and F-16 a
 Reuse `stallInTurn(spec, bankDeg, stallAoa, opts)` from `tests/flight/harness.js` in `b738.test.js` (flaps 30, Vref region, 3,000 ft) and `f16.test.js` (clean, 15,000 ft). Add one `it` per airframe at 45° and 60°. No `src/` change unless a card fails: then `it.fails` with the measured number and a ticket.
 
 ## Acceptance criteria
-- [x] 737 flaps 30: stall CAS at 45° and 60° bank is within ±8% of the 1-g stall × sqrt(1/cos bank)
-- [x] F-16 clean: the same, measured at the AoA limiter's break, or a KNOWN GAP with a ticket
+- [x] 737 flaps 30: stall IAS (EAS in this sim) at 45° and 60° bank is within ±8% of the 1-g stall × sqrt(1/cos bank)
+- [x] F-16 clean: the same, measured at the AoA limiter's break, or a KNOWN GAP with a ticket (measured at 20° α, under the limiter's 20.4° knee, where it does not bind; see Shipped)
 - [x] Each card fails when CLmax is mutated by 10% (proved in the PR body)
 
 ## Test plan
