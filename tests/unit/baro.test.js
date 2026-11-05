@@ -1,33 +1,41 @@
 import { describe, it, expect } from 'vitest';
-import { baroLabel, baroRect, drawAltCaption, gateVerdictRect, TOUCH_DECK_H, BARO_W, BARO_H } from '../../src/gateVerdict.js';
+import { baroLabel, baroSource, baroRect, drawAltCaption, gateVerdictRect, TOUCH_DECK_H, BARO_W, BARO_H } from '../../src/gateVerdict.js';
 import { altCaptionRect, windBoxRect, windReadout, ALT_TAPE_X, SPEED_TAPE_X, TAPE_TOP } from '../../src/hudLayout.js';
-import { parseMetar } from '../../src/weather.js';
+import { parseMetar, scenarioWeather } from '../../src/weather.js';
 
 // Ticket 0146: the altimeter setting under the altitude tape, the number physics flies on
 // (main.js refreshWeather: sim.altimInHg = sim.wx.altimInHg), "30.11 IN" over its source line.
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-describe('baroLabel (0146)', () => {
-  it('two decimals and IN, with the source: METAR when live, SCENARIO when not', () => {
-    expect(baroLabel(30.109, true, {})).toMatchObject({ text: '30.11 IN', src: 'METAR' });
-    expect(baroLabel(29.92, false, {})).toMatchObject({ text: '29.92 IN', src: 'SCENARIO' });
-    expect(baroLabel(30, false, {})).toMatchObject({ text: '30.00 IN', src: 'SCENARIO' });
-    expect(baroLabel(29.905, true, {}).text).toBe('29.91 IN');
-    expect(baroLabel(28.5, true, {}).text).toBe('28.50 IN');
+describe('baroLabel and baroSource (0146)', () => {
+  it('two decimals and IN', () => {
+    expect(baroLabel(30.109, 'METAR', {})).toMatchObject({ text: '30.11 IN', src: 'METAR' });
+    expect(baroLabel(30, 'SCENARIO', {}).text).toBe('30.00 IN');
+    expect(baroLabel(29.905, 'METAR', {}).text).toBe('29.91 IN');
+    expect(baroLabel(28.5, 'METAR', {}).text).toBe('28.50 IN');
   });
-  it('a METAR of 1019.6 hPa (A3011) reads 30.11, the value weather.js hands physics', () => {
+  it('the source: METAR only when a live METAR gave the number', () => {
     const m = { icaoId: 'KDFW', altim: 1019.6, wdir: 180, wspd: 5, temp: 24, visib: '10+', rawOb: 'METAR KDFW 161953Z 18005KT 10SM A3011' };
-    expect(baroLabel(parseMetar(m).altimInHg, true, {}).text).toBe('30.11 IN');
+    const wx = parseMetar(m);
+    expect(baroLabel(wx.altimInHg, baroSource(wx), {})).toMatchObject({ text: '30.11 IN', src: 'METAR' }); // A3011 = 1019.6 hPa
+    // A live METAR without an altimeter group: weather.js flies 29.92, which the METAR never said.
+    const noAltim = parseMetar({ ...m, altim: undefined });
+    expect(noAltim.altimInHg).toBe(29.92);
+    expect(baroSource(noAltim)).toBe('STANDARD');
+    expect(baroSource(parseMetar({ ...m, altim: NaN }))).toBe('STANDARD'); // typeof NaN is 'number'
+    // No reading at 0.1 hPa converts to exactly the 29.92 literal, so a real report is never STANDARD.
+    for (let hpa = 9300; hpa <= 10700; hpa++) expect(baroSource(parseMetar({ ...m, altim: hpa / 10 }))).toBe('METAR');
+    expect(baroSource(scenarioWeather())).toBe('SCENARIO');
+    expect(baroSource(undefined)).toBe('SCENARIO');
   });
   it('builds its strings only when the value or source changes (nothing allocated per frame)', () => {
     const out = {};
-    const a = baroLabel(30.02, true, out);
-    const t = a.text;
-    expect(baroLabel(30.0204, true, out)).toBe(out);
-    expect(out.text).toBe(t); // same string object: not rebuilt
-    baroLabel(30.03, true, out);
+    const t = baroLabel(30.02, 'METAR', out).text;
+    expect(baroLabel(30.0204, 'METAR', out)).toBe(out);
+    expect(out.text).toBe(t);
+    baroLabel(30.03, 'METAR', out);
     expect(out.text).toBe('30.03 IN');
-    baroLabel(30.03, false, out);
+    baroLabel(30.03, 'SCENARIO', out);
     expect(out.src).toBe('SCENARIO');
   });
 });
@@ -70,7 +78,7 @@ describe('drawAltCaption draws the setting (0146)', () => {
     return { calls, canvas: { width: w, height: h }, set font(f) { calls.push(['font', f]); }, set fillStyle(f) { calls.push(['fill', f]); }, fillRect: (...a) => calls.push(['rect', ...a]), fillText: (...a) => calls.push(['text', ...a]) };
   };
   const simFor = (inHg, live, extra = {}) => ({ altimInHg: inHg, wx: { live, altimInHg: inHg }, onGround: false, raFt: 1500, hudWind: windReadout({ windDirDeg: 180, windKts: 5, live }, null), ...extra });
-  for (const level of ['learner', 'pilot']) {
+  for (const level of ['pilot']) {
     it(`${level}: "30.11 IN" and METAR in its box, written to hudWind for ?debug`, () => {
       const ctx = fakeCtx(1280, 720), s = simFor(30.109, true);
       drawAltCaption(ctx, altCaptionRect(640, 360, {}), level, 1280, s, windBoxRect(1280, 720));
@@ -99,12 +107,12 @@ describe('drawAltCaption draws the setting (0146)', () => {
   });
   it('scenario weather says SCENARIO', () => {
     const ctx = fakeCtx(1280, 720), s = simFor(30, false);
-    drawAltCaption(ctx, altCaptionRect(640, 360, {}), 'learner', 1280, s, windBoxRect(1280, 720));
+    drawAltCaption(ctx, altCaptionRect(640, 360, {}), 'pilot', 1280, s, windBoxRect(1280, 720));
     expect(s.hudWind.baro).toBe('30.00 IN');
     expect(s.hudWind.baroSrc).toBe('SCENARIO');
   });
-  it('Kid has none (a pilot\'s number), nor a short upright phone (the deck)', () => {
-    for (const [level, w, h] of [['kid', 1280, 720], ['learner', 375, 548]]) {
+  it('Kid and Learner have none (plain words on this tape), nor a short upright phone (the deck)', () => {
+    for (const [level, w, h] of [['kid', 1280, 720], ['learner', 1280, 720], ['pilot', 375, 548]]) {
       const ctx = fakeCtx(w, h), s = simFor(30.109, true);
       drawAltCaption(ctx, altCaptionRect(w / 2, h / 2, {}), level, w, s, windBoxRect(w, h));
       expect(ctx.calls.filter((c) => c[0] === 'text').map((c) => c[1])).not.toContain('30.11 IN');

@@ -308,8 +308,9 @@ src/gateVerdict.js  the stabilized gate's HUD verdict (0020; lazy, fetched after
                     wind box's plain words for Kid/Learner (0142: windPlainWords RIGHT WIND / AIM INTO IT, Kid HANDS OFF, TAILWIND /
                     FLOATS LONG, HEADWIND / SHORT ROLL; a 24 px strip over the box; not on the ground, under 30 ft RA or under a
                     .coach-top card), drawn through drawAltCaption's call (main.js passes sim and _windBox)
-                    and the altimeter setting (0146: baroRect/baroLabel, "30.11 IN" over METAR or SCENARIO under the altitude tape, sim.altimInHg
-                    and sim.wx.live; not for Kid, nor on an upright screen too short for it over the touch deck; ?debug hudWind.baro)
+                    and the altimeter setting (0146: baroRect/baroLabel/baroSource, "30.11 IN" over METAR / STANDARD (weather.js's 29.92 fallback) /
+                    SCENARIO under the altitude tape, sim.altimInHg and sim.wx; Pilot only, not on an upright screen too short for it over the
+                    touch deck; ?debug hudWind.baro). The tape is true MSL (terrain.js yToFtMsl): the setting feeds airAt, not the tape
                     puts it at cy + 76 under the boresight; on a screen held upright too short for that over the touch
                     deck (TOUCH_DECK_H + 40 px of inset) it takes the callout caption's slot under the heading box, as
                     narrow, and gives way while a caption shows (on a 320 px phone its lines are squeezed to fit)

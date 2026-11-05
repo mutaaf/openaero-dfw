@@ -30,6 +30,11 @@ overlap the AGL box at 390x844.
 - [ ] The number is the one physics uses (`sim.altimInHg`)
 - [ ] Boot JS within budget
 
+As shipped (#196): Pilot only (Kid and Learner read plain words on this tape, first-timer panel); offline
+it shows the scenario's 30.00 (what physics flies on), not 29.92; a live METAR without an altimeter
+group reads 29.92 STANDARD; redrawn every frame from cached strings. The tape is true MSL height, so
+the "40 ft off" in Why does not happen here: the setting changes the air (airAt), not the tape.
+
 ## Test plan
 Unit: the label function for live vs scenario, rounding. e2e: set a mocked METAR via the
 fixtures and read the HUD text or the exposed debug snapshot.

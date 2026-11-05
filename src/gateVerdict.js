@@ -137,20 +137,26 @@ export function drawWind(ctx, box, s, level) {
   ctx.fillText(words[1], r.x + 3, r.y + 21, r.w - 6);
 }
 
-// The altimeter setting (0146): the number the altimeter is set to, under the altitude tape, as a
-// PFD shows it (FAA AIM 7-2-1). It is sim.altimInHg, the one physics flies on (main.js refreshWeather:
-// the flown field's METAR, else the scenario's 30.00), so a pilot can see why the tape reads 40 ft off
-// the field on a low-pressure day. Two decimals and IN over its source: METAR when the weather is live,
-// SCENARIO when not (the wind box's honesty rule). The strings are built when the value or source
-// changes, not per frame. The source is sim.wx.live, the same weather the number came from (the wind
-// box's hudWind.live is refreshed once a second and lagged it on the e2e's first frames). Pure, tested.
-export function baroLabel(inHg, live, out) {
+// The altimeter setting (0146): the number the altimeter is set to (FAA AIM ch. 7 §2, altimeter setting
+// procedures), under the altitude tape, where a glass cockpit's PFD shows it. It is sim.altimInHg (main.js refreshWeather: the flown field's METAR, or
+// DFW's, else the scenario's 30.00): what the sim's air is built from (atmosphere.js airAt: pressure
+// altitude, so density and the engines). The tape itself is true height above sea level (terrain.js
+// yToFtMsl), which a correctly set altimeter reads, so the setting does not move it. Two decimals and IN
+// over its source: METAR when a live METAR gave it, STANDARD when a live METAR had none (weather.js
+// parseMetar's 29.92 literal, which no hPa reading converts to exactly, or a NaN that refreshWeather
+// turns into 29.92; told apart here, so the boot chunk carries no flag), SCENARIO when the weather is not live (the wind box's honesty rule).
+// The source is sim.wx, the same weather the number came from (the wind box's hudWind.live is refreshed
+// once a second and lagged it on the e2e's first frames). The strings are built when the value or
+// source changes, not per frame. Pure, tested.
+export function baroSource(wx) {
+  return !wx?.live ? 'SCENARIO' : wx.altimInHg === 29.92 || !Number.isFinite(wx.altimInHg) ? 'STANDARD' : 'METAR';
+}
+export function baroLabel(inHg, src, out) {
   const v = Math.round(inHg * 100);
-  if (v !== out.v || live !== out.live) {
+  if (v !== out.v || src !== out.src) {
     out.v = v;
-    out.live = live;
     out.text = `${(v / 100).toFixed(2)} IN`;
-    out.src = live ? 'METAR' : 'SCENARIO';
+    out.src = src;
   }
   return out;
 }
@@ -173,17 +179,17 @@ export function baroRect(w, h, out) {
 }
 
 // Called by drawAltCaption every frame; writes the text and the box into sim.hudWind (the ?debug
-// snapshot spreads it): null for Kid (a pilot's number; its HUD drops the tape's bands too) and where
-// the box is left out.
+// snapshot spreads it). Pilot only: Kid and Learner read plain words on this tape (SEA LVL, 0140) and a
+// bare "30.11 IN" gives them nothing to act on (the first-timer panel); null where the box is left out.
 const _baro = {}, _baroBox = {};
 function drawBaro(ctx, s, level) {
   const hw = s.hudWind;
   const r = baroRect(ctx.canvas.width, ctx.canvas.height, _baroBox);
-  if (level === 'kid' || !r.show || !(s.altimInHg > 0)) {
+  if (level !== 'pilot' || !r.show || !(s.altimInHg > 0)) {
     hw.baro = hw.baroSrc = hw.baroBox = null;
     return;
   }
-  const b = baroLabel(s.altimInHg, !!s.wx?.live, _baro); // sim.wx is where refreshWeather took altimInHg from
+  const b = baroLabel(s.altimInHg, baroSource(s.wx), _baro); // sim.wx is where refreshWeather took altimInHg from
   hw.baro = b.text;
   hw.baroSrc = b.src;
   hw.baroBox = r;

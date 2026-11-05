@@ -16,11 +16,12 @@ async function fly(page, metars) {
   await page.locator('#btnStartFlight').click();
   await expect(page.locator('#onboardingModal')).toBeHidden();
 }
+const PILOT_ONLY = { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'openaero_assist_v1', value: '{"v":1,"level":"pilot","at":0}' }] }] };
 const hud = (page) => page.evaluate(() => window.openaeroDebug().hudWind);
 
 for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, height: 844, touch: true }, { width: 844, height: 390, touch: true }, { width: 820, height: 1180, touch: true }]) {
   test.describe(`${v.width}x${v.height}`, () => {
-    test.use({ viewport: { width: v.width, height: v.height }, hasTouch: v.touch, isMobile: v.touch, storageState: { cookies: [], origins: [] } });
+    test.use({ viewport: { width: v.width, height: v.height }, hasTouch: v.touch, isMobile: v.touch, storageState: PILOT_ONLY });
 
     test('shows the METAR altimeter setting under the altitude tape, clear of everything else', async ({ page }) => {
       const errors = collectErrors(page);
@@ -53,8 +54,8 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
   });
 }
 
-test.describe('offline and Kid (0146)', () => {
-  test.use({ storageState: { cookies: [], origins: [] } });
+test.describe('offline (0146)', () => {
+  test.use({ storageState: PILOT_ONLY });
 
   test('no METAR: the scenario setting, labelled SCENARIO', async ({ page }) => {
     await fly(page, null);
@@ -62,8 +63,12 @@ test.describe('offline and Kid (0146)', () => {
     expect((await hud(page)).baroSrc).toBe('SCENARIO');
   });
 
-  test('Kid has none', async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem('openaero_assist_v1', JSON.stringify({ v: 1, level: 'kid', at: 1 })));
+});
+
+test.describe('Kid and Learner (0146)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } }); // a first visit flies Learner
+
+  test('a first visit (Learner) has none', async ({ page }) => {
     await fly(page, [BARO_METAR]);
     await expect.poll(async () => (await hud(page)).source, { timeout: 10_000 }).toBe('METAR WIND');
     await page.waitForTimeout(500);
