@@ -1,7 +1,7 @@
 ---
 id: 0158
 title: The F-16 at Kid and Learner holds the centreline on a rollout in 25 kt of crosswind
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: player-feel
