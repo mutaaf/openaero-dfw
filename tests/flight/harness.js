@@ -3,6 +3,7 @@
 // published performance data. Ground is flat at y = 0; altitude is sim height in metres.
 import { Vector3, Quaternion, Euler } from 'three';
 import { stepFlightModel, trimThrottle } from '../../src/flightModel.js';
+import { engineThrust } from '../../src/engine.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank, flareSinkMps } from '../../src/autopilot.js';
 import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT, GRAVITY } from '../../src/constants.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
@@ -182,7 +183,9 @@ export function shortFieldTakeoff(spec, isaDevC = 0, clearFt = 0, { windKts = 0,
 // Rudder holds the sideslip near zero (uncoordinated, the lift vector tilts less than the
 // wings and the turn pulls ~1.8 g at 60°, not 2). Returns the IAS at the break and, over
 // the last 3 s before it, the true load factor (non-gravity acceleration perpendicular to
-// the flight path, / g), bank, sideslip, altitude error and bleed rate actually flown.
+// the flight path, / g), bank, sideslip, altitude error and bleed rate actually flown, and
+// `nWing`: the part of that load the wing carries, less the thrust's lift (T·sin α along the
+// tilted nose, ticket 0159: ~3% of the weight on a 737 at flaps 30, more on an F-16 at 20°).
 export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, altM = 1500 } = {}) {
   const b = makeBody(spec, { kts: fromKts, altM, flaps, throttle: 0.6 });
   const alt0 = b.pos.y;
@@ -222,7 +225,11 @@ export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, 
     prevVel.copy(x.vel);
     vHat.copy(x.vel).normalize();
     f.addScaledVector(vHat, -f.dot(vHat));
-    recent.push({ t: x.t, ias, n: f.length() / 9.80665, bank: bankRightDeg, beta, altErr: -altErr });
+    const nLoad = f.length() / 9.80665;
+    const tas = x.vel.length(), air = airAt(x.pos.y);
+    const thrust = engineThrust(spec, x.engineN, tas, air, x.mach, 0.5 * air.rho * tas * tas);
+    const nWing = nLoad - (thrust * Math.sin((x.aoaDeg ?? 0) * DEG_TO_RAD)) / (spec.massKg * 9.80665);
+    recent.push({ t: x.t, ias, n: nLoad, nWing, bank: bankRightDeg, beta, altErr: -altErr });
     while (recent.length && recent[0].t < x.t - 3) recent.shift();
   }, (x) => {
     if (x.aoaDeg > stallAoa) { kts = x.iasKts; return true; }
@@ -231,7 +238,7 @@ export function stallInTurn(spec, bankDeg, stallAoa, { fromKts = 90, flaps = 0, 
   const avg = (k) => recent.reduce((s, r) => s + r[k], 0) / recent.length;
   const first = recent[0], last = recent[recent.length - 1];
   return {
-    kts, n: avg('n'), bankDeg: avg('bank'), betaDeg: avg('beta'), altErrM: avg('altErr'),
+    kts, n: avg('n'), nWing: avg('nWing'), bankDeg: avg('bank'), betaDeg: avg('beta'), altErrM: avg('altErr'),
     bleedKtsS: (first.ias - last.ias) / (last.t - first.t), t: b.t,
   };
 }
