@@ -58,7 +58,10 @@ export function altLabels(level) {
 // The same call draws the wind box's plain words (0142) when main.js passes sim and the wind box
 // (one call from the boot chunk for both: its budget has no room for a second).
 export function drawAltCaption(ctx, r, level, screenW, s, windBox) {
-  if (s) drawWind(ctx, windBox, s, level);
+  if (s) {
+    drawWind(ctx, windBox, s, level);
+    drawBaro(ctx, s, level);
+  }
   const words = altLabels(level);
   r.w = level === 'pilot' ? words.altW : Math.min(words.altW, Math.floor(screenW - r.x)); // Pilot's tab is 0132's
   r.text = words.alt;
@@ -132,4 +135,64 @@ export function drawWind(ctx, box, s, level) {
   ctx.fillStyle = words === WIND_WORDS.tail ? '#fcd34d' : '#e0f2fe';
   ctx.fillText(words[0], r.x + 3, r.y + 10, r.w - 6);
   ctx.fillText(words[1], r.x + 3, r.y + 21, r.w - 6);
+}
+
+// The altimeter setting (0146): the number the altimeter is set to, under the altitude tape, as a
+// PFD shows it (FAA AIM 7-2-1). It is sim.altimInHg, the one physics flies on (main.js refreshWeather:
+// the flown field's METAR, else the scenario's 30.00), so a pilot can see why the tape reads 40 ft off
+// the field on a low-pressure day. Two decimals and IN over its source: METAR when the weather is live,
+// SCENARIO when not (the wind box's honesty rule). The strings are built when the value or source
+// changes, not per frame. The source is sim.wx.live, the same weather the number came from (the wind
+// box's hudWind.live is refreshed once a second and lagged it on the e2e's first frames). Pure, tested.
+export function baroLabel(inHg, live, out) {
+  const v = Math.round(inHg * 100);
+  if (v !== out.v || live !== out.live) {
+    out.v = v;
+    out.live = live;
+    out.text = `${(v / 100).toFixed(2)} IN`;
+    out.src = live ? 'METAR' : 'SCENARIO';
+  }
+  return out;
+}
+
+// Its box (canvas px): under the altitude tape's foot (cy + 90, hudLayout.js TAPE_TOP), in the tape's
+// column (cx + 130, ALT_TAPE_X; inlined: a boot symbol a lazy chunk imports grows the boot chunk), level
+// with the speed tape's SPD label across the screen (baseline cy + 106), kept on a narrow screen. 58 px
+// holds eight bold 11 px monospace glyphs (~53 px). On a screen held upright too short for it over the
+// touch deck (TOUCH_DECK_H + 40 px of inset, as the gate verdict) it would sit in the deck: left out
+// (show false). Writes `out`.
+export const BARO_W = 58;
+export const BARO_H = 26;
+export function baroRect(w, h, out) {
+  out.x = Math.min(w / 2 + 130, w - BARO_W - 2);
+  out.y = h / 2 + 94;
+  out.w = BARO_W;
+  out.h = BARO_H;
+  out.show = !(h > w && out.y + BARO_H > h - TOUCH_DECK_H - 40);
+  return out;
+}
+
+// Called by drawAltCaption every frame; writes the text and the box into sim.hudWind (the ?debug
+// snapshot spreads it): null for Kid (a pilot's number; its HUD drops the tape's bands too) and where
+// the box is left out.
+const _baro = {}, _baroBox = {};
+function drawBaro(ctx, s, level) {
+  const hw = s.hudWind;
+  const r = baroRect(ctx.canvas.width, ctx.canvas.height, _baroBox);
+  if (level === 'kid' || !r.show || !(s.altimInHg > 0)) {
+    hw.baro = hw.baroSrc = hw.baroBox = null;
+    return;
+  }
+  const b = baroLabel(s.altimInHg, !!s.wx?.live, _baro); // sim.wx is where refreshWeather took altimInHg from
+  hw.baro = b.text;
+  hw.baroSrc = b.src;
+  hw.baroBox = r;
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e0f2fe';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(b.text, r.x + 3, r.y + 12, r.w - 6);
+  ctx.font = 'bold 9px monospace';
+  ctx.fillText(b.src, r.x + 3, r.y + 23, r.w - 6);
 }

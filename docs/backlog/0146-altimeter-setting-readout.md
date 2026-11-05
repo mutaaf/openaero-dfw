@@ -1,12 +1,12 @@
 ---
 id: 0146
 title: Show the altimeter setting under the altitude tape, from the METAR
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-01
-pr:
+pr: 196
 ---
 
 ## Why
