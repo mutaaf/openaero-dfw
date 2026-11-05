@@ -55,7 +55,7 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
       for (const [name, r] of clear) expect(overlaps(box, r), `wind box vs ${name}`).toBe(false);
       // 0142: a first visit flies Learner, so the plain words show beside it, clear of the same things.
       await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudWind.plain, { timeout: 10_000 })
-        .toEqual(['BLOWN LEFT', 'STEER RIGHT']);
+        .toEqual(['RIGHT WIND', 'AIM INTO IT']);
       const pb = (await page.evaluate(() => window.openaeroDebug())).hudWind.plainBox;
       const plain = { x: pb.x, y: pb.y, width: pb.w, height: pb.h };
       expect(plain.x + plain.width).toBeLessThanOrEqual(v.width);
@@ -76,6 +76,26 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
 
 test.describe('plain words (0142)', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const [w, h] of [[375, 548], [390, 664]]) {
+    test(`${w}x${h}: never under the coach card when it takes the top slot (device panel)`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await fly(page, [XW_METAR]);
+      await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudWind.xw, { timeout: 10_000 }).toBe('XW 12R');
+      for (let i = 0; i < 6; i++) {
+        await page.waitForTimeout(500);
+        const d = await page.evaluate(() => window.openaeroDebug());
+        const coach = page.locator('#coach');
+        const top = await coach.evaluate((el) => el.classList.contains('coach-top') && !el.classList.contains('hidden'));
+        if (top) expect(d.hudWind.plain, 'no words under the top-slot coach').toBeNull();
+        if (d.hudWind.plain && await coach.isVisible()) {
+          const b = await coach.boundingBox();
+          const pb = d.hudWind.plainBox;
+          expect(overlaps({ x: pb.x, y: pb.y, width: pb.w, height: pb.h }, b), 'plain words vs #coach').toBe(false);
+        }
+      }
+    });
+  }
 
   test('Pilot keeps the numbers alone', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('openaero_assist_v1', '{"v":1,"level":"pilot","at":0}'));
