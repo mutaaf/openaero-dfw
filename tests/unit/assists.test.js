@@ -461,18 +461,18 @@ describe('on the runway (groundSteerRudder, 0110)', () => {
     expect(groundSteerRudder(350, 320, 0, 0, 2)).toBe(1);
     expect(groundSteerRudder(350, 350, 100, 0, 200)).toBeCloseTo(-0.0075, 9); // never more than 3° off: 1.5°/s
   });
-  // 0150: the nose tyre alone can't hold a 737 against a 20 kt crosswind at landing speed; the rudder surface helps,
-  // on the same target heading, faded out by 15 m/s (where the nose wheel does it alone), at most 2° of error's worth.
-  it('at landing speed the rollout rudder adds the rudder surface on the same heading; at a walk the nose wheel alone', () => {
-    const cfg = assistConfig('kid'), off = { ...ground, noseHdgDeg: 352.5, steerRateDegS: 31 };
+  // 0150: the nose tyre alone can't hold a 737 against a 20 kt crosswind at landing speed; the hold asks 5°/s more of steered
+  // rate per degree (up to 1°) there, faded out by 15 m/s, where the nose wheel does it alone; no yaw-rate damping (it chattered).
+  it('at landing speed the hold asks more pedal per degree; at a walk the nose wheel alone; no rate damping', () => {
+    const cfg = assistConfig('kid'), off = { ...ground, noseHdgDeg: 350.5, steerRateDegS: 31 };
+    const hold = groundSteerRudder(350, 350.5, 0, 0, 31);
     const fast = shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 70 }, 1 / 120, {}).rud;
-    expect(fast).toBeLessThan(groundSteerRudder(350, 352.5, 0, 0, 31) - 0.5); // nose right: much more left pedal
-    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 10 }, 1 / 120, {}).rud).toBeCloseTo(groundSteerRudder(350, 352.5, 0, 0, 31), 9);
-    // A 15° crab caps at 2°: the same pedal as 2.5°, so a crabbed touchdown is turned back gently (the 0110 skip card).
+    expect(fast).toBeCloseTo(hold - 0.5 * 5 / 31, 9); // nose 0.5° right: 2.5°/s more to the left
+    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 10 }, 1 / 120, {}).rud).toBeCloseTo(hold, 9);
+    // Past 1° the extra stays 5°/s (a crabbed touchdown is turned back by the 0110 hold, not slammed).
     expect(shapeControls(cfg, createAssistState(), { ...off, noseHdgDeg: 5, airspeedMps: 70 }, 1 / 120, {}).rud)
-      .toBeCloseTo(fast + groundSteerRudder(350, 5, 0, 0, 31) - groundSteerRudder(350, 352.5, 0, 0, 31), 9);
-    // A yaw rate already turning the right way takes pedal off (the damping that stops it swinging).
-    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 70, yawRateRight: -0.03 }, 1 / 120, {}).rud).toBeGreaterThan(fast);
+      .toBeCloseTo(groundSteerRudder(350, 5, 0, 0, 31) - 5 / 31, 9);
+    expect(shapeControls(cfg, createAssistState(), { ...off, airspeedMps: 70, yawRateRight: -0.03 }, 1 / 120, {}).rud).toBe(fast);
   });
   it("the player's pedals win; off a runway the rudder is theirs (0 if they leave it)", () => {
     const cfg = assistConfig('learner');

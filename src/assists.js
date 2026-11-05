@@ -99,18 +99,19 @@ export function shapeControls(cfg, st, s, dt, out) {
     st.pitchHoldDeg = null;
     out.elev = s.pitchIn; out.ail = s.rollIn;
     // Learner too lands on the mains (crabbed: it has no de-crab), and gets the same rudder there (0150 panel).
-    // With the nose wheel down, at landing speeds the rudder surface joins it on the same heading (0150): the nose
-    // tyre's side grip (gear.js noseWheelYawHold) can't out-turn the fin's weathervaning in a strong crosswind (a 737
-    // at ~135 kt, 20 kt across: ~0.19 vs ~0.25 rad/s²), and the hold, sized for nose-wheel steering, asked a tenth of a
-    // pedal while the nose sat 2.5° into the wind. Its heading error counts at most 2° (plus the yaw-rate damping), so a
-    // crabbed touchdown turns back at under ~5°/s (the 0110 skip card), faded out from 31 to 15 m/s of airspeed, where
-    // the nose wheel holds it alone.
+    // With the nose wheel down, at landing speeds the hold asks more pedal per degree (0150): the nose tyre's side grip
+    // (gear.js noseWheelYawHold) can't out-turn the fin's weathervaning in a strong crosswind (a 737 at ~135 kt, 20 kt
+    // across: ~0.19 vs ~0.25 rad/s²), the rudder surface has to help, and the hold's 0.5°/s per degree, sized for the
+    // nose wheel's steered rate, asked a tenth of a pedal while the nose sat 2.5° into the wind. Up to 1° of the error
+    // asks 5°/s of steered rate per degree more (5 / steerRateDegS of pedal: the loop through the nose wheel stays at 5/s,
+    // stable at 30 fps), faded out from 31 to 15 m/s of airspeed. No yaw-rate damping: through the nose wheel's steering
+    // it chattered the pedal at the slew limit and slowed a crabbed turn-back (0150 physics panel).
     if (Math.abs(s.yawIn) > DEAD || s.rwyHdgDeg == null) out.rud = s.yawIn;
     else {
       const off = headingError(s.noseHdgDeg, groundTargetHdg(s.rwyHdgDeg, s.crossM, s.crossVelMps));
       out.rud = s.noseWheelDown === false ? decrabRudder(off, s, MAINS_GAIN)
         : clamp(groundSteerRudder(s.rwyHdgDeg, s.noseHdgDeg, s.crossM, s.crossVelMps, s.steerRateDegS)
-          + decrabRudder(clamp(off, -2, 2), s, MAINS_GAIN) * clamp(s.airspeedMps / 16 - 0.94, 0, 1), -1, 1);
+          - clamp(off, -1, 1) * 5 / Math.max(1, s.steerRateDegS) * clamp(s.airspeedMps / 16 - 0.94, 0, 1), -1, 1);
     }
     return out;
   }
