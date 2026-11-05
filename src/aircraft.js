@@ -234,6 +234,10 @@ export const AIRCRAFT_DATABASE = {
     cyRudder: 0.187,
     clBeta: -0.089,
     clAileron: 0.178 * 17.5 * Math.PI / 180,
+    // Roll power (flightModel.js rollRateGain, 0156), the same Roskam set: Clδa 0.178 at the 17.5°
+    // mean aileron throw over roll damping Clp −0.47 is p·b/2V = 0.116 at full aileron, so the rate
+    // is 0.116 × 2V / 11.0 m: 60°/s at 97 KTAS (tests/flight/c172.test.js flies it against JSBSim).
+    rollPerTas: 0.02103, // (0.178 × 0.3054 rad) / 0.47 × 2 / 11.0 m
   },
   f16: {
     name: 'F-16C Fighting Falcon',
@@ -270,6 +274,13 @@ export const AIRCRAFT_DATABASE = {
     // by its flight control computer, which trims itself (a 1 g command); here a released stick holds the nose where it is, as before.
     pitchFbw: true,
     rollDamping: 5.2,
+    // Roll (flightModel.js rollRateGain, 0156): the flight control system commands a roll rate, up to
+    // 308°/s at full lateral stick (NASA TP-1538 App. A, p. 34), as far as the airframe can make it:
+    // TP-1538 Table III's ΔCl at the 21.5° aileron limit (0.055) over Clp −0.43 (as transcribed in
+    // Stevens & Lewis App. A) is p·b/2V 0.128 on Table I's 30 ft (9.144 m) span, so ~124°/s at
+    // 150 KTAS and the full command from ~375 KTAS. Low-α cruise derivatives: an estimate on approach.
+    rollPerTas: 0.02798, // 0.055 / 0.43 × 2 / 9.144 m
+    rollCmdRad: 5.376, // 308°/s
     yawDamping: 2.2,
     // Sideslip (0081): CYβ −1.146 per radian (NASA TP-1538 as in Stevens & Lewis, −0.02 per
     // degree; JSBSim f16.xml). No dihedral term: the F-16's stick commands a roll rate and

@@ -11,6 +11,7 @@ import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
 import { assistConfig, createAssistState, shapeControls, assistBestKey } from '../../src/assists.js';
 import { makeBody, fly, attitude, vsFpm } from '../flight/harness.js';
 import { M_TO_FT } from '../../src/constants.js';
+import { rollHoldScale } from '../../src/flightModel.js';
 
 const SA = 14.1;
 const DT = 0.1;
@@ -238,7 +239,7 @@ describe('assist levels still stall in the drill, then recover (headless, 0087)'
       const { pitchDeg, bankRightDeg } = attitude(x);
       const da = drillAssist(st.phase);
       Object.assign(s, {
-        pitchIn: st.phase === 'armed' || holdBack ? pitchIn : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+        pitchIn: st.phase === 'armed' || holdBack ? pitchIn : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(c172, (x.tasKts ?? 0) * 0.514444),
         aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: da.protect ? sa : 90, tailstrikeDeg: 15,
         onGround: false, wheelHeightM: x.pos.y, airspeedMps: (x.tasKts ?? 0) * 0.514444,
         guideBankDeg: 0, guideGammaDeg: da.kidClimb ? 5 : 0,

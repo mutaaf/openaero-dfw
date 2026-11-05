@@ -11,6 +11,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { assistConfig, createAssistState, shapeControls, slewRudder, groundSteerRudder } from '../../src/assists.js';
 import { touchGroundRudder, tillerShare } from '../../src/input.js';
 import { aileronForBank } from '../../src/autopilot.js';
+import { rollHoldScale } from '../../src/flightModel.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { surfaceWindFactor } from '../../src/weather.js';
 import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT } from '../../src/constants.js';
@@ -28,7 +29,7 @@ const flaps = (spec) => (spec === c172 ? 0 : 1);
 function assisted(level, spec, st, s, x, dt, { pitchIn = 0 } = {}) {
   const { pitchDeg, bankRightDeg } = attitude(x);
   Object.assign(s, {
-    pitchIn, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, yawRateRight: -x.angVel.y,
+    pitchIn, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y,
     aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex), tailstrikeDeg: spec.maxGroundPitchDeg ?? 15,
     onGround: !!x.onGround, wheelHeightM: x.pos.y - x.groundY - spec.gearHeight, airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS,
     guideBankDeg: 0, guideGammaDeg: 0,

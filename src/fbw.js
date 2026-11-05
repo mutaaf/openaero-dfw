@@ -91,8 +91,26 @@ function liftUpY(body) {
   return _x.cross(_v).normalize().y;
 }
 
-// Give every fly-by-wire airframe in `db` (aircraft.js AIRCRAFT_DATABASE) its limiter.
+// Pilot's aileron for one frame on an airframe whose stick commands a roll rate (spec.rollCmdRad, the
+// F-16's 308°/s, 0156; main.js calls it as spec.pilotRoll once this chunk is in, else its plain
+// smoothing, rateCmd falsy here): the touch stick and the gamepad get an expo curve (half stick 0.275
+// of the command, ~85°/s); deflecting it rolls in at 3/s (a thumb lands anywhere on the absolute touch
+// stick: at the plain 10/s a 0.2 s full flick snapped 60°, device panel) and the keys, all or nothing,
+// at 2/s, so a tap or a flick banks tens of degrees, not a snap. Letting go is as quick as the plain
+// smoothing (10/s).
+export function pilotRoll(cur, target, dt, rateCmd, source) {
+  const key = source === 'keyboard';
+  if (rateCmd && !key) target *= 0.4 + 0.6 * target * target;
+  const k = rateCmd && Math.abs(target) > Math.abs(cur) ? (key ? 2 : 3) : 10;
+  return cur + (target - cur) * Math.min(1, dt * k);
+}
+
+// Give every fly-by-wire airframe in `db` (aircraft.js AIRCRAFT_DATABASE) its limiter, and every
+// roll-rate-command one its stick shaping.
 export function installFbw(db) {
-  for (const spec of Object.values(db)) if (spec.pitchFbw) spec.fbw = fbwPitch;
+  for (const spec of Object.values(db)) {
+    if (spec.pitchFbw) spec.fbw = fbwPitch;
+    if (spec.rollCmdRad) spec.pilotRoll = pilotRoll;
+  }
 }
 installFbw(AIRCRAFT_DATABASE);

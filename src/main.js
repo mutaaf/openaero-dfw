@@ -53,10 +53,10 @@ import { loadCleanView, saveCleanView } from './viewPrefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, altCaptionRect, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand, stallBand,
+  windBoxRect, altCaptionRect, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand,
   ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
 } from './hudLayout.js';
-import { stepFlightModel, trimThrottle, dihedralAileron } from './flightModel.js';
+import { stepFlightModel, trimThrottle, dihedralAileron, rollHoldScale } from './flightModel.js';
 import { radioAltitudeM } from './gear.js';
 import { seedSystems, stepSystems, gearLocked, gearInTransit, systemsOf, AUTOBRAKE_LABELS } from './systems.js';
 import { createResScale, stepResScale, resetResScale } from './resScale.js';
@@ -1707,7 +1707,7 @@ function integrateSubStep(dt) {
 
   const assist = sim.apMaster ? null : assistConfig(sim.assist);
   if (sim.mouseYoke && targets.source === 'keyboard') {
-    targetRoll = assist ? sim.mouseStick.x : sim.aileronInput;
+    targetRoll = assist || spec.pilotRoll ? sim.mouseStick.x : sim.aileronInput; // the F-16's yoke is shaped below (0156)
     targetPitch = assist ? sim.mouseStick.y : sim.elevInput;
   }
 
@@ -1730,7 +1730,9 @@ function integrateSubStep(dt) {
   } else {
     resetAssistState(assistState);
     sim.elevInput = THREE.MathUtils.lerp(sim.elevInput, targetPitch, dt * 10);
-    sim.aileronInput = THREE.MathUtils.lerp(sim.aileronInput, targetRoll, dt * 10);
+    // The F-16's roll-rate command shapes the stick (fbw.js pilotRoll, 0156).
+    sim.aileronInput = spec.pilotRoll ? spec.pilotRoll(sim.aileronInput, targetRoll, dt, spec.rollCmdRad, sim.mouseYoke ? 'stick' : targets.source)
+      : THREE.MathUtils.lerp(sim.aileronInput, targetRoll, dt * 10);
     sim.rudderInput = THREE.MathUtils.lerp(sim.rudderInput, targetYaw, dt * 10);
   }
 
@@ -1744,7 +1746,7 @@ function integrateSubStep(dt) {
     const pitchRateUp = sim.angVel.x;
     const holdHeading = (hdgDeg) => {
       const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg), sim.tasKts * KTS_TO_MPS);
-      sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight);
+      sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight, rollHoldScale(spec, sim.tasKts * KTS_TO_MPS));
     };
     // Fly a flight-path angle: pitch = path + current angle of attack.
     // Pitch is capped at 9.5° nose-up (737 tailstrike is ~11°).
@@ -2085,7 +2087,7 @@ function renderHud() {
   drawTape(cx + ALT_TAPE_X, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
   gateVerdict?.drawAltCaption(hudCtx, altCaptionRect(cx, cy, _altCap), sim.assist, w, sim, _windBox); // + the wind box's plain words (0142)
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
-  if (sim.stallKts && !sim.onGround) drawStallBand(cx - 131, cy);
+  if (sim.stallKts && !sim.onGround) gateVerdict?.drawStallBand(hudCtx, cx - 131, cy, sim.stallKts, sim.iasKts); // lazy (0156)
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
   const showTrim = trimControl();
   if (showTrim !== trimShown) { // the rocker follows (no layout work on other frames)
@@ -2093,7 +2095,8 @@ function renderHud() {
     byId('touchTrim').classList.toggle('hidden', !showTrim);
     if (!showTrim) { trimHeld.up = trimHeld.dn = false; sim.touchTrim = 0; }
   }
-  if (showTrim && sim.trimAlphaDeg != null) drawTrimBug(cx - 131, cy);
+  // Pilot's trim bug (0094): drawn by the lazy gateVerdict.js (off the boot budget, 0156).
+  if (showTrim && sim.trimAlphaDeg != null) gateVerdict?.drawTrimBug(hudCtx, cx - 131, cy, trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex), sim.iasKts);
   if (sim.activeEnd && !sim.onGround && sim.raFt < 60) drawFlareCue(cx, cy);
 
   // Heading
@@ -2196,58 +2199,12 @@ function drawSpeedLimit(x, y) {
   if (b.tick) hudCtx.fillRect(x - 8, b.y - 1, 8, 2); // clear of the readout box (ends at x - 8)
 }
 
-// The low-speed band (0128, hudLayout.js stallBand): red from the tape's bottom up to the 1 g stall
-// speed for the flaps, amber up to 1.1 Vs, in the speed limit's column (the two never meet).
-const _stallBand = { redTop: 0, redBot: 0, red: false, amberTop: 0, amberBot: 0, amber: false };
-// A dark edge either side keeps it readable over bright ground and to red-green colour blindness
-// (the hue alone was ~1.4:1 against green terrain).
-function drawStallBand(x, y) {
-  const b = stallBand(y, sim.stallKts, sim.iasKts, _stallBand);
-  if (!b.red && !b.amber) return;
-  const top = b.amber ? b.amberTop : b.redTop;
-  hudCtx.fillStyle = '#020617';
-  hudCtx.fillRect(x - 8, top, 5, b.redBot - top);
-  if (b.red) {
-    hudCtx.fillStyle = '#ef4444';
-    hudCtx.fillRect(x - 7, b.redTop, 3, b.redBot - b.redTop);
-  }
-  if (b.amber) {
-    hudCtx.fillStyle = '#f59e0b';
-    hudCtx.fillRect(x - 7, b.amberTop, 3, b.amberBot - b.amberTop);
-  }
-}
-
 // Pilot's trim (0094) works where the trim is the player's: not under an assist or a
 // pitch-holding autopilot (they trim as they fly, sim.autoTrim), not on the F-16's fly-by-wire
 // (its pitch law carries the trim), not on JSBSim (?fdm=jsbsim keeps its own trim).
 const trimControl = () => !sim.autoTrim && !sim.spec.pitchFbw && !(jsbsim && jsbsim.flies(sim.aircraftKey));
 const trimmable = () => trimControl() && sim.trimAlphaDeg != null;
 let trimShown = false;
-
-// Trim (0094, Pilot): an amber bug on the speed tape at the speed a released stick flies, and
-// its number in a box under the airspeed readout (inside the tape, which the touch deck keeps
-// clear at every size); the bug parks at the tape's end when off scale.
-let trimText = '', trimTextKts = NaN;
-function drawTrimBug(x, y) {
-  const kts = trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex);
-  if (kts === null) return;
-  const r = Math.round(kts);
-  if (r !== trimTextKts) { trimTextKts = r; trimText = `T ${r}`; }
-  const by = y - THREE.MathUtils.clamp((kts - sim.iasKts) * 2, -88, 88);
-  hudCtx.strokeStyle = '#fbbf24';
-  hudCtx.lineWidth = 2;
-  hudCtx.beginPath();
-  hudCtx.moveTo(x + 11, by); hudCtx.lineTo(x + 19, by - 5); hudCtx.lineTo(x + 19, by + 5); hudCtx.closePath();
-  hudCtx.stroke();
-  hudCtx.lineWidth = 1.5;
-  hudCtx.fillStyle = '#020617'; // opaque: the tape's numbers must not read through it
-  hudCtx.fillRect(x - 52, y + 13, 44, 15);
-  hudCtx.fillStyle = '#fcd34d';
-  hudCtx.font = 'bold 11px monospace';
-  hudCtx.textAlign = 'center';
-  hudCtx.fillText(trimText, x - 30, y + 24);
-  hudCtx.textAlign = 'left';
-}
 
 // Wind readout (0075): source, an arrow for where the wind blows relative to the nose, its
 // speed and, low near the active runway, the cross and head/tail components. Box geometry in
@@ -2421,6 +2378,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.bankRightDeg = -_euler.z * RAD_TO_DEG;
   _assistIn.pitchRateUp = sim.angVel.x;
   _assistIn.rollRateRight = -sim.angVel.z;
+  _assistIn.rollScale = rollHoldScale(spec, sim.tasKts * KTS_TO_MPS);
   _assistIn.yawRateRight = -sim.angVel.y;
   const noseDeg = -_euler.y * RAD_TO_DEG, trackDeg = Math.atan2(sim.vel.x, -sim.vel.z) * RAD_TO_DEG;
   _assistIn.driftDeg = headingError(noseDeg, trackDeg); // Kid's de-crab (0100)
@@ -3321,7 +3279,7 @@ window.addEventListener('mousemove', e => {
     const normY = (e.clientY / window.innerHeight) * 2 - 1;
     sim.mouseStick.x = THREE.MathUtils.clamp(normX * 1.5, -1, 1);
     sim.mouseStick.y = THREE.MathUtils.clamp(normY * 1.5, -1, 1);
-    if (!assistConfig(sim.assist)) { sim.aileronInput = sim.mouseStick.x; sim.elevInput = sim.mouseStick.y; }
+    if (!assistConfig(sim.assist)) { if (!sim.spec.pilotRoll) sim.aileronInput = sim.mouseStick.x; sim.elevInput = sim.mouseStick.y; }
   } else if (isCanvasOrbiting) {
     const dx = e.clientX - prevMouseX;
     const dy = e.clientY - prevMouseY;

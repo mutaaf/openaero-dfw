@@ -32,7 +32,7 @@
 import { describe, it, expect } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { M_TO_FT, DEG_TO_RAD, KTS_TO_MPS } from '../../src/constants.js';
+import { M_TO_FT, DEG_TO_RAD, RAD_TO_DEG, KTS_TO_MPS } from '../../src/constants.js';
 import { fbwPushLimit } from '../../src/fbw.js';
 import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
@@ -483,22 +483,42 @@ describe('F-16C level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', (
 // command's 308°/s. The card (harness.js steadyRoll) enters at 350 KIAS from 170° of left bank so a
 // roll-rate command's realistic 0.3-0.5 s roll-in has settled by the ±30° window (the physics panel:
 // from 75° a τ 0.4 s roll that settles at 308 reads 227); flightModel.js only (JSBSim has no F-16 here).
-describe('F-16C full-stick roll rate vs NASA TP-1538 (ticket 0153)', () => {
+describe('F-16C full-stick roll rate vs NASA TP-1538 (tickets 0153, 0156)', () => {
   const KTS = 350, ALT_M = 10000 / M_TO_FT;
-  const roll = () => steadyRoll(f16, KTS, ALT_M, { fromDeg: 170, windowDeg: 30 });
+  // ±40° of window: at 308°/s that is ~0.26 s, over 30 samples at the harness's 1/120 s.
+  const roll = () => steadyRoll(f16, KTS, ALT_M, { fromDeg: 170, windowDeg: 40 });
 
   it(`the roll card's pilot flies the F-16's roll: settled through level, ball centred (|β| < 3°)`, () => {
     const r = roll();
-    console.log(`[f16] full stick entered at ${KTS} KIAS, 10,000 ft: ${r.rateDegS.toFixed(1)}°/s (in ${r.pEntry.toFixed(1)}, out ${r.pExit.toFixed(1)}) at ${r.iasKts.toFixed(0)} KIAS (TP-1538's command 308°/s), β ≤ ${r.betaMaxDeg.toFixed(1)}°`);
-    expect(r.samples).toBeGreaterThan(5);
+    console.log(`[f16] full stick entered at ${KTS} KIAS, 10,000 ft: ${r.rateDegS.toFixed(1)}°/s (in ${r.pEntry.toFixed(1)}, out ${r.pExit.toFixed(1)}) at ${r.iasKts.toFixed(0)} KIAS (TP-1538's command 308°/s), β ≤ ${r.betaMaxDeg.toFixed(1)}°, ${r.samples} samples`);
+    expect(r.samples).toBeGreaterThan(30);
     expect(r.betaMaxDeg).toBeLessThan(3);
     expect(Math.abs(r.pExit - r.pEntry) / r.rateDegS).toBeLessThan(0.03);
   });
 
-  // KNOWN GAP (0156): flightModel.js's steady rate is rollAuthority / rollDamping (2.8 / 5.2 rad/s,
-  // 30.9°/s) at any speed, a tenth of the command. On a ~10x gap no plausible damping error (under ~8x)
-  // can turn this card red; the C172's card is the one that sees the damping.
-  it.fails(`KNOWN GAP (0156): full lateral stick entered at ${KTS} KIAS, 10,000 ft rolls at TP-1538's 308°/s (±25%)`, () => {
-    within(roll().rateDegS, 308, 0.25);
+  // Closed by 0156 (was a KNOWN GAP: 30.9°/s, a tenth of the command). aircraft.js f16.rollCmdRad is
+  // the command's 308°/s; the airframe (rollPerTas, TP-1538's derivatives) could make ~330°/s here, so
+  // the command is what flies. One-sided around its ceiling: never above it (+2% for the averaging),
+  // and a realistic roll-in still reads within ~15%.
+  it(`full lateral stick entered at ${KTS} KIAS, 10,000 ft rolls at TP-1538's 308°/s command (260-315°/s)`, () => {
+    const r = roll().rateDegS;
+    expect(r).toBeGreaterThanOrEqual(260);
+    expect(r).toBeLessThanOrEqual(315);
+  });
+
+  // On approach (150 KIAS, sea level, gear down) the airframe can't make the command: TP-1538's roll
+  // power p·b/2V 0.128 (aircraft.js) on the 9.144 m reference span gives ~2·0.128·V/b. The card checks
+  // the rate is that, within ±25%, at the window's TAS (the roll dives it a little faster), and
+  // markedly lower than the cruise card's: under 60% of the command. A ±30° window: rolling at
+  // ~130°/s at α 6-10° the card's pilot runs out of rudder by the far edge (no aileron-rudder
+  // interconnect is modelled), and β passes 3° near +40°.
+  it('full lateral stick on approach (150 KIAS, gear down) rolls at the airframe\'s TP-1538 roll power, well under the command', () => {
+    const r = steadyRoll(f16, 150, 300, { fromDeg: 170, windowDeg: 30, gearDown: true });
+    const ref = 0.055 / 0.43 * 2 * r.tasKts * KTS_TO_MPS / 9.144 * RAD_TO_DEG;
+    console.log(`[f16] full stick entered at 150 KIAS, gear down: ${r.rateDegS.toFixed(1)}°/s at ${r.tasKts.toFixed(0)} KTAS (TP-1538 airframe ${ref.toFixed(0)}°/s), β ≤ ${r.betaWindowDeg.toFixed(1)}° in the window`);
+    expect(r.samples).toBeGreaterThan(30);
+    expect(r.betaWindowDeg).toBeLessThan(3);
+    within(r.rateDegS, ref, 0.25);
+    expect(r.rateDegS).toBeLessThan(0.6 * 308);
   });
 });
