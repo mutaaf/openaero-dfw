@@ -19,7 +19,7 @@ async function fly(page, metars) {
 const PILOT_ONLY = { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'openaero_assist_v1', value: '{"v":1,"level":"pilot","at":0}' }] }] };
 const hud = (page) => page.evaluate(() => window.openaeroDebug().hudWind);
 
-for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, height: 844, touch: true }, { width: 844, height: 390, touch: true }, { width: 820, height: 1180, touch: true }]) {
+for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, height: 844, touch: true }, { width: 844, height: 390, touch: true }, { width: 820, height: 1180, touch: true }, { width: 667, height: 375, touch: true }]) {
   test.describe(`${v.width}x${v.height}`, () => {
     test.use({ viewport: { width: v.width, height: v.height }, hasTouch: v.touch, isMobile: v.touch, storageState: PILOT_ONLY });
 
@@ -53,6 +53,17 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
     });
   });
 }
+
+test.describe('568x320 sideways (device panel)', () => {
+  test.use({ viewport: { width: 568, height: 320 }, hasTouch: true, isMobile: true, storageState: PILOT_ONLY });
+
+  test('left out: the touch button row would cover it', async ({ page }) => {
+    await fly(page, [BARO_METAR]);
+    await expect.poll(async () => (await hud(page)).source, { timeout: 10_000 }).toBe('METAR WIND');
+    await page.waitForTimeout(500);
+    expect((await hud(page)).baro).toBe(null);
+  });
+});
 
 test.describe('offline (0146)', () => {
   test.use({ storageState: PILOT_ONLY });

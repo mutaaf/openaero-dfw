@@ -41,7 +41,7 @@ describe('baroLabel and baroSource (0146)', () => {
 });
 
 describe('baroRect (0146)', () => {
-  for (const [w, h] of [[1280, 720], [390, 844], [844, 390], [820, 1180], [1180, 820], [430, 932], [568, 320], [375, 812]]) {
+  for (const [w, h] of [[1280, 720], [390, 844], [844, 390], [820, 1180], [1180, 820], [430, 932], [375, 812], [412, 915], [667, 375], [740, 360], [844, 300], [1024, 1366]]) {
     it(`${w}x${h}: under the altitude tape, on screen, off the tapes, SPD label, gate verdict, wind box and touch deck`, () => {
       const cx = w / 2, cy = h / 2;
       const r = baroRect(w, h, {});
@@ -59,6 +59,22 @@ describe('baroRect (0146)', () => {
       expect(overlaps(r, windBoxRect(w, h)), 'wind box').toBe(false);
       expect(overlaps(r, altCaptionRect(cx, cy, {})), 'MSL tab').toBe(false);
       if (h > w) expect(r.y + r.h).toBeLessThanOrEqual(h - TOUCH_DECK_H - 40);
+      // Sideways: off the button row (#touchButtons ~56 px over the foot, + a home indicator's ~16; it ends at
+      // cx + 130 from 660 px across), with a gap.
+      else expect(r.y + r.h <= h - 72 || r.x >= cx + 132).toBe(true);
+      expect(r.x).toBeGreaterThanOrEqual(cx + 132 - (r.x < cx + 134 ? 12 : 0));
+    });
+  }
+  for (const [w, h] of [[568, 320], [568, 300], [640, 304], [658, 320]]) {
+    it(`${w}x${h} sideways: under or beside the button row, so it is left out`, () => {
+      expect(baroRect(w, h, {}).show).toBe(false);
+    });
+  }
+  for (const [w, h] of [[344, 882], [360, 800]]) {
+    it(`${w}x${h}: the edge clamp would pull it into the gate verdict, so it is left out`, () => {
+      const r = baroRect(w, h, {});
+      expect(r.show).toBe(false);
+      expect(r.x).toBeLessThan(w / 2 + 122);
     });
   }
   for (const [w, h] of [[390, 664], [375, 548], [360, 640], [320, 568]]) {

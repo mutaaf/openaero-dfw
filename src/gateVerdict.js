@@ -162,19 +162,27 @@ export function baroLabel(inHg, src, out) {
 }
 
 // Its box (canvas px): under the altitude tape's foot (cy + 90, hudLayout.js TAPE_TOP), in the tape's
-// column (cx + 130, ALT_TAPE_X; inlined: a boot symbol a lazy chunk imports grows the boot chunk), level
-// with the speed tape's SPD label across the screen (baseline cy + 106), kept on a narrow screen. 58 px
-// holds eight bold 11 px monospace glyphs (~53 px). On a screen held upright too short for it over the
-// touch deck (TOUCH_DECK_H + 40 px of inset, as the gate verdict) it would sit in the deck: left out
-// (show false). Writes `out`.
+// column, 4 px right of its edge (cx + 130, ALT_TAPE_X; inlined: a boot symbol a lazy chunk imports grows
+// the boot chunk), level with the speed tape's SPD label across the screen (baseline cy + 106), kept on a
+// narrow screen. 58 px holds eight bold 11 px monospace glyphs (~53 px). Left out (show false) where it
+// would sit under a touch control or the gate verdict (the device panel):
+// - held upright, too short for it over the touch deck (TOUCH_DECK_H + 40 px of inset, as the verdict);
+// - held sideways: the button row (#touchButtons, ~56 px over the foot plus the home indicator's inset)
+//   ends at cx + 130 from ~660 px across (hence the 4 px), and narrower the stick shrinks and the row runs
+//   right over it (568x320, 640x304): left out under 660 px across (from there the 4 px keeps it clear,
+//   whatever the height or the inset);
+// - under ~375 px across the clamp to the screen's edge pulls it into the verdict (cx + 120): 360, 344.
+// Writes `out`.
 export const BARO_W = 58;
 export const BARO_H = 26;
 export function baroRect(w, h, out) {
-  out.x = Math.min(w / 2 + 130, w - BARO_W - 2);
+  const cx = w / 2;
+  out.x = Math.min(cx + 134, w - BARO_W - 2);
   out.y = h / 2 + 94;
   out.w = BARO_W;
   out.h = BARO_H;
-  out.show = !(h > w && out.y + BARO_H > h - TOUCH_DECK_H - 40);
+  const foot = out.y + BARO_H;
+  out.show = out.x >= cx + 122 && (h > w ? foot <= h - TOUCH_DECK_H - 40 : w >= 660);
   return out;
 }
 
