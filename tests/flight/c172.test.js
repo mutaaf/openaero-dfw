@@ -108,6 +108,15 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     within(r.totalFt, 1633, 0.15);
   });
 
+  // POH Fig. 5-5 (p. 5-14) heads its short-field table with the speeds: lift-off 51 KIAS and 56 KIAS at
+  // 50 ft, 2550 lb, flaps 10. The harness rotates at 45 KIAS to 11° (its convention), so the lift-off
+  // speed carries the pilot's rotation; ±10% is the band that still catches a stall-speed or CL error.
+  // Measured (validator, 2026-11-05): flightModel.js 53.4 KIAS (+4.7%), JSBSim 55.2 (+8.2%).
+  it('lifts off near 51 KIAS, flaps 10, 2550 lb, sea level (POH Fig. 5-5 table speeds, ±10%)', () => {
+    const r = shortFieldTakeoff(c172, 0, 0);
+    within(r.liftoffKts, 51, 0.1);
+  });
+
   // POH Fig. 5-11 (p. 5-23), 2550 lb, flaps 30°, power off, maximum braking, paved level dry
   // runway, zero wind, 61 KIAS at 50 ft, short-field technique (Section 4). Sea level,
   // interpolated to ISA 15 °C: ground roll (565 + 585) / 2 = 575 ft, total over a 50 ft
