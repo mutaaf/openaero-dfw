@@ -1,8 +1,8 @@
 ---
 id: 0160
 title: A check that every KNOWN GAP card names a live backlog ticket
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: S
 lens: tech-health
 created: 2026-11-05
