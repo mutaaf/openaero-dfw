@@ -1,8 +1,8 @@
 ---
 id: 0163
 title: The F-16 flies its final on-speed, 13° AoA, as its HUD bracket asks
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: authenticity
 created: 2026-11-06
