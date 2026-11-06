@@ -9,10 +9,18 @@
 //  - TP-1538: Nguyen et al., NASA Technical Paper 1538 (1979), Simulator Study of
 //    Stall/Post-Stall Characteristics of a Fighter Airplane With Relaxed Longitudinal Static
 //    Stability (the F-16's wind-tunnel data), https://ntrs.nasa.gov/citations/19800005879
+//  - TM-2014-218514: Le Vie, NASA/TM-2014-218514 (2014), Review of Research on Angle-of-Attack
+//    Indicator Effectiveness, §4.2 p. 18 (quoting T.O. GR1F-16CJ-1, 2002): with the gear down
+//    the HUD's AoA bracket reads 11° at its top, 13° in its middle, 15° at its bottom,
+//    https://ntrs.nasa.gov/citations/20140011419
 //
 // What the open data does not cover, so there is no card for it (gaps, not guesses):
-//  - climb rate, turn rate, takeoff and landing distances, approach speeds: all in the
-//    restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited. (Roll rate is the
+//  - climb rate, takeoff and landing distances, lift-off and approach speeds: all in the
+//    restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited. A search for an open
+//    lift-off speed or takeoff roll at a stated weight (NTRS, DTIC, af.mil; 0155) found only
+//    forum and blog figures, so there is no takeoff card. The approach *angle of attack* is
+//    open (TM-2014-218514 below) and carded: the speed it gives depends on a weight the open
+//    data does not state, so the card checks the AoA, not a speed. (Roll rate is the
 //    exception: TP-1538 App. A gives the roll-rate command's 308°/s limit, carded below, 0153.)
 //  - top speed: USAF gives "Mach 2 at altitude". The model has supersonic wave drag (0133), but
 //    its afterburner thrust keeps growing with Mach, so the Mach 2 card below is a KNOWN GAP
@@ -36,7 +44,9 @@ import { M_TO_FT, DEG_TO_RAD, RAD_TO_DEG, KTS_TO_MPS } from '../../src/constants
 import { fbwPushLimit } from '../../src/fbw.js';
 import { liftCoefficient, stallAoaDeg, stallSpeedKts } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
-import { makeBody, fly, attitude, vsFpm, loadFactorMeter, steadyRoll } from './harness.js';
+import { makeBody, fly, attitude, vsFpm, loadFactorMeter, steadyRoll, speedHoldPilot } from './harness.js';
+import { trimThrottle } from '../../src/flightModel.js';
+import { airAt } from '../../src/atmosphere.js';
 import { checkLevelTurn } from './turnCard.js';
 import { checkStallInTurn } from './stallTurnCard.js';
 
@@ -539,5 +549,39 @@ describe('F-16C full-stick roll rate vs NASA TP-1538 (tickets 0153, 0156)', () =
     expect(r.betaWindowDeg).toBeLessThan(3);
     within(r.rateDegS, ref, 0.25);
     expect(r.rateDegS).toBeLessThan(0.6 * 308);
+  });
+});
+
+// The approach (0155): the F-16 is flown on final by angle of attack, the flight path marker in
+// the middle of the HUD's gear-down AoA bracket, 13° (11° top, 15° bottom; TM-2014-218514).
+// The card flies the game's own final as main.js spawns it (Vref + 5 = 153 KIAS, flapsIndex 2,
+// gear down, the spec's 12 t) on a held 3° path, and reads the AoA the model needs there. It
+// sits at ~6°, under the bracket: the generic +0.28 CL per flap notch (aero.js flapDeltaCl,
+// +0.56 at notch 2) carries half the weight. At notch 2 the model would need 13° at ~131 KIAS (autopilot.js trimAoaDeg, power off).
+// KNOWN GAP 0163; its fix (flaperon lift with the gear down, not the notch rule) promotes it.
+describe('F-16C on-speed approach vs the HUD AoA bracket (NASA/TM-2014-218514; 0155)', () => {
+  const approach = () => {
+    const kts = f16.vrefKts + 5, flaps = 2, altM = 1500;
+    const b = makeBody(f16, { kts, altM, flaps, gearDown: true });
+    b.throttle = b.engineN = trimThrottle(f16, kts * KTS_TO_MPS, flaps, -3, true, airAt(altM));
+    const speed = speedHoldPilot(() => kts);
+    const gammaDeg = (bb) => Math.atan2(bb.vel.y, Math.hypot(bb.vel.x, bb.vel.z)) * RAD_TO_DEG;
+    // Speed on the stick, the 3° path on a slow throttle trim (a back-side pilot).
+    const pilot = (bb, dt) => { speed(bb, dt); bb.throttle = Math.max(0, Math.min(1, bb.throttle - (gammaDeg(bb) + 3) * 0.006 * dt)); };
+    fly(b, f16, 90, pilot);
+    let aoa = 0, gamma = 0, ias = 0, n = 0;
+    fly(b, f16, 15, (bb, dt) => { pilot(bb, dt); aoa += bb.aoaDeg; gamma += gammaDeg(bb); ias += bb.iasKts; n++; });
+    return { kts, aoaDeg: aoa / n, gammaDeg: gamma / n, iasKts: ias / n };
+  };
+  it('the card\'s pilot flies the game\'s final: 153 KIAS (±2 kt) on a 3° path (±0.5°)', () => {
+    const r = approach();
+    console.log(`[f16] final at ${r.iasKts.toFixed(1)} KIAS, path ${r.gammaDeg.toFixed(2)}°: α ${r.aoaDeg.toFixed(2)}° (HUD bracket 11-15°, on-speed 13°)`);
+    expect(Math.abs(r.iasKts - r.kts)).toBeLessThan(2);
+    expect(Math.abs(r.gammaDeg + 3)).toBeLessThan(0.5);
+  });
+  it.fails('KNOWN GAP (0163): on the game\'s final (153 KIAS, flaps 2, gear down, 12 t) the AoA is inside the HUD bracket, 11-15° (model: ~6°)', () => {
+    const r = approach();
+    expect(r.aoaDeg).toBeGreaterThanOrEqual(11);
+    expect(r.aoaDeg).toBeLessThanOrEqual(15);
   });
 });

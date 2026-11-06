@@ -1,12 +1,12 @@
 ---
 id: 0155
 title: F-16 takeoff and approach cards: lift-off and on-speed approach near published AoA and speed
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-05
-pr:
+pr: 202
 ---
 
 ## Why
