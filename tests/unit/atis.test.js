@@ -72,7 +72,7 @@ describe('buildAtis (ticket 0030)', () => {
   it('says calm and variable winds, clear skies and negative temperatures', () => {
     const c = buildAtis(metar('METAR KDFW 162053Z 00000KT 10SM CLR M02/M05 A2992', { wdir: 0, wspd: 0, wgst: null, temp: -2, dewp: -5, altim: 1013.2 }), END, { nowMs: 0 });
     expect(c.speech).toContain('wind calm');
-    expect(c.speech).toContain('sky clear');
+    expect(c.speech).toContain('clear below one two thousand');
     expect(c.speech).toContain('temperature minus two, dew point minus five');
     expect(c.speech).toContain('altimeter two niner niner two');
     expect(c.text).toContain('Temperature -2, dew point -5');
@@ -92,7 +92,7 @@ describe('buildAtis (ticket 0030)', () => {
   });
 
   it('names the departure runway on a takeoff and the field the runway is at', () => {
-    const t = buildAtis(metar('METAR KADS 162053Z 16008KT 10SM SKC 18/03 A3041', { icaoId: 'KADS' }), runwayEnd('KADS', '16'), { nowMs: 0, departing: true });
+    const t = buildAtis(metar('METAR KADS 162053Z 16008KT 10SM SKC 18/03 A3041', { icaoId: 'KADS', wdir: 160, wspd: 8, wgst: null }), runwayEnd('KADS', '16'), { nowMs: 0, departing: true });
     expect(t.speech.startsWith('Addison information')).toBe(true);
     expect(t.speech).toContain('departing runway one six');
     expect(t.text).toContain('Departing runway 16');
@@ -131,5 +131,41 @@ describe('buildAtis (ticket 0030)', () => {
     expect(t.speech).toContain('altimeter two niner niner two');
     expect(t.speech).not.toMatch(/undefined|NaN|null/);
     expect(t.text).not.toMatch(/undefined|NaN|null/);
+  });
+});
+
+// Validation panel (physics/aviation reviewer): 2-9-3's remarks, M/P visibility, +FC, CLR and VV.
+describe('buildAtis, the panel\'s cases (ticket 0030)', () => {
+  const END = runwayEnd('KDFW', '35C');
+  const said = (rawOb, extra = {}) => buildAtis(parseMetar({ icaoId: 'KDFW', obsTime: 1792183980, rawOb, temp: 20, dewp: 10, wdir: 180, wspd: 5, visib: '10+', altim: 1013.2, clouds: [], ...extra }), END, { nowMs: 0 });
+  it('says the remarks\' lightning, cumulonimbus and towering cumulus (2-9-3: always)', () => {
+    const a = said('METAR KDFW 061853Z 22012G22KT 5SM VCTS +TSRA SCT030CB BKN050TCU 28/22 A2975 RMK AO2 LTG DSNT W CB DSNT NW MOV E SLP071');
+    expect(a.speech).toContain('lightning distant west, cumulonimbus distant northwest moving east');
+    expect(a.speech.indexOf('lightning')).toBeLessThan(a.speech.indexOf('temperature'));
+    expect(said('METAR KDFW 061853Z 22012KT 10SM SCT040 28/22 A2975 RMK AO2 TCU DSNT S-SW').speech).toContain('towering cumulus distant south through southwest');
+    expect(said('METAR KDFW 061853Z 22012KT 10SM SCT040 28/22 A2975 RMK AO2 SLP071 T02780222').speech).not.toMatch(/lightning|cumulus/);
+  });
+  it('reads the report\'s visibility, less than and more than, and never says NaN', () => {
+    const m = said('SPECI KDFW 061853Z AUTO 18005KT M1/4SM FZFG VV001 M01/M01 A2992', { visib: 'M1/4' });
+    expect(m.speech).toContain('visibility less than one quarter');
+    expect(m.speech).toContain('indefinite ceiling one hundred');
+    expect(m.text).not.toMatch(/NaN/);
+    expect(said('METAR KDFW 061853Z 18005KT 1 1/2SM BR OVC008 20/19 A2992', { visib: NaN }).speech).toContain('visibility one and one half');
+    expect(said('METAR KDFW 061853Z 18005KT P6SM SKC 20/10 A2992').speech).toContain('visibility more than six');
+  });
+  it('+FC is a tornado or waterspout; CLR is clear below 12,000', () => {
+    expect(said('METAR KDFW 061853Z 18005KT 2SM +FC OVC010 20/19 A2992').speech).toContain('tornado or waterspout');
+    expect(said('METAR KDFW 061853Z 18005KT 10SM CLR 20/10 A2992').speech).toContain('clear below one two thousand');
+  });
+});
+
+describe('buildAtis, a tailwind runway (first-timer panel, ticket 0030)', () => {
+  it('a real ATIS never puts a tailwind runway in use: the mission\'s runway is "your runway", with the tailwind', () => {
+    const south = parseMetar({ icaoId: 'KDFW', obsTime: 1792183980, rawOb: 'METAR KDFW 162053Z 17015KT 10SM SKC 20/10 A2992', wdir: 170, wspd: 15, visib: '10+', altim: 1013.2, clouds: [] });
+    const a = buildAtis(south, runwayEnd('KDFW', '35C'), { nowMs: 0 });
+    expect(a.text).toMatch(/Your runway 35C, tailwind 1[45]/);
+    expect(a.speech).toMatch(/your runway three five center, tailwind one (four|five)/);
+    expect(a.text).not.toContain('Landing runway');
+    expect(buildAtis(south, runwayEnd('KDFW', '17C'), { nowMs: 0 }).text).toContain('Landing runway 17C');
   });
 });

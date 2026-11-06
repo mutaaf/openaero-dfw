@@ -63,9 +63,28 @@ function weatherWords(g) {
   const m = WX.exec(g);
   if (!m || !(m[2] || m[3])) return null;
   const [, pre, desc, phen] = m;
+  if (g === '+FC') return 'tornado or waterspout'; // +FC is a tornado or waterspout, not a heavy funnel cloud
   const words = [desc === 'TS' && 'thunderstorm', pre === '-' && 'light', pre === '+' && 'heavy', DESC[desc],
     phen.match(/../g)?.map((p) => PHEN[p]).join(' '), desc === 'SH' && 'showers', pre === 'VC' && 'in the vicinity'];
   return words.filter(Boolean).join(' ');
+}
+
+const RMK_WORDS = {
+  DSNT: 'distant', VC: 'in the vicinity', OHD: 'overhead', ALQDS: 'all quadrants', MOV: 'moving', AND: 'and',
+  N: 'north', NE: 'northeast', E: 'east', SE: 'southeast', S: 'south', SW: 'southwest', W: 'west', NW: 'northwest',
+};
+const RMK_HEAD = /^(?:(?:OCNL|FRQ|CONS)?LTG(?:IC|CG|CC|CA)*|CB|TCU)$/;
+export function remarkWords(raw) {
+  const r = String(raw ?? '').split(/ RMK /)[1];
+  if (!r) return [];
+  const out = [];
+  let cur = null;
+  for (const g of r.split(/\s+/)) {
+    if (RMK_HEAD.test(g)) { cur = [g.includes('LTG') ? 'lightning' : CLOUD[g][1]]; out.push(cur); continue; }
+    const words = cur && g.split('-').map((p) => RMK_WORDS[p]);
+    if (words && words.every(Boolean)) cur.push(words.join(' through ')); else cur = null;
+  }
+  return out.map((w) => w.join(' '));
 }
 
 export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {}) {
@@ -96,9 +115,14 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
     text.push(`Wind ${d[0]} at ${kts}${gust ? ` gusts ${gust}` : ''}`);
   }
 
-  const vis = visibility(Math.max(0, Number(wx.visibilitySm ?? 10)));
-  say.push(`visibility ${vis[1]}`);
-  text.push(`Visibility ${vis[0]}`);
+  // The report's SM group (M1/4SM: less than a quarter; P6SM: more than six), else the parsed miles.
+  const vi = groups.findIndex((g) => /^[MP]?\d+(?:\/\d+)?SM$/.test(g));
+  const vg = vi < 0 ? null : `${vi > 0 && /^\d+$/.test(groups[vi - 1]) ? `${groups[vi - 1]} ` : ''}${groups[vi]}`;
+  const vq = vg ? { M: ['less than ', 'Less than '], P: ['more than ', 'More than '] }[vg.replace(/^\d+ /, '')[0]] : null;
+  const sm = vg ? vg.replace(/[MP]|SM/g, '').split(' ').reduce((a, p) => a + (p.includes('/') ? p.split('/')[0] / p.split('/')[1] : Number(p)), 0) : Number(wx.visibilitySm);
+  const vis = visibility(Number.isFinite(sm) ? Math.max(0, sm) : 10);
+  say.push(`visibility ${vq ? vq[0] : ''}${vis[1]}`);
+  text.push(`Visibility ${vq ? vq[0] : ''}${vis[0]}`);
 
   const wxWords = groups.slice(tg ? groups.indexOf(tg.input) + 1 : 0).map(weatherWords).filter(Boolean);
   if (wxWords.length) {
@@ -113,7 +137,7 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
   for (const [, cover, base, cloud] of sky) {
     const ft = Number(base) * 100;
     let s, t;
-    if (cover === 'VV') { s = `vertical visibility ${spokenHeight(ft)}`; t = `vertical visibility ${comma(ft)}`; ceiling = true; }
+    if (cover === 'VV') { s = `indefinite ceiling ${spokenHeight(ft)}`; t = `indefinite ceiling ${comma(ft)}`; ceiling = true; }
     else if (cover === 'FEW') { s = `few clouds at ${spokenHeight(ft)}`; t = `few ${comma(ft)}`; }
     else if (cover === 'SCT') { s = `${spokenHeight(ft)} scattered`; t = `${comma(ft)} scattered`; }
     else {
@@ -126,10 +150,19 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
     skySay.push(s);
     skyText.push(t);
   }
-  if (!sky.length && groups.some((g) => /^(CLR|SKC|NSC|NCD)$/.test(g))) { skySay.push('sky clear'); skyText.push('sky clear'); }
+  // CLR is an automated station's "no clouds below 12,000 ft", not a clear sky.
+  if (!sky.length && groups.includes('CLR')) { skySay.push('clear below one two thousand'); skyText.push('clear below 12,000'); }
+  else if (!sky.length && groups.some((g) => /^(SKC|NSC|NCD)$/.test(g))) { skySay.push('sky clear'); skyText.push('sky clear'); }
   if (skySay.length) {
     say.push(skySay.join(', '));
     text.push(skyText.join(', ').replace(/^./, (c) => c.toUpperCase()));
+  }
+
+  // 2-9-3: always the remarks' lightning, cumulonimbus and towering cumulus ("LTG DSNT W", "CB DSNT NW MOV E").
+  const rmk = remarkWords(raw);
+  if (rmk.length) {
+    say.push(rmk.join(', '));
+    text.push(rmk.join(', ').replace(/^./, (c) => c.toUpperCase()));
   }
 
   // Temperature / dew point: the report's group (M = minus), else the parsed temperature.
@@ -150,9 +183,16 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
 
   if (end) {
     const [, num, side] = /^(\d+)([LCR]?)$/.exec(end.ident) ?? [, end.ident, ''];
-    const verb = departing ? 'departing' : 'landing';
-    say.push(`${verb} runway ${spokenDigits(num)}${side ? ` ${SIDE[side]}` : ''}`);
-    text.push(`${departing ? 'Departing' : 'Landing'} runway ${end.ident}`);
+    const rwy = `runway ${spokenDigits(num)}${side ? ` ${SIDE[side]}` : ''}`;
+    // A real ATIS never puts a tailwind runway in use; the mission's runway is fixed, so say it is yours, and the tailwind.
+    const tw = kts && wx.windDirDeg != null ? Math.round(-kts * Math.cos((wx.windDirDeg - end.hdgT) * Math.PI / 180)) : 0;
+    if (tw > 2) {
+      say.push(`your ${rwy}, tailwind ${spokenDigits(tw)}`);
+      text.push(`Your runway ${end.ident}, tailwind ${tw}`);
+    } else {
+      say.push(`${departing ? 'departing' : 'landing'} ${rwy}`);
+      text.push(`${departing ? 'Departing' : 'Landing'} runway ${end.ident}`);
+    }
   }
   say.push(`advise on initial contact you have information ${letterWord}`);
   text.push(`Advise you have ${letterWord.toUpperCase()}`);
@@ -168,24 +208,30 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
   };
 }
 
-// The panel. Shown for HOLD_MS after Start flight (spoken on a ground start only, so it never talks
-// over the landing coach on a final), and again, spoken, from #btnAtis. ✕, a tap on it or Esc closes it.
+// The panel. Pilot sees it after Start flight (not Kid or Learner: ATIS words are for pilots; not on a phone held
+// sideways, where it would sit over the Menu and the top bar); every level opens it from #btnAtis in the weather
+// ribbon. It is spoken only when asked for (the ATIS button), and only when no coach is talking: on the ground
+// without a coached takeoff or drill, or above 1,000 ft (the landing coach, the gate and the tutor speak lower).
+// The chunk owns its utterance (audio.js's voice, at speaking pace), so closing the panel or Sound OFF stops it
+// alone, never a callout; the panel stays up while it speaks and for HOLD_MS. It sits under the header and under
+// the coach card when that card is in its top slot (hudLayout.js coachOverHud), and follows new weather while up.
 export const HOLD_MS = 12000;
-let timer = 0, bound = false, spoke = 0;
-export function showAtis(sim, audio, speak = !!sim.onGround) {
+const SHORT_SIDEWAYS = '(orientation: landscape) and (max-height: 500px)';
+let timer = 0, poll = 0, bound = false, utter = null, shownWx = null;
+export function showAtis(sim, audio, asked = false) {
   const el = document.getElementById('atis');
   if (!el) return;
-  const close = () => {
-    el.classList.add('hidden');
-    clearTimeout(timer);
-    // Cut the briefing's own voice short, not a callout that started after it.
-    if (Date.now() - spoke < 30000) { try { window.speechSynthesis?.cancel(); } catch { /* best-effort */ } }
-    spoke = 0;
+  const hide = () => { el.classList.add('hidden'); clearTimeout(timer); clearInterval(poll); };
+  const hush = () => {
+    try { if (utter && window.speechSynthesis?.speaking) window.speechSynthesis.cancel(); } catch { /* best-effort */ }
+    utter = null;
   };
   if (!bound) {
     bound = true;
-    el.addEventListener('click', close);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el.classList.contains('hidden')) close(); });
+    el.addEventListener('click', () => { hush(); hide(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (utter || !el.classList.contains('hidden'))) { hush(); hide(); } });
+    // Sound OFF (audio.js mute leaves speech alone): stop the briefing's voice.
+    document.getElementById('btnAudio')?.addEventListener('click', () => { if (!sim.audioEnabled) hush(); });
     const btn = document.getElementById('btnAtis');
     btn?.classList.remove('hidden');
     btn?.addEventListener('click', () => {
@@ -194,13 +240,41 @@ export function showAtis(sim, audio, speak = !!sim.onGround) {
       showAtis(sim, audio, true);
     });
   }
-  const a = buildAtis(sim.wx, sim.activeEnd, { departing: sim.loadedMission?.kind === 'takeoff' && sim.onGround });
-  el.querySelector('[data-atis-src]').textContent = a.source;
-  el.toggleAttribute('data-live', a.live);
-  el.querySelector('[data-atis-text]').textContent = a.lines.join(' · ');
+  if (!asked && (sim.assist !== 'pilot' || window.matchMedia?.(SHORT_SIDEWAYS).matches)) return null;
+  const render = () => {
+    shownWx = sim.wx;
+    const a = buildAtis(sim.wx, sim.activeEnd, { departing: sim.loadedMission?.kind === 'takeoff' && sim.onGround });
+    el.querySelector('[data-atis-src]').textContent = a.source;
+    el.toggleAttribute('data-live', a.live);
+    el.querySelector('[data-atis-text]').textContent = a.lines.join(' · ');
+    return a;
+  };
+  const a = render();
+  el.style.top = '';
   el.classList.remove('hidden');
+  if (!window.matchMedia?.(SHORT_SIDEWAYS).matches) {
+    const below = (id) => { const r = document.getElementById(id)?.getBoundingClientRect(); return r && r.height ? r.bottom : 0; };
+    const coach = document.getElementById('coach');
+    const coachTop = coach?.classList.contains('coach-top') && !coach.classList.contains('hidden') ? below('coach') : 0;
+    el.style.top = `${Math.max(below('phoneHeader'), coachTop) + 6}px`;
+  }
   clearTimeout(timer);
-  timer = setTimeout(() => el.classList.add('hidden'), HOLD_MS);
-  if (speak && audio?.teach?.(a.speech)) spoke = Date.now();
+  clearInterval(poll);
+  timer = setTimeout(function wait() { if (utter) timer = setTimeout(wait, 1000); else hide(); }, HOLD_MS);
+  poll = setInterval(() => { if (sim.wx !== shownWx) render(); }, 1000); // a live METAR that lands after Start flight
+  const quiet = sim.onGround ? !(sim.toCoach || sim.rto || sim.engineOut) : sim.aglFt > 1000;
+  const synth = window.speechSynthesis;
+  hush();
+  if (asked && quiet && audio?.started && sim.audioEnabled && !sim.paused && synth && typeof SpeechSynthesisUtterance !== 'undefined') {
+    try {
+      const u = new SpeechSynthesisUtterance(a.speech);
+      u.rate = 1.1;
+      u.pitch = 0.75;
+      u.volume = 0.9;
+      u.onend = u.onerror = () => { if (utter === u) utter = null; };
+      utter = u;
+      synth.speak(u);
+    } catch { utter = null; }
+  }
   return a;
 }

@@ -402,11 +402,14 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
 src/atis.js         ATIS-style briefing (0030, lazy chunk loaded on Start flight): buildAtis (pure) says the flown METAR
                     as FAA JO 7110.65 para 2-9-3 lists it (field, letter by the observation's UTC hour, time, wind magnetic to
                     10° (its own copy of magvar.js's 2.7°, pinned by a unit test: importing magvar.js split it out of boot),
-                    visibility, weather, sky with CB/TCU, temp/dew, altimeter, landing or departing runway) with 2-4-17's numbers
-                    ("niner"); time, sky, temp/dew and altimeter read from the raw report. #atis under the top bar (a phone held
-                    sideways: top-left over the top bar), 12 s or a tap/Esc; spoken through audio.teach on a ground start only
-                    (never over the coach on a final), and from #btnAtis in the weather ribbon. Labelled "not the real
-                    broadcast"; SCENARIO on the offline weather
+                    visibility (the raw SM group: less/more than), weather (+FC a tornado), sky (CLR "clear below 12,000", VV an
+                    indefinite ceiling, CB/TCU), the remarks' lightning/CB/TCU, temp/dew, altimeter, landing or departing runway,
+                    "your runway, tailwind N" when the mission's runway has one) with 2-4-17's numbers ("niner"). #atis: Pilot
+                    sees it after Start flight (not Kid/Learner, not a phone held sideways); #btnAtis at the weather ribbon's
+                    right end opens it at any level. Placed under #phoneHeader and a .coach-top coach card; hidden under the
+                    menu sheet; re-rendered when sim.wx changes. Spoken only from the button and only when no coach talks (ground
+                    without a coached takeoff/drill, or above 1,000 ft), its own utterance, so a tap/Esc/Sound OFF stops it alone.
+                    Labelled "not the real broadcast"; SCENARIO on the offline weather
 src/atmosphere.js   ICAO standard atmosphere + the METAR's temperature/altimeter: density,
                     IAS ↔ TAS, speed of sound (pure, tested against the ICAO table); densityAltitudeFt
                     (0111: the FAA-H-8083-25 rule, display only) for the start screen's #txtDensityAlt line
