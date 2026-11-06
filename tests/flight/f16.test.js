@@ -10,7 +10,7 @@
 //    Stall/Post-Stall Characteristics of a Fighter Airplane With Relaxed Longitudinal Static
 //    Stability (the F-16's wind-tunnel data), https://ntrs.nasa.gov/citations/19800005879
 //  - TM-2014-218514: Le Vie, NASA/TM-2014-218514 (2014), Review of Research on Angle-of-Attack
-//    Indicator Effectiveness, §4.2 p. 18 (quoting T.O. GR1F-16CJ-1, 2002): with the gear down
+//    Indicator Effectiveness, §4.2 p. 19 (quoting T.O. GR1F-16CJ-1, 2002): with the gear down
 //    the HUD's AoA bracket reads 11° at its top, 13° in its middle, 15° at its bottom,
 //    https://ntrs.nasa.gov/citations/20140011419
 //
@@ -569,15 +569,17 @@ describe('F-16C on-speed approach vs the HUD AoA bracket (NASA/TM-2014-218514; 0
     // Speed on the stick, the 3° path on a slow throttle trim (a back-side pilot).
     const pilot = (bb, dt) => { speed(bb, dt); bb.throttle = Math.max(0, Math.min(1, bb.throttle - (gammaDeg(bb) + 3) * 0.006 * dt)); };
     fly(b, f16, 90, pilot);
-    let aoa = 0, gamma = 0, ias = 0, n = 0;
-    fly(b, f16, 15, (bb, dt) => { pilot(bb, dt); aoa += bb.aoaDeg; gamma += gammaDeg(bb); ias += bb.iasKts; n++; });
-    return { kts, aoaDeg: aoa / n, gammaDeg: gamma / n, iasKts: ias / n };
+    // Averaged over 45 s, more than one phugoid (~37 s at 153 KIAS), with the worst path error kept.
+    let aoa = 0, gamma = 0, ias = 0, n = 0, worst = 0;
+    fly(b, f16, 45, (bb, dt) => { pilot(bb, dt); const g = gammaDeg(bb); aoa += bb.aoaDeg; gamma += g; ias += bb.iasKts; n++; worst = Math.max(worst, Math.abs(g + 3)); });
+    return { kts, aoaDeg: aoa / n, gammaDeg: gamma / n, iasKts: ias / n, worstPathErrDeg: worst };
   };
-  it('the card\'s pilot flies the game\'s final: 153 KIAS (±2 kt) on a 3° path (±0.5°)', () => {
+  it('the card\'s pilot flies the game\'s final: 153 KIAS (±2 kt) on a 3° path (mean ±0.5°, never more than 0.6° off)', () => {
     const r = approach();
-    console.log(`[f16] final at ${r.iasKts.toFixed(1)} KIAS, path ${r.gammaDeg.toFixed(2)}°: α ${r.aoaDeg.toFixed(2)}° (HUD bracket 11-15°, on-speed 13°)`);
+    console.log(`[f16] final at ${r.iasKts.toFixed(1)} KIAS, path ${r.gammaDeg.toFixed(2)}° (worst ${r.worstPathErrDeg.toFixed(2)}° off): α ${r.aoaDeg.toFixed(2)}° (HUD bracket 11-15°, on-speed 13°)`);
     expect(Math.abs(r.iasKts - r.kts)).toBeLessThan(2);
     expect(Math.abs(r.gammaDeg + 3)).toBeLessThan(0.5);
+    expect(r.worstPathErrDeg).toBeLessThan(0.6);
   });
   it.fails('KNOWN GAP (0163): on the game\'s final (153 KIAS, flaps 2, gear down, 12 t) the AoA is inside the HUD bracket, 11-15° (model: ~6°)', () => {
     const r = approach();
