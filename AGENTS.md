@@ -291,12 +291,15 @@ src/nightGround.js  shader patch on the ground's MeshBasicMaterials (terrainLod,
 src/runwayLights.js lazy chunk: edge/centreline/threshold/end lights and ALSF-2/MALSR approach
                     lights with sequenced flashers, one Points draw (layout pure, tested); on at night or under 5 SM
                     (its update). Re-exports landingLight.js, so the landing light shares its chunk (no boot name)
-src/landingLight.js the landing light (0076, in runwayLights.js's chunk): a ground-conforming grid over the beam's footprint
-                    (terrain.js heights) drawn twice, dst · (1 + k) (the ground's own colour) and k · PAVEMENT added (the
-                    near-black runway decals), k = gain · cone · cos(incidence) / r² (poolK, footprint: pure, tested), gain
-                    fading in with the city lights (0 by day: hidden); a faint beam cone outside the cockpit view. Per-aircraft
-                    lamp (LAMPS: placement, aim, spread; approximate) here, not in boot aircraft.js. On by default; off climbing
-                    through 10,000 ft AGL, on descending through it (AIM 4-3-23); L or the menu's #btnLandLight; not stored.
+src/landingLight.js the landing light (0076, in runwayLights.js's chunk): a grid over the beam's footprint on terrain.js heights
+                    (lifted 0.3 m + 0.4% of the distance over the coarser drawn tiles), drawn twice: dst · (1 + k) (the ground's colour)
+                    and k · PAVEMENT added (the near-black runway decals); k = gain · cone · cos(incidence) / r², a display gain on the
+                    sRGB frame tuned by eye (poolK, FRAG, footprint, lampAxis: pure, tested), faded by the scene fog both ways;
+                    lampGain = GAIN · uNight⁴ (nothing while the sunset sky is bright, 0 by day: hidden). Re-laid only when the lamp
+                    moves past the grid's margins; no per-frame allocation. A faint beam cone in outside views and the replay. LAMPS
+                    (placement, aim for the landing attitude, spread; approximate; the F-16's on the nose gear) here, not in boot
+                    aircraft.js. On at every new flight; off climbing through 10,000 ft MSL, on descending (AIM 4-3-23 encourages
+                    them below 10,000 ft); L (not in a form field) or the menu's #btnLandLight (💡; "Landing light" from lg); not stored.
                     ?debug: window.openaeroLandingLight (as runwayLights.js/windsock.js set their own ?debug handles)
 src/windsock.js     wind cones (0027, lazy chunk after boot): one beside every runway end's touchdown zone
                     (~1,000 ft in, ~300 ft left, clear of every runway), streaming downwind in its own field's

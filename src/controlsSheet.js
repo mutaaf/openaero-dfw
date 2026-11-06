@@ -50,6 +50,7 @@ export const TOUCH = [
   { input: 'BRAKES', does: 'Brakes on / off', ids: ['touchBrakes'] },
   { input: 'ILS AUTO / REV', does: 'ILS autoland; REV on the 737 on the ground: reverse thrust', ids: ['touchIls'] },
   { input: '☰ Menu', does: 'Pause, camera, sound, missions, reset' },
+  { input: '💡 ON / OFF (in ☰ Menu)', does: 'Landing light: lights the runway ahead at night' },
 ];
 
 // A touch screen reads its own controls first.
