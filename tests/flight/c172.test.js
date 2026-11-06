@@ -40,7 +40,8 @@ function stallKts(flaps) {
   return kts;
 }
 
-const rocFpm = (altM) => settle(makeBody(c172, { kts: 74, altM, throttle: 1 }), c172, 10, speedHoldPilot(() => 74), vsFpm, 60);
+// Flown at POH Fig. 5-6's climb speed for the altitude: 74 KIAS at sea level, 72 KIAS from 8,000 ft up.
+const rocFpm = (altM, kts = 74) => settle(makeBody(c172, { kts, altM, throttle: 1 }), c172, 10, speedHoldPilot(() => kts), vsFpm, 60);
 
 // JSBSim's known gaps (measured, PR #48):
 //  - lift-off 55.2 kt (band edge 55.08, so a small fix promotes the card): the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
@@ -173,8 +174,10 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
   // POH Fig. 5-6 at 10,000 ft: 360 fpm at −20 °C, 300 at 0 °C → 315 fpm at ISA (−4.8 °C).
   // Both models climb ~279 here (−11%) since 0099's friction lapse: the POH's curve bends down
   // above 10,000 ft more than any single power lapse does, so this card and the ceiling share it.
-  it('climbs about 315 fpm at 10,000 ft, ISA (POH, ±15%)', () => {
-    within(rocFpm(3048), 315, 0.15);
+  // Fig. 5-6's climb speed column: 72 KIAS at 10,000 ft (74 at sea level), so the card flies 72
+  // (2026-11-06; 280 fpm flightModel.js, 275 JSBSim; at 74 it was 279 / 278).
+  it('climbs about 315 fpm at 10,000 ft, ISA, at 72 KIAS (POH Fig. 5-6, ±15%)', () => {
+    within(rocFpm(3048, 72), 315, 0.15);
   });
 
   // The POH's Section 1 specifications give a service ceiling of 14,000 ft, the altitude where
@@ -243,6 +246,15 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 // not below it; JSBSim's prop is not yet diagnosed. KNOWN GAP (0157). A mutation (thrust falling
 // from 3,000 N static to 1,700 N at 50 m/s) turned vxGradient and vyPeak green, but not vxPeak, and
 // took the 729 fpm Vy card out of its band: the shape needs a source, not a guess.
+// 2026-11-06 (Builder, 0157 not shipped): with this drag polar the POH's own numbers bound the shape.
+// The best angle at 62 needs T(62 KIAS) more than T(68) by ~35 N and T(74) by ~40 N. A small hump does
+// it, [0, 2070] [20, 2160] [28, 2195] [32, 2200] [35, 2148] [38, 2105] with the table above 38 m/s
+// unchanged: vxGradient and vxPeak go green (62: 9.66%, 56: 8.99, 68: 9.48, 74: 9.11) and every other
+// flightModel.js card passes except the 15 kt crosswind takeoff. That card's "wind is felt" check (mean
+// pedal over the whole roll < -0.1) reads -0.1006 today, and the quicker run through 40-60 KIAS takes it
+// to -0.098 (steady pedal still -0.18). The best rate at 74 also needs thrust falling ~22 N per m/s
+// through 40-42 m/s (74 to 80 KIAS), and at 10,000 ft that costs the 315 fpm card ~15-20 fpm
+// (it read 260-265 against a 268 floor). Neither was changed: see the ticket.
 const climbAt = (kts) => {
   const b = makeBody(c172, { kts, altM: 500 / M_TO_FT, throttle: 1 });
   const pilot = speedHoldPilot(() => kts);
