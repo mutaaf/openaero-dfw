@@ -9,6 +9,9 @@ created: 2026-10-17
 pr:
 ---
 
+## Note (2026-11-06 groom)
+Assist level and clean view are already remembered (main.js loadAssist/loadCleanView); this ticket now covers sound, camera and last mission only.
+
 ## Why
 Only personal bests are persisted today (`src/landing.js`). Every visit the player re-picks
 the mission, re-enables sound and re-selects their camera. A replay-worthy game should
