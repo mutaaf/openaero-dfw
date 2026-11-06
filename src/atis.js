@@ -8,7 +8,7 @@
 // magnetic (2-9-3's note: the ASOS's MAG WND), the METAR's true: magvar.js's variation. The letter follows the
 // observation's UTC hour, so it is stable and steps Alfa..Zulu and round again. Never the real broadcast:
 // the panel says so, and "SCENARIO" when the weather is weather.js's offline fallback.
-// showAtis puts it in #atis (index.html) and speaks it through audio.js (the sound checkbox, no voice
+// showAtis puts it in #atis (index.html) and speaks it, when asked, with audio.js's voice settings (the sound toggle; no voice
 // without speechSynthesis); #btnAtis in the weather ribbon opens it again.
 // magvar.js's MAG_VAR_DEG, inlined: importing magvar.js from a lazy chunk splits it out of the boot chunk
 // (+110 B at boot, AGENTS.md § 5). tests/unit/atis.test.js holds the two equal.
@@ -218,7 +218,7 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
 export const HOLD_MS = 12000;
 const SHORT_SIDEWAYS = '(orientation: landscape) and (max-height: 500px)';
 let timer = 0, poll = 0, bound = false, utter = null, shownWx = null;
-export function showAtis(sim, audio, asked = false) {
+export function showAtis(sim, asked = false) {
   const el = document.getElementById('atis');
   if (!el) return;
   const hide = () => { el.classList.add('hidden'); clearTimeout(timer); clearInterval(poll); };
@@ -237,7 +237,7 @@ export function showAtis(sim, audio, asked = false) {
     btn?.addEventListener('click', () => {
       // The ribbon is in the phone's ☰ Menu sheet: fold it (main.js setHudMenu, through its button) to show the panel.
       if (document.getElementById('hudMenu')?.classList.contains('open')) document.getElementById('btnMenu')?.click();
-      showAtis(sim, audio, true);
+      showAtis(sim, true);
     });
   }
   if (!asked && (sim.assist !== 'pilot' || window.matchMedia?.(SHORT_SIDEWAYS).matches)) return null;
@@ -265,7 +265,7 @@ export function showAtis(sim, audio, asked = false) {
   const quiet = sim.onGround ? !(sim.toCoach || sim.rto || sim.engineOut) : sim.aglFt > 1000;
   const synth = window.speechSynthesis;
   hush();
-  if (asked && quiet && audio?.started && sim.audioEnabled && !sim.paused && synth && typeof SpeechSynthesisUtterance !== 'undefined') {
+  if (asked && quiet && sim.audioEnabled && !sim.paused && synth && typeof SpeechSynthesisUtterance !== 'undefined') {
     try {
       const u = new SpeechSynthesisUtterance(a.speech);
       u.rate = 1.1;

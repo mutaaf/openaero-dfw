@@ -2859,7 +2859,7 @@ byId('btnStartFlight').addEventListener('click', () => {
   }
   if (byId('chkAutoSound').checked) audio.init();
   applyCoachChoice();
-  import('./atis.js').then((m) => m.showAtis(sim, audio)).catch(() => {}); // the ATIS-style briefing (0030)
+  import('./atis.js').then((m) => m.showAtis(sim)).catch(() => {}); // the ATIS-style briefing (0030)
   if (sim.loadedMission?.kind === 'takeoff') {
     const d = densityAltitudeText();
     showToast(`DA ${d.ft} at ${d.where}${d.thin ? ': thin air, longer roll, weaker climb' : ` (${d.src})`}`, 6000);
