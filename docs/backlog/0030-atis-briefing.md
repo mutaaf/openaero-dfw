@@ -1,12 +1,12 @@
 ---
 id: 0030
 title: A real ATIS-style briefing when you enter the cockpit
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-18
-pr:
+pr: 205
 ---
 
 ## Why

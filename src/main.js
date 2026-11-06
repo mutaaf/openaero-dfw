@@ -1593,7 +1593,7 @@ function syncWeatherUI(dt) {
   byId('txtWindBadge').textContent = windText(wx);
   const dfw = sim.wxByIcao.KDFW || scenarioWeather();
   const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
-  byId('txtFlow').textContent = flow === 'NORTH' ? 'NORTH (RWY 35/36)' : 'SOUTH (RWY 17/18)';
+  byId('txtFlow').textContent = `${flow} (RWY ${flow === 'NORTH' ? '35/36' : '17/18'})`;
   // HUD wind box (0075): components against the active runway only low down, near it.
   const low = sim.activeEnd && nearRunwayForWind(sim.approach, sim.activeEnd.lengthM, sim.aglFt);
   windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind);
@@ -2859,6 +2859,7 @@ byId('btnStartFlight').addEventListener('click', () => {
   }
   if (byId('chkAutoSound').checked) audio.init();
   applyCoachChoice();
+  import('./atis.js').then((m) => m.showAtis(sim)).catch(() => {}); // the ATIS-style briefing (0030)
   if (sim.loadedMission?.kind === 'takeoff') {
     const d = densityAltitudeText();
     showToast(`DA ${d.ft} at ${d.where}${d.thin ? ': thin air, longer roll, weaker climb' : ` (${d.src})`}`, 6000);
