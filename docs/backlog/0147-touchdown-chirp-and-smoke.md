@@ -1,8 +1,8 @@
 ---
 id: 0147
 title: Touchdown you can feel: tyre chirp and a puff of smoke that scale with the sink rate
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: player-feel
 created: 2026-11-01

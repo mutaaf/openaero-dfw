@@ -1,8 +1,8 @@
 ---
 id: 0161
 title: Steep-turn mission: hold 45° bank and your altitude, graded to the FAA test standard
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: content
 created: 2026-11-05
