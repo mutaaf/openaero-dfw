@@ -9,14 +9,14 @@ test.use(FULL_RES);
 const snap = (page) => page.evaluate(() => window.openaeroDebug());
 
 // Mean luminance and the count of bright (lum > 200) pixels in a band of the bare canvas,
-// rows from y0 to y1 (fractions of the height), at full resolution (lights are 2-5 px).
-async function band(page, y0, y1) {
+// rows from y0 to y1 and columns from x0 to x1 (fractions of the size), at full resolution (lights are 2-5 px).
+async function band(page, y0, y1, x0 = 0, x1 = 1) {
   const style = await page.addStyleTag({
     content: 'body * { visibility: hidden !important; } #simCanvas { visibility: visible !important; }',
   });
   const png = await page.locator('#simCanvas').screenshot();
   await style.evaluate((el) => el.remove());
-  return page.evaluate(async ([b64, y0, y1]) => {
+  return page.evaluate(async ([b64, y0, y1, x0, x1]) => {
     const img = new Image();
     img.src = `data:image/png;base64,${b64}`;
     await img.decode();
@@ -25,7 +25,8 @@ async function band(page, y0, y1) {
     const ctx = c.getContext('2d');
     ctx.drawImage(img, 0, 0);
     const top = Math.round(y0 * img.height);
-    const d = ctx.getImageData(0, top, img.width, Math.round(y1 * img.height) - top).data;
+    const left = Math.round(x0 * img.width);
+    const d = ctx.getImageData(left, top, Math.round(x1 * img.width) - left, Math.round(y1 * img.height) - top).data;
     let sum = 0, bright = 0;
     for (let i = 0; i < d.length; i += 4) {
       const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
@@ -33,7 +34,7 @@ async function band(page, y0, y1) {
       if (l > 200) bright++;
     }
     return { mean: sum / (d.length / 4), bright };
-  }, [png.toString('base64'), y0, y1]);
+  }, [png.toString('base64'), y0, y1, x0, x1]);
 }
 
 async function pickTime(page, label) {
@@ -124,4 +125,52 @@ test('the KDAL 31R dusk final flies at dusk; a When? pick during it is the playe
   await page.locator('#missionList .btnMission[data-scenario="kdal_31r_final"]').click();
   await expect.poll(async () => (await snap(page)).mission).toBe('kdal_31r_final');
   expect((await snap(page)).sun.mode).toBe('Noon');
+});
+
+// Ticket 0076: the landing light lights a patch of ground ahead on a night final, and nothing by day.
+// A 737 on 35C's final at ~100 ft (0.15 NM: the 3° path to the aim point), paused so the frames hold
+// still; the lower part of the view (the runway and the ground ahead) with the light on, then off (L).
+async function lightBands(page) {
+  await page.evaluate(() => window.openaeroDebugFinal('KDFW', '35C', 0.15));
+  await expect.poll(async () => (await snap(page)).distM, { timeout: 10_000 }).toBeLessThan(400);
+  await page.locator('#btnPause').click();
+  await expect.poll(async () => (await snap(page)).paused).toBe(true);
+  const agl = (await snap(page)).aglFt;
+  const on = await page.evaluate(() => window.openaeroLandingLight.debug());
+  await page.waitForTimeout(300);
+  const lit = await band(page, 0.6, 0.72, 0.42, 0.58);
+  await page.keyboard.press('KeyL');
+  await expect.poll(() => page.evaluate(() => window.openaeroLandingLight.on)).toBe(false);
+  // The menu says so (the HUD menu's Land light button).
+  await expect(page.locator('#btnLandLight')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#txtLandLight')).toHaveText('OFF');
+  await page.waitForTimeout(300);
+  const dark = await band(page, 0.6, 0.72, 0.42, 0.58);
+  await page.keyboard.press('KeyL'); // back on for the next case
+  await page.locator('#btnPause').click();
+  return { agl, on, lit: lit.mean, dark: dark.mean };
+}
+
+test('the landing light lights the ground ahead at 100 ft on a night final, and nothing at Noon (0076)', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto(`${BASE}?debug`);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  await pressed(page, 'Night').click();
+  await page.locator('#btnStartFlight').click();
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
+  await expect.poll(() => page.evaluate(() => !!window.openaeroLandingLight), { timeout: 15_000 }).toBe(true);
+  const night = await lightBands(page);
+  expect(night.agl).toBeGreaterThan(70);
+  expect(night.agl).toBeLessThan(140);
+  expect(night.on).toMatchObject({ on: true, lit: true });
+  // Measured 2026-11-06 at 1280x720 (82-85 ft): ~98 with the light, ~76 without; the threshold
+  // sits between them. The region is the runway just past the threshold bars.
+  expect(night.lit, JSON.stringify(night)).toBeGreaterThan(night.dark + 10);
+
+  await pickTime(page, 'Day');
+  await expect.poll(async () => (await snap(page)).sky.cityLights, { timeout: 15_000 }).toBe(0);
+  const day = await lightBands(page);
+  expect(day.on).toMatchObject({ on: true, lit: false });
+  expect(Math.abs(day.lit - day.dark), JSON.stringify(day)).toBeLessThan(0.5); // identical (measured 157.28 both)
+  expect(errors).toEqual([]);
 });

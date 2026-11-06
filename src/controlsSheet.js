@@ -21,6 +21,7 @@ export const KEYBOARD = [
   { input: 'C', does: 'Next camera view', codes: ['KeyC'] },
   { input: 'M', does: 'Fly with the mouse on / off', codes: ['KeyM'] },
   { input: 'H', does: 'Show / hide the instrument panels', codes: ['KeyH'] },
+  { input: 'L', does: 'Landing light on / off (it lights the ground ahead at night)', codes: ['KeyL'] },
   { input: '?', does: 'This controls sheet', keys: ['?'] },
   { input: 'Esc', does: 'Close a menu, the ATIS briefing or this sheet', keys: ['Escape'] },
   { input: 'Tab', does: 'Move between buttons in a menu', keys: ['Tab'] },

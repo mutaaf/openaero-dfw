@@ -8,6 +8,8 @@
 // fade in at dusk, and are directional where real fixtures are (thresholds, ends, approach).
 import * as THREE from 'three';
 import { courseVector } from './airports.js';
+// The aircraft's landing light (0076) rides in this chunk: its own would cost the boot chunk a name.
+export { createLandingLight } from './landingLight.js';
 
 const FT = 0.3048;
 export const LIGHT = { edge: 0, centre: 1, threshold: 2, end: 3, approach: 4, flasher: 5 };
@@ -163,7 +165,7 @@ export function createRunwayLights({ runways, endById, heightAt, reducedMotion =
     group.add(points);
     fields.push({ points, g, pos, kind, n });
   }
-  return {
+  const api = {
     points: group,
     count: all.length,
     // Re-seat on the terrain once the elevation grid arrives.
@@ -174,7 +176,9 @@ export function createRunwayLights({ runways, endById, heightAt, reducedMotion =
         g.computeBoundingSphere();
       }
     },
-    update(time, pixelRatio, night, eye) {
+    update(time, pixelRatio, night, eye, visibilitySm = 10) {
+      // On from dusk, and by day in low visibility (under 5 SM), as at the real fields.
+      group.visible = night > 0.02 || visibilitySm < 5;
       uniforms.uTime.value = time;
       uniforms.uPx.value = pixelRatio;
       uniforms.uNight.value = night;
@@ -186,4 +190,6 @@ export function createRunwayLights({ runways, endById, heightAt, reducedMotion =
       }
     },
   };
+  if (globalThis.location && new URLSearchParams(location.search).has('debug')) window.openaeroRunwayLights = api; // e2e: switch them off for a control frame
+  return api;
 }

@@ -1,12 +1,12 @@
 ---
 id: 0076
 title: Landing lights: a lit patch of runway ahead of you on a night final
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-22
-pr:
+pr: 207
 ---
 
 ## Why

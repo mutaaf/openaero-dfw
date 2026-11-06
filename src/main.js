@@ -224,6 +224,7 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 let skyDome = null;
 let runwayLights = null;
 let windsocks = null; // windsock.js (0027), lazy
+let landingLight; // landingLight.js (0076), lazy (in the runway lights' chunk)
 // Landing replay (0019, lazy): the last 30 s at 20 Hz of sim time, REPLAY on the results card.
 let replayLib = null, replayBuf = null, replaying = null;
 let _sockT = 0;
@@ -407,16 +408,14 @@ function buildRunways() {
   scene.add(papiLamps);
 
   // Runway and approach lights (ticket 0011): their own chunk, after boot.
-  import('./runwayLights.js').then(({ createRunwayLights }) => {
+  import('./runwayLights.js').then(({ createRunwayLights, createLandingLight }) => {
     runwayLights = createRunwayLights({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, reducedMotion });
-    scene.add(runwayLights.points);
-    if (debugOverlay) window.openaeroRunwayLights = runwayLights; // e2e: switch them off for a control frame
+    scene.add(runwayLights.points, (landingLight = createLandingLight(sim, () => aircraftRoot, ground.heightAt)).group); // and the landing light (0076)
   }).catch((err) => console.warn('Runway lights unavailable:', err.message));
   // A wind cone by every runway end's touchdown zone, in its field's METAR wind (0027).
   import('./windsock.js').then(({ createWindsocks }) => {
     windsocks = createWindsocks({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, gustAt: gustFactor, surfaceFactor: surfaceWindFactor, reducedMotion });
     scene.add(windsocks.group);
-    if (debugOverlay) window.openaeroWindsocks = windsocks; // e2e: hide them for a control frame
   }).catch((err) => console.warn('Windsocks unavailable:', err.message));
   import('./replay.js').then((m) => { replayLib = m; replayBuf = m.createReplayBuffer(); }).catch(() => {});
 }
@@ -3376,12 +3375,9 @@ function renderLoop(time) {
 function updateSkyAndLights(t) {
   skyDome?.update(camera, { time: t, pixelRatio: renderer.getPixelRatio(), wind: sim.windVec, altitudeM: camera.position.y + REF_ELEV_M });
   const night = nightUniforms.uNight.value;
-  if (runwayLights) {
-    // On from dusk, and by day in low visibility (under 5 SM), as at the real fields.
-    runwayLights.points.visible = night > 0.02 || sim.wx.visibilitySm < 5;
-    runwayLights.update(t, renderer.getPixelRatio(), night, camera.position);
-  }
+  runwayLights?.update(t, renderer.getPixelRatio(), night, camera.position, sim.wx.visibilitySm);
   if (papiLamps) papiLamps.material.size = 5 + 4 * night;
+  landingLight?.update(night);
   // On the sim's clock (frozen when paused), the flown field in the wind the aircraft feels.
   if (windsocks) {
     windsocks.update(sim.simTime, sim.simTime - _sockT, sockWx, camera.position, night, nightUniforms.uGroundTint.value);
@@ -3439,7 +3435,6 @@ window.openaeroDebug = () => {
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
     hudAltCaption: { ..._altCap }, // the altitude tape's MSL / SEA LVL tab (0132, 0140), canvas px
-    runwayScreen: debugScreen?.runwayScreen(sim.activeEnd, camera, simCanvas, ground) ?? null,
     headingDeg: hdg,
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,
@@ -3491,7 +3486,7 @@ window.openaeroDebug = () => {
     landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
     photoreal: photoreal ? photoreal.debugState() : null, // photoreal.js (or its boot stand-in)
-    render: debugScreen?.renderInfo(renderer) ?? null, // ?debug (debugScreen.js): draw calls, triangles
+    ...debugScreen?.screen(sim.activeEnd, camera, simCanvas, ground, renderer), // ?debug (debugScreen.js): runwayScreen, render (draw calls, triangles)
   };
 };
 
