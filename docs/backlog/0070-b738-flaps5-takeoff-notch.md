@@ -15,8 +15,11 @@ AO-2014-162 (VH-VZR) print four performance-tool outputs that agree, scaled to 6
 VR ~145 kt and V2 ~148 kt (V2 − VR 3–4 kt), flap not stated but most likely 1 or 5, what
 line crews use on long runways. The model's only takeoff notch is 10, and Boeing's field
 length card (ACAP §3.3.29, optimum flap) caps how little it can lift: refitted, it flies
-Vr 135 / V2 142. A pilot who knows the jet still sees speeds ~10 kt low. The two cards are
-`it.fails` in `tests/flight/b738.test.js` ("KNOWN GAP (0070)").
+Vr 135 / V2 142. A pilot who knows the jet still sees speeds ~10 kt low. The three cards
+(V2 − Vr, Vr and V2 at 65 t) are `it.fails` in `tests/flight/b738.test.js` ("KNOWN GAP (0070)").
+A fourth points here since 0160: rotating at Vr, the lift-off at the normal 8–9° (NTSB, quoting
+the operator's 737 manual for flaps 1 and 5). It flies flaps 10 today and lifts off at ~7.3°; it
+was filed under 0074 (the struts, shipped), but the figure is for the takeoff flaps this adds.
 
 ## What
 Add a flaps 5 notch to the 737 (`src/aircraft.js` flapDetentsDeg/flapCl/flapCd/
@@ -29,7 +32,9 @@ arrays (`vrefKtsByFlap`, `alphaStallDegByFlap`, `flapCd`), tests/flight FLAPS_* 
 and the e2e flap controls.
 
 ## Acceptance criteria
-- [ ] The two 0070 known-gap cards pass at flaps 5 and are promoted to `it`
+- [ ] The three 0070 speed cards pass at flaps 5 and are promoted to `it`
+- [ ] The lift-off attitude card (8–9° rotating at Vr) flies the new takeoff flap 5 and passes, promoted to `it`
+  (it is the one flaps 10 rotation card that is allowed to move)
 - [ ] The flaps 10 field-length, rotation and engine-out cards (0058) stay green
 - [ ] Landing cards (0057) and every assist/autopilot test unchanged
 - [ ] Works at 390x844 touch and 1280x720 keyboard/mouse (flap control)

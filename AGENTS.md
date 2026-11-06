@@ -28,7 +28,8 @@ V-speeds, today's METAR pushing the aircraft around, GPWS callouts with the real
 0. **Physics you can check.** Every flight-model claim has a flight test card in
    `tests/flight/` against a cited source (POH, manufacturer airport-planning data, FAA
    and NASA references). Known gaps are `it.fails` cards with a ticket; closing one is
-   progress you can measure. Every object that moves in the world (aircraft, gear,
+   progress you can measure (`scripts/check-gaps.mjs` fails the gate on a gap card with
+   no ticket tag, or whose ticket is missing, shipped or dropped). Every object that moves in the world (aircraft, gear,
    control surfaces, ground vehicles, traffic, windsocks) moves by its own physics, not
    by keyframes.
 
@@ -518,7 +519,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 | `npx wrangler dev --local --port 8799` | Build first; serves assets **and** the edge Worker locally (real METARs) |
 | `npm test` | Unit tests (Vitest) |
 | `npm run e2e` | Playwright e2e (builds first) |
-| `npm run check` | **The gate**: backlog validator + unit + build + boot JS budget + e2e. CI runs exactly this. |
+| `npm run check` | **The gate**: backlog validator + unit + known-gap ledger + build + boot JS budget + e2e. CI runs exactly this. |
+| `node scripts/check-gaps.mjs` | The known-gap ledger (0160): every `it.fails` card the last full `npm test` ran (scripts/gap-reporter.mjs records them) is titled `KNOWN GAP (NNNN): ...` and NNNN is an open ticket (proposed, ready, in-progress). Closing a ticket means promoting or retargeting its cards. |
 | `npx playwright test --project=devices --no-deps` | The device-class probe alone (iPhone 15 both ways, iPad Air both ways, iPad Pro 12.9 portrait, Pixel 8, Chromium with emulated touch; touch, 4x CPU throttle, layout + frame time; numbers in `docs/PERF.md`) |
 | `npm run check:fast` | Everything but e2e (budget included), for sandboxes that can't install Playwright browsers. CI still runs the full gate. |
 

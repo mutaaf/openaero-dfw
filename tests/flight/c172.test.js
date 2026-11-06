@@ -28,6 +28,11 @@ import { radioAltitudeM } from '../../src/gear.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
+// A card in a GAPS map (card id → its open ticket) runs as `it.fails` titled KNOWN GAP (ticket),
+// so scripts/check-gaps.mjs can hold the ticket open (0160); otherwise it is a plain `it`.
+const gapCard = (gaps, id) => (gaps.has(id)
+  ? (title, ...rest) => it.fails(`KNOWN GAP (${gaps.get(id)}): ${title}`, ...rest)
+  : it);
 
 // 1 kt/s deceleration at idle, wings level, until the wing passes its stall angle.
 function stallKts(flaps) {
@@ -43,7 +48,7 @@ function stallKts(flaps) {
 // Flown at POH Fig. 5-6's climb speed for the altitude: 74 KIAS at sea level, 72 KIAS from 8,000 ft up.
 const rocFpm = (altM, kts = 74) => settle(makeBody(c172, { kts, altM, throttle: 1 }), c172, 10, speedHoldPilot(() => kts), vsFpm, 60);
 
-// JSBSim's known gaps (measured, PR #48):
+// JSBSim's known gaps (measured, PR #48; ticket 0165):
 //  - lift-off 55.2 kt (band edge 55.08, so a small fix promotes the card): the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
 //    proportional only), so the wing reaches lift-off speed later.
 //
@@ -55,14 +60,14 @@ const rocFpm = (altM, kts = 74) => settle(makeBody(c172, { kts, altM, throttle: 
 // touchdown) were within about 2% of flightModel.js, but every airborne spawn started its engine at
 // 2,283 rpm and ~135 hp whatever the throttle, so the first ~3 s were powered. Now ~751 ft.
 const GAPS = {
-  flightModel: new Set(),
-  jsbsim: new Set(['takeoff']),
+  flightModel: new Map(),
+  jsbsim: new Map([['takeoff', '0165']]),
 };
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
   beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
   afterAll(() => useFdm(null));
-  const card = (id) => (GAPS[model].has(id) ? it.fails : it);
+  const card = (id) => gapCard(GAPS[model], id);
 
   it('stalls clean near 53 KCAS (POH: 48 KIAS / 53 KCAS, ±10%)', () => {
     within(stallKts(0), 53, 0.10);
@@ -268,12 +273,12 @@ const climbAt = (kts) => {
 // If one of these flips green, promote it per 0157. flightModel.js's vyPeak misses by only 13 fpm
 // (687 at 74 vs 700 at 80, a flat curve), so a fix should show a clear peak at 74, not a 1 fpm win.
 const VX_GAPS = {
-  flightModel: new Set(['vxGradient', 'vxPeak', 'vyPeak']),
-  jsbsim: new Set(['vxGradient', 'vxPeak', 'vyPeak']),
+  flightModel: new Map([['vxGradient', '0157'], ['vxPeak', '0157'], ['vyPeak', '0157']]),
+  jsbsim: new Map([['vxGradient', '0157'], ['vxPeak', '0157'], ['vyPeak', '0157']]),
 };
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, POH Section 4 (${model})`, () => {
-  const card = (id) => (VX_GAPS[model].has(id) ? it.fails : it);
+  const card = (id) => gapCard(VX_GAPS[model], id);
   const c = {};
   beforeAll(async () => {
     useFdm(model === 'jsbsim' ? await nodeJsbsim() : null);
@@ -647,7 +652,7 @@ function stallDrill(recover) {
 // was the elevator against damping, so with the stick released at the stall the nose stayed
 // where it was (10.5°) and the wing sank deeper (α 26° after 7 s); JSBSim, flying our C172
 // with Roskam's Cmα −0.89, drops the nose and flies again in ~1 s. Both models now do.
-const STALL_GAPS = { flightModel: new Set(), jsbsim: new Set() };
+const STALL_GAPS = { flightModel: new Map(), jsbsim: new Map() };
 
 // Released at the stall: idle, stick neutral, wings level. Seconds until the wing flies again.
 function releasedAtStall() {
@@ -670,7 +675,7 @@ function releasedAtStall() {
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S stall recovery drill (${model}, ticket 0087)`, () => {
   beforeAll(async () => useFdm(model === 'jsbsim' ? await nodeJsbsim() : null));
   afterAll(() => useFdm(null));
-  const card = (id) => (STALL_GAPS[model].has(id) ? it.fails : it);
+  const card = (id) => gapCard(STALL_GAPS[model], id);
 
   card('release')('released at the stall, the nose drops by itself and the wing flies again within 2 s (static stability, Roskam Cmα)', () => {
     const s = releasedAtStall();

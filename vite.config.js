@@ -64,6 +64,8 @@ export default defineConfig({
   },
   test: {
     include: ['tests/unit/**/*.test.js', 'tests/flight/**/*.test.js'],
+    // The known-gap ledger (0160): records every it.fails card for scripts/check-gaps.mjs.
+    reporters: ['default', './scripts/gap-reporter.mjs'],
     environment: 'node',
   },
 });

@@ -343,10 +343,10 @@ describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticke
   // KNOWN GAP (ticket 0158): the F-16's nose wheel steers ~190°/s at full pedal at landing speed (the 737's ~35°/s), so the
   // rollout's pedal, shared by the nose wheel and the rudder surface, is a few hundredths: 1,041 m off in 25 kt (1,107 m
   // before 0150), and Learner's crabbed touchdown in 20 kt 21.6 m.
-  it.fails('f16 kdfw_35c_final, 25 kt from 90°: on the centreline for 40 s of rollout (KNOWN GAP, 0158)', () => {
+  it.fails('KNOWN GAP (0158): f16 kdfw_35c_final, 25 kt from 90°: on the centreline for 40 s of rollout', () => {
     expect(flyKidFinal('f16', 'kdfw_35c_final', { fromDeg: 90, kts: 25 }, null, null, 40).roll.maxCrossM).toBeLessThan(8);
   });
-  it.fails('f16 kdfw_35c_final, 20 kt from 270°, Learner from 3 m: on the centreline for 40 s of rollout (KNOWN GAP, 0158)', () => {
+  it.fails('KNOWN GAP (0158): f16 kdfw_35c_final, 20 kt from 270°, Learner from 3 m: on the centreline for 40 s of rollout', () => {
     expect(flyKidFinal('f16', 'kdfw_35c_final', { fromDeg: 270, kts: 20 }, null, null, 40, 3).roll.maxCrossM).toBeLessThan(8);
   });
 });
