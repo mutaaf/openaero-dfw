@@ -17,6 +17,8 @@ line crews use on long runways. The model's only takeoff notch is 10, and Boeing
 length card (ACAP §3.3.29, optimum flap) caps how little it can lift: refitted, it flies
 Vr 135 / V2 142. A pilot who knows the jet still sees speeds ~10 kt low. The two cards are
 `it.fails` in `tests/flight/b738.test.js` ("KNOWN GAP (0070)").
+A third card, the lift-off at 8–9° rotating at Vr (NTSB, the operator's 737 manual), points here
+too since 0160: it was filed under 0074 (the struts, shipped), but closing it is this Vr fit.
 
 ## What
 Add a flaps 5 notch to the 737 (`src/aircraft.js` flapDetentsDeg/flapCl/flapCd/
