@@ -23,9 +23,12 @@ lever; its flaperons droop when the gear goes down. At notch 0 the same final is
 ~10.5°.
 
 ## What
-Give the F-16 a cited gear-down flaperon lift increment (TP-1538 Table III / App. B has the
-flaperon's ΔCL with deflection; Stevens & Lewis App. A transcribes the F-16 data) instead of
-the notch rule, and/or a cited approach speed, so the game's final sits in the bracket. Check the
+Give the F-16 a cited gear-down flaperon lift increment instead of the notch rule, and/or a
+cited approach speed, so the game's final sits in the bracket. Candidate sources, not yet read
+for this: TP-1538's flaperon/flap data, if legible (docs/LESSONS.md 0153: its Table III OCR is
+unreadable); the references of NASA/TM-2014-218514. Stevens & Lewis's F-16 model has no
+trailing-edge flap term, so it can't supply one. If no open ΔCL is found, record the gap; never
+fit one to hit 13°. Check the
 Kid/Learner final guides, the coach's speed calls and the takeoff cards still pass.
 
 ## Acceptance criteria

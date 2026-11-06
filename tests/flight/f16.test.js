@@ -19,7 +19,7 @@
 //    restricted T.O.; the game's vrKts 155 and vrefKts 148 are uncited. A search for an open
 //    lift-off speed or takeoff roll at a stated weight (NTRS, DTIC, af.mil; 0155) found only
 //    forum and blog figures, so there is no takeoff card. The approach *angle of attack* is
-//    open (TM-2014-218514 below) and carded: the speed it gives depends on a weight the open
+//    open (TM-2014-218514 above) and carded: the speed it gives depends on a weight the open
 //    data does not state, so the card checks the AoA, not a speed. (Roll rate is the
 //    exception: TP-1538 App. A gives the roll-rate command's 308°/s limit, carded below, 0153.)
 //  - top speed: USAF gives "Mach 2 at altitude". The model has supersonic wave drag (0133), but
