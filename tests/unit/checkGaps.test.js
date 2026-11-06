@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkGaps, gapTickets, unrunFiles } from '../../scripts/check-gaps.mjs';
+import { checkGaps, codeOnly, gapTickets, unrunFiles } from '../../scripts/check-gaps.mjs';
 import { ledgerOf } from '../../scripts/gap-reporter.mjs';
 
 const TICKETS = { '0066': 'proposed', '0143': 'ready', '0150': 'in-progress', '0074': 'shipped', '0090': 'dropped' };
@@ -51,15 +51,32 @@ describe('known-gap ledger (0160)', () => {
     expect(unrunFiles(sources, ['tests/flight/a.test.js', 'tests/flight/b.test.js'])).toEqual([]);
   });
 
+  it('an it.fails in a comment or a string (a fixture) is not a card a run must cover', () => {
+    const sources = {
+      'tests/flight/comment.test.js': "// no it.fails card is filed\n/* nor `it.fails` here */\nit('plain', () => {})",
+      'tests/unit/fixture.test.js': `const s = "it.fails('KNOWN GAP (0066): x')"; const t = 'GAPS.has(id) ? it.fails : it';`,
+      'tests/flight/real.test.js': "it.fails(`KNOWN GAP (0109): flaps ${f}`, () => {}) // it's real",
+      'tests/flight/chained.test.js': "it.concurrent.fails('KNOWN GAP (0109): x', () => {})",
+    };
+    expect(unrunFiles(sources, [])).toEqual(['tests/flight/real.test.js', 'tests/flight/chained.test.js']);
+    expect(codeOnly("it.fails('a // b', fn) // c")).toBe("it.fails('', fn) ");
+  });
+
+  it('names the describe in the table but reads the tag from the test\'s own title', () => {
+    const { rows, problems } = checkGaps([{ file: 'f', title: 'climbs at Vx', fullName: 'KNOWN GAP (0066) > climbs at Vx' }], TICKETS);
+    expect(rows[0]).toMatchObject({ status: 'untagged', title: 'KNOWN GAP (0066) > climbs at Vx' });
+    expect(problems[0]).toMatch(/or file one/);
+  });
+
   it('the reporter keeps only fails-mode tests, with their own titles and files relative to the repo', () => {
-    const t = (name, fails) => ({ name, options: { fails } });
+    const t = (name, fails) => ({ name, fullName: `S > ${name}`, options: { fails } });
     const mod = (path, tests) => ({ moduleId: `${process.cwd()}/${path}`, children: { allTests: () => tests } });
     const ledger = ledgerOf([
       mod('tests/flight/f16.test.js', [t('KNOWN GAP (0066): a', true), t('passes', undefined)]),
       mod('tests/unit/aero.test.js', [t('also passes', false)]),
     ]);
     expect(ledger).toEqual({
-      cards: [{ file: 'tests/flight/f16.test.js', title: 'KNOWN GAP (0066): a' }],
+      cards: [{ file: 'tests/flight/f16.test.js', title: 'KNOWN GAP (0066): a', fullName: 'S > KNOWN GAP (0066): a' }],
       files: ['tests/flight/f16.test.js', 'tests/unit/aero.test.js'],
     });
   });

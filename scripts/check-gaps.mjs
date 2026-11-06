@@ -10,7 +10,7 @@
 // (c172.test.js's `card(id)` over its GAPS maps, titles built in loops). scripts/gap-reporter.mjs
 // writes LEDGER on every `npm test`; run this after it (`npm run check` and `check:fast` do).
 // Exit 1 with the table and the problems.
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,33 +35,41 @@ export function readTickets(dir = 'docs/backlog') {
   return out;
 }
 
-// cards: [{ file, title }] (every it.fails as run); tickets: { id: status }.
+// cards: [{ file, title, fullName? }] (every it.fails as run; the tag must be in the test's own
+// title, fullName adds its describes for the table); tickets: { id: status }.
 export function checkGaps(cards, tickets) {
   const rows = [];
   const problems = [];
-  for (const { file, title } of cards) {
+  for (const { file, title, fullName = title } of cards) {
     const ids = gapTickets(title);
     if (!ids) {
-      rows.push({ file, title, ticket: '-', status: 'untagged' });
-      problems.push(`${file}: "${title}" is an it.fails card without a KNOWN GAP (NNNN) tag in its title`);
+      rows.push({ file, title: fullName, ticket: '-', status: 'untagged' });
+      problems.push(`${file}: "${fullName}" is an it.fails card without a KNOWN GAP (NNNN) tag in its own title: `
+        + 'title it `KNOWN GAP (NNNN): ...` with the open ticket that will close it, or file one');
       continue;
     }
     for (const id of ids) {
       const status = tickets[id] ?? 'missing';
-      rows.push({ file, title, ticket: id, status });
-      if (status === 'missing') problems.push(`${file}: "${title}" names ticket ${id}, which is not in docs/backlog`);
-      else if (!OPEN.includes(status)) problems.push(`${file}: "${title}" names ticket ${id}, which is ${status}: retarget the card to an open ticket or file one`);
+      rows.push({ file, title: fullName, ticket: id, status });
+      if (status === 'missing') problems.push(`${file}: "${fullName}" names ticket ${id}, which is not in docs/backlog: fix the number or file docs/backlog/${id}-*.md`);
+      else if (!OPEN.includes(status)) problems.push(`${file}: "${fullName}" names ticket ${id}, which is ${status}: retarget the card to an open ticket or file one`);
     }
   }
   return { rows, problems };
 }
 
-// Test files whose source has an it.fails/test.fails but which the ledger's run did not
+// Source with its string literals and comments blanked: an it.fails in a comment or a test
+// fixture's string is not a card. (A heuristic: it only decides which files a run must cover.)
+export const codeOnly = (text) => text
+  .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, "''")
+  .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+
+// Test files whose code has an it.fails/test.fails but which the ledger's run did not
 // include: a partial `npm test -- <file>` wrote the ledger, so it can't vouch for them.
 export function unrunFiles(sources, ledgerFiles) {
   const ran = new Set(ledgerFiles);
   return Object.entries(sources)
-    .filter(([file, text]) => /\b(?:it|test)\.fails\b/.test(text) && !ran.has(file))
+    .filter(([file, text]) => /\b(?:it|test)(?:\.\w+)*\.fails\b/.test(codeOnly(text)) && !ran.has(file))
     .map(([file]) => file);
 }
 
@@ -98,4 +106,5 @@ function main() {
   console.log(`check-gaps: every known gap names an open ticket`);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+const same = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+if (process.argv[1] && same(realpathSync(fileURLToPath(import.meta.url)), realpathSync(process.argv[1]))) main();

@@ -15,6 +15,11 @@ Pillar 0 says known gaps are written down, not hidden. There are ~26 `it.fails` 
 ## What
 `scripts/check-gaps.mjs` (same style as `check-backlog.mjs`): scan `tests/**/*.test.js` for `it.fails(` titles containing `KNOWN GAP (NNNN)` (also accept `NNNN, NNNN`), and require each `docs/backlog/NNNN-*.md` to exist with status `ready`, `proposed` or `in-progress`. Print a table (card, ticket, status) and exit 1 on a dangling or closed ticket. Add it to `npm run check:fast`.
 
+Shipped as (#208): the cards are read from the run, not the source (nine of the 23 are picked at
+runtime by c172.test.js's `card(id)`): `scripts/gap-reporter.mjs`, a vitest reporter, records them
+and `scripts/check-gaps.mjs` checks them after `npm test`; the parser's test is
+`tests/unit/checkGaps.test.js` (vite.config.js runs tests/unit and tests/flight only).
+
 ## Acceptance criteria
 - [x] Passes on main today (fix any title that points at a closed ticket in the same PR, by retargeting or filing)
 - [x] An `it.fails` without a `KNOWN GAP (NNNN)` tag also fails the check

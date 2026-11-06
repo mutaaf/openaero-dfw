@@ -28,8 +28,8 @@ V-speeds, today's METAR pushing the aircraft around, GPWS callouts with the real
 0. **Physics you can check.** Every flight-model claim has a flight test card in
    `tests/flight/` against a cited source (POH, manufacturer airport-planning data, FAA
    and NASA references). Known gaps are `it.fails` cards with a ticket; closing one is
-   progress you can measure (`scripts/check-gaps.mjs` fails the gate on a gap card whose
-   ticket is missing, shipped or dropped). Every object that moves in the world (aircraft, gear,
+   progress you can measure (`scripts/check-gaps.mjs` fails the gate on a gap card with
+   no ticket tag, or whose ticket is missing, shipped or dropped). Every object that moves in the world (aircraft, gear,
    control surfaces, ground vehicles, traffic, windsocks) moves by its own physics, not
    by keyframes.
 

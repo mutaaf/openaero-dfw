@@ -1,6 +1,6 @@
 ---
 id: 0165
-title: JSBSim's Cessna lifts off a short-field takeoff at the POH's 51 KIAS, inside the card's 8% band
+title: Make JSBSim's Cessna lift off a short-field takeoff at the POH's 51 KIAS, inside the card's 8% band
 status: proposed
 priority: P2
 size: S
@@ -20,7 +20,7 @@ airframe one, until shown otherwise.
 
 ## What
 Fly the POH's short-field rotation on JSBSim the way it is flown on flightModel.js: give the test
-pilot's pitch hold enough authority (an integral term, or a feed-forward elevator for the
+pilot's pitch hold (the harness's, tests/flight/harness.js) enough authority (an integral term, or a feed-forward elevator for the
 attitude) to hold 11° on JSBSim's tail, then re-measure. If the lift-off is still past the band
 with the attitude held, record why and leave the card failing; never widen the band.
 
@@ -30,7 +30,9 @@ with the attitude held, record why and leave the card failing; never widen the b
 - [ ] Every other C172 card passes unchanged on both models
 
 ## Test plan
-`npm test -- tests/flight/c172.test.js`; the takeoff card on both models.
+`npm test -- tests/flight/c172.test.js`; the takeoff card on both models; then the full `npm test` and
+`node scripts/check-gaps.mjs` (a partial run's ledger is refused).
 
 ## Out of scope
-Changing the POH figures or the card's tolerances; flightModel.js's takeoff (it passes).
+Changing the POH figures or the card's tolerances; flightModel.js's takeoff (it passes); any change
+to src/autopilot.js `elevatorForPitch` (Kid's assists and the autopilot fly it).
