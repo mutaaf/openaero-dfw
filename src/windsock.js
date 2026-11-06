@@ -210,5 +210,7 @@ export function createWindsocks({ runways, endById, heightAt, gustAt, surfaceFac
     airport: s.airport, end: s.end, x: s.x, z: s.z, y: baseY[i], groundY: heightAt(s.x, s.z),
     yawDeg: st.yaw[i], extensionDeg: st.ext[i], scale: state.scale[i], visible: group.visible,
   }));
-  return { group, socks, update, reseat, debug, state };
+  const api = { group, socks, update, reseat, debug, state };
+  if (globalThis.location && new URLSearchParams(location.search).has('debug')) window.openaeroWindsocks = api; // e2e: hide them for a control frame
+  return api;
 }

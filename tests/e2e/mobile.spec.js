@@ -159,7 +159,7 @@ test('phone: every folded control is one tap behind ☰ Menu; Pause pauses (0021
   await startFlight(page);
   await page.locator('#btnMenu').tap();
   await expect(page.locator('#btnMenu')).toHaveAttribute('aria-expanded', 'true');
-  for (const id of ['#btnOpenMissions', '#btnCamera', '#btnAudio', '#btnPause', '#btnReset', '#wxBadge']) {
+  for (const id of ['#btnOpenMissions', '#btnCamera', '#btnAudio', '#btnLandLight', '#btnPause', '#btnReset', '#wxBadge']) {
     await expect(page.locator(id), `${id} in the sheet`).toBeVisible();
   }
   const sheet = await page.locator('#hudMenu').boundingBox();
@@ -294,4 +294,21 @@ test('phone: the speed tape shows the red low-speed band under the 737\'s flaps-
   expect(r).toBeGreaterThan(180);
   expect(g).toBeLessThan(110);
   expect(b).toBeLessThan(110);
+});
+
+// Ticket 0076: the landing light is one tap behind ☰ Menu, and the button says whether it is on.
+test('phone: the Land light button in the menu turns the landing light off and on by touch (0076)', async ({ page }) => {
+  const errors = collectErrors(page);
+  await startFlight(page);
+  await page.locator('#btnMenu').tap();
+  const btn = page.locator('#btnLandLight');
+  await expect(btn).toBeVisible();
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#txtLandLight')).toHaveText('ON');
+  await btn.tap();
+  await expect(btn).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#txtLandLight')).toHaveText('OFF');
+  await btn.tap();
+  await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  expect(errors).toEqual([]);
 });
