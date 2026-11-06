@@ -177,6 +177,17 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     within(rocFpm(3048), 315, 0.15);
   });
 
+  // The climb between the POH's two Fig. 5-6 anchors above (729 fpm at sea level, 315 at 10,000 ft,
+  // both ISA): the POH's rate falls close to linearly with altitude between them, so 5,000 ft is
+  // read as their midpoint (522 fpm, an interpolation of cited figures, not a separate POH row;
+  // ±15%). Also: strictly between the anchors' flown values, so the curve cannot bulge or kink.
+  it('climbs between the POH anchors at 5,000 ft, ISA: about 522 fpm (Fig. 5-6 midpoint, ±15%)', () => {
+    const r0 = rocFpm(1), r5 = rocFpm(5000 / M_TO_FT), r10 = rocFpm(3048);
+    expect(r5).toBeLessThan(r0);
+    expect(r5).toBeGreaterThan(r10);
+    within(r5, (729 + 315) / 2, 0.15);
+  });
+
   // The POH's Section 1 specifications give a service ceiling of 14,000 ft, the altitude where
   // the climb falls to 100 fpm. flightModel.js climbed ~183 fpm there until 0099 took the
   // engine's friction power out of the δ/√θ lapse (engine.js): ~116 fpm now, JSBSim ~115.
