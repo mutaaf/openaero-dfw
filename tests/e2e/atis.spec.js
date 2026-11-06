@@ -107,11 +107,16 @@ test('Kid is not shown ATIS words by itself; the ATIS button still opens them', 
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('the panel fits at 390x844, clear of the touch deck, and a tap closes it', async ({ page }) => {
+  test('not shown by itself on a phone (the coach has the first 30 s); from the Menu it fits at 390x844 and a tap closes it', async ({ page }) => {
     await stubTiles(page);
     await page.goto(BASE);
     await page.locator('#btnStartFlight').click();
+    await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
     const atis = page.locator('#atis');
+    await page.waitForTimeout(500);
+    await expect(atis).toBeHidden();
+    await page.locator('#btnMenu').tap();
+    await page.locator('#btnAtis').tap();
     await expect(atis).toBeVisible();
     const box = await atis.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(0);

@@ -115,12 +115,13 @@ input[type=range] { accent-color: #38bdf8; }
    above the stick panel on desktop; always below the horizon. */
 #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
 #atis { top: calc(max(0.5rem, env(safe-area-inset-top)) + 3.125rem); }
+#atis [data-atis-text] { max-height: 6.5rem; overflow-y: auto; } /* a long METAR scrolls in the card, never grows into the HUD (0030) */
 /* A phone held sideways (0030; only when asked for, from the ATIS button): the top-left, over the top bar (the tapes keep
    the speed), clear of the heading box, the wind box and the coach card's top-right slot. Elsewhere atis.js sets its top
    under the header and the coach card's top slot. */
 @media (orientation: landscape) and (max-height: 500px) {
-  #atis { top: max(0.5rem, env(safe-area-inset-top)); left: max(0.5rem, env(safe-area-inset-left)); right: auto; margin: 0; width: min(22.5rem, calc(50vw - 3rem)); }
-  #atis [data-atis-text] { font-size: 10px; line-height: 13px; }
+  #atis { top: max(0.5rem, env(safe-area-inset-top)); left: max(0.5rem, env(safe-area-inset-left)); right: auto; margin: 0; width: min(22.5rem, calc(50vw - 4rem - env(safe-area-inset-left))); }
+  #atis [data-atis-text] { font-size: 10px; line-height: 13px; max-height: 5.75rem; }
 }
 @media (min-width: 1024px) { #coach { bottom: 10rem; } }
 /* A short screen held upright (0130, hudLayout.js coachOverHud): that slot is on the speed tape and

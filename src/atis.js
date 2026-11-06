@@ -208,8 +208,8 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
   };
 }
 
-// The panel. Pilot sees it after Start flight (not Kid or Learner: ATIS words are for pilots; not on a phone held
-// sideways, where it would sit over the Menu and the top bar); every level opens it from #btnAtis in the weather
+// The panel. Pilot sees it after Start flight on a screen with room for it (not Kid or Learner: ATIS words are for
+// pilots; not on phones or an iPad held sideways, see below); every level opens it from #btnAtis in the weather
 // ribbon. It is spoken only when asked for (the ATIS button), and only when no coach is talking: on the ground
 // without a coached takeoff or drill, or above 1,000 ft (the landing coach, the gate and the tutor speak lower).
 // The chunk owns its utterance (audio.js's voice, at speaking pace), so closing the panel or Sound OFF stops it
@@ -240,7 +240,10 @@ export function showAtis(sim, asked = false) {
       showAtis(sim, true);
     });
   }
-  if (!asked && (sim.assist !== 'pilot' || window.matchMedia?.(SHORT_SIDEWAYS).matches)) return null;
+  // Not by itself on a short screen: under 700 px, or a touch screen under 900 px (phones, an iPad held sideways), where
+  // the coach card takes the top slot and the heading and wind boxes sit close under it (the device panel). A tap away.
+  const touch = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches;
+  if (!asked && (sim.assist !== 'pilot' || window.innerHeight < (touch ? 900 : 700) || window.matchMedia?.(SHORT_SIDEWAYS).matches)) return null;
   const render = () => {
     shownWx = sim.wx;
     const a = buildAtis(sim.wx, sim.activeEnd, { departing: sim.loadedMission?.kind === 'takeoff' && sim.onGround });
@@ -250,18 +253,20 @@ export function showAtis(sim, asked = false) {
     return a;
   };
   const a = render();
-  el.style.top = '';
-  el.classList.remove('hidden');
-  if (!window.matchMedia?.(SHORT_SIDEWAYS).matches) {
+  // Under the header and under the coach card in its top slot (main.js placeCoach can move it there after we show).
+  const place = () => {
+    if (window.matchMedia?.(SHORT_SIDEWAYS).matches) { el.style.top = ''; return; }
     const below = (id) => { const r = document.getElementById(id)?.getBoundingClientRect(); return r && r.height ? r.bottom : 0; };
     const coach = document.getElementById('coach');
     const coachTop = coach?.classList.contains('coach-top') && !coach.classList.contains('hidden') ? below('coach') : 0;
     el.style.top = `${Math.max(below('phoneHeader'), coachTop) + 6}px`;
-  }
+  };
+  el.classList.remove('hidden');
+  place();
   clearTimeout(timer);
   clearInterval(poll);
   timer = setTimeout(function wait() { if (utter) timer = setTimeout(wait, 1000); else hide(); }, HOLD_MS);
-  poll = setInterval(() => { if (sim.wx !== shownWx) render(); }, 1000); // a live METAR that lands after Start flight
+  poll = setInterval(() => { if (sim.wx !== shownWx) render(); place(); }, 1000); // a live METAR that lands after Start flight
   const quiet = sim.onGround ? !(sim.toCoach || sim.rto || sim.engineOut) : sim.aglFt > 1000;
   const synth = window.speechSynthesis;
   hush();
