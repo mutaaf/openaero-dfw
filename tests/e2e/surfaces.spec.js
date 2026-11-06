@@ -58,6 +58,10 @@ test('full left vs full right stick moves the Cessna\'s ailerons in the chase vi
   await page.selectOption('#selScenario', 'kdfw_takeoff');
   await page.locator('#selAircraft').selectOption('c172');
   await page.locator('#btnCamera').click(); // Orbit Chase
+  // Zoom the chase in (the wheel: 48 m → its 12 m stop). At the default 48 m the
+  // ailerons are a few pixels each and the signal sat at 41-44 against a 51-72 floor on CI.
+  await page.mouse.move(640, 360);
+  await page.mouse.wheel(0, -1000);
   await page.keyboard.press('KeyB'); // brakes: the idling Cessna must not creep between frames
   await expect.poll(async () => (await snap(page)).brakesOn).toBe(true);
   await expect.poll(async () => (await snap(page)).parts.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(6);
@@ -82,7 +86,8 @@ test('full left vs full right stick moves the Cessna\'s ailerons in the chase vi
   // the airplane settling on its struts). Measured: moved 105-111 sampled pixels, still 0-13;
   // 2026-10-31 at 1280x720 with the panels in the shot: moved 245-280, still 4-45, and up to
   // ~160 on CI (an AoA badge flickering "-0.0°"/"0.0°" shifted the top bar's line, and other
-  // live text ticks); the 3D scene alone: moved 303-309, still 2-8.
+  // live text ticks); the 3D scene alone at 48 m: moved 41-270 (41-44 on CI, red), still 0-14;
+  // zoomed to 12 m (2026-11-06): moved 216-236, still 0-7.
   const sum = (d) => d.left + d.right;
   expect(sum(moved)).toBeGreaterThan(3 * sum(still) + 30);
   expect(Math.min(moved.left, moved.right)).toBeGreaterThan(5); // both wings, not one
