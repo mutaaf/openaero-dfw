@@ -114,6 +114,13 @@ input[type=range] { accent-color: #38bdf8; }
 /* First-flight coach: above the phone touch deck (which pads for the home indicator),
    above the stick panel on desktop; always below the horizon. */
 #coach { bottom: calc(232px + env(safe-area-inset-bottom)); }
+#atis { top: calc(max(0.5rem, env(safe-area-inset-top)) + 3.125rem); }
+/* A phone held sideways (0030): the top-left, over the top bar's IAS/GS/VS/PAPI (the tapes keep the speed), clear of the
+   heading box, the wind box and the coach card's top-right slot, until a tap or 12 s. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #atis { top: max(0.5rem, env(safe-area-inset-top)); left: max(0.5rem, env(safe-area-inset-left)); right: auto; margin: 0; width: min(22.5rem, calc(50vw - 3rem)); }
+  #atis [data-atis-text] { font-size: 10px; line-height: 13px; }
+}
 @media (min-width: 1024px) { #coach { bottom: 10rem; } }
 /* A short screen held upright (0130, hudLayout.js coachOverHud): that slot is on the speed tape and
    the runway, so the card goes up into the sky under the top bar's 44 px row (COACH_TOP_SLOT). */
