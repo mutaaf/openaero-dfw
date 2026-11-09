@@ -1,12 +1,12 @@
 ---
 id: 0162
 title: The Cessna burns fuel at the POH rate: a fuel readout, and an empty tank stops the engine
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-06
-pr:
+pr: 213
 ---
 
 ## Why
@@ -25,6 +25,14 @@ and altitude for the C172, integrated over sim time; usable fuel starts at the f
 FUEL readout (gal and minutes remaining) in the Pilot HUD panel row only, never Kid. At
 zero the engine quits through the existing `engineOut.js` path, with a caption and a
 FUEL EXHAUSTED line on the results card. The 737 and F-16 are out of scope here.
+
+## As built (#213)
+The ticket's 12.4 GPH (53 gal / 4.26 h) was a planning figure, not a rate: Section 1's 4.26 h includes
+start, taxi, takeoff, climb (Fig. 5-7) and a 45-minute reserve. The cards fly that chart instead: full
+throttle at 8,000 ft burns ~10.1 GPH (Fig. 5-8: 10.4 at 77%), and at 8,500 ft the tanks give 509 NM in
+4.38 h against 518 NM / 4.26 h. Kid and Learner have no fuel model (the readout is Pilot only, so a
+silent engine stop would be unfair). The fuel-out cue is the readout (FUEL EXHAUSTED, red) and ENG OUT,
+not a spoken caption: the caption queue lives in boot, which has no room.
 
 ## Acceptance criteria
 - [ ] Level cruise at 75% power, 8,500 ft burns within ±10% of the POH's 53 gal / 4.26 h (12.4 gal/h)
