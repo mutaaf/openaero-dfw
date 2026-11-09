@@ -201,7 +201,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
 
   return {
     init, update, mute, callout, takeoffCall, teach, pause,
-    get started() { return audioCtx !== null; },
+    get ctx() { return audioCtx; }, // null until init(); touchdownFeel.js plays its one-shot sounds on it (0147)
     get state() { return audioCtx ? audioCtx.state : 'off'; },
   };
 }

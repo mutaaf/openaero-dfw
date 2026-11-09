@@ -13,7 +13,7 @@ describe('audio callouts are captioned with sound off (0117)', () => {
     const audio = createAudio(sim, () => {}, (t, queued) => said.push([t, !!queued]));
     for (let ft = 1010; ft > 280; ft -= 5) { sim.raFt = ft; audio.update(); }
     expect(said).toEqual([['one thousand', false], ['five hundred', false], ['four hundred', false], ['three hundred', false]]);
-    expect(audio.started).toBe(false);
+    expect(audio.ctx).toBe(null); // not started
   });
 
   it('twenty is followed by a queued "retard" with power on', () => {
