@@ -86,11 +86,11 @@ describe('C172 steep turns (0161, FAA-S-ACS-6C Area V Task A)', () => {
     expect(r.st.maxAltDevFt).toBeGreaterThan(280);
     expect(r.grade.grade).toBe('D');
   });
-  it('a 30° bank is not a steep turn: the held-bank share fails and the grade drops', () => {
+  it('a 30° bank is not a steep turn: the held-bank share fails and the grade is a D', () => {
     const r = steepTurns({ bank: 30 });
     console.log(`[c172 steep] 30° bank: ${r.st.phase}, held ${(100 * r.st.bankOkS / Math.max(r.st.bankS, 1e-9)).toFixed(0)}% → ${r.grade.grade} ${r.grade.score}`);
     expect(r.st.bankOkS).toBe(0);
-    expect(r.grade.score).toBeLessThan(85);
+    expect(r.grade.grade).toBe('D');
   });
 });
 
@@ -107,7 +107,7 @@ function assisted(level, rollIn = () => 0) {
   fly(b, c172, 150, (x, dt) => {
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
-    kidGuide(st, s);
+    expect(kidGuide(st, s)).toBe(STEEP_ASSIST_BANK_DEG);
     Object.assign(s, {
       pitchIn: 0, rollIn: rollIn(st), yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
       rollScale: rollHoldScale(c172, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y, driftDeg: 0,
@@ -141,9 +141,12 @@ describe('C172 steep turns on the assists (0161: main.js applyAssists in the mis
     expect(r.st.maxAltDevFt).toBeLessThanOrEqual(100);
     expect(['S', 'A']).toContain(r.grade.grade);
   });
-  it('Learner, full stick each way and nothing else: 45° of bank, and the height sags (the lesson: ease back)', () => {
-    const r = assisted('learner', (st) => (st.phase === 'turn2' ? st.dir : st.phase === 'turn1' && st.turned * st.dir >= 360 - STEEP_LEAD_DEG ? 0 : st.phase === 'turn1' ? st.dir : 1));
+  it('Learner, full stick each way and nothing else: 45° of bank, and the height sags past the standard (the lesson: ease back)', () => {
+    const lead = (st) => st.turned * st.dir >= 360 - STEEP_LEAD_DEG;
+    const r = assisted('learner', (st) => (st.phase === 'entry' ? 1 : lead(st) ? 0 : st.dir));
     console.log(`[c172 steep learner] ${r.st.phase}: alt ${r.st.altSignFt.toFixed(0)} ft, bank held ${(100 * r.st.bankOkS / Math.max(1e-9, r.st.bankS)).toFixed(0)}% → ${r.grade.grade} ${r.grade.score}`);
     expect(r.st.bankOkS / r.st.bankS).toBeGreaterThan(0.9);
+    expect(r.st.maxAltDevFt).toBeGreaterThan(200); // a held attitude is not a held height in a 45° bank
+    expect(r.grade.grade).toBe('D');
   });
 });

@@ -73,3 +73,13 @@ test('the gamepad right stick trims in Pilot', async ({ page }) => {
   await expect.poll(kts, { timeout: 10_000 }).toBeGreaterThan(k0);
   await page.evaluate(() => { window.__pad.axes[3] = 0; });
 });
+
+// 0161: gamepad.js is a lazy chunk. A pad pressed before main.js listened fires its one gamepadconnected
+// into nothing; it still flies, because the chunk loads once the pad shows up in getGamepads.
+test('a pad that was connected before the page listened still flies (no gamepadconnected event)', async ({ page }) => {
+  await stubTiles(page);
+  await installFakePad(page);
+  await enterCockpit(page);
+  await page.evaluate(() => { window.__pad.axes[0] = 1; });
+  await expect.poll(() => page.locator('#meterAil').textContent(), { timeout: 5_000 }).not.toBe('0%');
+});

@@ -74,6 +74,20 @@ describe('steepTurnStep (0161): two 360° turns, one each way', () => {
     expect(flyTurns(stalled, { stalledAt: 8 }).events.at(-1)).toBe('failed');
     expect(stalled.why).toBe('stall');
   });
+  it('a 720° first turn is 360° off on the roll-out, not on the heading', () => {
+    const st = createSteepTurns();
+    flyTurns(st, { leadDeg: -340 });
+    expect(st.rollout[0]).toBeGreaterThan(300);
+    expect(gradeSteepTurns(st).score).toBeLessThanOrEqual(STEEP_ACS_CAP);
+  });
+  it('a one-second gust spike of 15 kt is not the pilot\'s speed (a ~2 s filter)', () => {
+    const st = createSteepTurns();
+    flyTurns(st, { kts: (t) => (t > 20 && t < 21 ? 110 : 95) });
+    expect(st.maxKtsDev).toBeLessThan(10);
+    const held = createSteepTurns();
+    flyTurns(held, { kts: (t) => (t > 20 ? 110 : 95) });
+    expect(held.maxKtsDev).toBeGreaterThan(14);
+  });
   it('does nothing once graded', () => {
     const st = createSteepTurns();
     flyTurns(st);
@@ -107,6 +121,27 @@ describe('gradeSteepTurns (0161): FAA-S-ACS-6C Area V Task A', () => {
     expect(g.score).toBeLessThanOrEqual(STEEP_ACS_CAP);
     expect(g.reason).toMatch(/tolerance/);
   });
+  it('the bank is held to the standard too: a 30° turn is capped at D, part of it outside ±5 at B', () => {
+    const shallow = createSteepTurns();
+    flyTurns(shallow, { bank: 30 });
+    const g = gradeSteepTurns(shallow);
+    expect(g.grade).toBe('D');
+    expect(g.reason).toMatch(/Not a steep turn/);
+    const part = createSteepTurns();
+    flyTurns(part, { bank: 47 });
+    Object.assign(part, { bankOkS: part.bankS * 0.7 });
+    const p = gradeSteepTurns(part);
+    expect(p.score).toBeLessThanOrEqual(STEEP_ACS_CAP);
+    expect(p.reason).toMatch(/Bank outside/);
+  });
+  it('a failed climb says less back pressure, a failed sink says ease back', () => {
+    const up = createSteepTurns();
+    flyTurns(up, { alt: (t, s) => (s.phase === 'entry' ? 3000 : 3000 + t * 20) });
+    expect(gradeSteepTurns(up).reason).toMatch(/Gained over 500 ft: less back pressure/);
+    const down = createSteepTurns();
+    flyTurns(down, { alt: (t, s) => (s.phase === 'entry' ? 3000 : 3000 - t * 20) });
+    expect(gradeSteepTurns(down).reason).toMatch(/Lost over 500 ft: ease back/);
+  });
   it('a roll-out 30° past the heading costs the roll-out factor', () => {
     const st = createSteepTurns();
     flyTurns(st, { leadDeg: -15 });
@@ -122,7 +157,7 @@ describe('gradeSteepTurns (0161): FAA-S-ACS-6C Area V Task A', () => {
     expect(g.note).toBeNull();
     const ok = createSteepTurns();
     flyTurns(ok);
-    expect(gradeSteepTurns(ok, true).note).toMatch(/Kid/);
+    expect(gradeSteepTurns(ok, true).note).toMatch(/flew the turns for you/);
   });
 });
 
@@ -151,10 +186,21 @@ describe('the coach and Kid\'s guide (0161)', () => {
     expect(steepPrompt(st, s({ altFt: 3070 }), false)).toBe('sttEase');
     expect(steepPrompt(st, s({ bankDeg: 35 }), false)).toBe('sttSteeper');
     expect(steepPrompt(st, s({ bankDeg: 55 }), false)).toBe('sttShallower');
-    expect(steepPrompt(st, s({ iasKts: 86 }), false)).toBe('sttPower');
+    expect(steepPrompt(st, s({ iasKts: 89 }), false)).toBe('sttPower');
+    expect(steepPrompt(st, s({ iasKts: 101 }), false)).toBe('sttFast');
     expect(steepPrompt(st, s(), false)).toBe('sttHold');
     st.turned = 345;
     expect(steepPrompt(st, s(), false)).toBe('sttReverse');
+    st.turned = 20; // rolling in: the back pressure and power go in now
+    expect(steepPrompt(st, s({ bankDeg: 30 }), false)).toBe('sttRollingIn');
+    // The second turn says which way until the player banks that way; the same way again keeps saying it.
+    Object.assign(st, { phase: 'turn2', dir: -1, turned: 0 });
+    expect(steepPrompt(st, s({ bankDeg: 0 }), false)).toBe('sttLeft');
+    expect(steepPrompt(st, s({ bankDeg: 45 }), false)).toBe('sttLeft');
+    expect(steepPrompt(st, s({ bankDeg: -40 }), false)).toBe('sttRollingIn');
+    expect(STEEP_TEXT.sttLeft).toMatch(/left/);
+    Object.assign(st, { phase: 'turn2', dir: 1, turned: 10 });
+    expect(steepPrompt(st, s({ bankDeg: -20 }), false)).toBe('sttRight');
     Object.assign(st, { phase: 'turn2', dir: -1, turned: -345 });
     expect(steepPrompt(st, s({ bankDeg: -45 }), false)).toBe('sttRollOut');
     expect(steepPrompt(st, s(), true)).toBe('sttKid');

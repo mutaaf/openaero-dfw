@@ -897,6 +897,14 @@ function checkGoAround() {
   showResults(result, best, end, ga.gate);
 }
 
+// A drill's card: its personal best, the coach cleared (the card pauses the flight), the results.
+function drillCard(result, place) {
+  let best = { isNewBest: false, best: null };
+  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
+  updateCoach(0);
+  showResults(result, best, place, null);
+}
+
 // The drills' lazy chunks: `lib` if already here, else fetched with `load`; `arm` sets the drill
 // up only if its mission is still the one loaded (another may have been picked meanwhile).
 function loadDrill(mission, lib, load, arm) {
@@ -941,10 +949,7 @@ function checkStallDrill(dt) {
   const step = stallLib.stallDrillState(st, _stIn);
   if (step !== 'complete' && step !== 'failed') return;
   const result = stallLib.gradeStallRecovery(stallLib.stallResultInput(st, sim.assist === 'kid'));
-  let best = { isNewBest: false, best: null };
-  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
-  updateCoach(0); // the drill is over: clear its prompt before the card pauses the flight
-  showResults(result, best, stallLib.STALL_PLACE, null);
+  drillCard(result, stallLib.STALL_PLACE);
 }
 
 // --- Dead-stick challenge (ticket 0036, deadStick.js) -------------------------------
@@ -971,10 +976,7 @@ function checkRto() {
   if (ev === 'fire') return;
   byId('masterAlertBanner').classList.add('hidden'); // the card pauses the flight: no warning frozen under it
   const result = rtoLib.gradeRto(sim.rto, sim.assist === 'kid');
-  let best = { isNewBest: false, best: null };
-  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
-  updateCoach(0);
-  showResults(result, best, rtoLib.RTO_END, null);
+  drillCard(result, rtoLib.RTO_END);
 }
 // --- Microburst windshear (ticket 0112, windshear.js): sim.windshear on that mission; the shear
 // starts at 600 ft on the final (its air added in updateWind), graded when out of it (or not).
@@ -987,10 +989,7 @@ function checkWindshear(dt) {
   if (ev !== 'clear' && ev !== 'failed') return;
   byId('masterAlertBanner').classList.add('hidden');
   const result = wsLib.gradeShear(sim.windshear, sim.assist === 'kid');
-  let best = { isNewBest: false, best: null };
-  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
-  updateCoach(0);
-  showResults(result, best, wsLib.SHEAR_END, null);
+  drillCard(result, wsLib.SHEAR_END);
 }
 
 // --- Steep turns (ticket 0161, steepTurns.js): sim.steepTurns on that mission, graded after both
@@ -1001,10 +1000,7 @@ function checkSteepTurns(dt) {
   if (ev !== 'complete' && ev !== 'failed') return;
   const result = stLib.gradeSteepTurns(sim.steepTurns, sim.assist === 'kid');
   sim.steepTurns = null;
-  let best = { isNewBest: false, best: null };
-  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
-  updateCoach(0);
-  showResults(result, best, stLib.STEEP_PLACE, null);
+  drillCard(result, stLib.STEEP_PLACE);
 }
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
@@ -2435,9 +2431,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   else if (sim.engineFailed && sim.engineOut) eoLib.kidGuide(sim, _assistIn);
   // The traffic pattern (0048): Kid's guide flies the legs and turns (pattern.js kidGuide).
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
-  // Steep turns (0161): a 45° cap for Kid and Learner, and Kid's guide flies the turns.
-  _assistIn.bankMaxDeg = sim.steepTurns ? stLib.STEEP_ASSIST_BANK_DEG : 0;
-  if (sim.steepTurns) stLib.kidGuide(sim.steepTurns, _assistIn);
+  // Steep turns (0161): Kid's guide flies the turns, and returns Kid's and Learner's 53° cap (full stick = 45°).
+  _assistIn.bankMaxDeg = sim.steepTurns ? stLib.kidGuide(sim.steepTurns, _assistIn) : 0;
   _assistIn.noFloor = sim.engineFailed;
   // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
   runwayUnderWheels(gsMps, noseDeg);
@@ -3263,16 +3258,22 @@ function showToast(msg, ms = 3500) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), ms);
 }
 const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
-let padLib = null; // gamepad.js: fetched on the first pad (0161)
-window.addEventListener('gamepadconnected', (e) => {
-  import('./gamepad.js').then((m) => (padLib = m)).catch((err) => console.warn('[openaero] no gamepad:', err));
-  showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`);
-});
+// gamepad.js (0161): fetched once a pad shows up in getGamepads (updateGamepad), so a pad pressed before this
+// listener existed works too; a failed fetch lets the next frame try again.
+let padLib = null, padLoading = false;
+window.addEventListener('gamepadconnected', (e) => showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`));
 window.addEventListener('gamepaddisconnected', () => { sim.pad = null; showToast('🎮 Controller disconnected'); });
 
 // Per-frame gamepad poll: continuous axes into sim.pad, edge-triggered buttons into actions.
 function updateGamepad() {
-  const p = padLib?.pollGamepad();
+  if (!padLib) {
+    if (!padLoading && navigator.getGamepads?.().some(Boolean)) {
+      padLoading = import('./gamepad.js').then((m) => (padLib = m), (err) => { padLoading = false; console.warn('[openaero] no gamepad:', err); });
+    }
+    sim.pad = null;
+    return;
+  }
+  const p = padLib.pollGamepad();
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
   if (replaying) { if (p.edges.length) replaying.stop(); return; } // any button ends the replay (0019), nothing else

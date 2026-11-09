@@ -33,6 +33,7 @@ export const STEEP_LEAD_DEG = 20;
 // Not finished: this far off the entry altitude, this long after the roll-in, or stalled.
 export const STEEP_FAIL_FT = 500;
 export const STEEP_FAIL_S = 150;
+export const STEEP_IAS_TAU_S = 2;
 export const STEEP_PLACE = { name: 'Over Grapevine Lake · 3,000 ft' };
 
 export const STEEP_TEXT = {
@@ -41,21 +42,26 @@ export const STEEP_TEXT = {
   sttEase: 'Climbing: ease off the back pressure a little',
   sttSteeper: 'Steeper: 45° of bank',
   sttShallower: 'Too steep: back to 45°',
-  sttPower: 'Slowing: add a little power',
+  sttRollingIn: 'Rolling in: ease back and add power',
+  sttLeft: 'Now the other way: roll left to 45°',
+  sttRight: 'Now the other way: roll right to 45°',
+  sttPower: 'Slowing: add power',
+  sttFast: 'Fast: ease off the power',
   sttHold: 'Hold it: 45°, your height, your speed',
-  sttReverse: 'Wings level, roll out, then roll the other way',
-  sttRollOut: 'Wings level, roll out on your heading',
+  sttReverse: 'Roll out, wings level: release the back pressure, less power. Then the other way',
+  sttRollOut: 'Wings level, roll out on your heading: release the back pressure, less power',
   sttKidIn: 'Let go: the plane rolls into a steep turn',
   sttKid: 'The plane holds the turn: watch the nose ride the horizon',
 };
 Object.assign(DRILL_TEXT, STEEP_TEXT);
-Object.assign(RANK, { sttRollIn: 1, sttBack: 1, sttEase: 1, sttSteeper: 1, sttShallower: 1, sttPower: 1, sttHold: 1, sttReverse: 2, sttRollOut: 2, sttKidIn: 1, sttKid: 1 });
+Object.assign(RANK, { sttRollIn: 1, sttRollingIn: 1, sttBack: 1, sttEase: 1, sttSteeper: 1, sttShallower: 1, sttPower: 1, sttFast: 1, sttHold: 1,
+  sttLeft: 2, sttRight: 2, sttReverse: 2, sttRollOut: 2, sttKidIn: 1, sttKid: 1 });
 
 // phase: 'entry' (wings level, not turning yet), 'turn1', 'turn2' (the other way), 'complete'
 // (both turns rolled out: graded), 'failed' (graded D). dir: +1 right, −1 left.
 export const createSteepTurns = () => ({
   phase: 'entry', dir: 0, turned: 0, lastHdg: null, hdg0: 0, alt0: 0, kts0: 0, t: 0,
-  maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, bankS: 0, bankOkS: 0, rollout: [], why: null,
+  maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, iasF: 0, bankS: 0, bankOkS: 0, rollout: [], why: null,
 });
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
@@ -74,13 +80,15 @@ export function steepTurnStep(st, s) {
     if (abs < STEEP_LEVEL_DEG || first) { st.hdg0 = s.hdgDeg; st.alt0 = s.altFt; st.kts0 = s.iasKts; st.turned = 0; if (abs < STEEP_LEVEL_DEG) return ''; }
     st.turned += d;
     if (abs < STEEP_ROLLED_IN_DEG) return '';
-    st.phase = 'turn1'; st.dir = Math.sign(s.bankDeg);
+    st.phase = 'turn1'; st.dir = Math.sign(s.bankDeg); st.iasF = s.iasKts;
     return 'turn1';
   }
   st.turned += d; st.t += s.dt;
   const altDev = s.altFt - st.alt0;
   if (Math.abs(altDev) > st.maxAltDevFt) { st.maxAltDevFt = Math.abs(altDev); st.altSignFt = altDev; }
-  st.maxKtsDev = Math.max(st.maxKtsDev, Math.abs(s.iasKts - st.kts0));
+  // The airspeed through a ~2 s filter: a METAR gust's spike is not the pilot's speed (physics panel).
+  st.iasF += (s.iasKts - st.iasF) * Math.min(1, s.dt / STEEP_IAS_TAU_S);
+  st.maxKtsDev = Math.max(st.maxKtsDev, Math.abs(st.iasF - st.kts0));
   const deg = st.turned * st.dir; // this turn's progress, degrees
   if (deg > STEEP_HOLD_FROM_DEG && deg < 360 - STEEP_HOLD_FROM_DEG) {
     st.bankS += s.dt;
@@ -92,7 +100,9 @@ export function steepTurnStep(st, s) {
     return 'failed';
   }
   if (deg >= STEEP_ROLLOUT_FROM_DEG && abs < STEEP_LEVEL_DEG) {
-    st.rollout.push(Math.abs(wrap180(s.hdgDeg - st.hdg0)));
+    // Off the entry heading; a turn that went round again (a 720°) counts its extra turn, not the heading.
+    const over = Math.abs(deg - 360);
+    st.rollout.push(over > 180 ? over : Math.abs(wrap180(s.hdgDeg - st.hdg0)));
     if (st.phase === 'turn1') { st.phase = 'turn2'; st.dir = -st.dir; st.turned = 0; return 'reverse'; }
     st.phase = 'complete';
     return 'complete';
@@ -107,14 +117,18 @@ export function steepPrompt(st, s, kid) {
   if (st.phase === 'entry') return 'sttRollIn';
   const deg = st.turned * st.dir;
   if (deg >= 360 - STEEP_LEAD_DEG) return st.phase === 'turn1' ? 'sttReverse' : 'sttRollOut';
-  if (deg < STEEP_HOLD_FROM_DEG && Math.abs(s.bankDeg) < STEEP_BANK_DEG - STEEP_BANK_TOL_DEG) return 'sttSteeper';
+  const bank = s.bankDeg * st.dir; // + = banked the turn's way
+  // The second turn: which way, until the player is banked that way (the same way again never ends it).
+  if (st.phase === 'turn2' && deg < STEEP_HOLD_FROM_DEG && bank < STEEP_ROLLED_IN_DEG) return st.dir > 0 ? 'sttRight' : 'sttLeft';
+  // Rolling in: the lift tilts, so the back pressure and the power go in now, not after the height goes.
+  if (deg < STEEP_HOLD_FROM_DEG) return 'sttRollingIn';
   const altDev = s.altFt - st.alt0;
   if (altDev < -STEEP_ALT_TOL_FT / 2) return 'sttBack';
   if (altDev > STEEP_ALT_TOL_FT / 2) return 'sttEase';
-  const bank = s.bankDeg * st.dir;
   if (bank < STEEP_BANK_DEG - STEEP_BANK_TOL_DEG) return 'sttSteeper';
   if (bank > STEEP_BANK_DEG + STEEP_BANK_TOL_DEG) return 'sttShallower';
-  if (s.iasKts < st.kts0 - STEEP_KTS_TOL * 0.7) return 'sttPower';
+  if (s.iasKts < st.kts0 - STEEP_KTS_TOL * 0.5) return 'sttPower';
+  if (s.iasKts > st.kts0 + STEEP_KTS_TOL * 0.5) return 'sttFast';
   return 'sttHold';
 }
 
@@ -146,12 +160,17 @@ export function steepStep(st, sim, dt) {
 }
 // The coach's word and Kid's guide from the last step's input.
 export const steepCoach = (st, kid) => steepPrompt(st, _s, kid);
-export const kidGuide = (st, out) => steepKidGuide(st, _s, out);
+// kidGuide returns the assists' bank cap in the mission (main.js sets s.bankMaxDeg from it).
+export const kidGuide = (st, out) => (steepKidGuide(st, _s, out), STEEP_ASSIST_BANK_DEG);
 
 const WEIGHTS = { alt: 0.35, speed: 0.2, bank: 0.25, rollout: 0.2 };
 export const STEEP_ACS_CAP = 84; // the top of a B: outside a test tolerance is not an A
 export const STEEP_LOST_CAP = 54; // the top of a D
-export const STEEP_KID_NOTE = 'Kid level: the plane flew the turns for you';
+// The bank is held to ±5° too: under 90% of each turn's middle at 45° ±5 is outside the standard (≤ B),
+// under 30% is not a steep turn (≤ D).
+export const STEEP_BANK_SHARE_B = 0.9;
+export const STEEP_BANK_SHARE_D = 0.3;
+export const STEEP_KID_NOTE = 'The plane flew the turns for you'; // results.js already says "Kid level"
 
 // The grade from the drill's state at 'complete' or 'failed'.
 export function gradeSteepTurns(st, kid = false) {
@@ -160,11 +179,11 @@ export function gradeSteepTurns(st, kid = false) {
   const share = st.bankS > 0 ? st.bankOkS / st.bankS : 0;
   const roll = st.rollout.length === 2 ? Math.max(...st.rollout) : null;
   const factors = [
-    { key: 'alt', label: 'Altitude held (test: ±100 ft)', value: `${st.altSignFt < 0 ? '−' : '+'}${Math.round(alt)} ft at worst`,
+    { key: 'alt', label: 'Altitude held (test: ±100 ft)', value: `${Math.round(alt) === 0 ? '' : st.altSignFt < 0 ? '−' : '+'}${Math.round(alt)} ft at worst`,
       score: curve(alt, [[50, 100], [100, 85], [200, 40], [300, 10], [400, 0]]) },
     { key: 'speed', label: 'Airspeed held (test: ±10 kt)', value: `±${Math.round(kts)} kt at worst`,
       score: curve(kts, [[5, 100], [10, 85], [15, 50], [25, 0]]) },
-    { key: 'bank', label: 'Bank 45° ±5 (share of the turns)', value: `${Math.round(share * 100)}%`,
+    { key: 'bank', label: 'Time at 45° ±5 of bank', value: `${Math.round(share * 100)}%`,
       score: curve(1 - share, [[0.05, 100], [0.2, 85], [0.5, 40], [0.8, 0]]) },
     { key: 'rollout', label: 'Rolled out on the heading (test: ±10°)', value: roll === null ? 'not both' : `${Math.round(roll)}° off`,
       score: roll === null ? 0 : curve(roll, [[5, 100], [10, 85], [20, 40], [45, 0]]) },
@@ -174,15 +193,19 @@ export function gradeSteepTurns(st, kid = false) {
   let reason = null;
   if (failed) {
     score = Math.min(score, STEEP_LOST_CAP);
-    reason = st.why === 'stall' ? 'Stalled in the turn: in a 45° bank the wing stalls ~19% faster. Shallower, then ease back.'
-      : st.why === 'height' ? `${st.altSignFt < 0 ? 'Lost' : 'Gained'} over ${STEEP_FAIL_FT} ft: ease back as you roll in, and add power.`
+    reason = st.why === 'stall' ? 'Stalled in the turn: at 45° of bank the stall speed is ~19% higher. Roll shallower, then ease back.'
+      : st.why === 'height' ? (st.altSignFt < 0 ? `Lost over ${STEEP_FAIL_FT} ft: ease back as you roll in, and add power.`
+        : `Gained over ${STEEP_FAIL_FT} ft: less back pressure, and ease off the power.`)
         : 'Not finished: two 360° turns, one each way.';
   } else if (alt > 2 * STEEP_ALT_TOL_FT) {
     score = Math.min(score, STEEP_LOST_CAP);
     reason = `${st.altSignFt < 0 ? 'Lost' : 'Gained'} ${Math.round(alt)} ft: the test allows 100. Capped at D.`;
-  } else if (alt > STEEP_ALT_TOL_FT || kts > STEEP_KTS_TOL || roll > STEEP_HDG_TOL_DEG) {
+  } else if (share < STEEP_BANK_SHARE_D) {
+    score = Math.min(score, STEEP_LOST_CAP);
+    reason = 'Not a steep turn: hold 45° of bank. Capped at D.';
+  } else if (alt > STEEP_ALT_TOL_FT || kts > STEEP_KTS_TOL || roll > STEEP_HDG_TOL_DEG || share < STEEP_BANK_SHARE_B) {
     score = Math.min(score, STEEP_ACS_CAP);
-    reason = 'Outside a test tolerance: no better than a B.';
+    reason = share < STEEP_BANK_SHARE_B ? 'Bank outside 45° ±5 for part of the turns: no better than a B.' : 'Outside a test tolerance: no better than a B.';
   }
   return { kind: 'steepTurns', title: failed ? 'Steep turns not finished' : 'Steep turns', grade: letterGrade(score), score, factors, reason,
     note: kid && !failed ? STEEP_KID_NOTE : null };
