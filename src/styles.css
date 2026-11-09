@@ -357,6 +357,10 @@ details[open] > summary::before { transform: rotate(90deg); }
 .fuel-readout { color: #6ee7b7; }
 .fuel-readout[data-fuel='low'] { color: #fbbf24; }
 .fuel-readout[data-fuel='out'] { color: #f87171; }
+/* Desktop clean view shows #topRow's strip and not the weather ribbon: the fuel gets a 7th cell there
+   (fuel.js toggles .hidden on #fuelCell). Never on a phone's strip or a touch screen (the label over THR). */
+@media (max-width: 1023px), (hover: none) and (pointer: coarse) { #fuelCell { display: none !important; } }
+@media (min-width: 1024px) { #phoneTelemetry:has(#fuelCell:not(.hidden)) { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
 
 /* The PAPI reading (0089): never colour alone (WCAG 1.4.1). main.js sets data-papi to the white-lamp
    count (0-4, '' with no runway ahead); the colour, a glyph and, on the desktop panel, the four lamps as

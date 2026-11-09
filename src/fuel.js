@@ -96,17 +96,19 @@ export const RESERVE_GAL = (RESERVE_MIN / 60) * fuelFlowGph(75);
 export const fuelLevel = (gal) => (gal <= 0 ? 'out' : gal < RESERVE_GAL ? 'low' : 'ok');
 
 // scene: the THREE.Scene main.js renders (its onBeforeRender is chained, as buffet.js's); sim: the shared
-// state. It owns sim.fuelGal and sim.fuelOut; main.js loadScenario sets both null for a new flight.
+// state. It owns sim.fuelGal and sim.fuelOut; main.js loadScenario sets sim.fuelGal null for a new flight.
 export function createFuel(scene, sim) {
-  const els = ['txtFuel', 'txtTouchFuel'].map((id) => document.getElementById(id)).filter(Boolean);
+  // #txtFuel: the weather ribbon (panels shown); #txtFuelCell: desktop clean view's top strip, under its own
+  // FUEL label (data-short: the line without "FUEL "); #txtTouchFuel: over the touch throttle's THR.
+  const els = ['txtFuel', 'txtFuelCell', 'txtTouchFuel'].map((id) => document.getElementById(id)).filter(Boolean);
   let lastT = null, shown = null, level = null, gph = 0, key = NaN, rpmAt = null;
   import('./engineSound.js').then((m) => { rpmAt = m.engineRpm; }).catch(console.warn); // no burn until it lands (ms)
   const show = (text, lvl) => {
     if (text === shown && lvl === level) return; // the DOM is written only when the line changes
     shown = text; level = lvl;
     for (const el of els) {
-      el.textContent = text ?? '';
-      el.classList.toggle('hidden', text === null);
+      el.textContent = (el.dataset.short ? text?.replace(/^FUEL /, '') : text) ?? '';
+      (el.closest('.fuel-cell') ?? el).classList.toggle('hidden', text === null);
       el.dataset.fuel = lvl ?? '';
     }
   };
@@ -117,14 +119,17 @@ export function createFuel(scene, sim) {
     const dt = lastT === null ? 0 : Math.min(1, Math.max(0, t - lastT));
     lastT = t;
     if (sim.spec?.engine?.type !== 'piston-prop' || sim.assist !== 'pilot') {
-      // No fuel to manage here: an engine the tank stopped (this flight) runs again; a drill's stays out.
-      if (sim.fuelOut) sim.engineFailed = false;
+      // No fuel to manage here. (A level change reloads the mission, main.js setAssist: a tank-stopped
+      // engine is the old flight's, and loadScenario sets engineFailed for the new one.)
       sim.fuelGal = sim.fuelOut = null;
       show(null, null);
       key = NaN;
       return;
     }
-    sim.fuelGal ??= startFuelGal(sim.onGround, (sim.pos.y + (sim.mslOffsetM ?? 0)) * 3.28084);
+    if (sim.fuelGal == null) { // a new flight: loadScenario nulls fuelGal
+      sim.fuelGal = startFuelGal(sim.onGround, (sim.pos.y + (sim.mslOffsetM ?? 0)) * 3.28084);
+      sim.fuelOut = false;
+    }
     if (!rpmAt) return;
     if (dt > 0) gph = fuelStep(sim, dt, rpmAt);
     // The line is built only when what it shows changes (tenths of a gallon, the minute, in or out of
