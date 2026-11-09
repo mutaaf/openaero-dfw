@@ -1,12 +1,12 @@
 ---
 id: 0079
 title: Stall buffet: feel the wing coming up on the stall, not only hear the horn
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 212
 ---
 
 ## Why
