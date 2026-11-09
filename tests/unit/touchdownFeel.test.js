@@ -13,7 +13,7 @@ describe('touchdownFeel (0147)', () => {
   });
   it('a 600 fpm touchdown is a heavy thump and a visible puff', () => {
     const f = touchdownFeel(-600);
-    expect(f.thump).toBeGreaterThanOrEqual(0.35);
+    expect(f.thump).toBeCloseTo(0.25, 5); // the cap: the heaviest it gets
     expect(f.puffAlpha).toBeGreaterThanOrEqual(0.7);
     expect(f.chirp).toBeGreaterThan(touchdownFeel(-100).chirp);
   });
@@ -34,6 +34,16 @@ describe('touchdownFeel (0147)', () => {
     expect(touchdownFeel(500).sink).toBe(0);
     expect(touchdownFeel(NaN).sink).toBe(0);
   });
+  it('a belly landing (gear up) thumps, without a tyre chirp or tyre smoke', () => {
+    const f = touchdownFeel(-150, false, true);
+    expect(f.chirp).toBe(0);
+    expect(f.puffAlpha).toBe(0);
+    expect(f.thump).toBeGreaterThan(0);
+  });
+  it('the thump never passes 0.25 (the callout chirp is 0.12)', () => {
+    expect(touchdownFeel(-5000).thump).toBeLessThanOrEqual(0.25);
+    expect(touchdownFeel(-5000, false, true).thump).toBeLessThanOrEqual(0.25);
+  });
   it('Kid (gentle) gets a light chirp only, however hard', () => {
     const f = touchdownFeel(-900, true);
     expect(f.chirp).toBeLessThan(0.06);
@@ -48,7 +58,7 @@ function fakeCtx() {
   const param = () => ({ value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} });
   const node = () => ({ connect: (n) => n, start() {}, stop() {}, frequency: param(), gain: param(), Q: param() });
   return {
-    made, currentTime: 1, sampleRate: 8000, destination: {},
+    made, state: 'running', currentTime: 1, sampleRate: 8000, destination: {},
     createBuffer: (c, n) => { made.buffers++; const d = new Float32Array(n); return { getChannelData: () => d }; },
     createBufferSource: () => { made.sources++; return node(); },
     createBiquadFilter: () => { made.filters++; return node(); },
@@ -63,7 +73,7 @@ describe('playTouchdown', () => {
     playTouchdown(ctx, touchdownFeel(-100));
     expect(ctx.made).toMatchObject({ buffers: 1, sources: 1, osc: 0 });
     playTouchdown(ctx, touchdownFeel(-650));
-    expect(ctx.made).toMatchObject({ buffers: 1, sources: 2, osc: 1 });
+    expect(ctx.made).toMatchObject({ buffers: 1, sources: 2, osc: 2 }); // the thump and its overtone
   });
 });
 
@@ -73,7 +83,7 @@ describe('createTouchdownFeel', () => {
     const ctx = fakeCtx();
     const root = new THREE.Object3D();
     root.position.set(10, 5, -20);
-    const sim = { lastAirVsi: -600, assist: kid ? 'kid' : 'pilot', spec: AIRCRAFT.b738, groundY: 1.2, windVec: new THREE.Vector3(4, 0, 0), audioEnabled: audioOn, paused: false };
+    const sim = { lastAirVsi: -600, assist: kid ? 'kid' : 'pilot', spec: AIRCRAFT.b738, groundY: 1.2, gearDown: true, gearPos: 1, windVec: new THREE.Vector3(4, 0, 0), audioEnabled: audioOn, paused: false };
     const feel = createTouchdownFeel(sim, () => root, { ctx }, reduced, () => t);
     return { feel, sim, ctx, root, setT: (v) => { t = v; } };
   };
@@ -92,7 +102,7 @@ describe('createTouchdownFeel', () => {
       expect(s.position.y).toBeLessThan(1.2 + 3); // at the runway, not at the CG 5 m up
       expect(s.material.opacity).toBeGreaterThan(0.5);
     }
-    expect(ctx.made.osc).toBe(1);
+    expect(ctx.made.osc).toBe(2);
     expect(feel.debug()).toMatchObject({ touches: 1, puffs: 2, sounded: 1, visible: 2 });
   });
 
@@ -136,7 +146,7 @@ describe('createTouchdownFeel', () => {
     feel.touch();
     expect(feel.sprites.some((s) => s.visible)).toBe(false);
     expect(ctx.made.sources).toBe(1);
-    expect(ctx.made.osc).toBe(1);
+    expect(ctx.made.osc).toBe(2);
   });
 
   it('sound off: silent, the puff stays', () => {
@@ -152,6 +162,33 @@ describe('createTouchdownFeel', () => {
     expect(ctx.made.sources).toBe(1);
     expect(ctx.made.osc).toBe(0);
     expect(feel.sprites.some((s) => s.visible)).toBe(false);
+  });
+
+  it('gear up: no puff, no chirp source, only the thump', () => {
+    const { feel, sim, ctx } = setup();
+    sim.gearPos = 0;
+    feel.touch();
+    expect(feel.sprites.some((s) => s.visible)).toBe(false);
+    expect(ctx.made.sources).toBe(1); // made, never started or connected
+    expect(ctx.made.osc).toBe(2);
+  });
+
+  it('a suspended context (iOS after a lock) plays nothing late', () => {
+    const { feel, ctx } = setup();
+    ctx.state = 'suspended';
+    feel.touch();
+    expect(ctx.made.sources + ctx.made.osc).toBe(0);
+  });
+
+  it('the wind it drifts in is fixed when the puff is born', () => {
+    const { feel, sim, setT } = setup();
+    feel.touch();
+    const s = feel.sprites.find((p) => p.visible);
+    const x0 = s.position.x;
+    sim.windVec.set(-40, 0, 0); // a new METAR after the touchdown
+    setT(100.5);
+    feel.update();
+    expect(s.position.x).toBeCloseTo(x0 + 0.76 * 4 * 0.5, 3);
   });
 
   it('no sound before audio has started (no context yet)', () => {

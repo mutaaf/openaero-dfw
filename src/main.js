@@ -1222,7 +1222,7 @@ let touchBuzzT = -1;
 function touchdownBuzz() {
   touchBuzzT = sim.simTime;
   hapt(touchdownPattern(sim.lastAirVsi, reducedMotion, sim.assist === 'kid'));
-  tdFeel?.touch(); // its chirp and tyre smoke (0147)
+  if (cockpitEntered && !modalOpen()) tdFeel?.touch(); // its chirp and tyre smoke (0147), not behind a menu
 }
 function updateHapticsButton() {
   const txt = byId('txtHapticsState');
