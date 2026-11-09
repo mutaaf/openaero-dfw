@@ -25,6 +25,7 @@ import { runwayEnd, approachGeometry } from '../../src/airports.js';
 import { DEADSTICK_KEY, createDeadStick, deadStickPrompt, kidGuide } from '../../src/deadStick.js';
 import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from '../../src/trim.js';
 import { radioAltitudeM } from '../../src/gear.js';
+import { engineRpm } from '../../src/engineSound.js';
 import { fuelStep, brakePowerPct, USABLE_GAL, START_TAXI_TAKEOFF_GAL, RESERVE_MIN } from '../../src/fuel.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -1232,9 +1233,10 @@ describe('Cessna 172S full-aileron roll rate vs JSBSim / Roskam (ticket 0153)', 
 // 10.4 GPH). In a fixed-pitch Cessna that much power at 8,000-8,500 ft is full throttle, so the cards
 // fly full throttle and let the model's power lapse and drag decide the speed and the burn.
 describe('Cessna 172S fuel burn vs POH (flightModel, ticket 0162)', () => {
-  function cruise(altFt, seconds = 60) {
+  function cruise(altFt, seconds = 60, throttle = 1, ktas = null) {
     const alt0 = altFt / M_TO_FT;
-    const b = makeBody(c172, { kts: 100, altM: alt0, throttle: 1 });
+    const kts = ktas ? ktas * Math.sqrt(airAt(alt0).sigma) : 100; // indicated
+    const b = makeBody(c172, { kts, altM: alt0, throttle });
     const hold = (x, dt) => {
       const { pitchDeg, bankRightDeg } = attitude(x);
       const vsErr = vsFpm(x);
@@ -1246,14 +1248,17 @@ describe('Cessna 172S fuel burn vs POH (flightModel, ticket 0162)', () => {
     fly(b, c172, 180, hold);
     b.fuelGal = 40;
     const tas = [];
-    fly(b, c172, seconds, (x, dt) => { hold(x, dt); fuelStep(x, dt); tas.push(x.tasKts); });
+    fly(b, c172, seconds, (x, dt) => { hold(x, dt); fuelStep(x, dt, engineRpm); tas.push(x.tasKts); });
     expect(Math.abs(b.pos.y - alt0) * M_TO_FT).toBeLessThan(100); // level
-    return { b, ktas: tas.reduce((a, c) => a + c, 0) / tas.length, gph: ((40 - b.fuelGal) / seconds) * 3600, bhp: brakePowerPct(b) };
+    return { b, ktas: tas.reduce((a, c) => a + c, 0) / tas.length, gph: ((40 - b.fuelGal) / seconds) * 3600, bhp: brakePowerPct(b, engineRpm) };
   }
 
-  it('full throttle level at 8,000 ft makes ~77% power and burns ~10.4 GPH (POH Fig. 5-8, 2700 rpm: ±5 points, ±10%)', () => {
+  // The model's full throttle there flies ~118 KTAS (the cruise card above: 124, ±8%) at ~2650 rpm, so
+  // its power is held to the same ±8%.
+  it('full throttle level at 8,000 ft makes ~77% power and burns ~10.4 GPH (POH Fig. 5-8, 2700 rpm: ±8%, ±10%)', () => {
     const { gph, bhp } = cruise(8000);
-    expect(Math.abs(bhp - 77)).toBeLessThanOrEqual(5);
+    console.log(`[c172 fuel] 8,000 ft full throttle: ${bhp.toFixed(1)}% (POH 77), ${gph.toFixed(2)} GPH (POH 10.4)`);
+    within(bhp, 77, 0.08);
     within(gph, 10.4, 0.1);
   });
 
@@ -1268,14 +1273,54 @@ describe('Cessna 172S fuel burn vs POH (flightModel, ticket 0162)', () => {
     within(hours, 4.26, 0.1);
   });
 
+  // Fig. 5-8's standard-temperature rows (ft, rpm, % BHP, KTAS): flown level at the row's KTAS (the model's
+  // own throttle for it, trimThrottle), the prop turns the row's rpm and the engine makes the row's power.
+  // The rpm is prop76.xml's Cp(J) against the IO-360's torque (engineSound.js), the power torque × rpm.
+  const ROWS = [[2000, 2550, 77, 118], [2000, 2300, 57, 104], [2000, 2100, 44, 90], [4000, 2500, 69, 115], [4000, 2200, 48, 96],
+    [6000, 2600, 73, 119], [6000, 2300, 51, 101], [8000, 2700, 77, 124], [8000, 2500, 61, 112], [8000, 2300, 48, 99], [8000, 2200, 43, 92],
+    [10000, 2700, 72, 123], [10000, 2500, 57, 111], [10000, 2300, 46, 97], [12000, 2500, 54, 109], [12000, 2300, 44, 95]];
+  it('level at each Fig. 5-8 row\'s KTAS the throttle reaches (standard temperature): the row\'s rpm (±3%) and % BHP (±5 points)', () => {
+    let worstRpm = 0, worstPct = 0;
+    const capped = [];
+    for (const [ft, rpm, pct, ktas] of ROWS) {
+      const air = airAt(ft / M_TO_FT), tas = ktas * KTS_TO_MPS;
+      const n = trimThrottle(c172, tas * Math.sqrt(air.sigma), 0, 0, true, air);
+      if (n >= 1) { capped.push(`${ft}/${rpm}`); continue; } // past full throttle: the cruise card's ±8% speed gap
+      const body = { engineN: n, pos: { y: ft / M_TO_FT }, tasKts: ktas, sigma: air.sigma };
+      worstRpm = Math.max(worstRpm, Math.abs(engineRpm(n, tas, air.sigma, true) / rpm - 1));
+      worstPct = Math.max(worstPct, Math.abs(brakePowerPct(body, engineRpm) - pct));
+    }
+    console.log(`[c172 fuel] Fig. 5-8 rows: worst rpm ${(worstRpm * 100).toFixed(1)}%, worst power ${worstPct.toFixed(1)} points; full throttle short of the row's KTAS: ${capped.join(' ')}`);
+    expect(capped.length).toBeLessThanOrEqual(2); // only the 2700 rpm rows at 8,000 and 10,000 ft
+    expect(worstRpm).toBeLessThanOrEqual(0.03);
+    expect(worstPct).toBeLessThanOrEqual(5);
+  });
+
+  // Section 1's second point: 45% power at 10,000 ft, 638 NM in 6.72 h (the same allowances; Fig. 5-7 to
+  // 10,000 ft: 20 min, 3.9 gal, 27 NM). Fig. 5-8's nearest row is 2300 rpm, 46%, 97 KTAS: the card sets
+  // the throttle that flies 97 KTAS level there and lets the model hold it and burn.
+  it('at ~45% power and 10,000 ft the tanks give ~638 NM in ~6.72 h (POH Section 1, ±10%)', () => {
+    const air = airAt(10000 / M_TO_FT);
+    const n = trimThrottle(c172, 97 * KTS_TO_MPS * Math.sqrt(air.sigma), 0, 0, true, air);
+    const { ktas, gph, bhp } = cruise(10000, 60, n, 97);
+    expect(Math.abs(bhp - 46)).toBeLessThanOrEqual(5);
+    const climb = { h: 20 / 60, gal: 3.9, nm: 27 };
+    const cruiseGal = USABLE_GAL - START_TAXI_TAKEOFF_GAL - climb.gal - (RESERVE_MIN / 60) * gph;
+    const hours = climb.h + cruiseGal / gph;
+    const nm = climb.nm + ktas * (cruiseGal / gph);
+    console.log(`[c172 fuel] 10,000 ft ${bhp.toFixed(1)}%: ${ktas.toFixed(1)} KTAS, ${gph.toFixed(2)} GPH -> ${nm.toFixed(0)} NM in ${hours.toFixed(2)} h (POH 638 NM, 6.72 h)`);
+    within(nm, 638, 0.1);
+    within(hours, 6.72, 0.1);
+  });
+
   it('a dry tank stops the engine: no power whatever the throttle, and the fuel says why', () => {
     const b = makeBody(c172, { kts: 100, altM: 3000 / M_TO_FT, throttle: 1 });
     b.fuelGal = 0.02; // ~6 s at full throttle
-    fly(b, c172, 30, (x, dt) => { x.throttle = 1; fuelStep(x, dt); x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z); });
+    fly(b, c172, 30, (x, dt) => { x.throttle = 1; fuelStep(x, dt, engineRpm); x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z); });
     expect(b.fuelGal).toBe(0);
     expect(b.engineFailed).toBe(true);
     expect(b.fuelOut).toBe(true);
     expect(b.engineN).toBeLessThan(0.01);
-    expect(brakePowerPct(b)).toBe(0);
+    expect(brakePowerPct(b, engineRpm)).toBe(0);
   });
 });

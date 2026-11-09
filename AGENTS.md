@@ -332,13 +332,16 @@ src/buffet.js       stall buffet (0079, in runwayLights.js's chunk, created by i
                     (the C172 a knot above Vs) buffets ~0.66. Cards: tests/flight/buffet.test.js. ?debug window.openaeroBuffet
 src/fuel.js         the Cessna's fuel (0162, in runwayLights.js's chunk, created with buffet.js on the group's 'added'; Pilot only):
                     53 gal usable, burnt on the sim clock (scene.onBeforeRender, sim.simTime) at the POH Fig. 5-8 lean flow for the
-                    brake power (engineN × engine.js's piston lapse, inlined with the ISA and pinned to it by a unit card; Fig. 5-8's
-                    rows are one line of % BHP, extended past 40-83% along its end segments). A ground spawn starts full, an airborne
+                    brake power: torque × rpm, the torque engineN × engine.js's piston lapse (inlined with the ISA and the altimeter
+                    setting, pinned by a unit card), the rpm engineSound.js engineRpm's (fetched lazily, passed in: a static import
+                    cost boot 20 B); at each Fig. 5-8 row's KTAS the model turns its rpm within ~1% and makes its power within ~4
+                    points (Fig. 5-8's rows are one line of % BHP, extended past 40-83% along its end segments). A ground spawn starts full, an airborne
                     one less Fig. 5-7's 1.4 gal start/taxi/takeoff and its climb fuel. Dry: sim.engineFailed (the dead-stick path, ENG
-                    OUT) and sim.fuelOut (the results card's FUEL EXHAUSTED). #txtFuel (EICAS) / #txtTouchFuel (over THR): "FUEL 50.2
-                    GAL 5:31" (h:mm at this burn), amber under the 45-min reserve. main.js loadScenario nulls sim.fuelGal/fuelOut;
+                    OUT) and sim.fuelOut (the results card's FUEL EXHAUSTED). #txtFuel (the weather ribbon, shown in clean view) /
+                    #txtTouchFuel (over THR, inside the throttle's 64 px: two lines): "FUEL 50.2 GAL 5h31" (the hours left at this
+                    burn, only at Fig. 5-8's 40-83% power, else gallons alone), amber under a fixed reserve (45 min at 75%, ~7.6 gal). main.js loadScenario nulls sim.fuelGal/fuelOut;
                     Kid/Learner and the jets have none (a tank-stopped engine runs again there). Cards: tests/flight/c172.test.js
-                    (Fig. 5-8 burn; Section 1's 518 NM / 4.26 h); ?debug window.openaeroFuel
+                    (Fig. 5-8 rows' rpm and power; burn; Section 1's 518 NM / 4.26 h and 638 NM / 6.72 h); ?debug window.openaeroFuel
 src/windsock.js     wind cones (0027, lazy chunk after boot): one beside every runway end's touchdown zone
                     (~1,000 ft in, ~300 ft left, clear of every runway), streaming downwind in its own field's
                     METAR (the flown field: sim.wx), lifted by drag ∝ V² to straight out at 15 kt at the cone (AC 150/5345-27)

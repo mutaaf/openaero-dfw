@@ -1,9 +1,10 @@
 // The Cessna's fuel (0162, src/fuel.js) against its own source, the Cessna 172S POH (July 8/98,
 // Rev. 4): Fig. 5-8 Cruise Performance and Fig. 5-7 Time, Fuel and Distance to Climb.
 import { describe, it, expect } from 'vitest';
-import { fuelFlowGph, climbFuelGal, startFuelGal, powerLapseAt, brakePowerPct, fuelStep, fuelText, fuelLevel, USABLE_GAL } from '../../src/fuel.js';
+import { fuelFlowGph, climbFuelGal, startFuelGal, powerLapseAt, brakePowerPct, fuelStep, fuelText, fuelLevel, RESERVE_GAL, USABLE_GAL } from '../../src/fuel.js';
 import { pistonPowerLapse } from '../../src/engine.js';
 import { airAt } from '../../src/atmosphere.js';
+import { engineRpm } from '../../src/engineSound.js';
 
 // Every row of Fig. 5-8 (2,550 lb, recommended lean mixture): [ft, rpm, then % BHP and GPH at
 // 20 °C below standard, standard and 20 °C above] (KTAS left out).
@@ -49,39 +50,60 @@ describe('fuel.js vs the C172S POH (0162)', () => {
     expect(startFuelGal(false, 8000)).toBeCloseTo(53 - 1.4 - 3.0, 5);
   });
 
-  it('its inlined power lapse is engine.js pistonPowerLapse over atmosphere.js airAt (0 to 14,000 ft, ISA −20 to +20 °C)', () => {
+  it('its inlined power lapse is engine.js pistonPowerLapse over atmosphere.js airAt (0 to 14,000 ft, ISA −20 to +20 °C, 29.42-30.42 inHg)', () => {
     for (const ft of [0, 2000, 4500, 8000, 10000, 14000]) {
       for (const dev of [-20, 0, 20]) {
-        const air = airAt(ft * 0.3048, dev);
-        expect(powerLapseAt(ft * 0.3048, dev)).toBeCloseTo(pistonPowerLapse(air.pressurePa, air.tempK), 4);
+        for (const inHg of [29.42, 29.92, 30.42]) {
+          const air = airAt(ft * 0.3048, dev, inHg);
+          expect(powerLapseAt(ft * 0.3048, dev, inHg)).toBeCloseTo(pistonPowerLapse(air.pressurePa, air.tempK), 4);
+        }
       }
     }
   });
 
+  it('brake power is torque × rpm, read as the physics reads the body: the spooled engineN (not the lever), the height above MSL (pos.y + mslOffsetM), the METAR air, the prop\'s rpm at this TAS', () => {
+    const air = airAt(2000, 10, 30.2);
+    const body = { engineN: 0.6, throttle: 1, pos: { y: 1800 }, mslOffsetM: 200, isaDevC: 10, altimInHg: 30.2, tasKts: 100, sigma: air.sigma };
+    const rpm = engineRpm(0.6, 100 * 0.514444, air.sigma, true);
+    expect(rpm).toBeGreaterThan(1500);
+    expect(rpm).toBeLessThan(2700);
+    expect(brakePowerPct(body, engineRpm)).toBeCloseTo(60 * pistonPowerLapse(air.pressurePa, air.tempK) * (rpm / 2700), 4);
+  });
+
   it('burns at the engine\'s brake power; a dry tank stops the engine and says why; a failed engine burns nothing', () => {
-    const body = { engineN: 1, pos: { y: 0 }, fuelGal: 20 };
-    const gph = fuelStep(body, 3600);
-    expect(brakePowerPct({ engineN: 1, pos: { y: 0 } })).toBeCloseTo(100, 6);
-    expect(gph).toBeCloseTo(fuelFlowGph(100), 6);
+    const body = { engineN: 1, pos: { y: 0 }, fuelGal: 20, tasKts: 126, sigma: 1 };
+    const bhp = brakePowerPct(body, engineRpm);
+    expect(bhp).toBeGreaterThan(95); // full throttle at the 126 KTAS maximum: ~2700 rpm, ~180 hp
+    expect(bhp).toBeLessThanOrEqual(101);
+    const gph = fuelStep(body, 3600, engineRpm);
+    expect(gph).toBeCloseTo(fuelFlowGph(bhp), 6);
     expect(body.fuelGal).toBeCloseTo(20 - gph, 6);
     expect(body.engineFailed).toBeUndefined();
-    fuelStep(body, 3600);
+    fuelStep(body, 3600, engineRpm);
     expect(body.fuelGal).toBe(0);
     expect(body.engineFailed).toBe(true);
     expect(body.fuelOut).toBe(true);
-    const dead = { engineN: 1, pos: { y: 0 }, fuelGal: 5, engineFailed: true };
-    expect(fuelStep(dead, 3600)).toBe(0);
+    const dead = { engineN: 1, pos: { y: 0 }, fuelGal: 5, engineFailed: true, tasKts: 100, sigma: 1 };
+    expect(fuelStep(dead, 3600, engineRpm)).toBe(0);
     expect(dead.fuelGal).toBe(5);
     expect(dead.fuelOut).toBeUndefined();
   });
 
-  it('the readout: gallons and h:mm at this burn; amber under the 45-minute reserve, red and EXHAUSTED when dry', () => {
-    expect(fuelText(53, 10.6)).toBe('FUEL 53.0 GAL 5:00');
-    expect(fuelText(7, 10)).toBe('FUEL 7.0 GAL 0:42');
-    expect(fuelText(12.3, 0)).toBe('FUEL 12.3 GAL');
-    expect(fuelText(0, 0)).toBe('FUEL EXHAUSTED');
-    expect(fuelLevel(53, 10)).toBe('ok');
-    expect(fuelLevel(7, 10)).toBe('low');
-    expect(fuelLevel(0, 0)).toBe('out');
+  it('the readout: gallons and the hours they last at a Fig. 5-8 power (5h00, never a clock\'s 5:00); gallons alone outside 40-83%', () => {
+    expect(fuelText(53, 75, 10.6)).toBe('FUEL 53.0 GAL 5h00');
+    expect(fuelText(7, 60, 10)).toBe('FUEL 7.0 GAL 0h42');
+    expect(fuelText(50.2, 5, 0.9)).toBe('FUEL 50.2 GAL'); // idle: the flow is our extrapolation
+    expect(fuelText(50.2, 100, 13)).toBe('FUEL 50.2 GAL'); // full power at sea level, past the table
+    expect(fuelText(12.3, 0, 0)).toBe('FUEL 12.3 GAL'); // a dead engine
+    expect(fuelText(0, 0, 0)).toBe('FUEL EXHAUSTED');
+  });
+
+  it('amber under a fixed reserve, 45 minutes at 75% power (~7.6 gal), whatever the throttle does; red and EXHAUSTED when dry', () => {
+    expect(RESERVE_GAL).toBeCloseTo(0.75 * fuelFlowGph(75), 6);
+    expect(RESERVE_GAL).toBeGreaterThan(7.3);
+    expect(RESERVE_GAL).toBeLessThan(7.9);
+    expect(fuelLevel(53)).toBe('ok');
+    expect(fuelLevel(7)).toBe('low');
+    expect(fuelLevel(0)).toBe('out');
   });
 });

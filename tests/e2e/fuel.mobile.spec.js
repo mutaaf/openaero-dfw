@@ -12,7 +12,7 @@ test('390x844 Pilot: FUEL over the throttle, inside the screen, overlapping noth
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   const el = page.locator('#txtTouchFuel');
   await expect(el).toBeVisible({ timeout: 10_000 });
-  await expect(el).toHaveText(/^FUEL \d+\.\d GAL \d+:\d\d$/);
+  await expect(el).toHaveText(/^FUEL \d+\.\d GAL( \d+h\d\d)?$/);
   const box = await el.boundingBox();
   const vp = page.viewportSize();
   expect(box.x).toBeGreaterThanOrEqual(0);
@@ -24,6 +24,19 @@ test('390x844 Pilot: FUEL over the throttle, inside the screen, overlapping noth
     const other = await page.locator(sel).boundingBox();
     if (other) expect(overlap(box, other), sel).toBe(false);
   }
+  // It takes no width from the touch deck (the device panel: a one-line label widened the throttle's
+  // column and squeezed the stick from 144 to 96 px): every control sits where it sits without it.
+  const boxes = () => Promise.all(['#touchThrottle', '#touchStick', '#txtTouchThr'].map((s) => page.locator(s).boundingBox()));
+  const withFuel = await boxes();
+  expect(box.width).toBeLessThanOrEqual(withFuel[0].width + 1);
+  await page.evaluate(() => document.getElementById('txtTouchFuel').classList.add('hidden'));
+  const without = await boxes();
+  for (let i = 0; i < 3; i++) {
+    expect(withFuel[i].x).toBeCloseTo(without[i].x, 0);
+    expect(withFuel[i].width).toBeCloseTo(without[i].width, 0);
+  }
+  expect(withFuel[1].width).toBeGreaterThanOrEqual(140);
+  await page.evaluate(() => document.getElementById('txtTouchFuel').classList.remove('hidden'));
   await page.screenshot({ path: test.info().outputPath('fuel-390x844.png') });
   expect(errors).toEqual([]);
 });

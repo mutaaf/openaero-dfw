@@ -23,7 +23,7 @@ test('Pilot, the Cessna aloft: FUEL with gallons and endurance; a dry tank stops
   await fly(page, 'mission=steep_turns');
   const el = page.locator('#txtFuel');
   await expect(el).toBeVisible();
-  await expect(el).toHaveText(/^FUEL \d+\.\d GAL \d+:\d\d$/);
+  await expect(el).toHaveText(/^FUEL \d+\.\d GAL( \d+h\d\d)?$/);
   // 3,000 ft over Grapevine Lake (~3,500 ft MSL): 53 less 1.4 to start and take off, ~1.3 to climb.
   const f0 = await fuel(page);
   expect(f0.gal).toBeGreaterThan(49.5);
