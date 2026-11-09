@@ -223,7 +223,7 @@ const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').ma
 let skyDome = null;
 let runwayLights = null;
 let windsocks = null; // windsock.js (0027), lazy
-let landingLight; // landingLight.js (0076), lazy (in the runway lights' chunk)
+let landingLight, tdFeel; // landingLight.js (0076), touchdownFeel.js (0147): lazy, in the runway lights' chunk
 // Landing replay (0019, lazy): the last 30 s at 20 Hz of sim time, REPLAY on the results card.
 let replayLib = null, replayBuf = null, replaying = null;
 let _sockT = 0;
@@ -407,16 +407,17 @@ function buildRunways() {
   scene.add(papiLamps);
 
   // Runway and approach lights (ticket 0011): their own chunk, after boot.
-  import('./runwayLights.js').then(({ createRunwayLights, createLandingLight }) => {
+  import('./runwayLights.js').then(({ createRunwayLights, createLandingLight, createTouchdownFeel }) => {
     runwayLights = createRunwayLights({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, reducedMotion });
     scene.add(runwayLights.points);
     scene.add((landingLight = createLandingLight(sim, () => aircraftRoot, ground.heightAt)).group); // the landing light (0076)
-  }).catch((err) => console.warn('Runway lights unavailable:', err.message));
+    scene.add((tdFeel = createTouchdownFeel(sim, () => aircraftRoot, audio, reducedMotion)).group);
+  }).catch(console.warn); // the failed import names its chunk
   // A wind cone by every runway end's touchdown zone, in its field's METAR wind (0027).
   import('./windsock.js').then(({ createWindsocks }) => {
     windsocks = createWindsocks({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, gustAt: gustFactor, surfaceFactor: surfaceWindFactor, reducedMotion });
     scene.add(windsocks.group);
-  }).catch((err) => console.warn('Windsocks unavailable:', err.message));
+  }).catch(console.warn);
   import('./replay.js').then((m) => { replayLib = m; replayBuf = m.createReplayBuffer(); }).catch(() => {});
 }
 
@@ -1221,6 +1222,7 @@ let touchBuzzT = -1;
 function touchdownBuzz() {
   touchBuzzT = sim.simTime;
   hapt(touchdownPattern(sim.lastAirVsi, reducedMotion, sim.assist === 'kid'));
+  if (cockpitEntered && !modalOpen()) tdFeel?.touch(); // its chirp and tyre smoke (0147), not behind a menu
 }
 function updateHapticsButton() {
   const txt = byId('txtHapticsState');
@@ -1257,7 +1259,7 @@ const tutor = createTutor();
 let tutorLib = null;
 import('./fbw.js').catch(console.warn); // the F-16's g/AoA limiter (0121): it installs itself; a failed load warns
 import('./supersonic.js').catch(console.warn); // the F-16's wave drag (0133): it installs itself
-import('./apTutor.js').then((m) => { tutorLib = m; }).catch((e) => console.warn('[openaero] no autopilot tutor:', e));
+import('./apTutor.js').then((m) => { tutorLib = m; }).catch(console.warn);
 let tutorEnabled = true;
 let coachHandover = false; // the player took over from the autopilot on a final
 const tutorInput = {
@@ -3344,7 +3346,7 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
 byId('btnAudio').addEventListener('click', () => {
-  if (!audio.started) audio.init();
+  if (!audio.ctx) audio.init();
   else {
     sim.audioEnabled = !sim.audioEnabled;
     updateAudioButton();
@@ -3527,7 +3529,6 @@ function populateMissionSelect() {
 // from MISSIONS so a new mission needs no HTML. Today's crosswind card (static, shown only
 // with live weather) sits under the recommended flight.
 const PICKER_TITLES = { recommended: 'Recommended first flight', drills: 'Drills', tours: 'Tours' };
-const PICKER_COLOURS = { final: 'text-sky-300', takeoff: 'text-sky-300', drill: 'text-sky-300', tour: 'text-amber-300' };
 function buildMissionPicker() {
   const list = byId('missionList');
   const crosswindCard = byId('btnCrosswindToday');
@@ -3554,7 +3555,7 @@ function missionCard(m, recommended) {
   const row = document.createElement('div');
   row.className = 'flex items-center justify-between gap-2 font-bold';
   const title = document.createElement('span');
-  title.className = recommended ? 'text-emerald-300' : PICKER_COLOURS[m.kind] || 'text-sky-300';
+  title.className = recommended ? 'text-emerald-300' : m.kind === 'tour' ? 'text-amber-300' : 'text-sky-300'; // tours amber, the rest sky
   title.textContent = m.label;
   const best = document.createElement('span');
   best.className = 'missionBest shrink-0 text-[10px] font-mono';

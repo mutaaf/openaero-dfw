@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { courseVector } from './airports.js';
 // The aircraft's landing light (0076) rides in this chunk: its own would cost the boot chunk a name.
 export { createLandingLight } from './landingLight.js';
+export { createTouchdownFeel } from './touchdownFeel.js'; // the touchdown's chirp and tyre smoke (0147)
 
 const FT = 0.3048;
 export const LIGHT = { edge: 0, centre: 1, threshold: 2, end: 3, approach: 4, flasher: 5 };
