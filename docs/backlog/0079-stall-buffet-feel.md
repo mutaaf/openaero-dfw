@@ -1,12 +1,12 @@
 ---
 id: 0079
 title: Stall buffet: feel the wing coming up on the stall, not only hear the horn
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 212
 ---
 
 ## Why
@@ -30,6 +30,9 @@ Never feeds back into physics.
 - [ ] With `prefers-reduced-motion: reduce` the camera does not move
 - [ ] No per-frame allocations; frame time within the perf probe budget
 - [ ] Silent and still in normal flight, takeoff and landing flare at Learner/Pilot
+  (as built, #212: Learner always; Pilot's flare unless it holds off to within ~2-3 kt of the stall:
+  a C172 full-stall touchdown a knot above Vs buffets ~0.66 in its last 5 ft, as the real airplane
+  does. The onset is ~85% of the stall angle, after the horn, not at it.)
 
 ## Test plan
 Unit test the curve per aircraft spec. E2E: hold the nose up in the Cessna until the horn

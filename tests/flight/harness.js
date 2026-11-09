@@ -303,8 +303,8 @@ export function crosswindTakeoff(spec, xwKts, { pedals = true, rotateKts = 55, p
 // bank and sideslip the slip needed on short final, and the widest the wheels strayed on the rollout
 // (brakes on, the pedals still on the centreline) to a stop. `wingLow: false` keeps the
 // feet flat (the ailerons still steer for the centreline, so it arrives crabbed and skating
-// sideways across its nose).
-export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 500, wingLow = true } = {}) {
+// sideways across its nose). `onStep(body, landed)` watches every sub-step.
+export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 500, wingLow = true, onStep = null } = {}) {
   const h0 = fromFt / M_TO_FT;
   const tan3 = Math.tan(3 * DEG_TO_RAD);
   const b = makeBody(spec, { kts, altM: h0 + spec.gearHeight, flaps, throttle: 0.3 });
@@ -315,6 +315,7 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
   let rudInt = 0, bankInt = 0, thrInt = b.throttle, flareFrom = null, td = null;
   let finalRudder = 0, finalAileron = 0, finalBank = 0, finalBeta = 0, finalN = 0, maxRollOffFt = 0;
   fly(b, spec, 240, (x, dt) => {
+    onStep?.(x, !!td); // an observer (0079's buffet card): the body, and whether it has touched down
     const yawLeft = yawLeftDegOf(x);
     const { pitchDeg, bankRightDeg } = attitude(x);
     const wheelM = x.pos.y - x.groundY - spec.gearHeight;
