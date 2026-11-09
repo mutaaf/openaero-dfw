@@ -19,8 +19,10 @@ export function showResults(sim, result, best, end, gate) {
   byId('txtScore').textContent = String(result.score);
   byId('txtResultRunway').textContent = end.name;
   const reason = byId('txtGradeReason');
-  reason.textContent = result.reason || '';
-  reason.classList.toggle('hidden', !result.reason);
+  // A tank run dry (fuel.js, 0162) says so first: the engine didn't just fail.
+  const why = [sim.fuelOut && 'FUEL EXHAUSTED: the engine stopped.', result.reason].filter(Boolean).join(' ');
+  reason.textContent = why;
+  reason.classList.toggle('hidden', !why);
   // The one thing to fix next time (0061); none for an S or a drill's own card.
   const tip = landingTip(result, { kid: sim.assist === 'kid', noEngine: !!sim.engineFailed });
   byId('txtTip').textContent = tip || '';
