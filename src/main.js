@@ -44,7 +44,6 @@ import {
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare } from './input.js';
 import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from './trim.js';
-import { pollGamepad, BUTTON } from './gamepad.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun, defaultTimeMode } from './sun.js';
@@ -994,6 +993,20 @@ function checkWindshear(dt) {
   showResults(result, best, wsLib.SHEAR_END, null);
 }
 
+// --- Steep turns (ticket 0161, steepTurns.js): sim.steepTurns on that mission, graded after both
+// turns (or not finished); null once graded, so KEEP FLYING is free flight.
+let stLib = null;
+function checkSteepTurns(dt) {
+  const ev = sim.steepTurns && stLib.steepStep(sim.steepTurns, sim, dt);
+  if (ev !== 'complete' && ev !== 'failed') return;
+  const result = stLib.gradeSteepTurns(sim.steepTurns, sim.assist === 'kid');
+  sim.steepTurns = null;
+  let best = { isNewBest: false, best: null };
+  try { best = recordBest(window.localStorage, assistBestKey(sim.missionKey, sim.assist), result); } catch { /* storage unavailable */ }
+  updateCoach(0);
+  showResults(result, best, stLib.STEEP_PLACE, null);
+}
+
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
 // only instructions) until Skip; their state is null on every other mission.
 function startDrills(mission) {
@@ -1003,8 +1016,10 @@ function startDrills(mission) {
   sim.engineOut = null;
   sim.rto = null;
   sim.windshear = null;
+  sim.steepTurns = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns);
+  if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
   if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
@@ -1279,7 +1294,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1307,6 +1322,7 @@ function updateCoach(dt) {
     coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
       : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim)
       : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
+      : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
       : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
     coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach) ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
@@ -1647,6 +1663,7 @@ function step6DofPhysics(dt) {
   if (sim.engineOut && eoLib.engineOutStep(sim.engineOut, sim)) sim.engineFailed = true;
   checkRto();
   checkWindshear(dt);
+  checkSteepTurns(dt);
   checkTouchdown(dt);
   checkTakeoffCallouts();
 }
@@ -2418,6 +2435,9 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   else if (sim.engineFailed && sim.engineOut) eoLib.kidGuide(sim, _assistIn);
   // The traffic pattern (0048): Kid's guide flies the legs and turns (pattern.js kidGuide).
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
+  // Steep turns (0161): a 45° cap for Kid and Learner, and Kid's guide flies the turns.
+  _assistIn.bankMaxDeg = sim.steepTurns ? stLib.STEEP_ASSIST_BANK_DEG : 0;
+  if (sim.steepTurns) stLib.kidGuide(sim.steepTurns, _assistIn);
   _assistIn.noFloor = sim.engineFailed;
   // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
   runwayUnderWheels(gsMps, noseDeg);
@@ -2449,7 +2469,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
       sim.throttle = 1; // full power until 1,000 ft
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : 0;
+      // The go-around drill's fast approach; the steep turns' entry speed (0161).
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : 0;
       sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
@@ -2922,6 +2943,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.deadStick = null;
   sim.engineOut = null;
   sim.rto = null;
+  sim.steepTurns = null;
   sim.windshear = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
@@ -3241,24 +3263,21 @@ function showToast(msg, ms = 3500) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), ms);
 }
 const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
-window.addEventListener('gamepadconnected', (e) => showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`));
+let padLib = null; // gamepad.js: fetched on the first pad (0161)
+window.addEventListener('gamepadconnected', (e) => {
+  import('./gamepad.js').then((m) => (padLib = m)).catch((err) => console.warn('[openaero] no gamepad:', err));
+  showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`);
+});
 window.addEventListener('gamepaddisconnected', () => { sim.pad = null; showToast('🎮 Controller disconnected'); });
 
 // Per-frame gamepad poll: continuous axes into sim.pad, edge-triggered buttons into actions.
 function updateGamepad() {
-  const p = pollGamepad();
+  const p = padLib?.pollGamepad();
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
   if (replaying) { if (p.edges.length) replaying.stop(); return; } // any button ends the replay (0019), nothing else
   if (!controlsSheetEl.classList.contains('hidden')) return; // no pad button acts behind the controls sheet
-  for (const b of p.edges) {
-    if (b === BUTTON.A) byId('btnFlaps').click();
-    else if (b === BUTTON.B) byId('btnGear').click();
-    else if (b === BUTTON.X) byId('btnBrakes').click();
-    else if (b === BUTTON.Y) byId('btnCamera').click();
-    else if (b === BUTTON.START) byId('btnPause').click();
-    else if (b === BUTTON.DPAD_UP) byId('btnApApr').click();
-  }
+  for (const b of p.edges) if (padLib.PAD_CLICKS[b]) byId(padLib.PAD_CLICKS[b]).click();
 }
 
 // Canvas Dragging for Orbit Camera & Mouse-Fly
@@ -3483,6 +3502,7 @@ window.openaeroDebug = () => {
     engineFailed: !!sim.engineFailed,
     rto: sim.rto ? { ...sim.rto } : null,
     windshear: sim.windshear ? { ...sim.windshear } : null,
+    steepTurns: sim.steepTurns ? { ...sim.steepTurns } : null,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,

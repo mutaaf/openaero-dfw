@@ -481,3 +481,20 @@ describe('on the runway (groundSteerRudder, 0110)', () => {
     expect(shapeControls(cfg, createAssistState(), { ...ground, crossM: 10 }, 1 / 120, {}).rud).toBeLessThan(0);
   });
 });
+
+describe('the pitch hold in a turn (0161)', () => {
+  // A coordinated turn pitches the nose up at (g/V)·tan φ·sin φ: at the held attitude with exactly
+  // that rate the hold asks no elevator, and damping the whole rate (the old law) pushed the nose down.
+  it('asks no elevator at the held pitch and the turn\'s own pitch rate; nose down only past it', () => {
+    const v = 50, phi = 45 * Math.PI / 180, q = 9.81 / v * Math.tan(phi) * Math.sin(phi);
+    const s = { pitchIn: 0, rollIn: 0.5, yawIn: 0, pitchDeg: 4, bankRightDeg: 45, pitchRateUp: q, rollRateRight: 0, aoaDeg: 5,
+      betaDeg: 0, stallAoaDeg: 14, tailstrikeDeg: 15, onGround: false, wheelHeightM: 900, airspeedMps: v, vsMps: 0, guideBankDeg: 0, guideGammaDeg: 0, bankMaxDeg: 53 };
+    const st = createAssistState(), out = {};
+    shapeControls(assistConfig('learner'), st, s, 0.01, out);
+    expect(Math.abs(out.elev)).toBeLessThan(1e-9);
+    shapeControls(assistConfig('learner'), st, { ...s, bankRightDeg: -45 }, 0.01, out); // a left turn too
+    expect(Math.abs(out.elev)).toBeLessThan(1e-9);
+    shapeControls(assistConfig('learner'), st, { ...s, pitchRateUp: q + 0.1 }, 0.01, out);
+    expect(out.elev).toBeGreaterThan(0); // + = nose down: the rate past the turn's is still damped
+  });
+});

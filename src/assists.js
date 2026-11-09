@@ -152,10 +152,16 @@ export function shapeControls(cfg, st, s, dt, out) {
   const pitchAtAoaMax = s.pitchDeg - s.aoaDeg + aoaMax;
   const pitchCmd = Math.min(st.pitchHoldDeg, pitchAtAoaMax);
   if (pitchCmd < st.pitchHoldDeg) st.pitchHoldDeg = Math.max(pitchCmd, cfg.pitchDownMaxDeg * CMD_SHARE);
-  out.elev = elevatorForPitch(pitchCmd, s.pitchDeg, s.pitchRateUp);
+  // In a coordinated turn the nose pitches up at q = (g/V)·tan φ·sin φ (body axes; ~8°/s at 45° and
+  // 95 KIAS) to stay on the horizon: the hold damps only the rate past that (0161: damping all of it
+  // held the nose ~3° low in a 45° bank, and Kid's steep turn sank 320 ft).
+  const phi = clamp(s.bankRightDeg, -60, 60) * Math.PI / 180;
+  const turnQ = s.airspeedMps > 20 ? 9.81 / s.airspeedMps * Math.tan(phi) * Math.sin(phi) : 0;
+  out.elev = elevatorForPitch(pitchCmd, s.pitchDeg, s.pitchRateUp - turnQ);
 
   // Roll: the stick commands a bank angle, capped; release = wings level.
-  const bankLimit = cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M ? FLARE_BANK_DEG : cfg.bankMaxDeg;
+  // s.bankMaxDeg: a mission's own cap (the steep turns' 45°, 0161), else the level's.
+  const bankLimit = cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M ? FLARE_BANK_DEG : s.bankMaxDeg || cfg.bankMaxDeg;
   const bankShare = bankLimit * CMD_SHARE;
   const bankCmd = Math.abs(s.rollIn) <= DEAD && cfg.handsOff
     ? clamp(s.guideBankDeg, -bankShare, bankShare)

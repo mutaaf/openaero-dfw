@@ -1,5 +1,6 @@
 // Gamepad support (standard mapping). Pure helpers are unit-tested; pollGamepad() is the
-// thin browser wrapper called once per frame from main.js.
+// thin browser wrapper called once per frame from main.js. A lazy chunk: main.js fetches it on the
+// first gamepadconnected (0161: off the boot budget; no pad, no poll).
 //
 // Mapping: left stick = roll/pitch (stick back = nose up), LB/RB = rudder,
 // RT/LT = throttle up/down, right stick forward/back = pitch trim nose down/up (0094), A = flaps, B = gear, X = brakes, Y = camera,
@@ -42,6 +43,9 @@ export function buttonEdges(prev, buttons) {
 }
 
 export const BUTTON = { A: 0, B: 1, X: 2, Y: 3, START: 9, DPAD_UP: 12 };
+// The button each edge presses (main.js clicks it): A flaps, B gear, X brakes, Y camera,
+// Start pause, D-pad up the ILS autoland.
+export const PAD_CLICKS = { [BUTTON.A]: 'btnFlaps', [BUTTON.B]: 'btnGear', [BUTTON.X]: 'btnBrakes', [BUTTON.Y]: 'btnCamera', [BUTTON.START]: 'btnPause', [BUTTON.DPAD_UP]: 'btnApApr' };
 
 // Browser wrapper: returns { targets, edges, id } for the first connected pad, or null.
 let prevPressed = [];

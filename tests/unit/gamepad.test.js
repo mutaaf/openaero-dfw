@@ -51,3 +51,13 @@ describe('buttonEdges', () => {
     expect(buttonEdges(prev, now)).toEqual([0]);
   });
 });
+
+describe('PAD_CLICKS (0161: main.js clicks these on a button edge)', () => {
+  it('A flaps, B gear, X brakes, Y camera, Start pause, D-pad up the ILS autoland', async () => {
+    const { PAD_CLICKS, BUTTON } = await import('../../src/gamepad.js');
+    expect(PAD_CLICKS).toEqual({
+      [BUTTON.A]: 'btnFlaps', [BUTTON.B]: 'btnGear', [BUTTON.X]: 'btnBrakes',
+      [BUTTON.Y]: 'btnCamera', [BUTTON.START]: 'btnPause', [BUTTON.DPAD_UP]: 'btnApApr',
+    });
+  });
+});
