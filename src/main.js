@@ -407,12 +407,11 @@ function buildRunways() {
   scene.add(papiLamps);
 
   // Runway and approach lights (ticket 0011): their own chunk, after boot.
-  import('./runwayLights.js').then(({ createRunwayLights, createLandingLight, createTouchdownFeel, createBuffet }) => {
+  import('./runwayLights.js').then(({ createRunwayLights, createLandingLight, createTouchdownFeel }) => {
     runwayLights = createRunwayLights({ runways: RUNWAYS_GEOM, endById: runwayEndById, heightAt: ground.heightAt, reducedMotion });
     scene.add(runwayLights.points);
     scene.add((landingLight = createLandingLight(sim, () => aircraftRoot, ground.heightAt)).group); // the landing light (0076)
     scene.add((tdFeel = createTouchdownFeel(sim, () => aircraftRoot, audio, reducedMotion)).group);
-    createBuffet(scene, sim, audio, reducedMotion); // the stall buffet (0079): its own scene hooks
   }).catch(console.warn); // the failed import names its chunk
   // A wind cone by every runway end's touchdown zone, in its field's METAR wind (0027).
   import('./windsock.js').then(({ createWindsocks }) => {

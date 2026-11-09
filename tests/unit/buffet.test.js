@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallAoaDeg } from '../../src/aero.js';
-import { buffetIntensity, shakeAt, BUFFET_ONSET, SHAKE_DEG } from '../../src/buffet.js';
+import { buffetIntensity, wingBuffet, shakeAt, BUFFET_ONSET, SHAKE_DEG } from '../../src/buffet.js';
+import { stallSpeedKts } from '../../src/aero.js';
 
 describe('buffetIntensity (0079)', () => {
   for (const [key, spec] of Object.entries(AIRCRAFT_DATABASE)) {
@@ -24,11 +25,35 @@ describe('buffetIntensity (0079)', () => {
       });
     }
   }
-  it('nothing at negative or zero AoA, or without a stall angle', () => {
-    expect(buffetIntensity(-20, 15)).toBe(0);
+  it('symmetric in AoA (the lift curve stalls on |α|); nothing at 0 or without a stall angle', () => {
+    expect(buffetIntensity(-20, 15)).toBe(1);
+    expect(buffetIntensity(-0.925 * 15, 15)).toBeCloseTo(buffetIntensity(0.925 * 15, 15), 12);
     expect(buffetIntensity(0, 15)).toBe(0);
     expect(buffetIntensity(20, 0)).toBe(0);
     expect(buffetIntensity(NaN, 15)).toBe(0);
+  });
+  it('onset at 85% of the stall angle, half way up at 92.5% (a smoothstep, not a ramp or a square)', () => {
+    expect(BUFFET_ONSET).toBe(0.85);
+    expect(buffetIntensity(0.925 * 15, 15)).toBeCloseTo(0.5, 6);
+    expect(buffetIntensity(0.8875 * 15, 15)).toBeCloseTo(0.15625, 6); // t = 1/4: 3t² − 2t³
+  });
+});
+
+describe('wingBuffet (0079)', () => {
+  const c172 = AIRCRAFT_DATABASE.c172;
+  it('takes the stall angle where the flaps are (flapPos, in transit), not where the lever is', () => {
+    // A go-around: the lever up (0), the flaps still at 30° (notch 3): the wing breaks at 13.3°.
+    const body = { flapsIndex: 0, flapPos: 3, iasKts: 60 };
+    expect(wingBuffet(c172, body, 13.3)).toBe(1);
+    expect(buffetIntensity(13.3, stallAoaDeg(c172, 0))).toBeLessThan(0.8); // the lever's angle would say ~0.7
+  });
+  it('full at the 1 g stall speed and above; fading with (IAS / Vs)² below it', () => {
+    const vs = stallSpeedKts(c172, 0);
+    expect(wingBuffet(c172, { flapPos: 0, iasKts: vs }, 20)).toBeCloseTo(1, 9);
+    expect(wingBuffet(c172, { flapPos: 0, iasKts: 2 * vs }, 20)).toBe(1);
+    expect(wingBuffet(c172, { flapPos: 0, iasKts: vs / 2 }, 20)).toBeCloseTo(0.25, 9);
+    expect(wingBuffet(c172, { flapPos: 0, iasKts: 5 }, 20)).toBeLessThan(0.02); // a tail slide
+    expect(wingBuffet(c172, { flapPos: 0, iasKts: 60 }, 5)).toBe(0);
   });
 });
 

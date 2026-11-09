@@ -10,8 +10,17 @@ import * as THREE from 'three';
 import { courseVector } from './airports.js';
 // The aircraft's landing light (0076) rides in this chunk: its own would cost the boot chunk a name.
 export { createLandingLight } from './landingLight.js';
-export { createTouchdownFeel } from './touchdownFeel.js'; // the touchdown's chirp and tyre smoke (0147)
-export { createBuffet } from './buffet.js'; // the stall buffet's shake and rumble (0079)
+import { createTouchdownFeel as touchdownFeel } from './touchdownFeel.js';
+import { createBuffet } from './buffet.js';
+// The touchdown's chirp and tyre smoke (0147), and with it the stall buffet's shake and rumble (0079):
+// the buffet hooks the scene the touchdown group is added to (main.js scene.add), so boot pays
+// nothing for it (its 201 kB line had no room for even the constructor call).
+export function createTouchdownFeel(sim, root, audio, reducedMotion) {
+  const feel = touchdownFeel(sim, root, audio, reducedMotion);
+  let buffet = null;
+  feel.group.addEventListener('added', () => { buffet ??= createBuffet(feel.group.parent, sim, audio, reducedMotion); });
+  return feel;
+}
 
 const FT = 0.3048;
 export const LIGHT = { edge: 0, centre: 1, threshold: 2, end: 3, approach: 4, flasher: 5 };

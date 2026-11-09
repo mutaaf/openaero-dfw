@@ -35,6 +35,13 @@ test('held nose-up at idle near the stall: the wing buffets and the camera shake
   expect(d.peakShakeDeg).toBeGreaterThan(0);
   expect(d.peakShakeDeg).toBeLessThanOrEqual(0.38); // pitch ≤ 0.35°, yaw ≤ 0.14°: √(0.35² + 0.14²)
   expect(d.cue).toBe(0);
+  // The ATC Tower view (4th press of C's button): the tower doesn't feel the wing (first-timer panel).
+  await page.evaluate(() => { for (let i = 0; i < 4; i++) document.getElementById('btnCamera').click(); window.openaeroBuffet.resetPeak(); });
+  await expect(page.locator('#txtCamMode')).toHaveText('ATC Tower');
+  await page.waitForTimeout(500);
+  const tower = await buffet(page);
+  expect(tower.intensity).toBeGreaterThan(0);
+  expect(tower.peakShakeDeg).toBe(0);
   await page.keyboard.up('KeyS');
   // Paused (the menu's PAUSE): still, and the rumble's target 0.
   await page.evaluate(() => document.getElementById('btnPause').click());
