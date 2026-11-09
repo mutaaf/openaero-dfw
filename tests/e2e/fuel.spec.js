@@ -65,3 +65,35 @@ test('Pilot in the 737 (the default final): no fuel readout', async ({ page }) =
   expect((await fuel(page)).gal).toBeNull();
   expect(errors).toEqual([]);
 });
+
+// The default desktop is the clean view (panels folded, the weather ribbon with them): the fuel is a 7th
+// cell in the top strip there (found live after #213: the ribbon readout was hidden by default).
+test('desktop clean view, Pilot: FUEL in the top strip, EXHAUSTED when dry', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = collectErrors(page);
+  await page.addInitScript(() => localStorage.setItem('openaero_view_v1', '{"v":1,"clean":true,"at":0}'));
+  await fly(page, 'mission=steep_turns');
+  const cell = page.locator('#txtFuelCell');
+  await expect(cell).toBeVisible();
+  await expect(cell).toHaveText(/^\d+\.\d GAL( \d+h\d\d)?$/);
+  await expect(page.locator('#fuelCell')).toContainText('FUEL');
+  // Inside the strip, one line, clear of the GEAR · FLAPS cell beside it.
+  const strip = await page.locator('#phoneTelemetry').boundingBox();
+  const box = await cell.boundingBox();
+  expect(box.x + box.width).toBeLessThanOrEqual(strip.x + strip.width);
+  expect(box.height).toBeLessThan(20);
+  const gear = await page.locator('#txtPhoneConfig').boundingBox();
+  expect(gear.x + gear.width).toBeLessThanOrEqual(box.x + 1);
+  await page.evaluate(() => window.openaeroFuel.set(0.0005));
+  await expect(cell).toHaveText('EXHAUSTED', { timeout: 15_000 });
+  await page.screenshot({ path: test.info().outputPath('fuel-clean-1280.png') });
+  expect(errors).toEqual([]);
+});
+
+test('desktop clean view, Kid: no fuel cell', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => { localStorage.setItem('openaero_view_v1', '{"v":1,"clean":true,"at":0}'); localStorage.setItem('openaero_assist_v1', '{"v":1,"level":"kid","at":0}'); });
+  await fly(page, 'mission=steep_turns');
+  await page.waitForTimeout(1000);
+  await expect(page.locator('#fuelCell')).toBeHidden();
+});

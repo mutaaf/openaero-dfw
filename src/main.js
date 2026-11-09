@@ -2529,7 +2529,7 @@ function loadScenario(key, final = null) {
   sim.landingGraded = false;
   sim.airborneTime = 0;
   sim.lastLanding = null;
-  sim.fuelGal = sim.fuelOut = null; // fuel.js fills the tanks for the new flight (0162)
+  sim.fuelGal = null; // fuel.js fills the tanks (and clears fuelOut) for the new flight (0162)
   pendingLanding = null;
   startGoAroundDrill(mission);
   startDrills(mission);
