@@ -25,6 +25,7 @@ import { runwayEnd, approachGeometry } from '../../src/airports.js';
 import { DEADSTICK_KEY, createDeadStick, deadStickPrompt, kidGuide } from '../../src/deadStick.js';
 import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from '../../src/trim.js';
 import { radioAltitudeM } from '../../src/gear.js';
+import { fuelStep, brakePowerPct, USABLE_GAL, START_TAXI_TAKEOFF_GAL, RESERVE_MIN } from '../../src/fuel.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
@@ -1220,5 +1221,61 @@ describe('Cessna 172S full-aileron roll rate vs JSBSim / Roskam (ticket 0153)', 
     useFdm(null);
     const slow = steadyRoll(c172, 60, ALT_M), fast = steadyRoll(c172, 110, ALT_M);
     expect(fast.rateDegS / slow.rateDegS).toBeGreaterThan(1 + 0.5 * (fast.tasKts / slow.tasKts - 1));
+  });
+});
+
+// Fuel (ticket 0162, src/fuel.js): the burn at the model's own power, flown level, against the POH.
+// Cessna 172S POH (July 8/98, Rev. 4): Section 1 (75% power at 8,500 ft: 518 NM, 4.26 h on 53 gal
+// usable, recommended lean, allowing for start, taxi, takeoff, climb and a 45-minute reserve);
+// Fig. 5-7 (climb from sea level to 8,500 ft: 15.5 min, 3.2 gal, 20.5 NM, interpolated; 1.4 gal
+// start, taxi and takeoff); Fig. 5-8 (8,000 ft, standard temperature, 2700 rpm: 77% BHP, 124 KTAS,
+// 10.4 GPH). In a fixed-pitch Cessna that much power at 8,000-8,500 ft is full throttle, so the cards
+// fly full throttle and let the model's power lapse and drag decide the speed and the burn.
+describe('Cessna 172S fuel burn vs POH (flightModel, ticket 0162)', () => {
+  function cruise(altFt, seconds = 60) {
+    const alt0 = altFt / M_TO_FT;
+    const b = makeBody(c172, { kts: 100, altM: alt0, throttle: 1 });
+    const hold = (x, dt) => {
+      const { pitchDeg, bankRightDeg } = attitude(x);
+      const vsErr = vsFpm(x);
+      x.pitchTrim = (x.pitchTrim ?? x.pitchCmd) + ((alt0 - x.pos.y) * 0.002 - vsErr * 0.00005) * dt * 20;
+      x.pitchCmd = Math.max(-5, Math.min(20, x.pitchTrim + (alt0 - x.pos.y) * 0.02 - vsErr * 0.001));
+      x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+    };
+    fly(b, c172, 180, hold);
+    b.fuelGal = 40;
+    const tas = [];
+    fly(b, c172, seconds, (x, dt) => { hold(x, dt); fuelStep(x, dt); tas.push(x.tasKts); });
+    expect(Math.abs(b.pos.y - alt0) * M_TO_FT).toBeLessThan(100); // level
+    return { b, ktas: tas.reduce((a, c) => a + c, 0) / tas.length, gph: ((40 - b.fuelGal) / seconds) * 3600, bhp: brakePowerPct(b) };
+  }
+
+  it('full throttle level at 8,000 ft makes ~77% power and burns ~10.4 GPH (POH Fig. 5-8, 2700 rpm: ±5 points, ±10%)', () => {
+    const { gph, bhp } = cruise(8000);
+    expect(Math.abs(bhp - 77)).toBeLessThanOrEqual(5);
+    within(gph, 10.4, 0.1);
+  });
+
+  it('at 8,500 ft the tanks give ~518 NM in ~4.26 h with the POH\'s allowances and 45 min reserve (POH Section 1, ±10%)', () => {
+    const { ktas, gph } = cruise(8500);
+    const climb = { h: 15.5 / 60, gal: 3.2, nm: 20.5 }; // Fig. 5-7, sea level to 8,500 ft
+    const cruiseGal = USABLE_GAL - START_TAXI_TAKEOFF_GAL - climb.gal - (RESERVE_MIN / 60) * gph;
+    const hours = climb.h + cruiseGal / gph;
+    const nm = climb.nm + ktas * (cruiseGal / gph);
+    console.log(`[c172 fuel] 8,500 ft full throttle: ${ktas.toFixed(1)} KTAS, ${gph.toFixed(2)} GPH -> ${nm.toFixed(0)} NM in ${hours.toFixed(2)} h (POH 518 NM, 4.26 h)`);
+    within(nm, 518, 0.1);
+    within(hours, 4.26, 0.1);
+  });
+
+  it('a dry tank stops the engine: no power whatever the throttle, and the fuel says why', () => {
+    const b = makeBody(c172, { kts: 100, altM: 3000 / M_TO_FT, throttle: 1 });
+    b.fuelGal = 0.02; // ~6 s at full throttle
+    fly(b, c172, 30, (x, dt) => { x.throttle = 1; fuelStep(x, dt); x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z); });
+    expect(b.fuelGal).toBe(0);
+    expect(b.engineFailed).toBe(true);
+    expect(b.fuelOut).toBe(true);
+    expect(b.engineN).toBeLessThan(0.01);
+    expect(brakePowerPct(b)).toBe(0);
   });
 });

@@ -330,6 +330,7 @@
       <div class="text-right text-[10px]">
         <div>G-LOAD <span id="txtGLoad" class="text-emerald-400 font-bold">1.00G</span></div>
         <div>V/S <span id="txtVsi" class="text-sky-300">-720 FPM</span></div>
+        <div id="txtFuel" class="fuel-readout hidden font-bold whitespace-nowrap" aria-live="polite"></div>
       </div>
     </div>
 
@@ -454,6 +455,7 @@
     <div class="flex items-end justify-between gap-2 px-3">
       <div id="touchLeft" class="flex items-end gap-1.5">
         <div class="pointer-events-auto flex flex-col items-center gap-1">
+          <span id="txtTouchFuel" class="fuel-readout hidden self-start text-[10px] font-bold bg-slate-900/90 rounded px-1.5 whitespace-nowrap"></span>
           <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1.5">THR <b id="txtTouchThr" class="text-emerald-400">44%</b></span>
           <div id="touchThrottle" class="touch-control hud-glass relative w-16 h-44 rounded-2xl overflow-hidden" aria-label="Throttle" role="slider" aria-valuemin="0" aria-valuemax="100">
             <div id="touchThrottleFill" class="absolute inset-x-0 bottom-0 bg-emerald-500/30"></div>
