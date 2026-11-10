@@ -167,10 +167,16 @@ function brighter(page, a, b, y0 = 0.5) {
   }, [a, b, y0]);
 }
 async function lightOnOff(page) {
-  await page.evaluate(() => window.openaeroDebugFinal('KDFW', '35C', 0.15));
+  // Teleport, let exactly one frame step the physics (the telemetry, aglFt included, is written there;
+  // a frame's dt is capped), then pause, all inside the page: a click after a poll let a slow CI
+  // runner fly from ~100 ft down to 56 ft first (main, 2026-11-10).
+  await page.evaluate(async () => {
+    window.openaeroDebugFinal('KDFW', '35C', 0.15);
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    document.getElementById('btnPause').click();
+  });
   await expect.poll(async () => (await snap(page)).mission).toBe('debug_KDFW_35C_0.15');
-  await page.locator('#btnPause').click();
-  await expect.poll(async () => (await snap(page)).paused).toBe(true);
+  expect((await snap(page)).paused).toBe(true);
   const agl = (await snap(page)).aglFt;
   const on = await page.evaluate(() => window.openaeroLandingLight.debug());
   // The teleport streams new imagery tiles: wait until none has arrived for a second.
@@ -197,6 +203,8 @@ async function lightOnOff(page) {
 }
 
 test('the landing light lights the ground ahead at 100 ft on a night final, and nothing at Noon (0076)', async ({ page }) => {
+  // Two settled-tile waits (up to 30 s each) and four full-res frame compares: 60 s ran out on a slow runner.
+  test.setTimeout(150_000);
   const errors = collectErrors(page);
   await page.goto(`${BASE}?debug`);
   await page.locator('#onboardingModal').waitFor({ state: 'visible' });
@@ -205,7 +213,7 @@ test('the landing light lights the ground ahead at 100 ft on a night final, and 
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   await expect.poll(() => page.evaluate(() => !!window.openaeroLandingLight), { timeout: 15_000 }).toBe(true);
   const night = await lightOnOff(page);
-  // ~100 ft at the spawn; a slow runner flies a second or so before the pause lands (76 ft at 4x CPU throttle).
+  // ~100 ft at the spawn, paused one frame after the teleport.
   expect(night.agl, JSON.stringify(night)).toBeGreaterThan(60);
   expect(night.agl, JSON.stringify(night)).toBeLessThan(120);
   expect(night.on).toMatchObject({ on: true, lit: true });
