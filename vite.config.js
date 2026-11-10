@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 // every HTML response. Path exclusions need a paid plan, so the game's HTML opts out with
 // `Cache-Control: no-transform` instead (AGENTS.md §3.3: no analytics). Workers static assets
 // read `_headers` from the root of the assets directory (./dist), one level above outDir.
-const HEADERS = ['/openaero/', '/openaero/index.html']
+const HEADERS = ['/openaero/', '/openaero/index.html', '/openaero/guide/', '/openaero/guide/index.html']
   .map((path) => `${path}\n  Cache-Control: public, max-age=0, must-revalidate, no-transform\n`)
   .join('');
 
