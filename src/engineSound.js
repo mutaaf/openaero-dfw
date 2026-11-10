@@ -22,6 +22,8 @@
 // open with N1, so the spool lag (engine.js spoolEngine) is audible; the 737 lower and
 // rounder, the F-16 higher with a brighter rasp. Those two voicings are tuning, not data.
 
+export { audioSession } from './audioSession.js'; // iOS's silent switch (0169): rides in this lazy chunk
+
 const D = 1.9304; // m, 76 in
 const D5 = D ** 5;
 const Q_FULL = (180 * 745.7) / ((2 * Math.PI * 2700) / 60); // N·m at 2700 rpm, ~475

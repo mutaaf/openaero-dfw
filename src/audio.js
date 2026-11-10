@@ -10,7 +10,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
   let engineOsc = null, engineFilter = null, engineGain = null;
   let windNoiseNode = null, windFilter = null, windGain = null;
   let stallOsc = null, stallGain = null;
-  let voice = null; const v = { hz: 150, gain: 0.08, filterHz: 450 }; // a plain drone until (or if never) it loads // engineSound.js (0148, lazy)
+  let voice = null, session = null; const v = { hz: 150, gain: 0.08, filterHz: 450 }; // a plain drone until (or if never) it loads // engineSound.js (0148, lazy)
 
   function init() {
     if (audioCtx) {
@@ -34,7 +34,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
       engineFilter.connect(engineGain);
       engineGain.connect(audioCtx.destination);
       engineOsc.start();
-      import('./engineSound.js').then((m) => { voice = m.engineVoice; }, () => {});
+      import('./engineSound.js').then((m) => { voice = m.engineVoice; session = m.audioSession; }, () => {});
 
       // Wind rush noise synthesis
       const bufferSize = audioCtx.sampleRate * 2;
@@ -146,6 +146,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
 
   // flying false (the start screen over the default final) holds the callouts.
   function update(flying = true) {
+    session?.(sim); // set once sound has started (init's lazy import); iOS: play through the silent switch (0169, audioSession.js)
     if (sim.paused) return;
     if (flying) {
       checkGpwsCallouts();

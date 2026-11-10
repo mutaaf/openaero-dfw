@@ -679,7 +679,7 @@ function buildAircraft(type) {
       fan.add(disc);
       plane.add(fan);
 
-      const exhaust = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.4, 16), titaniumMat);
+      const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0, 0.55, 1.4, 16), titaniumMat);
       exhaust.rotation.x = -Math.PI / 2;
       exhaust.position.set(ex, -1.35, 1.4);
       plane.add(exhaust);
@@ -711,7 +711,7 @@ function buildAircraft(type) {
     cabin.position.set(0, 0.15, -0.2);
     cGroup.add(cabin);
 
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.72, 1.8, 16), fuselageWhite);
+    const nose = new THREE.Mesh(new THREE.CylinderGeometry(0, 0.72, 1.8, 16), fuselageWhite);
     nose.rotation.x = -Math.PI / 2;
     nose.position.set(0, 0, -3.1);
     cGroup.add(nose);
@@ -760,7 +760,7 @@ function buildAircraft(type) {
     fuse.rotation.x = Math.PI / 2;
     fGroup.add(fuse);
 
-    const radome = new THREE.Mesh(new THREE.ConeGeometry(0.75, 3.8, 16), fanMat);
+    const radome = new THREE.Mesh(new THREE.CylinderGeometry(0, 0.75, 3.8, 16), fanMat);
     radome.rotation.x = -Math.PI / 2;
     radome.position.set(0, 0, -7.6);
     fGroup.add(radome);
@@ -787,7 +787,7 @@ function buildAircraft(type) {
     fGroup.add(vFin);
     fGroup.add(hinged('ctl_rudder', 0, 1.7, 5.1, 0.14, 2.8, 0.6, { mat: airlineBlue }));
 
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.5, 12), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+    const flame = new THREE.Mesh(new THREE.CylinderGeometry(0, 0.55, 3.5, 12), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
     flame.rotation.x = Math.PI / 2;
     flame.position.set(0, 0, 7.8);
     fGroup.add(flame);

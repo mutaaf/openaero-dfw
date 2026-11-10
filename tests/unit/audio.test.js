@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createAudio } from '../../src/audio.js';
+import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 
 // Captions (0117): the callouts are picked whether or not sound is on (audio never started here).
 // raFt: the radio altitude at the main wheels the callouts read (0122); aglFt is the CG's.
@@ -112,5 +113,80 @@ describe('the callouts read the radio altitude at the wheels, not the CG (0122)'
     const sim = simAt(245, { vsiFpm: -2000, aglFt: 257 });
     createAudio(sim, () => {}, (t) => said.push(t)).update();
     expect(said).toEqual(['pull up']);
+  });
+});
+
+// iOS's silent switch (0169): Web Audio on iOS is an 'ambient' session by default, which the ringer
+// switch mutes: the coach, the callouts, the engine and the stall horn all go silent with no hint why.
+// navigator.audioSession.type = 'playback' plays through it (src/audioSession.js, in engineSound.js's
+// lazy chunk, which init() fetches): 'auto' with sound off, 'ambient' paused; untouched without the API.
+describe('the audio session plays through the iPhone silent switch (0169)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const node = () => ({
+    connect() {}, start() {}, stop() {}, frequency: { setValueAtTime() {}, setTargetAtTime() {} },
+    gain: { value: 0, setValueAtTime() {}, setTargetAtTime() {}, exponentialRampToValueAtTime() {} },
+  });
+  class FakeCtx {
+    constructor() { this.state = 'running'; this.currentTime = 0; this.sampleRate = 8000; this.destination = {}; }
+    createOscillator() { return node(); } createBiquadFilter() { return node(); } createGain() { return node(); }
+    createBufferSource() { return node(); } createBuffer(_c, n) { return { getChannelData: () => new Float32Array(n) }; }
+    suspend() { return Promise.resolve(); } resume() { return Promise.resolve(); }
+  }
+  const flying = () => simAt(3000, { iasKts: 120, spec: AIRCRAFT_DATABASE.c172, flapsIndex: 0, engineN: 0.6, onGround: false, vel: { y: 0 } });
+  const withSession = () => {
+    const types = [];
+    const s = { _t: 'auto', get type() { return this._t; }, set type(t) { this._t = t; types.push(t); } };
+    vi.stubGlobal('navigator', { audioSession: s });
+    vi.stubGlobal('window', { AudioContext: FakeCtx });
+    return { s, types };
+  };
+
+  it('starting sound sets "playback"; nothing is set before the player starts it', async () => {
+    const { s, types } = withSession();
+    const sim = flying();
+    const audio = createAudio(sim, () => {});
+    audio.update();
+    expect(types).toEqual([]);
+    audio.init();
+    await vi.dynamicImportSettled();
+    audio.update();
+    expect(s.type).toBe('playback');
+  });
+
+  it('sound off sets "auto"; on again sets "playback"', async () => {
+    const { s } = withSession();
+    const sim = flying();
+    const audio = createAudio(sim, () => {});
+    audio.init();
+    await vi.dynamicImportSettled();
+    sim.audioEnabled = false; audio.update();
+    expect(s.type).toBe('auto');
+    sim.audioEnabled = true; audio.update();
+    expect(s.type).toBe('playback');
+  });
+
+  it('paused (or hidden) is "ambient"; Resume is "playback" again', async () => {
+    const { s } = withSession();
+    const sim = flying();
+    const audio = createAudio(sim, () => {});
+    audio.init();
+    await vi.dynamicImportSettled();
+    audio.update();
+    sim.paused = true; audio.pause(true); audio.update();
+    expect(s.type).toBe('ambient');
+    sim.paused = false; audio.pause(false); audio.update();
+    expect(s.type).toBe('playback');
+  });
+
+  it('without navigator.audioSession (desktop Chromium, Firefox) nothing throws', async () => {
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('window', { AudioContext: FakeCtx });
+    const sim = flying();
+    const audio = createAudio(sim, () => {});
+    audio.init();
+    await vi.dynamicImportSettled();
+    expect(() => { audio.update(); audio.pause(true); audio.pause(false); sim.audioEnabled = false; audio.update(); }).not.toThrow();
+    expect(sim.audioEnabled).toBe(false);
+    expect(audio.state).toBe('running');
   });
 });
