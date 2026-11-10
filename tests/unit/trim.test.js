@@ -83,7 +83,7 @@ describe('pitch trim (ticket 0094)', () => {
 });
 
 describe('takeoff trim (ticket 0141)', () => {
-  it('the Cessna\'s takeoff spawn trims for Vy 74 KIAS (POH) flaps up, and keeps 1.2 Vr with flaps set (0109)', () => {
+  it('the Cessna\'s takeoff spawn trims for Vy 74 KIAS (POH) flaps up, and keeps 1.2 Vr with flaps set (0170)', () => {
     expect(c172.vyKts).toBe(74);
     expect(trimSpeedKts(c172, takeoffTrimAoaDeg(c172, 0), 0)).toBeCloseTo(74, 6);
     for (const f of [1, 2, 3]) expect(takeoffTrimAoaDeg(c172, f)).toBe(trimAoaDeg(c172, c172.vrKts * 0.617, f));

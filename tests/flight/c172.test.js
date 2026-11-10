@@ -705,17 +705,19 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S stall recov
   });
 });
 
-// Full back stick after the stall (ticket 0094): idle, wings level, the stick held full back
-// from the stall for 30 s. Before 0090 flightModel.js locked at α 90°; after it, it cycled
-// between α ~13° and ~69° (a falling leaf); with 0102's stiffer pitch it settles. Both models
-// settle near α 40°: full stick is spec.elevatorAlphaDeg (36.7°) of α past the trim, on Roskam's
-// linear Cmα and Cmδe, which our JSBSim C172 shares, so JSBSim is not an independent check of the
-// depth. A real 172's post-stall pitch break would hold it shallower; that needs a cited
-// post-stall Cm (ticket 0109). Pinned here: no falling leaf, and the two models agree.
-function fullBackAfterStall() {
-  const b = Object.assign(makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 }), { autoTrim: false });
+// Full back stick after the stall (tickets 0094, 0109): idle, wings level, the stick held full back
+// from the stall for 30 s. Before 0090 flightModel.js locked at α 90°; after it, it cycled between
+// α ~13° and ~69° (a falling leaf); with 0102's stiffer pitch it settled, but at α 39.7-41.9° (JSBSim
+// 41.6°): Roskam's linear Cmα and Cmδe give full stick 36.7° of α past the trim at any angle. 0109
+// (src/pitchBreak.js) breaks both models past the stall from NASA's rotary-balance tunnel data for
+// high-wing GA singles (CR-3097 model B, CR-3201 model C, static points): the up elevator keeps a
+// quarter to a half of its power past α 18° and the Cm breaks nose down at the stall, so full back
+// stick balances just past it, α ~16-18° on the reports' own tables. Pinned: no falling leaf, both
+// models in that band, and the two agree (both carry the same tables).
+function fullBackAfterStall(flaps = 0) {
+  const b = Object.assign(makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0, flaps }), { autoTrim: false });
   const entry = speedHoldPilot((x) => Math.max(20, 80 - x.t));
-  const sa = stallAoaDeg(c172, 0);
+  const sa = stallAoaDeg(c172, flaps);
   let stallT = null;
   const late = [];
   fly(b, c172, 60, (x, dt) => {
@@ -729,9 +731,9 @@ function fullBackAfterStall() {
   return { minA: Math.min(...late), maxA: Math.max(...late), meanA: late.reduce((a, v) => a + v, 0) / late.length };
 }
 
-describe('Cessna 172S full back stick after the stall (both models, ticket 0094)', () => {
+describe('Cessna 172S full back stick after the stall (both models, tickets 0094, 0109)', () => {
   afterAll(() => useFdm(null));
-  it('no falling leaf: α settles (swings under 5° in the last 10 s, under 45°) and flightModel.js is within 3° of JSBSim', async () => {
+  it('no falling leaf: α settles (swings under 5° in the last 10 s) at 15-20°, where NASA CR-3097/CR-3201 balance full up elevator, and flightModel.js is within 3° of JSBSim', async () => {
     useFdm(null);
     const fm = fullBackAfterStall();
     useFdm(await nodeJsbsim());
@@ -740,13 +742,20 @@ describe('Cessna 172S full back stick after the stall (both models, ticket 0094)
     for (const [name, r] of [['flightModel', fm], ['jsbsim', jsb]]) {
       console.log(`[c172 ${name}] full back after the stall: α ${r.minA.toFixed(1)}-${r.maxA.toFixed(1)}° in the last 10 s (mean ${r.meanA.toFixed(1)}°)`);
       expect(r.maxA - r.minA).toBeLessThan(5);
-      expect(r.maxA).toBeLessThan(45);
+      expect(r.minA).toBeGreaterThanOrEqual(15);
+      expect(r.maxA).toBeLessThanOrEqual(20);
     }
     expect(Math.abs(fm.meanA - jsb.meanA)).toBeLessThan(3);
   }, 30000);
-  it.fails('KNOWN GAP (0109): flightModel.js settles at α ≤ 40° (a cited post-stall pitch break; measured 39.7-41.9°)', () => {
+  it('flaps 10, 20 and 30: full back stick after the stall settles at α 15-20° too (flightModel.js)', () => {
     useFdm(null);
-    expect(fullBackAfterStall().maxA).toBeLessThanOrEqual(40);
+    for (const flaps of [1, 2, 3]) {
+      const r = fullBackAfterStall(flaps);
+      console.log(`[c172 flightModel] flaps ${flaps * 10} full back after the stall: α ${r.minA.toFixed(1)}-${r.maxA.toFixed(1)}°`);
+      expect(r.maxA - r.minA).toBeLessThan(5);
+      expect(r.minA).toBeGreaterThanOrEqual(15);
+      expect(r.maxA).toBeLessThanOrEqual(20);
+    }
   });
 });
 
@@ -946,11 +955,11 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
       expect(slow.tailN).toBeLessThan(1.3 * fine.tailN);
       expect(-slow.downQ).toBeLessThan(1.3 * -fine.downQ);
     });
-    // Both models then pitch on past 30° a few feet up (JSBSim ~37-42°, flightModel.js ~43°): the
-    // elevator's full 36.7° of α past the trim on Roskam's linear Cmα/Cmδe, which neither model
-    // breaks past the stall. A real 172's elevator runs out near the stall; that needs a cited
-    // post-stall pitching moment (ticket 0109).
-    it.fails(`KNOWN GAP (0109): flaps ${flaps * 10}, held: peak pitch under 20° while the wheels are under 5 ft`, () => {
+    // Before 0109 both models pitched on past 30° a few feet up (the elevator's linear 36.7° of α);
+    // with the post-stall break (α ~19-20° at most) they peak lower: JSBSim 20.0° / 21.7°, flightModel.js
+    // 24.7° / 25.0° (flaps 0 / 10), pitching on to ~31-33° higher up as the speed bleeds at α ~17°. The
+    // ~20° bound is 0144's estimate, not a source; flightModel.js's 3-5° over JSBSim is ticket 0170.
+    it.fails(`KNOWN GAP (0170): flaps ${flaps * 10}, held: peak pitch under 20° while the wheels are under 5 ft`, () => {
       useFdm(null);
       expect(fullAftAtVr(flaps).peakLowDeg).toBeLessThan(20);
     });
@@ -1015,7 +1024,7 @@ describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, t
   });
   // Flaps 10 keeps 1.2 Vr (trim.js): Vy's lower nose leaves a held partial pull (touch, gamepad)
   // short of speed and back on the runway (device panel, #177). 0144's tail contact stops the
-  // rotation on the runway, not the climb past 20° a few feet up: that waits on 0109.
+  // rotation on the runway, not the climb past 20° a few feet up: 0109 broke the stall, the rest is 0170.
   it('logs flaps 10 and the over-rotations (10-12°) it does not card', () => {
     for (const [flaps, pitches] of [[1, [6, 7, 8, 9, 10, 11, 12]], [0, [10, 11, 12]]]) for (const pitchDeg of pitches) {
       const r = handsOffTakeoff(flaps, pitchDeg);
@@ -1028,7 +1037,9 @@ describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, t
 // A held partial pull (touch, gamepad; 0144's criterion, still open): 40-60% of the stick held
 // from Vr until "positive rate" (wheels > 5 ft, > 300 fpm), then let go, on Vy's trim at flaps 10.
 // Measured after 0144: 40% back on the runway, 50-60% a stall warning and back on it (the nose
-// passes 25-32° first). The held stick's α past the stall is ticket 0109's post-stall pitch break.
+// passes 25-32° first). After 0109's post-stall break the pull holds α under ~17.5° and the nose
+// under ~23°, no stall warning, but 40-80% still settle back onto the runway once let go (~57 KIAS
+// at the release, trimmed for 74): not the post-stall pitch, ticket 0170.
 function heldPullTakeoff(pull, flaps) {
   const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: trimAoaDeg(c172, POH_VY_KTS * KTS_TO_MPS, flaps) });
   const warnKts = stallWarningKts(c172, flaps);
@@ -1041,7 +1052,7 @@ function heldPullTakeoff(pull, flaps) {
   return { rel, warned, landed };
 }
 describe('Cessna 172S held partial pull at Vr, flaps 10 on Vy trim (flightModel, ticket 0144)', () => {
-  it.fails('KNOWN GAP (0109): a 40-60% pull held to positive rate, then let go, climbs away without a stall warning', () => {
+  it.fails('KNOWN GAP (0170): a 40-60% pull held to positive rate, then let go, climbs away without a stall warning', () => {
     for (const pull of [0.4, 0.5, 0.6]) {
       const r = heldPullTakeoff(pull, 1);
       expect(r.rel).not.toBeNull();

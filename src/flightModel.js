@@ -198,14 +198,18 @@ export function stepFlightModel(body, spec, dt) {
   // stick flies the trimmed speed. Its stiffness is the pitch authority over that angle (the
   // short period is as soft as the elevator is weak; the trim α per stick is the source's). A
   // pilot or autopilot that trims as it holds a pitch (body.autoTrim), or a fly-by-wire pitch
-  // law (spec.pitchFbw), carries the trim with the angle of attack, so the term is zero.
+  // law (spec.pitchFbw), carries the trim with the angle of attack, so the term is zero, all but the
+  // post-stall break (spec.pitchBreak, 0109): aerodynamic, so a trimming pilot meets it too.
   const authority = spec.pitchAuthority ?? 1.8;
   if (body.autoTrim || spec.pitchFbw || body.trimAlphaDeg == null) body.trimAlphaDeg = body.aoaDeg;
   const stiffness = spec.elevatorAlphaDeg ? authority / (spec.elevatorAlphaDeg * DEG_TO_RAD) : 0;
-  const alphaErr = MathUtils.clamp(aoaRad - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
+  // From α 8° (spec.pitchBreak, pitchBreak.js, 0109: NASA rotary-balance data) the nose-up elevator
+  // fades and past the stall the nose breaks down, so a held pull no longer out-pulls the stall.
+  const pb = spec.pitchBreak;
+  const alphaErr = MathUtils.clamp(aoaRad + (pb ? pb.breakDeg(body.aoaDeg) * DEG_TO_RAD : 0) - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
   // The stick's steady pitch rate (pitch authority over damping); a fly-by-wire airframe's g and
   // AoA limiter (spec.fbw, fbw.js, 0121) caps it in the air, so a held pull stops at the limits.
-  let qCmd = -body.elevInput * authority / spec.pitchDamping;
+  let qCmd = -body.elevInput * authority / spec.pitchDamping * (pb ? pb.eta(body.aoaDeg, body.elevInput) : 1);
   if (spec.fbw) qCmd = spec.fbw(body, spec, qCmd, aoaRad, fBodyY, airspeed, qDyn);
   const qRate = (qCmd * spec.pitchDamping - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
