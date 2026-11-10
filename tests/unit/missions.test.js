@@ -12,11 +12,12 @@ describe('groupMissions (0029)', () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('puts the recommended final first, then airports in order, then drills, then tours', () => {
+  it('puts the recommended final first, then airports in order, then weather, drills, then tours', () => {
     expect(groups[0]).toMatchObject({ id: 'recommended' });
     expect(groups[0].missions.map((m) => m.key)).toEqual([RECOMMENDED_KEY]);
-    expect(groups.map((g) => g.id)).toEqual(['recommended', 'KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY', 'drills', 'tours']);
-    for (const g of groups.slice(1, -2)) {
+    expect(groups.map((g) => g.id)).toEqual(['recommended', 'KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY', 'weather', 'drills', 'tours']);
+    expect(groups.at(-3).missions.every((m) => m.group === 'weather')).toBe(true);
+    for (const g of groups.slice(1, -3)) {
       for (const m of g.missions) expect(m.airport).toBe(g.id);
     }
     expect(groups.at(-2).missions.every((m) => m.kind === 'drill')).toBe(true);
