@@ -1,8 +1,8 @@
 ---
 id: 0109
 title: C172 post-stall pitch break from a cited source: full back stick should not hold α 40°
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: authenticity
 created: 2026-10-29

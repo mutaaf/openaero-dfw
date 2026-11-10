@@ -1,7 +1,7 @@
 ---
 id: 0070
 title: Give the 737 a flaps 5 takeoff notch that flies the published crew speeds
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
