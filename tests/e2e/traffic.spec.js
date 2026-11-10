@@ -39,9 +39,10 @@ test('the default final: a 737 on the parallel final ahead, on its own runway, o
 
 test('no traffic away from DFW (a Love Field final)', async ({ page }) => {
   await fly(page, '&mission=kdal_31r_final');
-  await page.waitForTimeout(4000);
-  const t = await page.evaluate(() => window.openaeroTraffic?.() ?? null);
-  // The chunk may not have loaded the model (nothing to draw): either way there is no jet.
-  expect(t?.jet ?? null).toBeNull();
-  expect(t?.spawned ?? 0).toBe(0);
+  // The chunk loads on every flight; on a Love Field final it never places a jet.
+  await expect.poll(() => page.evaluate(() => typeof window.openaeroTraffic), { timeout: 15_000 }).toBe('function');
+  await page.waitForTimeout(7000); // past the first spawn time (FIRST_SPAWN_S, 5 s of flight)
+  const t = await page.evaluate(() => window.openaeroTraffic());
+  expect(t.jet).toBeNull();
+  expect(t.spawned).toBe(0);
 });

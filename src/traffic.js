@@ -20,7 +20,8 @@
 // per page, shared). The jet steps the flight model at 1/60 s (once a frame at 60 fps); drawing
 // it is one model copy, culled by three off screen. Off for the rest of a flight once the adaptive
 // resolution (resScale.js) has fallen to its floor of 1 on a device that started above it: the
-// device's own "this phone is struggling" signal. Allocates nothing per frame.
+// device's own "this phone is struggling" signal. Makes no objects per frame (stepFlightModel's own
+// number boxing is the player's step's too).
 import { Vector3, Quaternion, Euler } from 'three';
 import { RUNWAY_ENDS, RUNWAYS_GEOM, approachSpawn, AIM_POINT_M } from './airports.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
@@ -51,7 +52,8 @@ export const MIN_SEP_M = NM_TO_M;        // never placed within 1 NM of the play
 export const FLOW_DEG = 30;              // a parallel: within this of the player's runway heading
 export const AHEAD_NM = 2;               // the first jet: this much closer to its runway than the player
 export const SPAWN_NM = [4, 8];          // every jet after it
-export const FIRST_SPAWN_S = 1;          // after a flight starts
+export const FIRST_SPAWN_S = 5;          // after a flight starts: past resScale's 1 s grace and its first windows, so a
+                                         // struggling phone is off before it fetches the model (device panel)
 export const GAP_S = [40, 90];           // after one jet leaves, before the next
 export const VACATE_KTS = 30;            // slowed to this on the rollout: it turns off (despawns)
 export const SHORT_RWY_M = 2835;         // 9,300 ft: shorter than this, autobrake 3 (17L/35R's 8,500 ft), else 2
@@ -143,6 +145,8 @@ export function createTrafficJet(end, distNm, air, fm, spec = AIRCRAFT_DATABASE[
     flapsIndex: FLAPS, gearDown: true, brakesOn: false, apMaster: true, autobrake: end.lengthM < SHORT_RWY_M ? 3 : 2,
     autoTrim: true, trimAlphaDeg: trimAoaDeg(spec, vApp, FLAPS),
     onGround: false, groundY: end.thrY, iasKts: vApp / KTS_TO_MPS, tasKts: 0, aoaDeg: trimAoaDeg(spec, vApp, FLAPS),
+    // Every field stepFlightModel writes, present from the start: one object shape for its lookups.
+    gsKts: 0, mach: 0, betaDeg: 0, accelY: 0, loadFactor: 1, sigma: 1, lastAirVsi: 0, spoilers: 0,
     mslOffsetM, isaDevC, altimInHg,
   };
   body.engineN = body.throttle;
@@ -152,7 +156,7 @@ export function createTrafficJet(end, distNm, air, fm, spec = AIRCRAFT_DATABASE[
     spec, fm, end, rwy: runwayOf(end), body,
     dx: Math.sin(r), dz: -Math.cos(r),
     phase: 'final', // final → flare → rollout → done
-    at: { trim: 0 }, prevIas: null, iasRate: 0, gsInt: 0, groundS: 0, t: 0,
+    at: { trim: 0 }, prevIas: NaN, iasRate: 0, gsInt: 0, groundS: 0, t: 0,
     touchdown: null, // { alongM, crossM, vsFpm, iasKts } at the first main-wheel contact
     _air: {},
   };
@@ -171,7 +175,7 @@ function autoThrottle(j, kts, gammaDeg, dt) {
 }
 
 // One sub-step of the jet's autopilot and flight model (main.js's ILS coupling, autoland and
-// autothrottle, flown here on the jet's own state). Scalars only: allocates nothing.
+// autothrottle, flown here on the jet's own state). Scalars only: makes no objects.
 export function stepTrafficJet(j, dt) {
   const b = j.body, spec = j.spec, e = j.end;
   if (j.phase === 'done') return;
@@ -184,7 +188,7 @@ export function stepTrafficJet(j, dt) {
   const hdg = (-_e.y * RAD_TO_DEG + 360) % 360, pitchDeg = _e.x * RAD_TO_DEG, bankRightDeg = -_e.z * RAD_TO_DEG;
   const tasMps = (b.tasKts || b.iasKts) * KTS_TO_MPS;
   const hdgCmd = e.hdgT + localizerInterceptDeg(crossM);
-  if (j.prevIas !== null && Math.abs(b.iasKts - j.prevIas) < 5) j.iasRate += ((b.iasKts - j.prevIas) / dt - j.iasRate) * Math.min(1, dt / 0.5);
+  if (!Number.isNaN(j.prevIas) && Math.abs(b.iasKts - j.prevIas) < 5) j.iasRate += ((b.iasKts - j.prevIas) / dt - j.iasRate) * Math.min(1, dt / 0.5);
   j.prevIas = b.iasKts;
 
   const wheelH = b.pos.y - b.groundY - spec.gearHeight;
@@ -221,8 +225,10 @@ export function stepTrafficJet(j, dt) {
 }
 
 // Whether traffic may fly: off once the adaptive resolution sits on its floor (resScale.js
-// RES_STEPS' last rung, 1) on a device that started above it.
-export const trafficAllowed = (pixelRatio, deviceRatio) => !(deviceRatio > 1 && pixelRatio <= 1);
+// RES_STEPS' last rung, 1) on a device whose ladder started above it. `topRatio` is the renderer's
+// ratio at the first tick (the ladder's top: resScale doesn't step behind the start screen), not the
+// live devicePixelRatio, which a browser zoom or a move to another monitor changes (device panel).
+export const trafficAllowed = (pixelRatio, topRatio) => !(topRatio > 1 && pixelRatio <= 1);
 
 // The scheduler: spawns, flies and retires jets on the sim's clock. `sim` is main.js's (or a
 // test's) state: simTime, activeEnd, loadedMission, pos, windVec, mslOffsetM, isaDevC, altimInHg, fm.
@@ -278,11 +284,13 @@ export function createTraffic(scene, sim, base = import.meta.env?.BASE_URL ?? '/
   const sched = createTrafficScheduler(sim);
   // The jet is the loaded model itself, added to the scene (no Group of our own: importing three's
   // Group here split Object3D out of the boot chunk, +0.4 kB gz).
-  let model = null, loading = false;
+  let model = null, loading = false, top = null;
   const before = scene.onBeforeRender;
   scene.onBeforeRender = function (renderer, sc, camera, target) {
     before.call(this, renderer, sc, camera, target);
-    sched.tick(!!sim.fm && trafficAllowed(renderer.getPixelRatio(), globalThis.devicePixelRatio || 1));
+    const ratio = renderer.getPixelRatio();
+    top ??= ratio;
+    sched.tick(!!sim.fm && trafficAllowed(ratio, top));
     const j = sched.jet;
     if (j && !model && !loading) {
       loading = true; // the model the player's 737 uses: one fetch per page, shared (aircraftModel.js)
@@ -296,7 +304,13 @@ export function createTraffic(scene, sim, base = import.meta.env?.BASE_URL ?? '/
     }
     if (!model) return;
     model.visible = !!j;
-    if (j) { model.position.copy(j.body.pos); model.quaternion.copy(j.body.quat); }
+    if (j) {
+      model.position.copy(j.body.pos);
+      model.quaternion.copy(j.body.quat);
+      // three updates the scene's matrices before onBeforeRender: without this it draws (and culls)
+      // last frame's pose, at the origin on its first frame and at the last jet's turn-off after a respawn.
+      model.updateMatrixWorld();
+    }
   };
   const api = { sched, get model() { return model; } };
   if (globalThis.location && new URLSearchParams(location.search).has('debug')) {

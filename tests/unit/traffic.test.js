@@ -107,11 +107,13 @@ describe('the runway under the jet (0080)', () => {
 });
 
 describe('slow devices (0080)', () => {
-  it('off once the adaptive resolution sits on its floor of 1 on a screen that started above it', () => {
+  it('off once the adaptive resolution sits on its floor of 1 on a screen that started above it (its ratio at the first tick, not a zoomed devicePixelRatio)', () => {
     expect(trafficAllowed(3, 3)).toBe(true);
     expect(trafficAllowed(1.25, 3)).toBe(true);
     expect(trafficAllowed(1, 3)).toBe(false);
     expect(trafficAllowed(1, 1)).toBe(true); // a 1x screen has no lower rung to fall to
+    expect(trafficAllowed(1, 1)).toBe(true); // ...even zoomed to a devicePixelRatio of 1.1: the ladder's top was 1
+    expect(trafficAllowed(0.5, 0.5)).toBe(true); // the desktop e2e's half-resolution screen
   });
 });
 
@@ -152,18 +154,18 @@ describe('the scheduler (0080)', () => {
   });
   it('a new mission, a respawn (FLY AGAIN) or the player lining up on its runway clears it', () => {
     const sim = final(), sch = createTrafficScheduler(sim);
-    run(sim, sch, 2);
+    run(sim, sch, FIRST_SPAWN_S + 1);
     expect(sch.jet?.end.ident).toBe('35R');
     sim.activeEnd = runwayEnd('KDFW', '35R'); // the player switched to the jet's runway
     sch.tick();
     expect(sch.jet).toBeNull();
-    run(sim, sch, 2);
+    run(sim, sch, FIRST_SPAWN_S + 1);
     expect(sch.jet).not.toBeNull();
     expect(sameRunway(sch.jet.end, sim.activeEnd)).toBe(false);
     sim.pos.z += 5000; // FLY AGAIN: the same mission object, the player back at the start
     sch.tick();
     expect(sch.jet).toBeNull();
-    run(sim, sch, 2);
+    run(sim, sch, FIRST_SPAWN_S + 1);
     expect(sch.jet).not.toBeNull();
     sim.loadedMission = { key: 'kdal' }; sim.activeEnd = runwayEnd('KDAL', '13R');
     run(sim, sch, 5);
@@ -171,14 +173,14 @@ describe('the scheduler (0080)', () => {
   });
   it('off for the rest of the flight on a slow device, back for the next flight', () => {
     const sim = final(), sch = createTrafficScheduler(sim);
-    run(sim, sch, 2);
+    run(sim, sch, FIRST_SPAWN_S + 1);
     expect(sch.jet).not.toBeNull();
     sch.tick(false);
     expect(sch.jet).toBeNull();
     run(sim, sch, 5); // the ratio climbed back: still off this flight
     expect(sch.jet).toBeNull();
     sim.loadedMission = { key: 'next' };
-    run(sim, sch, 2);
+    run(sim, sch, FIRST_SPAWN_S + 1);
     expect(sch.jet).not.toBeNull();
   });
 });
