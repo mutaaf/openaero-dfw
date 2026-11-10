@@ -1266,6 +1266,7 @@ const tutor = createTutor();
 let tutorLib = null;
 import('./fbw.js').catch(console.warn); // the F-16's g/AoA limiter (0121): it installs itself; a failed load warns
 import('./supersonic.js').catch(console.warn); // the F-16's wave drag (0133): it installs itself
+import('./pitchBreak.js').catch(console.warn); // the Cessna's post-stall pitch break (0109): it installs itself
 import('./apTutor.js').then((m) => { tutorLib = m; }).catch(console.warn);
 let tutorEnabled = true;
 let coachHandover = false; // the player took over from the autopilot on a final

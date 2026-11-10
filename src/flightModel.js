@@ -202,10 +202,13 @@ export function stepFlightModel(body, spec, dt) {
   const authority = spec.pitchAuthority ?? 1.8;
   if (body.autoTrim || spec.pitchFbw || body.trimAlphaDeg == null) body.trimAlphaDeg = body.aoaDeg;
   const stiffness = spec.elevatorAlphaDeg ? authority / (spec.elevatorAlphaDeg * DEG_TO_RAD) : 0;
-  const alphaErr = MathUtils.clamp(aoaRad - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
+  // Past the stall (spec.pitchBreak, pitchBreak.js, 0109: NASA rotary-balance data) the nose breaks
+  // down and the elevator loses most of its power, so a held pull no longer out-pulls the stall.
+  const pb = spec.pitchBreak;
+  const alphaErr = MathUtils.clamp(aoaRad + (pb ? pb.breakDeg(body.aoaDeg) * DEG_TO_RAD : 0) - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
   // The stick's steady pitch rate (pitch authority over damping); a fly-by-wire airframe's g and
   // AoA limiter (spec.fbw, fbw.js, 0121) caps it in the air, so a held pull stops at the limits.
-  let qCmd = -body.elevInput * authority / spec.pitchDamping;
+  let qCmd = -body.elevInput * authority / spec.pitchDamping * (pb ? pb.eta(body.aoaDeg, body.elevInput) : 1);
   if (spec.fbw) qCmd = spec.fbw(body, spec, qCmd, aoaRad, fBodyY, airspeed, qDyn);
   const qRate = (qCmd * spec.pitchDamping - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.

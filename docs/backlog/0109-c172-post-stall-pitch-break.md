@@ -1,12 +1,12 @@
 ---
 id: 0109
 title: C172 post-stall pitch break from a cited source: full back stick should not hold α 40°
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-29
-pr:
+pr: 222
 ---
 
 ## Why
@@ -25,18 +25,30 @@ GPL data without the operator). Give flightModel.js a Cm(α) past the stall (or 
 effectiveness that falls with tail α) from it, and the same in public/jsbsim/ if it applies.
 
 ## Acceptance criteria
-- [ ] The source is cited in aircraft.js with its figure or table number
-- [ ] Full back stick after the stall settles at an α the source supports (flight card)
-- [ ] The stall-recovery cards, the hands-off and phugoid cards and the 0094 trim cards stay green
+- [x] The source is cited in aircraft.js with its figure or table number (NASA CR-3097 Figs. A3/A21,
+      CR-3201 Figs. A3/A15; the tables in src/pitchBreak.js)
+- [x] Full back stick after the stall settles at an α the source supports (flight card: α 15-20°,
+      measured 17.0°, JSBSim 16.8°; the tables alone balance at 16-18°, tests/unit/pitchBreak.test.js)
+- [x] The stall-recovery cards, the hands-off and phugoid cards and the 0094 trim cards stay green
 
-- [ ] (from 0144) Full aft stick held from Vr: peak pitch under ~20° while the wheels are under
-      5 ft (c172.test.js `KNOWN GAP (0109)` cards, flaps 0 and 10; measured 41.6°, JSBSim 37-42°)
-- [ ] (from 0144) A 40-60% pull held from Vr to positive rate, then let go, climbs away at flaps
-      10 on Vy's trim without a stall warning (`KNOWN GAP (0109)` card); then trim.js
-      takeoffTrimAoaDeg can fly Vy with flaps 10 too
+Moved to 0170 (measured: not the post-stall pitch, or not only it):
+- (from 0144) Full aft stick held from Vr: peak pitch under ~20° while the wheels are under
+      5 ft. Now flightModel.js 24.7° / 25.0° (flaps 0 / 10), JSBSim 20.0° / 21.7° (was ~37-42°).
+- (from 0144) A 40-60% pull held from Vr to positive rate, then let go, climbs away at flaps
+      10 on Vy's trim without a stall warning. Now no stall warning and α ≤ 17.5°, but still back
+      on the runway (~57 KIAS at the release, trimmed for 74).
 
 ## Test plan
 Promote the `it.fails` card (α ≤ 40°) or replace its bound with the cited value; tighten the 45° bound on both models.
 
 ## Out of scope
 Spins, the F-16 and 737 post-stall.
+
+## Shipped notes
+Sources (open NASA contractor reports on NTRS, the Langley spin-tunnel rotary-balance series):
+NASA CR-3097 (Bihrle & Hultberg 1979), high-wing model B (NACA 2412, AR 7.37, a Skyhawk-like
+layout), static Cm at δe 0 and +23° to α 90°; NASA CR-3201 (Hultberg, Chu & Dickens 1980),
+high-wing model C, the series' only up-elevator run (δe −15°). The up-elevator share is model C's
+applied to the C172 (model B has no up-elevator run). The same tables are in public/jsbsim/c172.xml
+(Cmde_up, Cmde_down, Cm_break). Not used: NASA TN D-6573 (a T-tail jet), Ananda & Selig 2016
+(a low-wing model).

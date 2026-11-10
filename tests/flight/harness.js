@@ -12,6 +12,7 @@ import { surfaceWindFactor } from '../../src/weather.js';
 // The F-16's g/AoA limiter (0121): the game loads it right after boot (main.js), the cards fly with it.
 import '../../src/fbw.js';
 import '../../src/supersonic.js';
+import '../../src/pitchBreak.js';
 
 export const DT = 1 / 120;
 const _e = new Euler(0, 0, 0, 'YXZ');

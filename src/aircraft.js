@@ -224,6 +224,9 @@ export const AIRCRAFT_DATABASE = {
     pitchDamping: 3.8,
     // Elevator balance (flightModel.js, 0090): Roskam's Cmα −0.89 against Cmδe −1.28 per
     // radian, as in our JSBSim C172 (public/jsbsim/), at the TCDS's 25.5° mean elevator throw.
+    // Linear to the stall only: past it spec.pitchBreak (src/pitchBreak.js, 0109, a lazy chunk) takes
+    // the elevator's power and the nose-down break from NASA CR-3201 Figs. A3/A15 (model C, δe −15°)
+    // and CR-3097 Figs. A3/A21 (high-wing model B, δe 0/+23°), static rotary-balance points.
     elevatorAlphaDeg: (1.28 / 0.89) * 25.5,
     rollDamping: 4.2,
     yawDamping: 2.5,
