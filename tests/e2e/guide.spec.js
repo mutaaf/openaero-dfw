@@ -3,7 +3,7 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles } from './helpers.js';
 
 // The player guide (public/guide/index.html → /openaero/guide/): a plain page whose text is in
-// the HTML itself (no scripts, no ads, no analytics beacon), one tap from the start screen.
+// the HTML itself (no scripts, no ads, no analytics beacon), under How to fly on the start screen.
 test('the guide builds as a plain, readable page with no scripts', () => {
   const html = readFileSync('dist/openaero/guide/index.html', 'utf8');
   expect(html).toContain('<h1>OpenAero DFW Player Guide</h1>');
@@ -27,6 +27,7 @@ for (const size of [{ width: 390, height: 844 }, { width: 1280, height: 720 }]) 
     await page.setViewportSize(size);
     await page.goto(BASE);
     const link = page.locator('#lnkGuide');
+    await link.scrollIntoViewIfNeeded();
     await expect(link).toBeVisible();
     await expect(link).toBeInViewport();
     expect((await link.boundingBox()).height).toBeGreaterThanOrEqual(44);
