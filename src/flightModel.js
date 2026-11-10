@@ -198,7 +198,8 @@ export function stepFlightModel(body, spec, dt) {
   // stick flies the trimmed speed. Its stiffness is the pitch authority over that angle (the
   // short period is as soft as the elevator is weak; the trim α per stick is the source's). A
   // pilot or autopilot that trims as it holds a pitch (body.autoTrim), or a fly-by-wire pitch
-  // law (spec.pitchFbw), carries the trim with the angle of attack, so the term is zero.
+  // law (spec.pitchFbw), carries the trim with the angle of attack, so the term is zero, all but the
+  // post-stall break (spec.pitchBreak, 0109): aerodynamic, so a trimming pilot meets it too.
   const authority = spec.pitchAuthority ?? 1.8;
   if (body.autoTrim || spec.pitchFbw || body.trimAlphaDeg == null) body.trimAlphaDeg = body.aoaDeg;
   const stiffness = spec.elevatorAlphaDeg ? authority / (spec.elevatorAlphaDeg * DEG_TO_RAD) : 0;

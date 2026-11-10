@@ -714,10 +714,10 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S stall recov
 // quarter to a half of its power past α 18° and the Cm breaks nose down at the stall, so full back
 // stick balances just past it, α ~16-18° on the reports' own tables. Pinned: no falling leaf, both
 // models in that band, and the two agree (both carry the same tables).
-function fullBackAfterStall() {
-  const b = Object.assign(makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0 }), { autoTrim: false });
+function fullBackAfterStall(flaps = 0) {
+  const b = Object.assign(makeBody(c172, { kts: 80, altM: STALL_ALT_M, throttle: 0, flaps }), { autoTrim: false });
   const entry = speedHoldPilot((x) => Math.max(20, 80 - x.t));
-  const sa = stallAoaDeg(c172, 0);
+  const sa = stallAoaDeg(c172, flaps);
   let stallT = null;
   const late = [];
   fly(b, c172, 60, (x, dt) => {
@@ -747,6 +747,16 @@ describe('Cessna 172S full back stick after the stall (both models, tickets 0094
     }
     expect(Math.abs(fm.meanA - jsb.meanA)).toBeLessThan(3);
   }, 30000);
+  it('flaps 10, 20 and 30: full back stick after the stall settles at α 15-20° too (flightModel.js)', () => {
+    useFdm(null);
+    for (const flaps of [1, 2, 3]) {
+      const r = fullBackAfterStall(flaps);
+      console.log(`[c172 flightModel] flaps ${flaps * 10} full back after the stall: α ${r.minA.toFixed(1)}-${r.maxA.toFixed(1)}°`);
+      expect(r.maxA - r.minA).toBeLessThan(5);
+      expect(r.minA).toBeGreaterThanOrEqual(15);
+      expect(r.maxA).toBeLessThanOrEqual(20);
+    }
+  });
 });
 
 // Hands off, trimmed (ticket 0090): bumped 10 kt fast and let go, a stable airplane trades the

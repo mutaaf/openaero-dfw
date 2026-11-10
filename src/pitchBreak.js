@@ -17,14 +17,20 @@
 //
 // What they show: (1) past the stall the elevator loses most of its power. Up 15° on model C is
 // worth ΔCm 0.49 at α 8°, 0.24 at 18°, 0.12 at 25-35°, 0.04-0.06 at 40-50°; down 23° on model B
-// keeps ~1.0 to α 16°, then 0.74 at 18°, ~0.6 at 30° and ~0.5 at 40-50° (TN D-6573's T-tail jet,
-// another airplane, says the same: about a fourth past α 24°). (2) Model B's Cm breaks nose down at
+// keeps ~1.0 to α 16°, then 0.74 at 18°, ~0.6 at 30° and ~0.5 at 40-50° (NASA TN D-6573's summary, a
+// T-tail jet, another airplane, says the same: about a fourth past α 24°). (2) Model B's Cm breaks nose down at
 // the stall: against its own pre-stall slope (-0.0208/°, α 8-14°) it is 0.12 more nose-down at 16°,
 // 0.20 at 18°, then flattens and is less nose-down than the line from ~28° on.
 // The up-elevator ratio is model C's applied to the C172 (model B has no up-elevator run): that
 // is the assumption here. The break is model B's, in degrees of α at its own slope, so it scales
 // with our Cmα (the same moment as so many degrees of α more). Spins, sideslip and the rotary
 // terms are out of scope (the rotary data are why the reports exist).
+// Also assumed: the δe −15° / +23° runs (Figs. A15, A21) had the rudder at −25° where the δe 0
+// baselines had it at 0, so the "elevator" increments carry any rudder effect on Cm; and model C's
+// −15° share is applied to the C172's whole −28° throw. Between α ~25° and 30° the break's slope
+// leaves the pitch slightly unstable (model B's flat Cm there); full back stick balances at ~17°,
+// short of it. Trim (body.trimAlphaDeg) keeps its full power here, while JSBSim sums the trim into
+// the elevator, which η scales: with nose-up trim past the stall the two differ by ~1°.
 // Static only: no stall hysteresis or unsteady Cm, so a held full back stick settles steadily (idle:
 // α ~17°, nose ~10° up, ~54 KIAS, ~700 fpm down; power on it climbs at α 17° with the warning on)
 // where a real 172 bobs and buffets. Until this chunk loads (or if it fails: console.warn) the
