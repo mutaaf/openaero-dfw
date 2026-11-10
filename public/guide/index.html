@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenAero DFW Guide: How to Fly, Controls and Landing Tips</title>
+<meta name="description" content="How to play OpenAero DFW, the free browser flight simulator over Dallas-Fort Worth: assist levels, missions, controls, landing grades and tips.">
+<link rel="canonical" href="https://mutaafaziz.com/openaero/guide/">
+<meta name="theme-color" content="#020617">
+<link rel="icon" href="../icons/icon-192.png">
+<style>
+:root{--bg:#020617;--panel:#0f172a;--line:#1e293b;--text:#e2e8f0;--dim:#94a3b8;--sky:#7dd3fc;--amber:#fbbf24;--green:#10b981;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  background-image:linear-gradient(rgba(125,211,252,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(125,211,252,.04) 1px,transparent 1px);background-size:32px 32px}
+main{max-width:42rem;margin:0 auto;padding:1.5rem max(16px,env(safe-area-inset-left)) 3rem}
+.eyebrow{font:700 11px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin:0 0 .6rem}
+h1{font-size:clamp(1.7rem,6vw,2.3rem);line-height:1.15;margin:0 0 1rem;letter-spacing:-.01em}
+h2{font-size:1.2rem;color:var(--sky);margin:2.4rem 0 .6rem;padding-top:.9rem;border-top:1px dashed var(--line);font-family:var(--mono);letter-spacing:.02em}
+h3{font-size:1rem;margin:1.4rem 0 .3rem}
+p,li{color:var(--text)}
+li{margin:.45rem 0}
+strong{color:#fff}
+a{color:var(--sky)}
+.fly{display:inline-flex;align-items:center;gap:.5rem;min-height:48px;padding:.7rem 1.6rem;border-radius:.8rem;font-weight:900;letter-spacing:.03em;color:#020617;text-decoration:none;
+  background:linear-gradient(180deg,#6ee7b7,#10b981);border:1px solid #a7f3d0;box-shadow:0 8px 24px rgba(16,185,129,.35),inset 0 1px 0 rgba(255,255,255,.5)}
+.fly:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.6rem;font:700 12px var(--mono);color:var(--dim)}
+.top a{color:var(--dim);text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.lede{font-size:1.06rem;color:#cbd5e1}
+.table{overflow-x:auto;border:1px solid var(--line);border-radius:.6rem;background:rgba(15,23,42,.7)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;vertical-align:top;padding:.55rem .7rem;border-bottom:1px solid var(--line)}
+th{font:700 11px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--sky);background:var(--panel)}
+tr:last-child td{border-bottom:0}
+kbd{display:inline-block;min-width:1.4em;padding:0 .3em;border-radius:.3rem;border:1px solid rgba(148,163,184,.45);border-bottom-width:2px;background:var(--panel);font:600 .85em var(--mono);text-align:center;color:#fff}
+.end{margin-top:2.6rem;padding:1.2rem;border:1px solid var(--line);border-radius:.8rem;background:var(--panel);text-align:center}
+.end p{margin:0 0 .9rem;color:var(--dim)}
+@media (prefers-reduced-motion:no-preference){.fly{transition:transform .15s}.fly:hover{transform:translateY(-1px)}}
+</style>
+</head>
+<body>
+<main>
+<div class="top"><a href="../">&larr; OpenAero DFW</a><span>PLAYER GUIDE</span></div>
+<p class="eyebrow">KDFW &middot; 3&deg; glidepath &middot; 4-light PAPI</p>
+<h1>OpenAero DFW Player Guide</h1>
+<p class="lede">OpenAero DFW is a 3D flight simulator that runs in your web browser over real satellite imagery and terrain of the Dallas and Fort Worth area. You can land a passenger jet at DFW International, practice an engine failure in a small propeller plane over Addison, or fly a fighter jet past the downtown Dallas skyline. It opens on a laptop, phone or tablet, works with a gamepad, and needs no download and no account.</p>
+<p><a class="fly" href="../">Play OpenAero DFW &#9992;</a></p>
+
+<h2>What it is</h2>
+<p>OpenAero DFW flies a six-degree-of-freedom (6-DOF) flight model over North Texas elevation data and satellite map tiles. There are six real airports with 15 surveyed runways: Dallas/Fort Worth International (KDFW, all seven runways), Dallas Love Field (KDAL), Addison (KADS), Fort Worth Alliance (KAFW), Fort Worth Meacham (KFTW) and Arlington Municipal (KGKY). Each runway sits at its real elevation and heading, with painted markings, runway and approach lights, and a four-light Precision Approach Path Indicator (PAPI) set to a 3.0 degree glidepath. When you are online, today's real airport weather report (METAR) sets the wind, gusts, visibility and cloud.</p>
+<p>There are three airplanes, each with its own weight, wing, stall angle and engine:</p>
+<ul>
+<li><strong>Boeing 737-800 NG:</strong> a twin-engine airliner of 65,000 kg with a 35.8 m wingspan, flaps 0, 10, 30 and 40, retractable gear, thrust reversers and four autobrake settings. It rotates at 135 knots (flaps 10), its reference landing speed (Vref) is 150 knots with flaps 30 or 141 knots with flaps 40, it stalls clean at 114 knots, and its maximum operating speed is 340 knots.</li>
+<li><strong>Cessna 172S Skyhawk:</strong> a single-engine propeller plane of 1,150 kg with an 11.0 m wingspan, fixed gear and flaps 0, 10, 20 and 30. It rotates at 55 knots, climbs best at 74 knots (Vy), glides best at 68 knots with the engine stopped, uses a Vref of 62 knots, stalls clean at 48 knots, and must never exceed 163 knots.</li>
+<li><strong>F-16C Fighting Falcon:</strong> a single-engine fighter of 12,000 kg with a 10.0 m wingspan and a fly-by-wire flight computer. It rotates at 155 knots, uses a Vref of 148 knots, stalls clean at 120 knots, and its wing keeps flying up to a 28 degree angle of attack.</li>
+</ul>
+
+<h2>How to start</h2>
+<p>The start screen asks three quick questions before you press <strong>Fly</strong>:</p>
+<ol>
+<li><strong>Who's flying?</strong> All three assist levels use the same physics; only the help changes. <strong>Kid</strong> keeps the wing from stalling, limits bank to 30 degrees and pitch to 15 up and 10 down, runs the throttle, gear and flaps for you, and stops steep dives near the ground. Let go of the stick on a final approach and it lines up, follows the glidepath, flares and lands. <strong>Learner</strong> (the first-visit default) gives you the throttle, gear, flaps and flare, while still preventing stalls and holding bank under 45 degrees; let go and it holds your pitch. <strong>Pilot</strong> is the raw airplane with manual trim and no limits.</li>
+<li><strong>When?</strong> <strong>Live</strong> matches the real sun over Dallas right now, or pick <strong>Dawn</strong>, <strong>Day</strong>, <strong>Dusk</strong> or <strong>Night</strong> for lit runways and city lights.</li>
+<li><strong>Where to?</strong> Start with the 4-mile ILS final to KDFW Runway 35C, or pick one of 26 missions across all six airports: approaches, takeoffs, a 1-mile flare challenge, a low-ceiling fog approach, night and dusk landings, tours past Reunion Tower and AT&amp;T Stadium, and emergency drills. On days with real crosswinds you also get <strong>Today's Crosswind Challenge</strong>.</li>
+</ol>
+
+<h2>Controls</h2>
+<p>Fly with a keyboard and mouse, a touchscreen, or a USB or Bluetooth gamepad. Press <kbd>?</kbd> or <strong>Controls</strong> at any time to pause and see the full control sheet.</p>
+<div class="table"><table>
+<thead><tr><th>Action</th><th>Keyboard</th><th>Touch</th><th>Gamepad</th></tr></thead>
+<tbody>
+<tr><td>Nose down / up</td><td><kbd>W</kbd> / <kbd>S</kbd> or arrows</td><td>Right stick down / up</td><td>Left stick</td></tr>
+<tr><td>Bank left / right</td><td><kbd>A</kbd> / <kbd>D</kbd> or arrows</td><td>Right stick sideways</td><td>Left stick</td></tr>
+<tr><td>Rudder</td><td><kbd>Q</kbd> / <kbd>E</kbd></td><td>Automatic in Kid and Learner</td><td><kbd>LB</kbd> / <kbd>RB</kbd></td></tr>
+<tr><td>Power</td><td>Hold <kbd>Shift</kbd> / <kbd>Ctrl</kbd></td><td>Left slider (top is full)</td><td><kbd>RT</kbd> / <kbd>LT</kbd></td></tr>
+<tr><td>Trim (Pilot, not the F-16)</td><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Hold NOSE UP / NOSE DN</td><td>Right stick</td></tr>
+<tr><td>Gear (not the Cessna)</td><td><kbd>G</kbd></td><td>GEAR</td><td><kbd>B</kbd></td></tr>
+<tr><td>Flaps, next notch</td><td><kbd>F</kbd></td><td>FLAPS</td><td><kbd>A</kbd></td></tr>
+<tr><td>Brakes</td><td><kbd>B</kbd> (<kbd>K</kbd> autobrake on the 737)</td><td>BRAKES</td><td><kbd>X</kbd></td></tr>
+<tr><td>Reverse thrust (737, on the ground)</td><td><kbd>R</kbd></td><td>REV</td><td>None</td></tr>
+<tr><td>Autopilot / autoland</td><td><kbd>Z</kbd> autopilot</td><td>ILS AUTO</td><td>D-pad up</td></tr>
+<tr><td>Camera</td><td><kbd>C</kbd></td><td>Menu</td><td><kbd>Y</kbd></td></tr>
+</tbody></table></div>
+<p>On a keyboard, <kbd>M</kbd> lets you fly with the mouse, <kbd>H</kbd> hides the side panels, <kbd>L</kbd> switches the landing light and <kbd>Space</kbd> centres the stick.</p>
+
+<h2>How landings are graded</h2>
+<p>Once your wheels have stayed on the runway for one second, the landing is scored from 0 to 100 and given a grade: <strong>S</strong> (95 and up), <strong>A</strong> (85 to 94), <strong>B</strong> (70 to 84), <strong>C</strong> (55 to 69) or <strong>D</strong> (below 55). Touching down short of the runway or off its side is always a D. Five factors make up the score:</p>
+<ul>
+<li><strong>Touchdown rate (35%):</strong> how softly you land. Up to 120 feet per minute (fpm) of sink scores 100, 240 fpm scores 75 and 400 fpm scores 40. Harder than 600 fpm breaks the gear: <strong>CRASH</strong>.</li>
+<li><strong>Centreline (20%):</strong> within 3 m of the middle line scores full marks.</li>
+<li><strong>Touchdown zone (20%):</strong> between 150 m and 600 m past the threshold scores full marks.</li>
+<li><strong>Flare (15%):</strong> nose 1 to 7 degrees up with less than 2 degrees of bank scores full marks. More than 10 degrees of bank strikes a wingtip: <strong>CRASH</strong>.</li>
+<li><strong>Speed (10%):</strong> from 5 knots below Vref to 10 knots above it scores full marks.</li>
+</ul>
+<p>Bounces count too. If the wheels go back up more than 2 feet for at least 0.3 seconds, one bounce caps the grade at C and two or more cap it at D. The results card shows where you touched down, a tip for next time, an instant <strong>Replay</strong> and your personal best for that mission and assist level.</p>
+
+<h2>Tips</h2>
+<ul>
+<li><strong>Read the PAPI.</strong> The four lights sit left of the runway. Two white and two red means you are on the 3 degree path; more white means high, more red means low. Put the green velocity vector on the runway aim point and hold Vref plus 5 knots: 155 knots in the 737 at flaps 30, 67 in the Cessna, 153 in the F-16.</li>
+<li><strong>Flare low and gently.</strong> Listen to the height callouts. The coach calls the flare below 50 feet and wants the throttle at idle by 30 feet. Ease the nose up, do not yank it, and let the sink rate melt away.</li>
+<li><strong>Crab, then straighten.</strong> In a crosswind, point the nose a little into the wind on final so you track the centreline. In the flare, use the rudder (<kbd>Q</kbd> / <kbd>E</kbd>) to line the nose up with the runway.</li>
+<li><strong>Fly the drills by the numbers.</strong> In the 737 <strong>Windshear Escape</strong>, when WINDSHEAR sounds, go to full power and 15 degrees nose up, and hold it; do not dive for the lost speed. In the Cessna engine failure and dead-stick drills, pitch for 68 knots. Lose the engine at 300 feet and you land ahead; at 700 feet a quick turn back can work if the coach says your height allows it. <strong>Steep Turns</strong> asks for a 45 degree bank all the way round while holding height within 100 feet.</li>
+</ul>
+
+<h2>Settings and accessibility</h2>
+<p><strong>Options</strong> on the start screen turns the engine and altitude sounds, the landing coach and the autopilot tutor on or off. The tutor explains each step while the autopilot flies; press <strong>Your turn</strong> to take over. On desktop, <kbd>H</kbd> or <strong>Clean view</strong> folds away the side panels. Spoken callouts also appear as captions, in plain words on Kid and Learner. With your device's reduce-motion setting on, flashing lights stay steady and alert vibrations are skipped. Menus work from the keyboard (<kbd>Tab</kbd>, <kbd>Esc</kbd>), touch buttons are at least 44 pixels, and you can add the game to a phone or tablet home screen.</p>
+
+<h2>For parents</h2>
+<p>OpenAero DFW has no account, login, chat or messaging, and asks for no personal information. Personal bests and settings are saved only in your browser on this device. While flying, the game talks to this site (which also passes along official airport weather reports) to map tile servers from Esri and, when available, Google for the 3D city, and on menu screens to Google's ad service. The free game shows ads only on its menu screens, never during a flight and never in Kid mode; those ads are marked as child-directed, and any reward ad is a button the player must choose to press. This guide page has no ads. See the site's <a href="../../ads/privacy/">ads and privacy page</a> for details.</p>
+
+<h2>Questions</h2>
+<h3>Why did I get a CRASH?</h3>
+<p>You touched down with the gear up, sank faster than 600 fpm, or had more than 10 degrees of bank.</p>
+<h3>How do I watch the airplane land itself?</h3>
+<p>Pick <strong>Kid</strong> and let go of the stick on any final, or press <strong>ILS AUTO</strong> (D-pad up on a gamepad) and let the autopilot tutor explain each step.</p>
+<h3>Why do my personal bests change when I switch levels?</h3>
+<p>Kid, Learner and Pilot keep separate bests, so a score made with help never replaces one flown on the raw airplane.</p>
+<h3>What is the amber T on the speed tape?</h3>
+<p>On Pilot it marks your trim speed. Move it with <kbd>[</kbd> and <kbd>]</kbd>, the touch trim buttons or the right gamepad stick; let go of the stick and the airplane settles toward it.</p>
+<h3>Why won't the Cessna raise its gear?</h3>
+<p>The real Cessna 172S has fixed landing gear, so only the 737 and the F-16 can raise theirs.</p>
+
+<div class="end"><p>Ready for takeoff? Runway 35C is waiting.</p><a class="fly" href="../">Play OpenAero DFW &#9992;</a></div>
+</main>
+</body>
+</html>

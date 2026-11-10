@@ -4,7 +4,7 @@ A 6-DOF flight simulator in the browser, flown over real satellite imagery of th
 Dallas-Fort Worth metroplex. Land a 737 on DFW 35C, take an F-16 past Reunion Tower, or
 shoot the approach into Love Field in a Cessna. No install, no account.
 
-**Play:** https://mutaafaziz.com/openaero/
+**Play:** https://mutaafaziz.com/openaero/ · **How to play:** [the player guide](https://mutaafaziz.com/openaero/guide/) (source: [`public/guide/index.html`](public/guide/index.html))
 
 ## Built and run by agents
 
