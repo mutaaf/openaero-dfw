@@ -115,24 +115,27 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
     expect(Math.abs(pitch - 3.2)).toBeLessThanOrEqual(1);
   });
 
-  // ACAP §3.4.3 (flaps 30, standard day, zero wind, dry, auto spoilers, anti-skid): the
-  // sea-level dry curve reads 5,570 ft at 140,000 lb, 5,690 ft at 143,300 lb (65 t) and
-  // 5,800 ft at MLW. That is the FAR landing field length, the demonstrated distance from
+  // ACAP §3.4.3, p. 3-51 (flaps 30, standard day, zero wind, dry, auto spoilers, anti-skid,
+  // zero runway gradient; CFM56-7B; 0166 re-read the page image at 110 dpi): the sea-level
+  // dry curve reads 5,570 ft at 140,000 lb, 5,690 ft at 143,300 lb (65 t) and 5,800 ft at
+  // MLW 146,300 lb. That is the FAR landing field length, the demonstrated distance from
   // 50 ft divided by 0.6 (14 CFR 121.195(b)), so the airplane itself needs 0.6 × 5,690 =
-  // 3,414 ft from 50 ft to a stop. Flown like 14 CFR 25.125: a steady 3° approach at Vref
-  // (1.23 Vs) to 50 ft, idle and flare from 30 ft, then maximum braking, no reverse, in
-  // Boeing's configuration: flaps 30 at the fitted Vref30 (~150 kt), auto ground spoilers.
-  // (Before 0057 it flew flaps 25 at 139 kt with the wing still lifting on the rollout,
-  // two errors that partly cancelled.)
-  it('lands from 50 ft to a stop in about 3,414 ft, 65 t, sea level, dry (Boeing ACAP §3.4.3 × 0.6, ±15%)', () => {
-    const kts = vrefKts(FLAPS_30);
+  // 3,414 ft from 50 ft to a stop at 65 t (3,480 ft at MLW). Flown like 14 CFR 25.125: a
+  // steady 3° approach at Vref (1.23 Vs, scaled to the weight) to 50 ft, idle and flare from
+  // 30 ft, then maximum manual braking and no reverse (certified landing distances, 14 CFR
+  // 25.125 and AC 25-7D, take no reverse-thrust credit, so the chart has none), in Boeing's configuration: flaps 30 at the fitted Vref30
+  // (~150 kt at 65 t), auto ground spoilers. (Before 0057 it flew flaps 25 at 139 kt with the
+  // wing still lifting on the rollout, two errors that partly cancelled.)
+  function landFromFifty(massKg) {
+    const spec = { ...b738, massKg };
+    const kts = vrefKts(FLAPS_30, massKg);
     const v = kts * KTS_TO_MPS;
-    const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_30, throttle: trimThrottle(b738, v, FLAPS_30, -3, true, airAt(15)) });
+    const b = makeBody(spec, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_30, throttle: trimThrottle(spec, v, FLAPS_30, -3, true, airAt(15)) });
     b.vel.set(0, -v * Math.sin(3 * DEG_TO_RAD), -v * Math.cos(3 * DEG_TO_RAD));
-    const pitch0 = trimAoaDeg(b738, v, FLAPS_30) - 3;
+    const pitch0 = trimAoaDeg(spec, v, FLAPS_30) - 3;
     b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
-    let touchdown = null;
-    fly(b, b738, 90, (x) => {
+    let touchdown = null, spoilersAt80 = null, spoilers2s = null;
+    fly(b, spec, 90, (x) => {
       const { pitchDeg, bankRightDeg } = attitude(x);
       const ft = (x.pos.y - b738.gearHeight) * M_TO_FT;
       let cmd = pitch0;
@@ -141,13 +144,35 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
       x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
       x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
     }, (x) => {
-      if (!touchdown && x.onGround) touchdown = { sinkFpm: x.lastAirVsi, airFt: x.distM * M_TO_FT };
+      if (!touchdown && x.onGround) touchdown = { sinkFpm: x.lastAirVsi, airFt: x.distM * M_TO_FT, t: x.t };
+      if (touchdown && spoilers2s === null && x.t - touchdown.t >= 2) spoilers2s = x.spoilers ?? 0;
+      if (touchdown && spoilersAt80 === null && -x.vel.z <= 80 * KTS_TO_MPS) spoilersAt80 = x.spoilers ?? 0;
       return touchdown && -x.vel.z < 0.3;
     });
-    // A real landing, not a drop: on the runway at under 600 fpm after ~1,000 ft in the air.
-    expect(touchdown.sinkFpm).toBeGreaterThan(-600);
-    expect(touchdown.airFt).toBeGreaterThan(700);
-    within(b.distM * M_TO_FT, 0.6 * 5690, 0.15);
+    return { ft: b.distM * M_TO_FT, touchdown, spoilersAt80, spoilers2s };
+  }
+
+  for (const { label, massKg, chartFt } of [
+    { label: '65 t', massKg: b738.massKg, chartFt: 5690 },
+    { label: 'MLW 66,361 kg', massKg: MLW_KG, chartFt: 5800 },
+  ]) {
+    it(`lands from 50 ft to a stop in about ${(0.6 * chartFt).toLocaleString('en-US')} ft, ${label}, sea level, dry (Boeing ACAP §3.4.3 p. 3-51 × 0.6, ±12%)`, () => {
+      const { ft, touchdown, spoilersAt80, spoilers2s } = landFromFifty(massKg);
+      // A real landing, not a drop: on the runway at under 600 fpm after ~1,000 ft in the air.
+      expect(touchdown.sinkFpm).toBeGreaterThan(-600);
+      expect(touchdown.airFt).toBeGreaterThan(700);
+      // The chart assumes the auto ground spoilers: all the way out within 2 s of touchdown, and still out at 80 kt.
+      expect(spoilers2s).toBe(1);
+      expect(spoilersAt80).toBe(1);
+      within(ft, 0.6 * chartFt, 0.12);
+    });
+  }
+
+  // The chart's slope: 3,000 lb more landing weight costs ~110 ft of field length (5,690 → 5,800),
+  // 66 ft of airplane distance (0.6 × 110). The model adds ~39 ft: inside ±50% of the slope, which
+  // two ±12% points alone would not pin (any positive or even negative slope fits them).
+  it('a heavier 737 (MLW vs 65 t) needs ~66 ft more from 50 ft, as ACAP §3.4.3 p. 3-51 slopes (±50%)', () => {
+    within(landFromFifty(MLW_KG).ft - landFromFifty(b738.massKg).ft, 0.6 * (5800 - 5690), 0.5);
   });
 
   // ACAP §3.3.29 (CFM56-7B24/-7B26/-7B27 at 26,000 lb SLST; the model has 2 × 120 kN ≈
