@@ -1,12 +1,12 @@
 ---
 id: 0166
 title: 737 landing roll card: flaps 30, autobrake, dry runway, stops inside Boeing's published landing distance
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-09
-pr:
+pr: 163
 ---
 
 ## Why
