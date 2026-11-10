@@ -200,7 +200,7 @@ export function buildAtis(wx, end, { nowMs = Date.now(), departing = false } = {
   const live = !!wx.live;
   const source = live
     ? `ATIS-style · live ${wx.icao} METAR${hhmm ? ` ${hhmm}Z` : ''} · not the real broadcast`
-    : 'SCENARIO weather (offline) · not the real broadcast';
+    : `SCENARIO weather (${wx.scripted ? "this mission's" : 'offline'}) · not the real broadcast`; // 0092: lowIfr.js's report
   return {
     letter: atisLetter(wx.obsTime ?? nowMs / 1000), letterWord, live, source,
     speech: `${say.join('. ')}.`,

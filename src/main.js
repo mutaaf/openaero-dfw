@@ -1673,7 +1673,10 @@ function step6DofPhysics(dt) {
   checkRto();
   checkWindshear(dt);
   checkSteepTurns(dt);
-  if (sim.dh && ifrLib.dhStep(sim.dh, sim)) audio.callout('minimums'); // the low-ceiling ILS's decision height (0092)
+  if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in
+    if (ifrLib.dhStep(sim.dh, sim)) audio.callout('minimums');
+    if (sim.activeEnd) scene.fog.density = ifrLib.cloudFog((camera.position.y - sim.activeEnd.thrY) * M_TO_FT);
+  }
   checkTouchdown(dt);
   checkTakeoffCallouts();
 }

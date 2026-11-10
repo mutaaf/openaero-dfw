@@ -106,6 +106,7 @@ attribute vec2 aDir;
 attribute float aKind;
 attribute float aPhase;
 uniform float uPx, uNight, uTime, uFlash;
+uniform float fogDensity;
 varying vec3 vCol;
 varying float vA;
 void main() {
@@ -130,7 +131,11 @@ void main() {
   // 10 NM: on screen, size stands for intensity, not the lamp (0068).
   size *= clamp(9000.0 / (dist + 3000.0), aKind > 1.5 ? 1.0 : 0.55, 1.4);
   gl_PointSize = max((1.5 + 1.5 * uNight) * max(1.0, uPx), size * uPx);
-  vA = on * facing;
+  // A lamp outshines the haze a surface fades into (Allard's law: lights carry ~3x the visibility),
+  // so the scene's fog dims it only past a 1 SM fog's density: never on a clear or hazy day, by
+  // ~2 km in 1/2 SM, and at once inside a cloud (0092: the low-ceiling ILS's in-cloud fog).
+  float thick = max(0.0, fogDensity - 9.4e-4) * dist;
+  vA = on * facing * exp(-thick * thick);
   vCol = aCol;
   gl_Position = projectionMatrix * viewMatrix * wp;
   // A light facing away is dark: clip it before the rasterizer sets up its quad.
@@ -153,9 +158,12 @@ export const LIGHTS_RANGE_M = 35000;
 
 export function createRunwayLights({ runways, endById, heightAt, reducedMotion = false }) {
   const all = layoutRunwayLights(runways, endById);
-  const uniforms = { uPx: { value: 1 }, uNight: { value: 0 }, uTime: { value: 0 }, uFlash: { value: reducedMotion ? 0 : 1 } };
+  const uniforms = {
+    uPx: { value: 1 }, uNight: { value: 0 }, uTime: { value: 0 }, uFlash: { value: reducedMotion ? 0 : 1 },
+    fogDensity: { value: 0 }, fogColor: { value: new THREE.Color() }, fogNear: { value: 1 }, fogFar: { value: 2000 }, // three fills these (fog: true)
+  };
   const material = new THREE.ShaderMaterial({
-    uniforms, vertexShader: VERT, fragmentShader: FRAG,
+    uniforms, vertexShader: VERT, fragmentShader: FRAG, fog: true,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
   });
   const group = new THREE.Group();

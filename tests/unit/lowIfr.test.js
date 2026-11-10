@@ -1,9 +1,10 @@
 // Ticket 0092: the low-ceiling ILS mission's scripted weather and its decision height.
 import { describe, it, expect } from 'vitest';
 import {
-  flightCategory, lowIfrWeather, WX, LOW_IFR_REPORT, DH_FT, DH_PROMPT_S, createDh, dhStep, dhPrompt,
+  flightCategory, lowIfrWeather, WX, LOW_IFR_REPORT, DH_FT, DH_PROMPT_S, createDh, dhStep, dhPrompt, cloudFog,
 } from '../../src/lowIfr.js';
 import { coachText, coachTarget } from '../../src/coach.js';
+import { buildAtis } from '../../src/atis.js';
 import { isImc } from '../../src/aero.js';
 import { missionByKey, groupMissions, MISSIONS } from '../../src/missions.js';
 import { windReadout, WIND_BOX_W } from '../../src/hudLayout.js';
@@ -102,7 +103,7 @@ describe('the mission', () => {
 describe('decision height (FAA P/CG ILS Category I: 200 ft above touchdown)', () => {
   const end = runwayEnd('KDFW', '35C');
   const sim = (hatFt, o = {}) => ({
-    activeEnd: end, onGround: false, simTime: 0, gearDown: true, vsiFpm: -700, raFt: hatFt - 6, pos: { y: end.thrY + hatFt * FT_TO_M }, vel: { y: -3.5 },
+    activeEnd: end, onGround: false, simTime: 0, gearDown: true, vsiFpm: -700, raFt: hatFt - 6, throttle: 0.3, flapsIndex: 2, spec: { fixedGear: false }, pos: { y: end.thrY + hatFt * FT_TO_M }, vel: { y: -3.5 },
     approach: { distM: (hatFt * FT_TO_M) / Math.tan(3 * Math.PI / 180) - 300 }, ...o,
   });
 
@@ -161,5 +162,54 @@ describe('decision height (FAA P/CG ILS Category I: 200 ft above touchdown)', ()
     // Fed as s.ds it takes the card over the path prompts; the autopilot keeps the coach quiet.
     expect(coachTarget({ aglFt: 190, vsiFpm: -700, papiWhite: 0, throttle: 0.3, onGround: false, ds: 'dh' })).toBe('dh');
     expect(coachTarget({ aglFt: 190, vsiFpm: -700, papiWhite: 2, throttle: 0.3, onGround: false, ds: 'dh', autopilot: true })).toBeNull();
+  });
+
+  it('a missed approach at minimums: the coach flies the climb-out with you, then says how to try again', () => {
+    const st = createDh();
+    dhStep(st, sim(400, { simTime: 10 }));
+    dhStep(st, sim(199, { simTime: 20 }));
+    expect(st.missed).toBe(false);
+    // Full power, climbing: the missed approach starts (not a landing's balloon at part power).
+    dhStep(st, sim(190, { simTime: 21, vel: { y: 1 }, throttle: 0.5 }));
+    expect(st.missed).toBe(false);
+    dhStep(st, sim(190, { simTime: 21, vel: { y: 1 }, throttle: 1 }));
+    expect(st.missed).toBe(true);
+    const at = (hatFt, o) => dhPrompt(st, sim(hatFt, { simTime: 60, vel: { y: 3 }, vsiFpm: 600, throttle: 1, ...o }), false);
+    expect(at(200, { throttle: 0.6 })).toBe('maPower');
+    expect(at(200, { vsiFpm: -100 })).toBe('maPitch');
+    expect(at(300)).toBe('maFlaps'); // never "you're high: ease the nose down" on the way up
+    expect(at(400, { flapsIndex: 1 })).toBe('maGear');
+    expect(at(400, { flapsIndex: 1, spec: { fixedGear: true } })).toBe('maClimb'); // the Cessna has no gear to raise
+    expect(at(800, { flapsIndex: 1, gearDown: false })).toBe('maClimb');
+    expect(at(1600, { flapsIndex: 1, gearDown: false })).toBe('maDone');
+    expect(dhPrompt(st, sim(400, { simTime: 60 }), true)).toBeNull(); // Kid's plane lands itself
+    expect(coachText('maDone')).toMatch(/RESET/);
+    expect(coachText('maPower', { touch: true })).toMatch(/throttle/);
+    expect(coachText('maPitch', { touch: true })).toMatch(/stick up/);
+    // A second approach: the call clears it.
+    dhStep(st, sim(320, { simTime: 90, vel: { y: 3 }, throttle: 1 }));
+    expect(dhStep(st, sim(198, { simTime: 120 }))).toBe(true);
+    expect(st.missed).toBe(false);
+  });
+});
+
+describe('in the cloud (BKN004 OVC008: no view of the ground until the break-out)', () => {
+  it('fog thickens to ~120 m above the 400 ft base and is the report\'s 2 SM below it', () => {
+    const clear = fogDensityForVisibility(2), cloud = 1.517 / 120;
+    expect(cloudFog(0)).toBeCloseTo(clear, 9);
+    expect(cloudFog(370)).toBeCloseTo(clear, 9);
+    expect(cloudFog(450)).toBeCloseTo(cloud, 9);
+    expect(cloudFog(1600)).toBeCloseTo(cloud, 9);
+    expect(cloudFog(410)).toBeGreaterThan(clear);
+    expect(cloudFog(410)).toBeLessThan(cloud);
+    // ~90% fog at 120 m: the runway from 750 ft on the path (~2.2 NM) is gone.
+    expect(1 - Math.exp(-((4000 * cloudFog(750)) ** 2))).toBeGreaterThan(0.999);
+  });
+
+  it('the ATIS-style briefing calls it this mission\'s scenario, not offline', () => {
+    const a = buildAtis(WX, runwayEnd('KDFW', '35C'), { nowMs: 0 });
+    expect(a.live).toBe(false);
+    expect(a.source).toMatch(/SCENARIO weather \(this mission's\)/);
+    expect(a.source).not.toMatch(/offline/);
   });
 });

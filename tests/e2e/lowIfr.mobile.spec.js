@@ -29,7 +29,7 @@ for (const [w, h] of [[390, 844], [844, 390]]) {
     // The trimmed airplane on a 1 NM final, hands off, down through 200 ft.
     await page.evaluate(() => window.openaeroDebugFinal('KDFW', '35C', 1.0, 0, { lowIfr: true }));
     await expect.poll(async () => (await snap(page)).dh?.calls, { timeout: 60_000, intervals: [100] }).toBe(1);
-    await expect(page.locator('#txtCoach')).toHaveText(/Minimums: runway lights in sight\? Land\. If not, full power: go around/);
+    await expect(page.locator('#txtCoach')).toHaveText(/Minimums: lights in sight\? Land\. No lights: full power, nose up, go around/);
     const coach = await page.locator('#coach').boundingBox();
     expect(coach.x).toBeGreaterThanOrEqual(0);
     expect(coach.y).toBeGreaterThanOrEqual(0);
