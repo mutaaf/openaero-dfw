@@ -820,7 +820,7 @@ let detailedModelsArmed = false;
 function attachDetailedModel(type) {
   const refs = animRefs;
   if (detailedModelsArmed) import('./aircraftModel.js').then((m) => m.attachModel(aircraftRoot, type, import.meta.env.BASE_URL, refs, () => refs === animRefs))
-    .then(() => ads?.paint()).catch((e) => console.warn('[openaero] no aircraft model:', e));
+    .then(() => ads?.paint()).catch(console.warn); // the error names the chunk or the model's URL
 }
 
 // --- Stabilized-approach gate (ticket 0020) ----------------------------------------
@@ -912,7 +912,7 @@ function drillCard(result, place) {
 function loadDrill(mission, lib, load, arm) {
   const go = (m) => { if (sim.loadedMission === mission) arm(m); };
   if (lib) go(lib);
-  else load().then(go).catch((e) => console.warn('[openaero] no drill:', e));
+  else load().then(go).catch(console.warn); // the failed import names its chunk
 }
 
 function startGoAroundDrill(mission) {
@@ -3272,7 +3272,7 @@ window.addEventListener('gamepaddisconnected', () => { sim.pad = null; showToast
 function updateGamepad() {
   if (!padLib) {
     if (!padLoading && navigator.getGamepads?.().some(Boolean)) {
-      padLoading = import('./gamepad.js').then((m) => (padLib = m), (err) => { padLoading = false; console.warn('[openaero] no gamepad:', err); });
+      padLoading = import('./gamepad.js').then((m) => (padLib = m), (err) => { padLoading = false; console.warn(err); });
     }
     sim.pad = null;
     return;

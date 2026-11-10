@@ -20,7 +20,7 @@
 // per page, shared). The jet steps the flight model at 1/60 s (once a frame at 60 fps); drawing
 // it is one model copy, culled by three off screen. Off for the rest of a flight once the adaptive
 // resolution (resScale.js) has fallen to its floor of 1 on a device that started above it: the
-// device's own "this phone is struggling" signal. Makes no objects per frame (stepFlightModel's own
+// device's own "this phone is struggling" signal. None after dark (nightGround.js uNight over 0.5): no lights yet. Makes no objects per frame (stepFlightModel's own
 // number boxing is the player's step's too).
 import { Vector3, Quaternion, Euler } from 'three';
 import { RUNWAY_ENDS, RUNWAYS_GEOM, approachSpawn, AIM_POINT_M } from './airports.js';
@@ -51,7 +51,10 @@ export const TRAFFIC_AIRPORT = 'KDFW';
 export const TRAFFIC_KEY = 'b738';
 export const MIN_SEP_M = NM_TO_M;        // never placed within 1 NM of the player
 export const FLOW_DEG = 30;              // a parallel: within this of the player's runway heading
-export const AHEAD_NM = 2;               // the first jet: this much closer to its runway than the player
+export const AHEAD_NM = 2.5;             // the first jet: this much closer to its runway than the player (1.5 NM at the
+                                         // least), so it is ~20° off the nose from the default final, just inside a phone's
+                                         // portrait view (±21°; at 2 NM it sat 28° right, off screen: first-timer panel)
+export const FIRST_MIN_NM = 1.5;
 export const SPAWN_NM = [4, 8];          // every jet after it
 export const FIRST_SPAWN_S = 5;          // after a flight starts: past resScale's 1 s grace and its first windows, so a
                                          // struggling phone is off before it fetches the model (device panel)
@@ -110,17 +113,18 @@ export function distToThresholdNm(end, pos) {
 }
 
 // Where the next jet starts: { end, distNm } on one of trafficEnds, at least MIN_SEP_M from the
-// player (3D), or null. `first`: the flight's first jet, AHEAD_NM closer than the player (2-8 NM);
-// else `rand()` (0..1) picks 4-8 NM. If that spot is too close it tries the rest of 2-8 NM by
-// half miles, nearest the wanted distance first, then the next parallel. Allocates (a spawn, not a frame).
+// player (3D), or null. `first`: the flight's first jet, AHEAD_NM closer than the player (1.5-8 NM);
+// else `rand()` (0..1) picks 4-8 NM. If that spot is too close it tries the rest of 1.5-8 NM by
+// half miles, nearest the wanted distance first, then the next parallel: so the first jet is ahead
+// where there is room (on a 1-3 NM final it may start behind the player). Allocates (a spawn, not a frame).
 export function pickTrafficSpawn(playerEnd, playerPos, { first = false, rand = Math.random, wx = null } = {}) {
   const ends = trafficEnds(playerEnd, RUNWAY_ENDS, wx);
   if (!ends.length) return null;
   const want = first
-    ? Math.min(8, Math.max(2, distToThresholdNm(playerEnd, playerPos) - AHEAD_NM))
+    ? Math.min(8, Math.max(FIRST_MIN_NM, distToThresholdNm(playerEnd, playerPos) - AHEAD_NM))
     : SPAWN_NM[0] + rand() * (SPAWN_NM[1] - SPAWN_NM[0]);
   const tries = [want];
-  for (let d = 2; d <= 8; d += 0.5) tries.push(d);
+  for (let d = FIRST_MIN_NM; d <= 8; d += 0.5) tries.push(d);
   tries.sort((a, b) => Math.abs(a - want) - Math.abs(b - want));
   for (const end of ends) {
     for (const distNm of tries) {
@@ -284,7 +288,9 @@ export const trafficAllowed = (pixelRatio, topRatio) => !(topRatio > 1 && pixelR
 export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
   const st = { jet: null, nextAt: null, first: true, mission: undefined, endId: null, off: false, lastT: null, acc: 0, spawned: 0, px: NaN, pz: NaN };
   const retire = (gapS) => { st.jet = null; st.nextAt = sim.simTime + gapS; };
-  st.tick = (allowed = true) => {
+  // dark: no jet at all (it has no lights yet: a real one on final shows its landing lights for miles,
+  // ours would be an unlit speck; first-timer panel). Not latched like a slow device: dusk-to-day comes back.
+  st.tick = (allowed = true, dark = false) => {
     const t = sim.simTime ?? 0;
     const dt = st.lastT === null ? 0 : Math.min(0.25, Math.max(0, t - st.lastT));
     st.lastT = t;
@@ -303,7 +309,7 @@ export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
       }
     }
     if (!allowed) st.off = true;
-    if (st.off) { st.jet = null; return st; }
+    if (st.off || dark) { st.jet = null; if (dark) st.nextAt = null; return st; }
     if (!st.jet) {
       if (st.nextAt === null) st.nextAt = t + FIRST_SPAWN_S;
       if (t < st.nextAt || !(dt > 0)) return st;
@@ -328,7 +334,9 @@ export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
 }
 
 // The game's side: `scene` is main.js's THREE.Scene (its onBeforeRender chained, as fuel.js's).
-export function createTraffic(scene, sim, base = import.meta.env?.BASE_URL ?? '/') {
+// isDark: () => true after dark (runwayLights.js passes nightGround.js's uNight > 0.5; importing nightGround.js
+// here split three's Color out of the boot chunk, +0.3 kB gz).
+export function createTraffic(scene, sim, isDark = () => false, base = import.meta.env?.BASE_URL ?? '/') {
   const sched = createTrafficScheduler(sim);
   // The jet is the loaded model itself, added to the scene (no Group of our own: importing three's
   // Group here split Object3D out of the boot chunk, +0.4 kB gz).
@@ -338,7 +346,7 @@ export function createTraffic(scene, sim, base = import.meta.env?.BASE_URL ?? '/
     before.call(this, renderer, sc, camera, target);
     const ratio = renderer.getPixelRatio();
     top ??= ratio;
-    sched.tick(!!sim.fm && trafficAllowed(ratio, top));
+    sched.tick(!!sim.fm && trafficAllowed(ratio, top), isDark());
     const j = sched.jet;
     if (j && !model && !loading) {
       loading = true; // the model the player's 737 uses: one fetch per page, shared (aircraftModel.js)

@@ -43,7 +43,7 @@ const DFW = RUNWAY_ENDS.filter((e) => e.airport === 'KDFW');
 
 describe('the traffic 737 lands on its runway (0080)', () => {
   for (const end of DFW) {
-    for (const nm of [2, 8]) {
+    for (const nm of [1.5, 2, 8]) {
       it(`${end.ident} from ${nm} NM, calm: in the touchdown zone, on the centreline, stopped on the runway`, () => {
         const r = flyJet(end, nm);
         const td = r.j.touchdown;

@@ -17,7 +17,7 @@ const DFW = RUNWAY_ENDS.filter((e) => e.airport === 'KDFW');
 const dist3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
 describe('which runway the traffic lands on (0080)', () => {
-  it('with the player on 35C: the other south-flow runways, 35R first (1.5 km), the close parallel 35L (360 m) last, never 35C or 17C', () => {
+  it('with the player on 35C: the other north-flow (landing north) runways, 35R first (1.5 km), the close parallel 35L (360 m) last, never 35C or 17C', () => {
     const ends = trafficEnds(runwayEnd('KDFW', '35C')).map((e) => e.ident);
     expect(ends).not.toContain('35C');
     expect(ends).not.toContain('17C');
@@ -56,17 +56,17 @@ describe('which runway the traffic lands on (0080)', () => {
 });
 
 describe('where the traffic starts (0080)', () => {
-  it('the default 4 NM final on 35C: the first jet 2 NM out on 35R, ahead of the player, over 1 NM away', () => {
+  it('the default 4 NM final on 35C: the first jet 1.5 NM out on 35R, ahead of the player, over 1 NM away', () => {
     const end = runwayEnd('KDFW', '35C');
     const player = approachSpawn(end, 4).pos;
     const s = pickTrafficSpawn(end, player, { first: true });
     expect(s.end.ident).toBe('35R');
-    expect(s.distNm).toBeCloseTo(2, 5);
+    expect(s.distNm).toBeCloseTo(1.5, 5);
     const p = approachSpawn(s.end, s.distNm).pos;
     expect(dist3(p, player)).toBeGreaterThanOrEqual(MIN_SEP_M);
     expect(distToThresholdNm(s.end, p)).toBeLessThan(distToThresholdNm(end, player)); // ahead
   });
-  it('every KDFW end, the player anywhere from the runway to 10 NM out, first or not: never their runway, never within 1 NM, 2-8 NM out', () => {
+  it('every KDFW end, the player anywhere from the runway to 10 NM out, first or not: never their runway, never within 1 NM, 1.5-8 NM out', () => {
     let n = 0;
     for (const pe of DFW) {
       const spots = [0, 1, 2, 3, 4, 5, 6, 8, 10].map((nm) => approachSpawn(pe, nm).pos);
@@ -78,9 +78,9 @@ describe('where the traffic starts (0080)', () => {
             const s = pickTrafficSpawn(pe, pos, { first, rand: () => r });
             expect(s, `${pe.id}`).not.toBeNull();
             expect(sameRunway(s.end, pe)).toBe(false);
-            expect(s.distNm).toBeGreaterThanOrEqual(2);
+            expect(s.distNm).toBeGreaterThanOrEqual(1.5);
             expect(s.distNm).toBeLessThanOrEqual(8);
-            if (!first) expect(s.distNm).toBeGreaterThanOrEqual(r === 0 ? 2 : 4); // 4-8, unless that spot was too close
+            if (!first) expect(s.distNm).toBeGreaterThanOrEqual(r === 0 ? 1.5 : 4); // 4-8, unless that spot was too close
             expect(dist3(approachSpawn(s.end, s.distNm).pos, pos)).toBeGreaterThanOrEqual(MIN_SEP_M);
             n++;
           }
@@ -191,6 +191,15 @@ describe('the scheduler (0080)', () => {
     expect(pickTrafficSpawn(e, p, { first: true, wx: { windDirDeg: 180, windKts: 9 } })).not.toBeNull();
     expect(pickTrafficSpawn(e, p, { first: true, wx: { windDirDeg: 180, windKts: 9, gustKts: 14 } })).toBeNull();
     expect(pickTrafficSpawn(e, p, { first: true, wx: { windDirDeg: 180, windKts: MAX_TAILWIND_KTS + 1 } })).toBeNull();
+  });
+  it('no jet after dark (no lights yet), back when it is light', () => {
+    const sim = final(), sch = createTrafficScheduler(sim);
+    for (let t = 0; t < FIRST_SPAWN_S + 1; t += 1 / 60) { sim.simTime += 1 / 60; sch.tick(true, true); }
+    expect(sch.jet).toBeNull();
+    run(sim, sch, FIRST_SPAWN_S + 1);
+    expect(sch.jet).not.toBeNull();
+    sch.tick(true, true);
+    expect(sch.jet).toBeNull();
   });
   it('off for the rest of the flight on a slow device, back for the next flight', () => {
     const sim = final(), sch = createTrafficScheduler(sim);
