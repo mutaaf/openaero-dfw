@@ -28,6 +28,8 @@ export const MISSIONS = [
   // Microburst windshear drill (0112, windshear.js): the 737 meets a microburst at 600 ft on a 3 NM final.
   { key: 'kdfw_35c_windshear', label: 'KDFW 35C Windshear Escape (737)', blurb: 'A microburst waits on short final: when WINDSHEAR sounds, full power and 15° nose up, and hold it. Don\'t dive for the lost speed.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 3, aircraft: 'b738', windshear: true },
   // Night and dusk (0060): `sun` flies that When? preset for the mission's run only (missionSun).
+  // Low-ceiling ILS (0092, lowIfr.js): a scripted LIFR report (400 ft broken, 2 SM), the Weather group.
+  { key: 'kdfw_35c_low_ifr', label: 'KDFW 35C Low Ceiling ILS (5 NM)', blurb: 'A scripted foggy day: cloud down to 400 ft and 2 miles of mist. Fly the ILS bars down through the grey; at 200 ft, minimums: lights in sight, land; if not, go around.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 5, lowIfr: true, group: 'weather' },
   { key: 'kdfw_35c_night', label: 'KDFW 35C Night ILS (4 NM)', blurb: 'Flown at night: follow the sequenced flashers of the approach lights and the PAPI down to the lit runway. Your When? comes back after.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4, sun: 'Night' },
   { key: 'kdfw_17c_final', label: 'KDFW RWY 17C (South Flow 4 NM)', blurb: 'South flow: the centre runway flown from the north, the way DFW lands in a south wind.', kind: 'final', airport: 'KDFW', rwy: '17C', distNm: 4 },
   { key: 'kdfw_36l_final', label: 'KDFW RWY 36L (West Side 6 NM)', blurb: 'A longer 6 NM final from the south to the west-side runway.', kind: 'final', airport: 'KDFW', rwy: '36L', distNm: 6 },
@@ -71,35 +73,27 @@ export function missionSun(mission, mode, before) {
 
 export const CROSSWIND_KEY = 'crosswind_today';
 
-// Today's crosswind challenge (ticket 0018) from pickCrosswindRunway(): a 4 NM final on that
-// end, labelled with the live crosswind. Null when there is no pick (no live weather).
-export function crosswindMission(pick) {
-  if (!pick) return null;
-  const kts = Math.round(Math.abs(pick.crosswindKts));
-  return {
-    key: CROSSWIND_KEY, kind: 'final', airport: pick.end.airport, rwy: pick.end.ident, distNm: 4,
-    label: `Today's crosswind: ${pick.end.airport} ${pick.end.ident}, ${kts} kt from the ${pick.crosswindKts > 0 ? 'right' : 'left'}`,
-  };
-}
-
 // The start screen's mission picker (ticket 0029) is generated from MISSIONS: the recommended
 // first flight on top, then one group per airport in this order (an airport not listed here
-// gets its own group after them), then the drills flown away from an airport, then the tours. Every key appears once; empty groups drop.
+// gets its own group after them), then the weather missions (`group: 'weather'`, 0092), then the drills flown away from an
+// airport, then the tours. Every key appears once; empty groups drop.
 export const RECOMMENDED_KEY = 'kdfw_35c_final';
 const AIRPORT_ORDER = ['KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY'];
 
 export function groupMissions(missions) {
   const groups = [{ id: 'recommended', missions: [] }, ...AIRPORT_ORDER.map((id) => ({ id, missions: [] }))];
+  const weather = { id: 'weather', missions: [] };
   const drills = { id: 'drills', missions: [] };
   const tours = { id: 'tours', missions: [] };
   const byId = new Map(groups.map((g) => [g.id, g]));
   for (const m of missions) {
     if (m.key === RECOMMENDED_KEY) { byId.get('recommended').missions.push(m); continue; }
+    if (m.group === 'weather') { weather.missions.push(m); continue; }
     if (m.kind === 'drill' && !m.airport) { drills.missions.push(m); continue; }
     if (m.kind === 'tour' || !m.airport) { tours.missions.push(m); continue; }
     let g = byId.get(m.airport);
     if (!g) { g = { id: m.airport, missions: [] }; byId.set(m.airport, g); groups.push(g); }
     g.missions.push(m);
   }
-  return [...groups, drills, tours].filter((g) => g.missions.length);
+  return [...groups, weather, drills, tours].filter((g) => g.missions.length);
 }

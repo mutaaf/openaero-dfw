@@ -157,7 +157,10 @@ export function windReadout(wx, comps, out = {}) {
   out.live = !!wx.live;
   // A wet runway (0108) only ever comes from the METAR's rain, so it takes the source line.
   out.wet = !!wx.wetRunway;
-  out.source = out.wet ? 'WET RWY' : out.live ? 'METAR WIND' : 'SCENARIO';
+  // An IFR or low-IFR report (AIM 7-1-7, the Worker's fltCat or lowIfr.js's) says so (0092): the
+  // ceiling is why the runway is not in sight. 'LIFR METAR' / 'LIFR SCN' fit the box.
+  const cat = /IFR/.test(wx.fltCat) && wx.fltCat; // IFR, LIFR (not MVFR)
+  out.source = out.wet ? 'WET RWY' : cat ? `${cat} ${out.live ? 'METAR' : 'SCN'}` : out.live ? 'METAR WIND' : 'SCENARIO';
   out.calm = kts < 2;
   // The arrow reads these, so it always agrees with the text it sits beside.
   out.dirDeg = vrb ? null : wx.windDirDeg;

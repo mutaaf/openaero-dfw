@@ -15,7 +15,7 @@ import {
   RUNWAY_ENDS, RUNWAYS_GEOM, runwayEnd, runwayEndById, approachGeometry, selectActiveRunway,
   approachSpawn, takeoffSpawn, courseVector, AIM_POINT_M, AIRPORT_NAMES, papiWhite, runwayFactsText,
 } from './airports.js';
-import { MISSIONS, missionByKey, crosswindMission, CROSSWIND_KEY, groupMissions, missionSun } from './missions.js';
+import { MISSIONS, missionByKey, CROSSWIND_KEY, groupMissions, missionSun } from './missions.js';
 import { missionFromLink, terrainOnly, stripDeepLink, fdmFromLink } from './deeplink.js';
 import { gradeLanding, recordBest, driftAngleDeg, bestGrades, createBounceTracker, stepBounce, capBounced, recontactCrash, BOUNCE_MIN_S, GRADE_COLOURS } from './landing.js';
 import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIGH_FT } from './coach.js';
@@ -25,8 +25,8 @@ import {
   flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
 } from './autopilot.js';
 import {
-  parseMetar, scenarioWeather, windVector, gustFactor, runwayWindComponents, surfaceWindFactor,
-  fogDensityForVisibility, metarAgeMinutes, flowForWind, pickCrosswindRunway,
+  scenarioWeather, windVector, gustFactor, runwayWindComponents, surfaceWindFactor,
+  fogDensityForVisibility, metarAgeMinutes, flowForWind,
 } from './weather.js';
 import { createTerrainLod } from './terrainLod.js';
 import { createLazyPhotoreal, photorealAllowed } from './photorealLazy.js';
@@ -994,6 +994,7 @@ function checkWindshear(dt) {
   drillCard(result, wsLib.SHEAR_END);
 }
 
+let ifrLib = null; // lowIfr.js (0092)
 // --- Steep turns (ticket 0161, steepTurns.js): sim.steepTurns on that mission, graded after both
 // turns (or not finished); null once graded, so KEEP FLYING is free flight.
 let stLib = null;
@@ -1015,6 +1016,7 @@ function startDrills(mission) {
   sim.rto = null;
   sim.windshear = null;
   sim.steepTurns = null;
+  sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
   drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns);
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
@@ -1027,6 +1029,10 @@ function startDrills(mission) {
   sim.toCoach = null;
   if (mission.kind === 'takeoff' && !drillCoach) loadDrill(mission, null, () => import('./takeoffCoach.js'), (lib) => { sim.toCoach = lib.createTakeoffCoach(sim.aircraftKey, sim.spec); });
   if (mission.windshear) loadDrill(mission, wsLib, () => import('./windshear.js'), (lib) => { wsLib = lib; if (sim.aircraftKey === mission.aircraft) { const d = courseVector(runwayEnd(mission.airport, mission.rwy).hdgT); sim.windshear = lib.createShear(d.x, d.z); } });
+  // The low-ceiling ILS (0092, lowIfr.js): its scripted weather is currentWeather()'s while sim.dh
+  // is set; the first time, the chunk comes after the spawn, so spawn again in its weather (behind the start
+  // screen, or in a flight's first seconds: never under a flight already flown).
+  if (mission.lowIfr) loadDrill(mission, ifrLib, () => import('./lowIfr.js'), (lib) => { const late = !ifrLib; ifrLib = lib; sim.dh = lib.createDh(); if (late && (!detailedModelsArmed || sim.airborneTime < 3)) loadScenario(sim.missionKey, sim.missionKey.startsWith('debug_') && mission); });
 }
 
 // --- Landing grade ---------------------------------------------------------------
@@ -1322,6 +1328,7 @@ function updateCoach(dt) {
       : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim)
       : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
       : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
+      : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
       : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
     coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach) ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
@@ -1468,6 +1475,7 @@ function applySky() {
   applyGroundLight();
 }
 
+let metarLib = null; // metar.js, with the first report
 async function fetchWeather() {
   try {
     // no-store + a minute bucket: the zone's Browser Cache TTL can stretch cached edge
@@ -1476,11 +1484,13 @@ async function fetchWeather() {
     const res = await fetch(`${import.meta.env.BASE_URL}api/metar?ids=${WX_IDS}&t=${bucket}`, { cache: 'no-store' });
     if (!res.ok) return;
     const body = await res.json();
+    metarLib ??= await import('./metar.js'); // reading a report is a lazy chunk (0092)
     const next = {};
-    for (const m of body.metars || []) next[m.icaoId] = parseMetar(m);
+    for (const m of body.metars || []) next[m.icaoId] = metarLib.parseMetar(m);
     if (Object.keys(next).length) sim.wxByIcao = next;
-  } catch {
-    // Offline: keep the last real weather, or the labelled scenario weather.
+  } catch (e) {
+    console.warn(e); // offline, or metar.js failed to load (the error names its chunk)
+    // Keep the last real weather, or the labelled scenario weather.
   }
   refreshWeather();
   refreshCrosswindMission();
@@ -1492,7 +1502,7 @@ async function fetchWeather() {
 // Re-pick today's crosswind challenge from the live METARs. A flight already under way keeps
 // its runway (sim.activeEnd); the new pick applies from the next load / Fly again.
 function refreshCrosswindMission() {
-  const m = crosswindMission(pickCrosswindRunway(sim.wxByIcao, RUNWAY_ENDS, Date.now() / 1000));
+  const m = metarLib && metarLib.crosswindMission(metarLib.pickCrosswindRunway(sim.wxByIcao, RUNWAY_ENDS, Date.now() / 1000));
   sim.crosswindMission = m;
   // Flying the challenge when it disappears: Fly again keeps the runway you were flying.
   const flying = sim.missionKey === CROSSWIND_KEY && sim.loadedMission ? [sim.loadedMission] : [];
@@ -1516,7 +1526,7 @@ function refreshCrosswindMission() {
 // The weather for where you are flying: the active runway's field, else DFW, else scenario.
 function currentWeather() {
   const field = sim.activeEnd ? sim.activeEnd.airport : 'KDFW';
-  return sim.wxByIcao[field] || sim.wxByIcao.KDFW || scenarioWeather();
+  return sim.dh ? ifrLib.WX : sim.wxByIcao[field] || sim.wxByIcao.KDFW || scenarioWeather();
 }
 
 function refreshWeather() {
@@ -1606,7 +1616,7 @@ function syncWeatherUI(dt) {
   // Remarks (RMK …) are for forecasters; drop them so the age stays visible.
   byId('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
   byId('txtWindBadge').textContent = windText(wx);
-  const dfw = sim.wxByIcao.KDFW || scenarioWeather();
+  const dfw = sim.dh ? sim.wx : sim.wxByIcao.KDFW || scenarioWeather(); // the low-ceiling day's DFW is its scripted one (0092)
   const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
   byId('txtFlow').textContent = `${flow} (RWY ${flow === 'NORTH' ? '35/36' : '17/18'})`;
   // HUD wind box (0075): components against the active runway only low down, near it.
@@ -1663,6 +1673,10 @@ function step6DofPhysics(dt) {
   checkRto();
   checkWindshear(dt);
   checkSteepTurns(dt);
+  if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in
+    if (ifrLib.dhStep(sim.dh, sim)) audio.callout('minimums');
+    if (sim.activeEnd) scene.fog.density = ifrLib.cloudFog((camera.position.y - sim.activeEnd.thrY) * M_TO_FT);
+  }
   checkTouchdown(dt);
   checkTakeoffCallouts();
 }
@@ -2542,6 +2556,8 @@ function loadScenario(key, final = null) {
 
   if (mission.kind === 'final') {
     const end = runwayEnd(mission.airport, mission.rwy);
+    sim.activeEnd = end;
+    refreshWeather(); // the spawn's air (density, altimeter) is this field's, or this mission's (0092)
     // The go-around drill (0047) starts fast and high on purpose.
     const vApp = (sim.spec.vrefKts + 5 + (mission.fastKts ?? 0)) * KTS_TO_MPS; // indicated
     const airThr = airAt(end.thrY + REF_ELEV_M, sim.isaDevC, sim.altimInHg);
@@ -2621,6 +2637,7 @@ function loadScenario(key, final = null) {
   // Airborne spawns fly their speed through the air: the wind adds to the ground velocity
   // (a final with a tailwind starts at its airspeed, not 5 kt slow).
   if (!sim.onGround) {
+    refreshWeather(); // this field's (or this mission's, 0092) wind
     updateWind(0);
     sim.vel.add(sim.windVec);
   }
@@ -3497,6 +3514,7 @@ window.openaeroDebug = () => {
     caption: caption.text,
     wakeLock: wakeLock.held,
     sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg },
+    fltCat: sim.wx.fltCat, dh: sim.dh && { ...sim.dh },
     cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
     lastLanding: sim.lastLanding,
@@ -3529,7 +3547,7 @@ function populateMissionSelect() {
 // Start-screen mission picker (ticket 0029): one card per mission, grouped by airport, built
 // from MISSIONS so a new mission needs no HTML. Today's crosswind card (static, shown only
 // with live weather) sits under the recommended flight.
-const PICKER_TITLES = { recommended: 'Recommended first flight', drills: 'Drills', tours: 'Tours' };
+const PICKER_TITLES = { recommended: 'Recommended first flight', weather: 'Weather', drills: 'Drills', tours: 'Tours' };
 function buildMissionPicker() {
   const list = byId('missionList');
   const crosswindCard = byId('btnCrosswindToday');

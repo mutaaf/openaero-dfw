@@ -36,8 +36,9 @@ export const landmarkSeats = (objs, ground) => Object.fromEntries(objs.filter((o
 export function hooks(sim, scenario, arm, dead, ground) {
   // 0068: a final to any runway end from any distance, e.g. 17R from 10 NM; fastKts (0127): that
   // much over the final's speed, flaps and all (an overspeed on the final).
-  window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0) => scenario(null,
-    { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts });
+  // `extra`: mission flags to keep (0092: { lowIfr: true } flies the low-ceiling day's weather once its chunk is in).
+  window.openaeroDebugFinal = (airport, rwy, distNm, fastKts = 0, extra) => scenario(null,
+    { key: `debug_${airport}_${rwy}_${distNm}`, label: `${airport} ${rwy} (${distNm} NM, debug)`, airport, rwy, distNm, fastKts, ...extra });
   // 0091: throw the airplane back up off the runway (m/s), a scripted bounce; with onGroundS, armed:
   // it fires in the physics after that long on the wheels (sim time), so a slow frame can't move it
   // along the derotation (the nose comes down ~8°/s after touchdown).

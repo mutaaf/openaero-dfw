@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { baroLabel, baroSource, baroRect, drawAltCaption, gateVerdictRect, TOUCH_DECK_H, BARO_W, BARO_H } from '../../src/gateVerdict.js';
 import { altCaptionRect, windBoxRect, windReadout, ALT_TAPE_X, SPEED_TAPE_X, TAPE_TOP } from '../../src/hudLayout.js';
-import { parseMetar, scenarioWeather } from '../../src/weather.js';
+import { scenarioWeather } from '../../src/weather.js';
+import { parseMetar } from '../../src/metar.js';
 
 // Ticket 0146: the altimeter setting under the altitude tape, the number physics flies on
 // (main.js refreshWeather: sim.altimInHg = sim.wx.altimInHg), "30.11 IN" over its source line.

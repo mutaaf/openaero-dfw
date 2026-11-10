@@ -6,7 +6,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildAtis, spokenDigits, spokenHeight, atisLetter, ATIS_MAG_VAR_DEG } from '../../src/atis.js';
 import { MAG_VAR_DEG } from '../../src/magvar.js';
-import { parseMetar, scenarioWeather } from '../../src/weather.js';
+import { scenarioWeather } from '../../src/weather.js';
+import { parseMetar } from '../../src/metar.js';
 import { runwayEnd } from '../../src/airports.js';
 
 const metar = (rawOb, extra = {}) => parseMetar({

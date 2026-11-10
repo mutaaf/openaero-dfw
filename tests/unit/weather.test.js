@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseMetar, windVector, gustFactor, runwayWindComponents, fogDensityForVisibility,
-  scenarioWeather, metarAgeMinutes, flowForWind, pickCrosswindRunway, cloudLayers, surfaceWindFactor,
+  windVector, gustFactor, runwayWindComponents, fogDensityForVisibility,
+  scenarioWeather, metarAgeMinutes, flowForWind, surfaceWindFactor,
 } from '../../src/weather.js';
+import { parseMetar, pickCrosswindRunway, cloudLayers, crosswindMission } from '../../src/metar.js';
 import { RUNWAY_ENDS } from '../../src/airports.js';
-import { crosswindMission, missionByKey } from '../../src/missions.js';
+import { missionByKey } from '../../src/missions.js';
 
 const DFW = {
   icaoId: 'KDFW', obsTime: 1792183980, rawOb: 'METAR KDFW 162053Z 35023G32KT 10SM FEW050 BKN250 18/03 A3041',

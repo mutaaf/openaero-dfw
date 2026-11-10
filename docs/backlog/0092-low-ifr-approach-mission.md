@@ -1,12 +1,12 @@
 ---
 id: 0092
 title: Low-ceiling approach mission: break out at the decision height
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-10-26
-pr:
+pr: 220
 ---
 
 ## Why
@@ -29,11 +29,11 @@ ceiling by construction), the existing go-around machinery applies. The HUD wind
 weather label show the category (IFR/LIFR) from `fltCat`.
 
 ## Acceptance criteria
-- [ ] The mission appears in the picker under a weather group and starts with the scripted METAR; the HUD never says "live"
-- [ ] At 5 NM the runway is not visible through the overcast (a pixel/visibility probe like the 0068 spec); below the ceiling the approach lights are
-- [ ] A 200 ft callout fires once on the glideslope
-- [ ] No console errors; boot JS budget unchanged (mission data only; any new code lazy)
-- [ ] Works at 390x844 touch and 1280x720
+- [x] The mission appears in the picker under a weather group and starts with the scripted METAR; the HUD never says "live"
+- [x] At 5 NM the runway is not visible through the overcast (a pixel/visibility probe like the 0068 spec); below the ceiling the approach lights are
+- [x] A 200 ft callout fires once on the glideslope
+- [x] No console errors; boot JS budget unchanged (mission data only; any new code lazy)
+- [x] Works at 390x844 touch and 1280x720
 
 ## Test plan
 Unit for the scripted METAR parse (category IFR, ceiling 400, vis 2) and the decision-height
@@ -41,3 +41,12 @@ trigger; e2e that the mission boots and the label reads scenario.
 
 ## Out of scope
 Real approach plates, missed-approach holds, ILS category minima by runway.
+
+## Shipped notes
+- The scripted report is LIFR, not IFR: its 400 ft broken ceiling is under AIM 7-1-7's 500 ft
+  (the visibility alone, 2 SM, would be IFR). `lowIfr.js flightCategory` computes it from the
+  ceiling and visibility; the Worker's live reports carry their own `fltCat`.
+- Decision height: 200 ft above the threshold (FAA Pilot/Controller Glossary, ILS Category I), the
+  "minimums" callout once on the final, then the coach's decision words for 5 s.
+- Boot paid for by moving METAR parsing into a lazy chunk (src/metar.js): boot 200.97 → 200.50 kB.
+
