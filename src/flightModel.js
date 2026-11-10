@@ -202,8 +202,8 @@ export function stepFlightModel(body, spec, dt) {
   const authority = spec.pitchAuthority ?? 1.8;
   if (body.autoTrim || spec.pitchFbw || body.trimAlphaDeg == null) body.trimAlphaDeg = body.aoaDeg;
   const stiffness = spec.elevatorAlphaDeg ? authority / (spec.elevatorAlphaDeg * DEG_TO_RAD) : 0;
-  // Past the stall (spec.pitchBreak, pitchBreak.js, 0109: NASA rotary-balance data) the nose breaks
-  // down and the elevator loses most of its power, so a held pull no longer out-pulls the stall.
+  // From α 8° (spec.pitchBreak, pitchBreak.js, 0109: NASA rotary-balance data) the nose-up elevator
+  // fades and past the stall the nose breaks down, so a held pull no longer out-pulls the stall.
   const pb = spec.pitchBreak;
   const alphaErr = MathUtils.clamp(aoaRad + (pb ? pb.breakDeg(body.aoaDeg) * DEG_TO_RAD : 0) - body.trimAlphaDeg * DEG_TO_RAD, -ALPHA_LIN, ALPHA_LIN);
   // The stick's steady pitch rate (pitch authority over damping); a fly-by-wire airframe's g and

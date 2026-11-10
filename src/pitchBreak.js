@@ -25,6 +25,10 @@
 // is the assumption here. The break is model B's, in degrees of α at its own slope, so it scales
 // with our Cmα (the same moment as so many degrees of α more). Spins, sideslip and the rotary
 // terms are out of scope (the rotary data are why the reports exist).
+// Static only: no stall hysteresis or unsteady Cm, so a held full back stick settles steadily (idle:
+// α ~17°, nose ~10° up, ~54 KIAS, ~700 fpm down; power on it climbs at α 17° with the warning on)
+// where a real 172 bobs and buffets. Until this chunk loads (or if it fails: console.warn) the
+// pitch is the old linear one; no flight starts before the Start flight tap (fbw.js's pattern).
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 
 const ALPHA = [8, 10, 12, 14, 16, 18, 20, 25, 30, 35, 40, 45, 50];
@@ -38,7 +42,7 @@ const BREAK_DEG = [0, 0, 0, 0, 5.7, 9.7, 8.2, 3.7, -1.8, -3.9, -4.6, -6.7, -7.4]
 
 // Linear interpolation in the table, held at its ends.
 export function lookup(table, aoaDeg) {
-  if (aoaDeg <= ALPHA[0]) return table[0];
+  if (!(aoaDeg > ALPHA[0])) return table[0]; // NaN too: the pre-stall end
   for (let i = 1; i < ALPHA.length; i++) {
     if (aoaDeg <= ALPHA[i]) {
       const f = (aoaDeg - ALPHA[i - 1]) / (ALPHA[i] - ALPHA[i - 1]);
