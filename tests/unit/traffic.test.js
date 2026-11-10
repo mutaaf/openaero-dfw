@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { Vector3 } from 'three';
 import {
   trafficEnds, pickTrafficSpawn, sameRunway, runwayOf, runwayY, distToThresholdNm, trafficAllowed,
-  createTrafficScheduler, lateralM, MIN_SEP_M, FLOW_DEG, FIRST_SPAWN_S, GAP_S, PARALLEL_MIN_M,
+  createTrafficScheduler, lateralM, tailwindKts, MAX_TAILWIND_KTS, MIN_SEP_M, FLOW_DEG, FIRST_SPAWN_S, GAP_S, PARALLEL_MIN_M,
 } from '../../src/traffic.js';
 import { RUNWAY_ENDS, runwayEnd, approachSpawn, takeoffSpawn } from '../../src/airports.js';
 import { headingError, vrefFor } from '../../src/aero.js';
@@ -170,6 +170,27 @@ describe('the scheduler (0080)', () => {
     sim.loadedMission = { key: 'kdal' }; sim.activeEnd = runwayEnd('KDAL', '13R');
     run(sim, sch, 5);
     expect(sch.jet).toBeNull();
+  });
+  it("the jet flies the field's METAR, never the player's windshear drill (physics panel: a microburst's downdraft put it 1 km short)", () => {
+    const sim = final();
+    sim.wx = { windDirDeg: 270, windKts: 12, gustKts: null };
+    const sch = createTrafficScheduler(sim);
+    run(sim, sch, FIRST_SPAWN_S + 0.5);
+    sim.windVec.set(20, -15, 0); // the player's sim.windVec inside the microburst (windshear.js addShearWind)
+    run(sim, sch, 1);
+    const w = sch.jet.body.windVec;
+    expect(w.y).toBe(0);
+    expect(w.x).toBeCloseTo(12 * 0.514444, 3); // from the west: blowing east (+X), the reported 12 kt above 10 m
+  });
+  it('no jet on an end with more than a 10 kt tailwind (the 737-800 limit), gusts counted', () => {
+    const e = runwayEnd('KDFW', '35C');
+    expect(tailwindKts({ windDirDeg: 180, windKts: 12 }, e.hdgT)).toBeCloseTo(12, 1);
+    expect(tailwindKts({ windDirDeg: 360, windKts: 20 }, e.hdgT)).toBeLessThan(0);
+    expect(tailwindKts(null, e.hdgT)).toBe(0);
+    const p = approachSpawn(e, 4).pos;
+    expect(pickTrafficSpawn(e, p, { first: true, wx: { windDirDeg: 180, windKts: 9 } })).not.toBeNull();
+    expect(pickTrafficSpawn(e, p, { first: true, wx: { windDirDeg: 180, windKts: 9, gustKts: 14 } })).toBeNull();
+    expect(pickTrafficSpawn(e, p, { first: true, wx: { windDirDeg: 180, windKts: MAX_TAILWIND_KTS + 1 } })).toBeNull();
   });
   it('off for the rest of the flight on a slow device, back for the next flight', () => {
     const sim = final(), sch = createTrafficScheduler(sim);

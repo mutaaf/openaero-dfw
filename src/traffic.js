@@ -26,7 +26,7 @@ import { Vector3, Quaternion, Euler } from 'three';
 import { RUNWAY_ENDS, RUNWAYS_GEOM, approachSpawn, AIM_POINT_M } from './airports.js';
 import { AIRCRAFT_DATABASE } from './aircraft.js';
 import {
-  localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
+  bankCommandForHeading, aileronForBank, glidepathGammaDeg,
   flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
 } from './autopilot.js';
 // Imported with autopilot.js on purpose: a lazy chunk that imports autopilot.js (or flightModel.js)
@@ -42,6 +42,7 @@ export const headingError = (target, current) => {
 };
 export const vrefFor = (spec, flapsIndex) => spec.vrefKtsByFlap?.[flapsIndex] ?? spec.vrefKts;
 import { airAt, tasFromIas } from './atmosphere.js';
+import { gustFactor, surfaceWindFactor } from './weather.js';
 import { seedSystems } from './systems.js';
 // Only symbols main.js already imports: a lazy chunk importing one it doesn't grows the boot chunk's exports.
 import { KTS_TO_MPS, NM_TO_M, DEG_TO_RAD, RAD_TO_DEG, M_TO_FT } from './constants.js';
@@ -56,7 +57,13 @@ export const FIRST_SPAWN_S = 5;          // after a flight starts: past resScale
                                          // struggling phone is off before it fetches the model (device panel)
 export const GAP_S = [40, 90];           // after one jet leaves, before the next
 export const VACATE_KTS = 30;            // slowed to this on the rollout: it turns off (despawns)
-export const SHORT_RWY_M = 2835;         // 9,300 ft: shorter than this, autobrake 3 (17L/35R's 8,500 ft), else 2
+// Autobrake 3 on a landing distance of 9,300 ft or less (17L/35R's 8,500 ft, 13R/31L's 9,300), else 2.
+// A game choice, not a published rule: at 2 the jet's long float on downhill 35R left it under 30 kt
+// only a few metres from the end (an airline crew picks the setting from runway length and conditions).
+export const SHORT_RWY_M = 9300 * 0.3048;
+// The 737-800's tailwind landing limit, 10 kt (the certified limit for most operators; 15 kt is an
+// option). No jet lands on an end with more tailwind than that (physics panel: 15 kt floated it off 35R's end).
+export const MAX_TAILWIND_KTS = 10;
 export const MAX_GROUND_S = 120;
 export const STEP_S = 1 / 60;
 const FLAPS = 2;                          // flaps 30, the player's final's setting (main.js loadScenario)
@@ -78,13 +85,22 @@ export function lateralM(end, playerEnd) {
 }
 // KDFW ends traffic may land on with the player on `playerEnd`: the same flow, another runway;
 // those PARALLEL_MIN_M or more away first, then the closer ones, each nearest first. [] away from KDFW.
-export function trafficEnds(playerEnd, ends = RUNWAY_ENDS) {
+export function trafficEnds(playerEnd, ends = RUNWAY_ENDS, wx = null) {
   if (!playerEnd || playerEnd.airport !== TRAFFIC_AIRPORT) return [];
+  if (wx && tailwindKts(wx, playerEnd.hdgT) > MAX_TAILWIND_KTS) return [];
   const key = (e) => { const l = lateralM(e, playerEnd); return l < PARALLEL_MIN_M ? 1e6 + l : l; };
   return ends
     .filter((e) => e.airport === TRAFFIC_AIRPORT && !sameRunway(e, playerEnd)
-      && Math.abs(headingError(e.hdgT, playerEnd.hdgT)) <= FLOW_DEG)
+      && Math.abs(headingError(e.hdgT, playerEnd.hdgT)) <= FLOW_DEG
+      && !(wx && tailwindKts(wx, e.hdgT) > MAX_TAILWIND_KTS))
     .sort((a, b) => key(a) - key(b));
+}
+
+// The METAR's tailwind component (kt, + = from behind) on a runway heading, gusts counted
+// (weather.js runwayWindComponents' headwind, negated; calm or variable: 0).
+export function tailwindKts(wx, hdgT) {
+  if (wx?.windDirDeg == null || !wx.windKts) return 0;
+  return -Math.max(wx.windKts, wx.gustKts || 0) * Math.cos((wx.windDirDeg - hdgT) * DEG_TO_RAD);
 }
 
 // Distance (NM) to an end's threshold along its extended centreline, + before it.
@@ -97,8 +113,8 @@ export function distToThresholdNm(end, pos) {
 // player (3D), or null. `first`: the flight's first jet, AHEAD_NM closer than the player (2-8 NM);
 // else `rand()` (0..1) picks 4-8 NM. If that spot is too close it tries the rest of 2-8 NM by
 // half miles, nearest the wanted distance first, then the next parallel. Allocates (a spawn, not a frame).
-export function pickTrafficSpawn(playerEnd, playerPos, { first = false, rand = Math.random } = {}) {
-  const ends = trafficEnds(playerEnd);
+export function pickTrafficSpawn(playerEnd, playerPos, { first = false, rand = Math.random, wx = null } = {}) {
+  const ends = trafficEnds(playerEnd, RUNWAY_ENDS, wx);
   if (!ends.length) return null;
   const want = first
     ? Math.min(8, Math.max(2, distToThresholdNm(playerEnd, playerPos) - AHEAD_NM))
@@ -126,13 +142,16 @@ export function runwayY(rwy, x, z) {
 const _e = new Euler(0, 0, 0, 'YXZ');
 
 // A jet on `end`'s final distNm out, in trim at Vref + 5 on the 3° path, gear down, flaps 30,
-// autobrake 2 armed (the player's final's spawn, main.js loadScenario; 3 on a runway under 9,300 ft). `air`: { mslOffsetM,
-// isaDevC, altimInHg, windVec? } (the player's sim; its wind is the jet's). Allocates (a spawn).
+// autobrake armed (SHORT_RWY_M), as the player's final spawns (main.js loadScenario). `air`: { mslOffsetM,
+// isaDevC, altimInHg, wx? } (the player's sim; wx is the field's METAR, weather.js). The jet flies its
+// own wind from that METAR (trafficWind), never the player's windVec, which carries the windshear
+// drill's microburst and the log law at the player's height. Allocates (a spawn).
 export function createTrafficJet(end, distNm, air, fm, spec = AIRCRAFT_DATABASE[TRAFFIC_KEY]) {
   const mslOffsetM = air.mslOffsetM ?? 0, isaDevC = air.isaDevC ?? 0, altimInHg = air.altimInHg ?? 29.92;
   const vApp = (vrefFor(spec, FLAPS) + 5) * KTS_TO_MPS;
-  const thrAir = airAt(end.thrY + mslOffsetM, isaDevC, altimInHg);
-  const s = approachSpawn(end, distNm, tasFromIas(vApp, thrAir.sigma));
+  const y0 = approachSpawn(end, distNm).pos.y; // the spawn's own air, not the threshold's (151 → 155 KIAS)
+  const spawnAir = airAt(y0 + mslOffsetM, isaDevC, altimInHg);
+  const s = approachSpawn(end, distNm, tasFromIas(vApp, spawnAir.sigma));
   const r = end.hdgT * DEG_TO_RAD;
   const body = {
     pos: new Vector3(s.pos.x, s.pos.y, s.pos.z),
@@ -141,8 +160,8 @@ export function createTrafficJet(end, distNm, air, fm, spec = AIRCRAFT_DATABASE[
     angVel: new Vector3(),
     windVec: new Vector3(),
     elevInput: 0, aileronInput: 0, rudderInput: 0,
-    throttle: fm.trimThrottle(spec, vApp, FLAPS, -3, true, thrAir),
-    flapsIndex: FLAPS, gearDown: true, brakesOn: false, apMaster: true, autobrake: end.lengthM < SHORT_RWY_M ? 3 : 2,
+    throttle: fm.trimThrottle(spec, vApp, FLAPS, -3, true, spawnAir),
+    flapsIndex: FLAPS, gearDown: true, brakesOn: false, apMaster: true, autobrake: end.lengthM - end.displacedM <= SHORT_RWY_M ? 3 : 2,
     autoTrim: true, trimAlphaDeg: trimAoaDeg(spec, vApp, FLAPS),
     onGround: false, groundY: end.thrY, iasKts: vApp / KTS_TO_MPS, tasKts: 0, aoaDeg: trimAoaDeg(spec, vApp, FLAPS),
     // Every field stepFlightModel writes, present from the start: one object shape for its lookups.
@@ -151,15 +170,28 @@ export function createTrafficJet(end, distNm, air, fm, spec = AIRCRAFT_DATABASE[
   };
   body.engineN = body.throttle;
   seedSystems(spec, body);
-  if (air.windVec) { body.windVec.copy(air.windVec); body.vel.add(body.windVec); }
-  return {
+  const j = {
     spec, fm, end, rwy: runwayOf(end), body,
     dx: Math.sin(r), dz: -Math.cos(r),
     phase: 'final', // final → flare → rollout → done
-    at: { trim: 0 }, prevIas: NaN, iasRate: 0, gsInt: 0, groundS: 0, t: 0,
+    at: { trim: 0 }, prevIas: NaN, iasRate: 0, gsInt: 0, locInt: 0, groundS: 0, t: 0,
     touchdown: null, // { alongM, crossM, vsFpm, iasKts } at the first main-wheel contact
     _air: {},
+    wx: air.wx ?? null,
   };
+  trafficWind(j);
+  body.vel.add(body.windVec); // in trim through the air, as main.js spawns a final
+  return j;
+}
+
+// The jet's wind (m/s, body.windVec) from the field's METAR at its own wheel height: main.js
+// updateWind's gusts and log-law surface layer, without the windshear drill's microburst. No objects.
+export function trafficWind(j) {
+  const b = j.body, wx = j.wx;
+  if (wx?.windDirDeg == null || !wx.windKts) { b.windVec.set(0, 0, 0); return; }
+  const mps = gustFactor(j.t, wx.windKts, wx.gustKts) * KTS_TO_MPS * surfaceWindFactor(b.pos.y - b.groundY);
+  const r = wx.windDirDeg * DEG_TO_RAD; // weather.js windVector: it blows towards dir + 180°
+  b.windVec.set(-Math.sin(r) * mps, 0, Math.cos(r) * mps);
 }
 
 // Fly a flight-path angle: pitch = path + angle of attack, capped at 9.5° (main.js holdGamma).
@@ -187,14 +219,26 @@ export function stepTrafficJet(j, dt) {
   _e.setFromQuaternion(b.quat, 'YXZ');
   const hdg = (-_e.y * RAD_TO_DEG + 360) % 360, pitchDeg = _e.x * RAD_TO_DEG, bankRightDeg = -_e.z * RAD_TO_DEG;
   const tasMps = (b.tasKts || b.iasKts) * KTS_TO_MPS;
-  const hdgCmd = e.hdgT + localizerInterceptDeg(crossM);
+  // The localizer flown as a track (physics panel): main.js's heading law (localizerInterceptDeg) has no
+  // drift term and weaved ±170 m in an 18 kt crosswind. The ground track closes the centreline in ~12 s
+  // of flight (up to 25°), and the heading law below banks for the track error, so the crab comes by itself.
+  const gsH = Math.max(20, Math.hypot(b.vel.x, b.vel.z));
+  const trk = (Math.atan2(b.vel.x, -b.vel.z) * RAD_TO_DEG + 360) % 360;
+  // Plus a slow integral (~20 s), as the glidepath has: in a crosswind the bank and the fin's weathervane
+  // settle into a slip that holds a standing offset (16-30 m at 18-35 kt) the proportional term alone keeps.
+  if (!b.onGround) j.locInt = Math.max(-600, Math.min(600, j.locInt + crossM * dt));
+  const locM = crossM + j.locInt / 20;
+  const trkCmd = e.hdgT + Math.max(-25, Math.min(25, Math.asin(Math.max(-1, Math.min(1, -locM / (12 * gsH)))) * RAD_TO_DEG));
   if (!Number.isNaN(j.prevIas) && Math.abs(b.iasKts - j.prevIas) < 5) j.iasRate += ((b.iasKts - j.prevIas) / dt - j.iasRate) * Math.min(1, dt / 0.5);
   j.prevIas = b.iasKts;
 
   const wheelH = b.pos.y - b.groundY - spec.gearHeight;
   if (!b.onGround && j.phase !== 'rollout') {
-    b.aileronInput = aileronForBank(bankCommandForHeading(headingError(hdgCmd, hdg), tasMps), bankRightDeg, -b.angVel.z, j.fm.rollHoldScale(spec, tasMps));
-    b.rudderInput = 0;
+    b.aileronInput = aileronForBank(bankCommandForHeading(headingError(trkCmd, trk), tasMps), bankRightDeg, -b.angVel.z, j.fm.rollHoldScale(spec, tasMps));
+    // The de-crab (an autoland's align mode): in the last 2 m the rudder (up to half) yaws the nose onto
+    // the runway and the track law banks into the wind, so the wheels meet the runway nearly straight.
+    // Earlier or harder (8 m, full rudder) it slipped 16 m downwind in the flare (tests/flight/traffic.test.js).
+    b.rudderInput = wheelH < 2 ? Math.max(-0.5, Math.min(0.5, headingError(e.hdgT, hdg) * 0.1)) : 0;
     if (wheelH > 15 && j.phase === 'final') {
       if (Math.abs(heightAbovePathM) < 15) j.gsInt = Math.max(-100, Math.min(100, j.gsInt + heightAbovePathM * dt));
       holdGamma(b, glidepathGammaDeg(heightAbovePathM, j.gsInt), pitchDeg);
@@ -211,15 +255,19 @@ export function stepTrafficJet(j, dt) {
     // and the pedals hold the centreline (rudder + = yaw right: back towards it, along the runway).
     if (j.phase !== 'rollout') {
       j.phase = 'rollout';
-      j.touchdown = { alongM: along, crossM, vsFpm: b.lastAirVsi ?? b.vel.y * M_TO_FT * 60, iasKts: b.iasKts };
+      j.touchdown = { alongM: along, crossM, vsFpm: b.lastAirVsi ?? b.vel.y * M_TO_FT * 60, iasKts: b.iasKts, driftDeg: Math.abs(headingError(e.hdgT, hdg)) };
+      // A long float (a tailwind, downhill 35R, a hot day): under 1,800 m of runway left, MAX autobrake,
+      // as a crew would brake harder (physics panel: a 10 kt tailwind at ISA+25 on 35R ran past the end at 3).
+      if (e.lengthM - e.displacedM - along < 1800) b.autobrake = 4;
     }
     b.throttle = 0;
-    b.elevInput = 0.3;
+    b.elevInput = 0; // main.js's autoland: the nose comes down by itself (gear.js tailVsMainsAccel)
     b.aileronInput = aileronForBank(0, bankRightDeg, -b.angVel.z);
     b.rudderInput = Math.max(-1, Math.min(1, headingError(e.hdgT - Math.max(-5, Math.min(5, crossM * 0.5)), hdg) * 0.15));
     j.groundS += dt;
     if (b.gsKts <= VACATE_KTS || j.groundS > MAX_GROUND_S) j.phase = 'done';
   }
+  trafficWind(j);
   j.fm.stepFlightModel(b, spec, dt);
   j.t += dt;
 }
@@ -231,7 +279,7 @@ export function stepTrafficJet(j, dt) {
 export const trafficAllowed = (pixelRatio, topRatio) => !(topRatio > 1 && pixelRatio <= 1);
 
 // The scheduler: spawns, flies and retires jets on the sim's clock. `sim` is main.js's (or a
-// test's) state: simTime, activeEnd, loadedMission, pos, windVec, mslOffsetM, isaDevC, altimInHg, fm.
+// test's) state: simTime, activeEnd, loadedMission, pos, wx, mslOffsetM, isaDevC, altimInHg, fm.
 // Pure apart from the jet objects it makes at a spawn; tick() allocates nothing otherwise.
 export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
   const st = { jet: null, nextAt: null, first: true, mission: undefined, endId: null, off: false, lastT: null, acc: 0, spawned: 0, px: NaN, pz: NaN };
@@ -259,7 +307,7 @@ export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
     if (!st.jet) {
       if (st.nextAt === null) st.nextAt = t + FIRST_SPAWN_S;
       if (t < st.nextAt || !(dt > 0)) return st;
-      const s = pickTrafficSpawn(sim.activeEnd, sim.pos, { first: st.first, rand });
+      const s = pickTrafficSpawn(sim.activeEnd, sim.pos, { first: st.first, rand, wx: sim.wx });
       if (!s) { st.nextAt = t + 5; return st; }
       st.jet = createTrafficJet(s.end, s.distNm, sim, sim.fm);
       st.first = false;
@@ -267,7 +315,7 @@ export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
       st.acc = 0;
       return st;
     }
-    st.jet.body.windVec.copy(sim.windVec ?? st.jet.body.windVec);
+    st.jet.wx = sim.wx ?? null; // the field's METAR (a new observation mid-flight too)
     st.acc += dt;
     while (st.acc >= STEP_S) {
       stepTrafficJet(st.jet, STEP_S);

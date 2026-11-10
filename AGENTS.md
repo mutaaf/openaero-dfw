@@ -352,9 +352,13 @@ src/windsock.js     wind cones (0027, lazy chunk after boot): one beside every r
 src/traffic.js      ambient traffic (0080, lazy chunk fetched by runwayLights.js's touchdown-feel hook, as fuel.js is):
                     one 737 at a time on a parallel final into DFW (only while the player's end is at KDFW; same flow,
                     2,500 ft+ beside the player's runway first, JO 7110.65 §5-9-6; never their runway, never within
-                    1 NM), the first one 2 NM closer than the player, later ones 4-8 NM out after a 40-90 s gap.
-                    Flown by stepFlightModel and the autopilot's ILS/flare/autothrottle laws at 1/60 s on the sim
-                    clock, autobrake 2 (3 under 9,300 ft), gone at 30 kt; drawn with aircraftModel.js's twin-jet copy.
+                    1 NM, none on an end with over 10 kt of tailwind), the first one 5 s into a flight and 2 NM closer
+                    than the player, later ones 4-8 NM out after a 40-90 s gap. Flown by stepFlightModel and the
+                    autopilot's glidepath/flare/autothrottle laws at 1/60 s on the sim clock; its localizer is a track
+                    law with a slow integral (main.js's heading law weaved in 18 kt of crosswind) and it de-crabs in the
+                    last 2 m; its own wind from sim.wx at its own height (never sim.windVec: the windshear drill's
+                    microburst); autobrake 2 (3 on 9,300 ft or less, MAX with under 1,800 m left), gone at 30 kt; drawn
+                    with aircraftModel.js's twin-jet copy.
                     The flight model comes in as main.js `sim.fm` (importing flightModel.js, or autopilot.js without
                     assists.js, from a lazy chunk split aero.js out of boot; three's Group split Object3D). Off for the
                     flight once resScale sits at 1 on a screen above 1x. Cards: tests/flight/traffic.test.js (every
