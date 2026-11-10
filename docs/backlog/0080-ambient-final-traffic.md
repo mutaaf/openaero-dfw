@@ -1,12 +1,12 @@
 ---
 id: 0080
 title: Ambient airliner traffic: one jet landing on the parallel final into DFW
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-10-22
-pr:
+pr: 218
 ---
 
 ## Why

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { shapeAxis, gamepadTargets, buttonEdges } from '../../src/gamepad.js';
+import { padName, connectedText } from '../../src/gamepad.js';
 
 describe('shapeAxis', () => {
   it('returns 0 inside the deadzone', () => {
@@ -59,5 +60,15 @@ describe('PAD_CLICKS (0161: main.js clicks these on a button edge)', () => {
       [BUTTON.A]: 'btnFlaps', [BUTTON.B]: 'btnGear', [BUTTON.X]: 'btnBrakes',
       [BUTTON.Y]: 'btnCamera', [BUTTON.START]: 'btnPause', [BUTTON.DPAD_UP]: 'btnApApr',
     });
+  });
+});
+
+// The connect toast (moved here from main.js for 0080's boot bytes): the pad's name without the vendor tail.
+describe('the connect toast', () => {
+  it('names the pad and says how it flies', () => {
+    expect(padName('Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)')).toBe('Xbox Wireless Controller');
+    expect(padName(undefined)).toBe('Controller');
+    expect(padName(' (vendor only)')).toBe('Controller');
+    expect(connectedText('Test Pad (STANDARD GAMEPAD)')).toBe('🎮 Test Pad connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot');
   });
 });

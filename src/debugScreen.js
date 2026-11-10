@@ -58,7 +58,8 @@ export function overlay(text) {
 }
 
 // openaeroDebug()'s runwayScreen and render, spread into it (keys off the boot budget, 0076).
-export const screen = (end, camera, canvas, ground, r) => ({ runwayScreen: runwayScreen(end, camera, canvas, ground), render: renderInfo(r) });
+// windsocks: each sock's seat and hang, through windsock.js's ?debug handle (moved off the boot budget, 0080).
+export const screen = (end, camera, canvas, ground, r) => ({ runwayScreen: runwayScreen(end, camera, canvas, ground), render: renderInfo(r), windsocks: window.openaeroWindsocks?.debug() ?? null });
 
 // openaeroDebug().render: the last frame's draw calls and triangles (off the boot budget, 0144).
 export const renderInfo = (r) => r && { calls: r.info.render.calls, triangles: r.info.render.triangles };

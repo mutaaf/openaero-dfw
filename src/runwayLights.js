@@ -13,15 +13,22 @@ export { createLandingLight } from './landingLight.js';
 import { createTouchdownFeel as touchdownFeel } from './touchdownFeel.js';
 import { createBuffet } from './buffet.js';
 import { createFuel } from './fuel.js';
+import { nightUniforms } from './nightGround.js'; // landingLight.js imports it too: no new boot export
 // The touchdown's chirp and tyre smoke (0147), and with it the stall buffet's shake and rumble (0079)
-// and the Cessna's fuel (0162): both hook the scene the touchdown group is added to (main.js
+// the Cessna's fuel (0162) and the ambient traffic (0080): all hook the scene the touchdown group is added to (main.js
 // scene.add), so boot pays nothing for them (its 201 kB line had no room for even a constructor call).
 export function createTouchdownFeel(sim, root, audio, reducedMotion) {
   const feel = touchdownFeel(sim, root, audio, reducedMotion);
-  let buffet = null, fuel = null;
+  let buffet = null, fuel = null, traffic = false;
   feel.group.addEventListener('added', () => {
     buffet ??= createBuffet(feel.group.parent, sim, audio, reducedMotion);
     fuel ??= createFuel(feel.group.parent, sim);
+    // Ambient traffic on a parallel final into DFW (0080): its own lazy chunk, fetched from here.
+    if (!traffic) {
+      traffic = true;
+      const scene = feel.group.parent;
+      import('./traffic.js').then((m) => m.createTraffic(scene, sim, () => nightUniforms.uNight.value > 0.5)).catch(console.warn);
+    }
   });
   return feel;
 }

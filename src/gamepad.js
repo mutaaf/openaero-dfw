@@ -45,6 +45,9 @@ export function buttonEdges(prev, buttons) {
 export const BUTTON = { A: 0, B: 1, X: 2, Y: 3, START: 9, DPAD_UP: 12 };
 // The button each edge presses (main.js clicks it): A flaps, B gear, X brakes, Y camera,
 // Start pause, D-pad up the ILS autoland.
+// The toast when a pad connects (main.js): its name without the vendor/product tail, and the mapping.
+export const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
+export const connectedText = (id) => `🎮 ${padName(id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`;
 export const PAD_CLICKS = { [BUTTON.A]: 'btnFlaps', [BUTTON.B]: 'btnGear', [BUTTON.X]: 'btnBrakes', [BUTTON.Y]: 'btnCamera', [BUTTON.START]: 'btnPause', [BUTTON.DPAD_UP]: 'btnApApr' };
 
 // Browser wrapper: returns { targets, edges, id } for the first connected pad, or null.
