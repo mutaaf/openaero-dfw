@@ -30,13 +30,20 @@ at +-12%). A mismatch ships as `it.fails` with `KNOWN GAP (NNNN)` against a new 
 (per 0160), not a loosened band. Touches tests only unless the card shows a real gap.
 
 ## Acceptance criteria
-- [ ] The card cites the document, page, weight, flaps, and conditions in a comment
-- [ ] Distance is measured from the 50 ft point to a full stop, not from touchdown
-- [ ] A miss is filed as a ticket and the card is `it.fails` tagged with it
-- [ ] `npm run check:fast` passes, gap ledger included
+- [x] The card cites the document, page, weight, flaps, and conditions in a comment
+- [x] Distance is measured from the 50 ft point to a full stop, not from touchdown
+- [x] A miss is filed as a ticket and the card is `it.fails` tagged with it
+- [x] `npm run check:fast` passes, gap ledger included
 
 ## Test plan
 The new card in b738.test.js; `node scripts/check-gaps.mjs` accepts it if marked.
+
+## Shipped (#217)
+The card already existed (0057); #217 tightened it to ±12%, added the MLW point, the weight
+slope and a ground-spoiler assertion, and cited p. 3-51. It flies maximum manual braking with
+no reverse, as the ACAP chart is made (14 CFR 25.125); autobrake and reversers are pinned to
+the FCOM decelerations in tests/flight/b738-systems.test.js. Model: 3,200 ft vs 3,414 (65 t),
+3,239 vs 3,480 (MLW).
 
 ## Out of scope
 Wet and contaminated runways (0108), reverse-thrust sound, F-16 landing roll.
