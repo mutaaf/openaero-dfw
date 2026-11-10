@@ -117,7 +117,7 @@ describe('the callouts read the radio altitude at the wheels, not the CG (0122)'
 });
 
 // iOS's silent switch (0169): Web Audio on iOS is an 'ambient' session by default, which the ringer
-// switch mutes: the coach, the callouts, the engine and the stall horn all go silent with no hint why.
+// switch mutes: the engine, the wind, the stall horn and the chirps go silent with no hint why.
 // navigator.audioSession.type = 'playback' plays through it (src/audioSession.js, in engineSound.js's
 // lazy chunk, which init() fetches): 'auto' with sound off, 'ambient' paused; untouched without the API.
 describe('the audio session plays through the iPhone silent switch (0169)', () => {
@@ -172,9 +172,9 @@ describe('the audio session plays through the iPhone silent switch (0169)', () =
     audio.init();
     await vi.dynamicImportSettled();
     audio.update();
-    sim.paused = true; audio.pause(true); audio.update();
+    sim.paused = true; audio.pause(true); // a hidden tab: no frame, so no update()
     expect(s.type).toBe('ambient');
-    sim.paused = false; audio.pause(false); audio.update();
+    sim.paused = false; audio.pause(false);
     expect(s.type).toBe('playback');
   });
 

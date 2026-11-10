@@ -30,8 +30,15 @@ test('Start flight with sound plays through the silent switch; sound off and pau
   await expect.poll(() => type(page)).toBe('ambient');
   await click(page, 'btnPause'); // RESUME
   await expect.poll(() => type(page)).toBe('playback');
+  // Hiding the tab (a locked phone) pauses (0032) with no frame drawn: 'ambient' at once.
+  await page.evaluate(() => {
+    window.requestAnimationFrame = () => 0; // hidden: no frames
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  expect(await type(page)).toBe('ambient');
   // Written only on a change, not every frame.
-  expect(await page.evaluate(() => window.__ses)).toEqual(['playback', 'auto', 'playback', 'ambient', 'playback']);
+  expect(await page.evaluate(() => window.__ses)).toEqual(['playback', 'auto', 'playback', 'ambient', 'playback', 'ambient']);
   expect(errors).toEqual([]);
 });
 

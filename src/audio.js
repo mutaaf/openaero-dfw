@@ -197,6 +197,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
   // lock, which resuming also covers.
   function pause(on) {
     try { if (on) synth?.cancel(); } catch { /* best-effort */ }
+    session?.(sim); // a hidden tab runs no update() (0169): main.js setPaused set sim.paused first
     if (audioCtx && audioCtx.state !== 'closed') audioCtx[on ? 'suspend' : 'resume']().catch(() => {});
   }
 
