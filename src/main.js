@@ -93,6 +93,7 @@ const sim = {
   groundY: 0, // terrain height under the aircraft (terrain.js), sim Y
   // Air (atmosphere.js): y = 0 is KDFW's elevation; ISA + the METAR's temperature/altimeter
   mslOffsetM: REF_ELEV_M, isaDevC: 0, altimInHg: 29.92, sigma: 1,
+  fm: { stepFlightModel, trimThrottle, rollHoldScale }, // the traffic's flight model (traffic.js, 0080)
 
   // Autopilot
   apMaster: false, apHdgHold: false, apAltHold: false, apApproach: false,
@@ -3260,11 +3261,11 @@ function showToast(msg, ms = 3500) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add('hidden'), ms);
 }
-const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
 // gamepad.js (0161): fetched once a pad shows up in getGamepads (updateGamepad), so a pad pressed before this
 // listener existed works too; a failed fetch lets the next frame try again.
 let padLib = null, padLoading = false;
-window.addEventListener('gamepadconnected', (e) => showToast(`🎮 ${padName(e.gamepad && e.gamepad.id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`));
+// The connect toast's words are gamepad.js's (connectedText): a pad that connects fetches it anyway.
+window.addEventListener('gamepadconnected', (e) => import('./gamepad.js').then((m) => showToast(m.connectedText(e.gamepad?.id))).catch(console.warn));
 window.addEventListener('gamepaddisconnected', () => { sim.pad = null; showToast('🎮 Controller disconnected'); });
 
 // Per-frame gamepad poll: continuous axes into sim.pad, edge-triggered buttons into actions.
@@ -3495,10 +3496,9 @@ window.openaeroDebug = () => {
     audio: audio.state,
     caption: caption.text,
     wakeLock: wakeLock.held,
-    sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg, azimuthDeg: sun.azimuthDeg },
+    sun: { mode: TIME_MODES[sim.timeOfDayMode], elevationDeg: sun.elevationDeg },
     cloudBaseFt: sim.wx.cloudLayers?.find((l) => l.coverage >= 0.75)?.baseFt ?? null,
     sky: { ...skyDome?.state, cityLights: nightUniforms.uNight.value, runwayLights: runwayLights?.count ?? 0 },
-    windsocks: windsocks ? windsocks.debug() : null,
     lastLanding: sim.lastLanding,
     stabilizedGate: sim.gate,
     goAround: sim.goAround ? { ...sim.goAround } : null,
@@ -3511,7 +3511,7 @@ window.openaeroDebug = () => {
     landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
     photoreal: photoreal ? photoreal.debugState() : null, // photoreal.js (or its boot stand-in)
-    ...debugScreen?.screen(sim.activeEnd, camera, simCanvas, ground, renderer), // ?debug (debugScreen.js): runwayScreen, render (draw calls, triangles)
+    ...debugScreen?.screen(sim.activeEnd, camera, simCanvas, ground, renderer), // ?debug (debugScreen.js): runwayScreen, render (draw calls, triangles), windsocks
   };
 };
 
