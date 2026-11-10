@@ -1030,8 +1030,9 @@ function startDrills(mission) {
   if (mission.kind === 'takeoff' && !drillCoach) loadDrill(mission, null, () => import('./takeoffCoach.js'), (lib) => { sim.toCoach = lib.createTakeoffCoach(sim.aircraftKey, sim.spec); });
   if (mission.windshear) loadDrill(mission, wsLib, () => import('./windshear.js'), (lib) => { wsLib = lib; if (sim.aircraftKey === mission.aircraft) { const d = courseVector(runwayEnd(mission.airport, mission.rwy).hdgT); sim.windshear = lib.createShear(d.x, d.z); } });
   // The low-ceiling ILS (0092, lowIfr.js): its scripted weather is currentWeather()'s while sim.dh
-  // is set; the first time, the chunk comes after the spawn, so spawn again in its wind.
-  if (mission.lowIfr) loadDrill(mission, ifrLib, () => import('./lowIfr.js'), (lib) => { const late = !ifrLib; ifrLib = lib; sim.dh = lib.createDh(); if (late) loadScenario(mission.key); });
+  // is set; the first time, the chunk comes after the spawn, so spawn again in its weather (behind the start
+  // screen, or in a flight's first seconds: never under a flight already flown).
+  if (mission.lowIfr) loadDrill(mission, ifrLib, () => import('./lowIfr.js'), (lib) => { const late = !ifrLib; ifrLib = lib; sim.dh = lib.createDh(); if (late && (!detailedModelsArmed || sim.airborneTime < 3)) loadScenario(sim.missionKey, sim.missionKey.startsWith('debug_') && mission); });
 }
 
 // --- Landing grade ---------------------------------------------------------------
@@ -1487,8 +1488,9 @@ async function fetchWeather() {
     const next = {};
     for (const m of body.metars || []) next[m.icaoId] = metarLib.parseMetar(m);
     if (Object.keys(next).length) sim.wxByIcao = next;
-  } catch {
-    // Offline: keep the last real weather, or the labelled scenario weather.
+  } catch (e) {
+    console.warn(e); // offline, or metar.js failed to load (the error names its chunk)
+    // Keep the last real weather, or the labelled scenario weather.
   }
   refreshWeather();
   refreshCrosswindMission();
@@ -2551,6 +2553,8 @@ function loadScenario(key, final = null) {
 
   if (mission.kind === 'final') {
     const end = runwayEnd(mission.airport, mission.rwy);
+    sim.activeEnd = end;
+    refreshWeather(); // the spawn's air (density, altimeter) is this field's, or this mission's (0092)
     // The go-around drill (0047) starts fast and high on purpose.
     const vApp = (sim.spec.vrefKts + 5 + (mission.fastKts ?? 0)) * KTS_TO_MPS; // indicated
     const airThr = airAt(end.thrY + REF_ELEV_M, sim.isaDevC, sim.altimInHg);

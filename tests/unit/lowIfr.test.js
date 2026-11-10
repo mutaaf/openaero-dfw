@@ -102,7 +102,7 @@ describe('the mission', () => {
 describe('decision height (FAA P/CG ILS Category I: 200 ft above touchdown)', () => {
   const end = runwayEnd('KDFW', '35C');
   const sim = (hatFt, o = {}) => ({
-    activeEnd: end, onGround: false, simTime: 0, pos: { y: end.thrY + hatFt * FT_TO_M }, vel: { y: -3.5 },
+    activeEnd: end, onGround: false, simTime: 0, gearDown: true, vsiFpm: -700, raFt: hatFt - 6, pos: { y: end.thrY + hatFt * FT_TO_M }, vel: { y: -3.5 },
     approach: { distM: (hatFt * FT_TO_M) / Math.tan(3 * Math.PI / 180) - 300 }, ...o,
   });
 
@@ -151,6 +151,10 @@ describe('decision height (FAA P/CG ILS Category I: 200 ft above touchdown)', ()
     expect(dhPrompt(st, sim(180, { simTime: 21 }), true)).toBe('dhKid');
     expect(dhPrompt(st, sim(100, { simTime: 20 + DH_PROMPT_S + 0.1 }), false)).toBeNull();
     expect(dhPrompt(st, sim(0, { simTime: 22, onGround: true }), false)).toBeNull();
+    // It hands the card back at once to what matters more (as s.ds it would outrank them in coachTarget).
+    expect(dhPrompt(st, sim(180, { simTime: 21, gearDown: false }), false)).toBeNull();
+    expect(dhPrompt(st, sim(180, { simTime: 21, vsiFpm: -1500 }), false)).toBeNull();
+    expect(dhPrompt(st, sim(105, { simTime: 23, raFt: 95 }), true)).toBeNull();
     expect(coachText('dh')).toMatch(/minimums/i);
     expect(coachText('dh')).toMatch(/go around/i);
     expect(coachText('dhKid')).toMatch(/let the plane land/i);

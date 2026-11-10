@@ -18,8 +18,8 @@ export function flightCategory(ceilingFt, visibilitySm) {
 }
 
 // The day's report, in the Worker's JSON shape so it goes through the same parser as a live
-// one: 12 kt down the runway, 2 SM in mist, broken at 400 ft and overcast at 800 (above the
-// field). A mist (BR) report is 5/8 to 6 SM with a close dew point; it wets nothing.
+// one: 12 kt from 350° (11.8 kt on the nose of 35C, 2 kt from the left), 2 SM in mist, broken
+// at 400 ft and overcast at 800 (above the field). A mist (BR) report is 5/8 to 6 SM with a close dew point; it wets nothing.
 // Labelled "SCENARIO", never live.
 export const LOW_IFR_REPORT = {
   icaoId: 'KDFW', obsTime: null, rawOb: 'SCENARIO KDFW 35012KT 2SM BR BKN004 OVC008 12/11 A2992',
@@ -39,8 +39,8 @@ export const WX = lowIfrWeather();
 // Decision height: a Category I ILS approach is flown to a height above touchdown of not less
 // than 200 ft (FAA Pilot/Controller Glossary, "ILS CATEGORIES"); there the pilot decides,
 // visual reference in sight or an immediate missed approach (14 CFR 1.1, "Decision height").
-// Read as the altimeter reads it, the aircraft's height above the threshold (like the
-// stabilized gate's), not the radio altitude over whatever the ground is doing.
+// Read as the altimeter reads it, the aircraft's height above the threshold (standing in for the
+// touchdown zone elevation; like the stabilized gate's), not the radio altitude over the ground.
 export const DH_FT = 200;
 // Re-armed 100 ft above it, like the GPWS heights (aero.js gpwsRearm): a go-around and a
 // second approach are called again; a bump in the descent is not.
@@ -65,9 +65,13 @@ export function dhStep(st, s) {
   return true;
 }
 
-// The coach's prompt key for DH_PROMPT_S after the call, in the air (main.js feeds it as s.ds).
+// The coach's prompt key for DH_PROMPT_S after the call, in the air (main.js feeds it as s.ds, which
+// coach.js puts above every landing prompt). So it gives way at once to what matters more: the
+// gear not down, a sink over 1,200 fpm (the coach's 'sink'), and under 100 ft of radio altitude,
+// the flare and the idle call.
 export function dhPrompt(st, s, kid) {
   if (st.calledAt === null || s.onGround || s.simTime - st.calledAt > DH_PROMPT_S) return null;
+  if (!s.gearDown || s.vsiFpm < -1200 || s.raFt < 100) return null;
   return kid ? 'dhKid' : 'dh';
 }
 
@@ -76,5 +80,6 @@ export const DH_TEXT = {
   dhKid: 'Minimums: there are the runway lights! Let the plane land',
 };
 Object.assign(DRILL_TEXT, DH_TEXT);
-// It takes the card at once over the path prompts (rank 1-2), under gear (3) and the flare.
+// Rank 3: it replaces the path prompts (rank 1-2) at once when it starts; dhPrompt's own gates hand the
+// card back to gear, sink, flare and idle (as s.ds it outranks them in coach.js coachTarget).
 Object.assign(RANK, { dh: 3, dhKid: 3 });
