@@ -49,3 +49,9 @@ The POH is readable (befa.org copy, `pdftotext -layout`): Fig. 2-1 "Airspeed Lim
 model has no instrument error) and check the weight scaling against the POH's own 2,200 and 1,900 lb rows, not
 the ticket's 2,100 lb. Started from the Validator's draft (#228). The +0.3 g allowance is not used: the pull
 peaks under its steady value, and with it a +12% CLmax mutation passed; without it that mutation fails.
+Flown at 4,900 ft (the steep-turn cards' height) instead of sea level: Va is a calibrated speed, so the height
+does not change the pull (3.59 g at sea level too). The ticket's `law.cornell.edu/cfr/text/14/23.337` link is
+dead: Va >= Vs sqrt(n) was former 14 CFR 23.335(c)(1) and n = 3.8 former 23.337(a)(1), both removed by
+Amendment 23-64 (2017). Validation panel: the pull now flies with the trim held (autoTrim off: a trim chasing
+α took it to 90°), both pulls must peak at the stall AoA, the Va rows are one-sided (-0.5% / +3%: a +5%
+CLmax mutation now fails), floors 3.3 g / 3.0 g (JSBSim), and the gross cards fly 2,550 lb (the spec is 2,535).
