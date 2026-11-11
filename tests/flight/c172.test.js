@@ -18,7 +18,7 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts, stallSpeedKts, isStallWarning } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
-import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, steadyRoll } from './harness.js';
+import { DT, loadFactorMeter, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, steadyRoll } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
@@ -1407,5 +1407,52 @@ describe('Cessna 172S fuel burn vs POH (flightModel, ticket 0162)', () => {
     expect(b.fuelOut).toBe(true);
     expect(b.engineN).toBeLessThan(0.01);
     expect(brakePowerPct(b, engineRpm)).toBe(0);
+  });
+});
+
+// Maneuvering speed (ticket 0167, validator). Va is the speed below which a full pull stalls the wing
+// before the airframe passes its limit load: Va = Vs1g × √n, n = +3.8 g for the normal category
+// (14 CFR 23.337(a)(1), https://www.law.cornell.edu/cfr/text/14/23.337; FAA-H-8083-3C ch. 5,
+// "Maneuvering speed": Va falls with weight by √(W/Wmax)). The model's 1-g clean stall (stallSpeedKts,
+// fitted to POH Fig. 5-3) gives Va ≈ 103 KCAS at 2,550 lb. The POH's printed Va (Section 2) is not
+// open in this repo, so this card checks the regulation's physics, not a printed number. The model
+// does not enforce the limit (nothing breaks above Va): the card says what a pilot would feel.
+// Measured (flightModel.js, 4,900 ft, 0.5 s stick ramp to full aft, 4 s held): 3.30 g at Va, 5.38 g at
+// 1.3 Va, 3.27 g at the 2,100 lb Va, 3.89 g at the 2,550 lb Va with 2,100 lb on board.
+describe('Cessna 172S maneuvering speed Va (flightModel, ticket 0167)', () => {
+  const LIMIT_G = 3.8, ALLOW_G = 0.3;
+  const vaKts = (massKg) => stallSpeedKts({ ...c172, massKg }, 0) * Math.sqrt(LIMIT_G);
+  const fullPull = (kts, massKg) => {
+    const spec = { ...c172, massKg };
+    const b = makeBody(spec, { kts, altM: 1500 });
+    fly(b, spec, 10, speedHoldPilot(() => kts));
+    const meter = loadFactorMeter();
+    meter(b);
+    const t0 = b.t;
+    let peak = 0;
+    fly(b, spec, 4, (x, dt) => {
+      x.elevInput = -Math.min(1, (x.t - t0) / 0.5); // - = back stick
+      x.throttle = 0.6;
+      peak = Math.max(peak, meter(x, dt));
+    });
+    return peak;
+  };
+  const GROSS_KG = c172.massKg, LIGHT_KG = 2100 * 0.45359237;
+
+  it('Va at 2,550 lb is the 1-g stall speed × √3.8: 103 KCAS, ±3%', () => {
+    within(vaKts(GROSS_KG), 103, 0.03);
+  });
+  it('a full pull at Va stays at or under the 3.8 g limit plus a 0.3 g transient', () => {
+    expect(fullPull(vaKts(GROSS_KG), GROSS_KG)).toBeLessThanOrEqual(LIMIT_G + ALLOW_G);
+  });
+  it('a full pull at 1.3 Va goes past the limit (the wing can still make more than the airframe takes)', () => {
+    expect(fullPull(1.3 * vaKts(GROSS_KG), GROSS_KG)).toBeGreaterThan(LIMIT_G);
+  });
+  it('Va falls with the square root of weight: at 2,100 lb it is 9% lower and the pull still stays within the limit', () => {
+    expect(vaKts(LIGHT_KG) / vaKts(GROSS_KG)).toBeCloseTo(Math.sqrt(LIGHT_KG / GROSS_KG), 2);
+    expect(fullPull(vaKts(LIGHT_KG), LIGHT_KG)).toBeLessThanOrEqual(LIMIT_G + ALLOW_G);
+  });
+  it('flown at the 2,550 lb Va with 2,100 lb on board, the same pull makes more g than at its own Va', () => {
+    expect(fullPull(vaKts(GROSS_KG), LIGHT_KG)).toBeGreaterThan(fullPull(vaKts(LIGHT_KG), LIGHT_KG) + 0.3);
   });
 });

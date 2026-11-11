@@ -1,12 +1,12 @@
 ---
 id: 0167
 title: Cessna maneuvering-speed card: a full back-stick pull at Va stalls before it reaches the 3.8 g limit
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-10
-pr:
+pr: 228
 ---
 
 ## Why
