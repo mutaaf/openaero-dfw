@@ -37,9 +37,9 @@ export function liftCoefficient(spec, aoaRad, flapsIndex) {
     if (deg > t[0][0]) {
       let i = 1;
       while (i < t.length - 1 && deg > t[i][0]) i++;
-      const [d0, c0] = t[i - 1], [d1, c1] = t[i];
+      const p0 = t[i - 1], p1 = t[i]; // indexed, not destructured: no iterator in the hot path
       // Past the last point the table's last segment carries on, as the line did, until the drop.
-      cl = c0 + (c1 - c0) * (deg - d0) / (d1 - d0) + flapDeltaCl(spec, flapsIndex);
+      cl = p0[1] + (p1[1] - p0[1]) * (deg - p0[0]) / (p1[0] - p0[0]) + flapDeltaCl(spec, flapsIndex);
     }
     stallAngleRad = Math.max(stallAngleRad, last[0] * DEG_TO_RAD);
   }
