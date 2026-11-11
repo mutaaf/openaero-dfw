@@ -42,8 +42,8 @@ describe('systems (hydraulics, brakes, reversers)', () => {
     expect(gearLocked(b)).toBe(true);
   });
   it('load relief: flaps 40 commanded above 162 kt go to 30', () => {
-    expect(flapTargetDeg(b738, { flapsIndex: 3, iasKts: 165 })).toBe(30);
-    expect(flapTargetDeg(b738, { flapsIndex: 3, iasKts: 150 })).toBe(40);
+    expect(flapTargetDeg(b738, { flapsIndex: 4, iasKts: 165 })).toBe(30);
+    expect(flapTargetDeg(b738, { flapsIndex: 4, iasKts: 150 })).toBe(40);
   });
   it('reversers deploy on the ground only, and turn thrust around at their effectiveness', () => {
     const b = body({ reverseCmd: true });

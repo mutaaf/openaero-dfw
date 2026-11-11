@@ -29,7 +29,7 @@ describe('pitch trim (ticket 0094)', () => {
     expect(trimLimits(c172, 0).max).toBeCloseTo(stallAoaDeg(c172, 0) - 4, 9);
     expect(kts(c172, trimLimits(c172, 0).min)).toBeCloseTo(163, 6);
     expect(kts(b738, trimLimits(b738, 0).min)).toBeCloseTo(340, 6);
-    expect(kts(b738, trimLimits(b738, 3).min, 3)).toBeCloseTo(340, 6);
+    expect(kts(b738, trimLimits(b738, 4).min, 4)).toBeCloseTo(340, 6); // notch 4: flaps 40
     let a = trimLimits(c172, 0).max - 0.1;
     for (let i = 0; i < 100; i++) a = trimStep(a, 1, 0.1, c172, 0);
     expect(a).toBeCloseTo(trimLimits(c172, 0).max, 9);
@@ -93,7 +93,13 @@ describe('takeoff trim (ticket 0141)', () => {
     for (const [key, spec] of Object.entries(AIRCRAFT_DATABASE)) {
       if (key === 'c172') continue;
       expect(spec.vyKts).toBeUndefined();
-      for (const f of [0, 1, 2]) expect(takeoffTrimAoaDeg(spec, f)).toBe(trimAoaDeg(spec, spec.vrKts * 0.617, f));
+      for (const f of [0, 1, 2]) expect(takeoffTrimAoaDeg(spec, f)).toBe(trimAoaDeg(spec, (spec.vrKtsByFlap?.[f] ?? spec.vrKts) * 0.617, f));
+    }
+    // The 737's flaps: 1.2 × that flap's Vr (0070): 174 kt at flaps 5, 162 at flaps 10 (as before 0070).
+    const b738 = AIRCRAFT_DATABASE.b738;
+    expect(Math.round(trimSpeedKts(b738, takeoffTrimAoaDeg(b738, 1), 1))).toBe(174);
+    expect(Math.round(trimSpeedKts(b738, takeoffTrimAoaDeg(b738, 2), 2))).toBe(162);
+    {
     }
   });
 });

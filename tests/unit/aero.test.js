@@ -302,10 +302,10 @@ describe('flap lift per airframe', () => {
     const s = DB.b738;
     const q = 0.5 * 1.225 * ((s.vrefKts + 5) * 0.514444) ** 2;
     const clNeeded = (s.massKg * 9.80665) / (q * s.wingAreaM2);
-    const aoaDeg = ((clNeeded - s.cl0 - s.flapCl[2]) / s.clAlpha) * 180 / Math.PI;
+    const aoaDeg = ((clNeeded - s.cl0 - s.flapCl[3]) / s.clAlpha) * 180 / Math.PI;
     expect(aoaDeg).toBeGreaterThan(4);
     expect(aoaDeg).toBeLessThan(6);
-    expect(lc(s, aoaDeg * Math.PI / 180, 2)).toBeCloseTo(clNeeded, 3);
+    expect(lc(s, aoaDeg * Math.PI / 180, 3)).toBeCloseTo(clNeeded, 3); // notch 3: flaps 30
   });
   it('airframes without a value keep the original 0.28 per notch', () => {
     const s = { ...DB.f16, flapClPerNotch: undefined, flapCl: undefined };

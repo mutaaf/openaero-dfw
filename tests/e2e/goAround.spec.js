@@ -66,11 +66,11 @@ test('fly the drill: the gate calls it, full power and climb, the card says go-a
 test('landing the drill anyway is graded "should have gone around"', async ({ page }) => {
   test.setTimeout(240_000);
   await startDrill(page);
-  // The autoland flies the approach with flaps 10 (F cycles 30 → 40 → up → 10): a landing
+  // The autoland flies the approach with flaps 10 (F cycles 30 → 40 → up → 5 → 10): a landing
   // it can make, through a gate that calls the flaps and says go around.
   await page.click('#btnApApr');
-  for (let i = 0; i < 3; i++) await page.keyboard.press('KeyF');
-  expect((await snap(page)).flapsIndex).toBe(1);
+  for (let i = 0; i < 4; i++) await page.keyboard.press('KeyF');
+  expect((await snap(page)).flapsIndex).toBe(2);
   await expect.poll(async () => (await snap(page)).stabilizedGate, { timeout: 120_000 }).not.toBeNull();
   const gate = (await snap(page)).stabilizedGate;
   expect(gate.stable).toBe(false);

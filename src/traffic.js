@@ -69,7 +69,7 @@ export const SHORT_RWY_M = 9300 * 0.3048;
 export const MAX_TAILWIND_KTS = 10;
 export const MAX_GROUND_S = 120;
 export const STEP_S = 1 / 60;
-const FLAPS = 2;                          // flaps 30, the player's final's setting (main.js loadScenario)
+const FLAPS = 3;                          // flaps 30, the player's final's setting (main.js loadScenario, b738.landingFlapsIndex)
 const TAN_GLIDE = Math.tan(3 * DEG_TO_RAD); // airports.js GLIDE_DEG, the path approachGeometry flies
 
 // The physical runway (RUNWAYS_GEOM entry) an end belongs to.

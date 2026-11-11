@@ -17,14 +17,17 @@
 //    pilot who does nothing never stops on the runway.
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
+import { vrFor } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
 import { createRto, stepRto, gradeRto, rtoRefStopM, RTO_END } from '../../src/rto.js';
 import { makeBody, fly, attitude } from './harness.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
-const FLAPS_10 = 1;
-const V1_KTS = b738.vrKts - 3; // aero.js: V1 = Vr - 3
+// ACAP §3.3.29's field length is the optimum flap's, so this card rolls at flaps 10 (the model's
+// field-length takeoff flap) with its Vr; the game's takeoff spawns set flaps 5 (V1 142, 0070).
+const FLAPS_10 = 2;
+const V1_KTS = vrFor(b738, FLAPS_10) - 3; // aero.js: V1 = Vr - 3
 const ACAP_FIELD_FT = 5100;
 const RWY_M = RTO_END.lengthM - 60; // 35C ahead of the takeoff spawn (airports.js takeoffSpawn)
 const gsKts = (b) => Math.hypot(b.vel.x, b.vel.z) / KTS_TO_MPS;

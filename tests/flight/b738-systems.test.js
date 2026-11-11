@@ -12,7 +12,7 @@ import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { makeBody, fly, attitude, speedHoldPilot } from './harness.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
-const FLAPS_30 = 2, FLAPS_40 = 3;
+const FLAPS_30 = 3, FLAPS_40 = 4;
 const FT_S2 = 0.3048;
 
 // A flaps 30 landing from 50 ft at Vref: idle and flare from 30 ft, then `rollout(x)` sets

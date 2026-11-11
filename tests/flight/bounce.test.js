@@ -65,7 +65,7 @@ describe('bounced landings (0091)', () => {
 
   for (const sinkFpm of [300, 900]) {
     it(`737: a ${sinkFpm} fpm touchdown at 6° nose up stays down (no false bounce)`, () => {
-      const { t } = dropOnto(b738, { kts: b738.vrefKts + 5, flaps: 2, sinkFpm, pitchDeg: 6 });
+      const { t } = dropOnto(b738, { kts: b738.vrefKts + 5, flaps: 3, sinkFpm, pitchDeg: 6 });
       expect(t.bounces).toBe(0);
       expect(t.settled).toBe(true);
     });
@@ -73,9 +73,9 @@ describe('bounced landings (0091)', () => {
 
   it('737: a 3° approach with a flare from 30 ft (14 CFR 25.125, as b738.test.js) counts no bounce', () => {
     const kts = b738.vrefKts, v = kts * KTS_TO_MPS;
-    const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: 2, throttle: trimThrottle(b738, v, 2, -3, true, airAt(15)) });
+    const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: 3, throttle: trimThrottle(b738, v, 3, -3, true, airAt(15)) });
     b.vel.set(0, -v * Math.sin(3 * DEG_TO_RAD), -v * Math.cos(3 * DEG_TO_RAD));
-    const pitch0 = trimAoaDeg(b738, v, 2) - 3;
+    const pitch0 = trimAoaDeg(b738, v, 3) - 3; // notch 3: flaps 30
     b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
     const t = createBounceTracker();
     let td = false;

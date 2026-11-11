@@ -32,7 +32,7 @@ const c172 = AIRCRAFT_DATABASE.c172, b738 = AIRCRAFT_DATABASE.b738;
 // The 737 card's landing (b738.test.js, Boeing ACAP §3.4.3): a 3° approach at Vref30 to 50 ft,
 // idle and flare from 30 ft, then nose down and maximum manual braking, no reverse.
 function b738Landing({ wet }) {
-  const FLAPS_30 = 2;
+  const FLAPS_30 = 3;
   const kts = 1.23 * stallSpeedKts(b738, FLAPS_30);
   const v = kts * KTS_TO_MPS;
   const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_30, throttle: trimThrottle(b738, v, FLAPS_30, -3, true, airAt(15)) });

@@ -84,3 +84,18 @@ test('desktop: the coach sits clear of the panels and the horizon at 1280x720', 
   }
   expect(overlaps(coach, { x: 0, y: 720 * 0.4, width: 1280, height: 720 * 0.2 }), 'coach covers the horizon').toBe(false);
 });
+
+// 0070 first-timer panel: the 737's flap notches are 0/5/10/30/40, so its landing flaps are lever
+// notch 3. Below landing flaps on the final, the coach asks for 30°, never the 10° at notch 2 (a
+// player who stopped there would be asked again and again).
+test('737 final short of landing flaps: the coach asks for flaps 30, not 10', async ({ page }) => {
+  test.setTimeout(200_000);
+  await page.goto(`${BASE}?mission=kdfw_35c_final`);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  await page.locator('#btnStartFlight').click();
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
+  for (let i = 0; i < 4; i++) await page.keyboard.press('KeyF'); // 30 -> 40 -> 0 -> 5 -> 10
+  expect((await page.evaluate(() => window.openaeroDebug())).flapsIndex).toBe(2);
+  await expect(page.locator('#txtCoach')).toHaveText(/Landing flaps/, { timeout: 150_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/30°/);
+});

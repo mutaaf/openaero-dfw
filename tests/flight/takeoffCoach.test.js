@@ -27,7 +27,7 @@ function coachedTakeoff(key) {
   let vrT = null, liftT = null, liftKts = null, lowPeakDeg = 0, rollFt = 0;
   // The coach watching the same flight (its own logic, not only the attitude): what it said.
   const st = createTakeoffCoach(key, spec, 1);
-  st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1)); // main.js's sim.stallKts
+  st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1), 1); // main.js's sim.stallKts
   const said = new Set();
   fly(b, spec, 120, (x, dt) => {
     if (vrT === null && x.iasKts >= spec.vrKts) vrT = x.t;
@@ -63,6 +63,16 @@ describe('takeoff coach: the rotate attitude is a takeoff (ticket 0093)', () => 
       expect(r.said.has('toRotate')).toBe(true);
     });
   }
+  // AAIB 6/2019 quoting the 737 FCTM: "liftoff attitude is achieved in approximately 3 to 4 seconds".
+  // The coach asks the 737 for 8° and to hold it (ROTATE_PITCH_DEG; 9° would leave 2° to the 11° tail,
+  // under its 3° margin). At the takeoff spawns' flaps 5 (0070) the wing is fitted to lift off at
+  // ~8.3° on a continuous rotation, so held at 8° it sits on the runway until the speed builds:
+  // 4.7 s after Vr, ~167 kt (was 2.9 s at flaps 10). b738.test.js's continuous rotation: 3.8 s.
+  it.fails('KNOWN GAP (0173): the 737 flown as coached (flaps 5) lifts off 3–4 s after Vr (737 FCTM, quoted in AAIB 6/2019)', () => {
+    const r = coachedTakeoff('b738');
+    expect(r.liftT - r.vrT).toBeGreaterThanOrEqual(3);
+    expect(r.liftT - r.vrT).toBeLessThanOrEqual(4);
+  });
 });
 
 // The Cessna yanked to full aft stick on the roll (a kid's pull, early or at Vr): the coach's

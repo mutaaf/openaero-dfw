@@ -37,7 +37,7 @@ describe('landing gear on struts', () => {
 
   it('737: after a mains-first touchdown at 5° nose-up, the nose comes down by itself with the stick neutral', () => {
     const v = 140 * KTS_TO_MPS;
-    const b = makeBody(b738, { kts: 140, altM: b738.gearHeight + 1.5, flaps: 2 });
+    const b = makeBody(b738, { kts: 140, altM: b738.gearHeight + 1.5, flaps: 3 });
     b.quat.setFromEuler(new Euler(5 * DEG_TO_RAD, 0, 0, 'YXZ'));
     b.vel.set(0, -1, -v);
     b.throttle = 0; b.apMaster = false;
@@ -54,7 +54,7 @@ describe('landing gear on struts', () => {
 
   it('737: a wing-low touchdown lands on one main and rolls level', () => {
     const v = 140 * KTS_TO_MPS;
-    const b = makeBody(b738, { kts: 140, altM: b738.gearHeight + 1, flaps: 2 });
+    const b = makeBody(b738, { kts: 140, altM: b738.gearHeight + 1, flaps: 3 });
     // 3° right wing low (roll right = negative z rotation in three.js), 4° nose up.
     b.quat.setFromEuler(new Euler(4 * DEG_TO_RAD, 0, -3 * DEG_TO_RAD, 'YXZ'));
     b.vel.set(0, -1, -v);

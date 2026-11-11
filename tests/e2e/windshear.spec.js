@@ -20,7 +20,7 @@ test('windshear on Kid: the warning, the plane climbs out of the microburst, gra
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   await expect.poll(async () => (await snap(page)).windshear?.phase, { timeout: 10_000 }).toBe('final');
-  expect(await snap(page)).toMatchObject({ mission: 'kdfw_35c_windshear', aircraft: 'b738', onGround: false, flapsIndex: 2 });
+  expect(await snap(page)).toMatchObject({ mission: 'kdfw_35c_windshear', aircraft: 'b738', onGround: false, flapsIndex: 3 });
   await expect.poll(async () => (await snap(page)).windshear.phase, { timeout: 90_000, intervals: [250] }).toBe('warning');
   await expect(page.locator('#masterAlertBanner')).toHaveText('WINDSHEAR');
   await expect(page.locator('#masterAlertBanner')).toBeVisible();
