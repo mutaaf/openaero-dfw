@@ -1,7 +1,7 @@
 ---
 id: 0115
 title: Land past the heavy's touchdown point: a wake-turbulence lesson on the parallel final
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: content
