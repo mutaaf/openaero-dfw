@@ -323,7 +323,8 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, P
 // and 23.73(a): VREF is at least 1.3 VS1, here 1.3 x 48 KCAS (Fig. 5-3, flaps 30, 2550 lb) = 62.4.
 // The POH's 60 KIAS is 63 KCAS with flaps 30 and with flaps 10 (Fig. 5-1, normal static), so both
 // climbs fly 63 KCAS (the model's IAS has no instrument error): flaps 30 is §23.77's configuration,
-// and flaps 30 with the lever at 20 from the first frame is the POH's go-around (0047's coach).
+// and flaps 30 with the lever at 20 from the first frame is the POH's go-around. (The game's Cessna
+// finals fly flaps 20, aero.js landingFlaps, so 0047's coach asks it for flaps 10, not 20.)
 // Full throttle, 2550 lb, ISA, spawned at 500 ft: settled for 60 s (rate and speed steady within a
 // few fpm), then measured over 10 s at ~870-960 ft (σ 0.97; aero.js groundEffectFactor 0.995 there,
 // i.e. out of ground effect). Measured 2026-11-11: flaps 30 ~5.6% (flightModel.js) / ~5.1% (JSBSim),
@@ -377,7 +378,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S balked land
   // At one speed the wing flies one CL whatever the flaps, so the gain is the flap drag the lever
   // takes off: ~+19% (flightModel.js) / ~+21% (JSBSim). With flaps 20 given flaps 30's drag it
   // measured +0.3%, which a bare "greater" passes; 5% says it climbs clearly better, not by noise.
-  it('the POH go-around, flaps up to 20 at 60 KIAS (POH p. 4-17), out-climbs flaps 30 at the same speed by over 5%, in rate and in gradient', () => {
+  it('the POH go-around, flaps 30 to 20 at 60 KIAS (POH p. 4-17), out-climbs flaps 30 at the same speed by over 5%, in rate and in gradient', () => {
     expect(r.f20.fpm).toBeGreaterThan(1.05 * r.f30.fpm);
     expect(r.f20.gradient).toBeGreaterThan(1.05 * r.f30.gradient);
   });

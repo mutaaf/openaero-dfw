@@ -48,3 +48,8 @@ Measured (both models, 63 KCAS, settled 60 s from 500 ft, 10 s window at ~840-1,
 5.59% / 360 fpm (flightModel.js), 5.13% / 331 (JSBSim); the lever at 20: 6.65% / 429, 6.20% / 400.
 Mutations: the C172's thrust table x0.85 takes flaps 30 to 2.98% (fails); flaps 20 given flaps 30's
 drag climbs +0.3% (fails the >5% comparison). No physics change; no gap found.
+Validation panel (first-timer): the ticket's "the coached go-around (the lever raises flaps to 20 as the 0047
+mission coaches)" does not hold for the game's Cessna: its finals fly flaps 20 (aero.js landingFlaps, no
+landingFlapsIndex on the c172), so the go-around coach asks it for flaps 10; the drill itself flies the
+selected aircraft (the 737 by default). The card flies the POH's own go-around (30 to 20) and says so.
+Whether the Cessna's finals should be flaps 30 is a separate question for the Scout.
