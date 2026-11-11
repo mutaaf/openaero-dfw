@@ -44,7 +44,7 @@ test('737 takeoff with the coach: full power, rotate to 8°, positive rate gear 
   await expect.poll(() => page.evaluate(() => window.__coach), { timeout: 30_000 }).toContainEqual('Positive rate: gear up (G)');
   const shown = await page.evaluate(() => window.__coach);
   const i = (re) => shown.findIndex((t) => re.test(t));
-  expect(i(/^On the centreline: rotate at 135 kt$/)).toBeGreaterThan(i(/Full power/));
+  expect(i(/^On the centreline: rotate at 145 kt$/)).toBeGreaterThan(i(/Full power/));
   expect(i(/^Rotate/)).toBeGreaterThan(i(/^On the centreline/));
   expect(i(/^Positive rate/)).toBeGreaterThan(i(/^Rotate/));
   // Spoken (sound on), each prompt once, never cutting off a takeoff callout.
