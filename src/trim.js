@@ -49,5 +49,6 @@ export function trimSpeedKts(spec, alphaDeg, flapsIndex) {
 // publishes one (the C172S's 74 KIAS, a flaps-up speed: POH Sec. 4/5), else at 1.2 Vr (the jets,
 // and the Cessna with flaps set: until a held pull stops over-rotating it, 0170, Vy's lower
 // nose leaves a touch player's over-pitched lift-off short of speed and back on the runway).
+// Vr is the flaps' own (the 737's 145 at flaps 5, 135 at flaps 10: aero.js vrFor, inlined; 0070).
 export const takeoffTrimAoaDeg = (spec, flapsIndex) =>
-  trimAoaDeg(spec, !flapsIndex && spec.vyKts * KTS_TO_MPS || spec.vrKts * 0.617, flapsIndex);
+  trimAoaDeg(spec, !flapsIndex && spec.vyKts * KTS_TO_MPS || (spec.vrKtsByFlap?.[flapsIndex] ?? spec.vrKts) * 0.617, flapsIndex);

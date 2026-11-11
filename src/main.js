@@ -1376,7 +1376,7 @@ function updateCoach(dt) {
   }
   coachVals.targetKts = Math.round(vrefFor(sim.spec, sim.flapsIndex) + 5);
   const detents = sim.spec.flapDetentsDeg ?? sim.flapAngles;
-  coachVals.flapsDeg = prompt === 'gaFlaps' ? detents[Math.max(0, sim.goAround.callFlaps - 1)] : detents[2];
+  coachVals.flapsDeg = prompt === 'gaFlaps' ? detents[Math.max(0, sim.goAround.callFlaps - 1)] : detents[landingFlaps(sim.spec)];
   coachVals.touch = touchOnly;
   const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
   byId('txtCoach').textContent = text;

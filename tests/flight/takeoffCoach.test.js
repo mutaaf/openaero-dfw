@@ -27,7 +27,7 @@ function coachedTakeoff(key) {
   let vrT = null, liftT = null, liftKts = null, lowPeakDeg = 0, rollFt = 0;
   // The coach watching the same flight (its own logic, not only the attitude): what it said.
   const st = createTakeoffCoach(key, spec, 1);
-  st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1)); // main.js's sim.stallKts
+  st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1), 1); // main.js's sim.stallKts
   const said = new Set();
   fly(b, spec, 120, (x, dt) => {
     if (vrT === null && x.iasKts >= spec.vrKts) vrT = x.t;

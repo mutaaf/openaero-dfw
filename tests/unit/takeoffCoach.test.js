@@ -84,6 +84,10 @@ describe('takeoffTarget: the climb', () => {
     expect(climbKts(AIRCRAFT_DATABASE.c172, 0)).toBe(74);
     expect(climbKts(AIRCRAFT_DATABASE.c172, 1)).toBe(66);
   });
+  it('737: 1.2 × the flaps\' own Vr: 174 kt at flaps 5, 162 at flaps 10 (0070)', () => {
+    expect(climbKts(AIRCRAFT_DATABASE.b738, 1)).toBe(174);
+    expect(climbKts(AIRCRAFT_DATABASE.b738, 2)).toBe(162);
+  });
   it('F-16 (fly-by-wire: the trim holds no speed): an attitude, not a speed', () => {
     createTakeoffCoach('f16', AIRCRAFT_DATABASE.f16, 1);
     expect(climbKts(AIRCRAFT_DATABASE.f16, 1)).toBeNull();
@@ -98,7 +102,7 @@ describe('takeoffTarget: the climb', () => {
     it(`${key}: "Slow" from below 1.13 Vs at the flaps set`, () => {
       const spec = AIRCRAFT_DATABASE[key];
       const st = rolled(createTakeoffCoach(key, spec, 1));
-      st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1)); // as takeoffPromptFor reads sim.stallKts
+      st.slowKts = slowKtsFor(spec, spec.pitchFbw ? null : stallSpeedKts(spec, 1), 1); // as takeoffPromptFor reads sim.stallKts
       const floor = SLOW_VS * stallSpeedKts(spec, 1);
       expect(st.slowKts).toBeGreaterThanOrEqual(floor);
       expect(takeoffTarget(st, { ...air, iasKts: floor - 1 })).toBe('toSlow');

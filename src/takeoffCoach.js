@@ -29,7 +29,7 @@ export const tailStrikeDeg = (spec) => spec.maxGroundPitchDeg ?? (spec.gear?.tai
 export const SLOW_VS = 1.13;
 // aero.js vrFor, inlined (no aero.js import here, above): Vr for the flaps set (737: 5 → 145, 10 → 135).
 const vrOf = (spec, flapsIndex) => spec.vrKtsByFlap?.[flapsIndex] ?? spec.vrKts;
-export const slowKtsFor = (spec, stallKts) => Math.max(spec.vrKts - 3, SLOW_VS * (stallKts ?? 0));
+export const slowKtsFor = (spec, stallKts, flapsIndex) => Math.max(vrOf(spec, flapsIndex) - 3, SLOW_VS * (stallKts ?? 0));
 export const TAIL_FT = 10;
 // The tail call looks this far ahead at the pitch rate: a firm pull passes 1° inside a frame of
 // the card (first-timer panel: the warning first showed past the tail, 15.6° in the Cessna).
@@ -62,7 +62,7 @@ Object.assign(RANK, {
 // a fly-by-wire airframe (the F-16's pitchFbw carries the trim with α, so a released stick holds no
 // speed, and full power runs it past 300 kt in the first 1,000 ft: panel): it is told an attitude.
 export const climbKts = (spec, flapsIndex) => (spec.pitchFbw ? null
-  : Math.round(!flapsIndex && spec.vyKts || 1.2 * spec.vrKts));
+  : Math.round(!flapsIndex && spec.vyKts || 1.2 * vrOf(spec, flapsIndex)));
 
 // Words with this airframe's numbers at these flaps (the card reads coach.js coachText:
 // TOUCH_WORDS on a touch screen, else DRILL_TEXT). The keyboard's nose up is S or ↑ and power is
@@ -119,9 +119,9 @@ export function configureTakeoffCoach(st, key, spec, flapsIndex = 0) {
   st.pitchDeg = ROTATE_PITCH_DEG[key] ?? 8;
   st.tailDeg = tailStrikeDeg(spec) - TAIL_MARGIN_DEG;
   st.vrKts = vrOf(spec, flapsIndex);
-  st.slowKts = slowKtsFor(spec, null);
+  st.slowKts = slowKtsFor(spec, null, flapsIndex);
   st.retractable = !spec.fixedGear;
-  st.climbKts = climbKts(spec, flapsIndex) ?? spec.vrKts * 1.2;
+  st.climbKts = climbKts(spec, flapsIndex) ?? vrOf(spec, flapsIndex) * 1.2;
   st.blank = true; // one quiet frame: main.js re-reads the words only when the prompt changes (device panel)
   return st;
 }
@@ -203,6 +203,6 @@ export function takeoffPromptFor(st, sim, pitchDeg) {
   _in.halfWidthM = (sim.activeEnd?.widthM ?? 0) / 2;
   _in.pitchRateDegS = (sim.angVel?.x ?? 0) * 180 / Math.PI;
   _in.autoSteer = sim.assist !== 'pilot' || (st.touch && sim.gsKts > 40);
-  st.slowKts = slowKtsFor(sim.spec, sim.stallKts);
+  st.slowKts = slowKtsFor(sim.spec, sim.stallKts, sim.flapsIndex);
   return takeoffPrompt(st, _in, t);
 }
