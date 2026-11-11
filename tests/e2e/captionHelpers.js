@@ -15,7 +15,8 @@ export async function recordCaptions(page) {
       window.__captions.push({ text: el.textContent, rect: rectOf('calloutCaption'), coach: rectOf('coach'),
         master: rectOf('masterAlertBanner'), stall: rectOf('stallAlertBanner'), w: innerWidth, h: innerHeight,
         // ?debug only: the radio altitude at the main wheels (0122) and the CG's height when it showed.
-        raFt: window.openaeroDebug?.().raFt, aglFt: window.openaeroDebug?.().aglFt });
+        raFt: window.openaeroDebug?.().raFt, aglFt: window.openaeroDebug?.().aglFt,
+        distM: window.openaeroDebug?.().distM, heightAbovePathM: window.openaeroDebug?.().heightAbovePathM });
     }).observe(el, { childList: true, characterData: true, subtree: true });
   });
 }

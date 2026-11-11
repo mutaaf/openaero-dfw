@@ -32,3 +32,8 @@ what the figure supports; do not tune κA or t/c (0120's are cited) to pass the 
 
 ## Out of scope
 A stick shaker or buffet sound; the F-16 and C172.
+
+## Source search (Builder, 2026-11-11)
+Searched for a 737-800 maximum-altitude-vs-weight table (FCOM PI) and found only forum posts (PPRuNe: the FMC's
+maximum altitude is the lowest of the certified ceiling, the 1.3 g buffet altitude and the thrust limit) and the
+FL410 certified ceiling. No open table or CFM thrust point above FL350 found.

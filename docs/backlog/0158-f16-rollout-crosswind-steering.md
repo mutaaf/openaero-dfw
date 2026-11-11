@@ -34,3 +34,8 @@ tests/flight/kidFinal.test.js, tests/flight/groundSteer.test.js.
 
 ## Out of scope
 The 737 and the Cessna; Pilot's ground handling.
+
+## Source search (Builder, 2026-11-11)
+Searched for the F-16's nose-wheel steering authority: only study flashcards (±32°) and sim forums (engage under
+~60 kt, weight-on-wheels); no flight-manual excerpt or report found, and no low/high gain mode for the F-16 (that is
+the F/A-18's). Not citable yet.
