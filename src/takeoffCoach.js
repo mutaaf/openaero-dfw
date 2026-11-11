@@ -27,6 +27,8 @@ export const tailStrikeDeg = (spec) => spec.maxGroundPitchDeg ?? (spec.gear?.tai
 // lower than Vr - 3 kt. Vs is main.js's sim.stallKts (aero.js stallSpeedKts at the flaps, the tape's
 // band; null for the F-16, whose 1.13 Vs is its Vr - 3 anyway): importing aero.js here cost boot bytes.
 export const SLOW_VS = 1.13;
+// aero.js vrFor, inlined (no aero.js import here, above): Vr for the flaps set (737: 5 → 145, 10 → 135).
+const vrOf = (spec, flapsIndex) => spec.vrKtsByFlap?.[flapsIndex] ?? spec.vrKts;
 export const slowKtsFor = (spec, stallKts) => Math.max(spec.vrKts - 3, SLOW_VS * (stallKts ?? 0));
 export const TAIL_FT = 10;
 // The tail call looks this far ahead at the pitch rate: a firm pull passes 1° inside a frame of
@@ -68,7 +70,7 @@ export const climbKts = (spec, flapsIndex) => (spec.pitchFbw ? null
 // so a touch word never says "pull back" (first-timer panel: dragged towards you, the nose went down).
 export function takeoffWords(key, spec, flapsIndex = 0) {
   const pitch = ROTATE_PITCH_DEG[key] ?? 8;
-  const vr = Math.round(spec.vrKts);
+  const vr = Math.round(vrOf(spec, flapsIndex));
   const climb = climbKts(spec, flapsIndex);
   return {
     keys: {
@@ -116,7 +118,7 @@ export function configureTakeoffCoach(st, key, spec, flapsIndex = 0) {
   st.key = key; st.spec = spec; st.flaps = flapsIndex;
   st.pitchDeg = ROTATE_PITCH_DEG[key] ?? 8;
   st.tailDeg = tailStrikeDeg(spec) - TAIL_MARGIN_DEG;
-  st.vrKts = spec.vrKts;
+  st.vrKts = vrOf(spec, flapsIndex);
   st.slowKts = slowKtsFor(spec, null);
   st.retractable = !spec.fixedGear;
   st.climbKts = climbKts(spec, flapsIndex) ?? spec.vrKts * 1.2;

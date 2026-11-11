@@ -11,7 +11,7 @@ import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { driftAngleDeg, gradeLanding } from '../../src/landing.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
-import { stallAoaDeg } from '../../src/aero.js';
+import { stallAoaDeg, landingFlaps } from '../../src/aero.js';
 import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src/airports.js';
 import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
@@ -31,7 +31,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
   const vApp = (spec.vrefKts + 5) * KTS_TO_MPS;
   const sp = approachSpawn(end, m.distNm, tasFromIas(vApp, airAt(0).sigma));
-  const b = makeBody(spec, { kts: spec.vrefKts + 5, altM: sp.pos.y, flaps: 2 });
+  const b = makeBody(spec, { kts: spec.vrefKts + 5, altM: sp.pos.y, flaps: landingFlaps(spec) });
   b.pos.set(sp.pos.x, sp.pos.y, sp.pos.z);
   b.vel.set(sp.vel.x, sp.vel.y, sp.vel.z);
   let gamma = -3;
@@ -42,8 +42,8 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     b.vel.set(d.x * v, 0, d.z * v);
     gamma = 0;
   }
-  b.quat.setFromEuler(_e.set((trimAoaDeg(spec, vApp, 2) + gamma) * DEG_TO_RAD, sp.yawRad, 0));
-  b.throttle = b.engineN = trimThrottle(spec, vApp, 2, gamma, true, airAt(b.pos.y));
+  b.quat.setFromEuler(_e.set((trimAoaDeg(spec, vApp, landingFlaps(spec)) + gamma) * DEG_TO_RAD, sp.yawRad, 0));
+  b.throttle = b.engineN = trimThrottle(spec, vApp, landingFlaps(spec), gamma, true, airAt(b.pos.y));
   b.apMaster = false;
   b.autoTrim = true; // Kid's assist trims (main.js: sim.autoTrim with an assist)
   const w = fromDeg * Math.PI / 180;
@@ -51,7 +51,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   b.vel.add(b.windVec);
   let cfg = assistConfig('kid');
   const ast = createAssistState();
-  const s = {}, out = {}, conf = { gearDown: true, flapsIndex: 2 }, at = { trim: 0 };
+  const s = {}, out = {}, conf = { gearDown: true, flapsIndex: landingFlaps(spec) }, at = { trim: 0 };
   let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
   const roll = { maxNoseOff3sDeg: 0, maxCrossM: 0, yawSq: 0, n: 0, rudFlips: 0 };
   const bank = { maxDeg: 0, flips: 0, lastP: 0 };

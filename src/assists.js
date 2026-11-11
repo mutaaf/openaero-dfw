@@ -15,7 +15,7 @@
 // below ~500 ft and an auto-flare near the ground, and main.js adds the autothrottle, automatic
 // gear/flaps and a hard landing that resets instead of crashing (see ASSIST_CONFIG).
 import { aileronForBank, elevatorForPitch, flareSinkMps, bankCommandForHeading, glidepathGammaDeg } from './autopilot.js';
-import { headingError, vrefFor } from './aero.js';
+import { headingError, vrefFor, landingFlaps } from './aero.js';
 
 export const ASSIST_KEY = 'openaero_assist_v1';
 export const ASSIST_LEVELS = ['kid', 'learner', 'pilot'];
@@ -248,7 +248,7 @@ export function autoConfigure(spec, s, cfgOut) {
     if (descending && s.aglFt < 1000) cfgOut.gearDown = true;
     else if (climbing && s.aglFt > 500) cfgOut.gearDown = false;
   }
-  if (descending && s.aglFt < 1500 && s.iasKts < spec.vrefKts + 40) cfgOut.flapsIndex = Math.max(cfgOut.flapsIndex, 2);
+  if (descending && s.aglFt < 1500 && s.iasKts < spec.vrefKts + 40) cfgOut.flapsIndex = Math.max(cfgOut.flapsIndex, landingFlaps(spec));
   else if (climbing && s.aglFt > 1000) cfgOut.flapsIndex = 0;
   return cfgOut;
 }

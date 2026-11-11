@@ -61,6 +61,10 @@ export function stallSpeedKts(spec, flapsIndex) {
 // Vref (kt) for the flaps that are set: the airframe's per-notch value for its landing flaps
 // (737: 30 and 40), else its one vrefKts.
 export const vrefFor = (spec, flapsIndex) => spec.vrefKtsByFlap?.[flapsIndex] ?? spec.vrefKts;
+// Vr (kt) for the takeoff flaps that are set (737: flaps 5 145, flaps 10 135; 0070), else its one vrKts.
+export const vrFor = (spec, flapsIndex) => spec.vrKtsByFlap?.[flapsIndex] ?? spec.vrKts;
+// The lever notch of the usual landing flaps (737: 3, flaps 30; 172: 2, 20°; F-16: 2).
+export const landingFlaps = (spec) => spec.landingFlapsIndex ?? 2;
 
 export const stallWarningKts = (spec, flapsIndex) => stallSpeedKts(spec, flapsIndex) + 5;
 

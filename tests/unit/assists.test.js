@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { stallAoaDeg } from '../../src/aero.js';
+import { stallAoaDeg, landingFlaps } from '../../src/aero.js';
 import {
   ASSIST_KEY, ASSIST_CONFIG, DEFAULT_ASSIST, assistConfig, createAssistState, shapeControls,
   autoConfigure, groundSteerRudder, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
@@ -272,7 +272,7 @@ describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {
 describe('Kid hands-off line-up (headless, runway heading north, x = cross-track)', () => {
   for (const [name, spec, kts] of [['737-800', AIRCRAFT_DATABASE.b738, 141], ['Cessna 172', AIRCRAFT_DATABASE.c172, 67]]) {
     it(`${name}: from 150 m right of the centreline, captures it without S-turns`, () => {
-      const b = makeBody(spec, { kts, altM: 400, flaps: 2, throttle: 0.3 });
+      const b = makeBody(spec, { kts, altM: 400, flaps: landingFlaps(spec), throttle: 0.3 });
       b.apMaster = false;
       b.pos.x = 150;
       const st = createAssistState(), cfg = assistConfig('kid'), s = {}, out = {}, e = new Euler(0, 0, 0, 'YXZ');
@@ -283,7 +283,7 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
         const hdg = (-e.y * 180 / Math.PI + 360) % 360;
         Object.assign(s, {
           pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
-          aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, 2), tailstrikeDeg: 15,
+          aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, landingFlaps(spec)), tailstrikeDeg: 15,
           onGround: false, wheelHeightM: 400, airspeedMps: 70, guideBankDeg: kidLocalizerBankDeg(0, hdg, x.pos.x), guideGammaDeg: 0,
         });
         shapeControls(cfg, st, s, dt, out);
@@ -300,7 +300,7 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
     // leaves no steady offset (on the nose heading it was drift / 0.15°/m: ~50 m at 10 kt).
     it(`${name}: in a crosswind from the right, flown on the ground track, holds the centreline crabbed`, () => {
       const xw = kts > 100 ? 15 : 10; // kt, from the east (runway north): ~6° and ~8.5° of crab
-      const b = makeBody(spec, { kts, altM: 400, flaps: 2, throttle: 0.3 });
+      const b = makeBody(spec, { kts, altM: 400, flaps: landingFlaps(spec), throttle: 0.3 });
       b.apMaster = false;
       b.windVec.set(-xw * 0.514444, 0, 0);
       b.vel.add(b.windVec);
@@ -313,7 +313,7 @@ describe('Kid hands-off line-up (headless, runway heading north, x = cross-track
         const track = Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI;
         Object.assign(s, {
           pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
-          aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, 2), tailstrikeDeg: 15,
+          aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, stallAoaDeg: stallAoaDeg(spec, landingFlaps(spec)), tailstrikeDeg: 15,
           onGround: false, wheelHeightM: 400, airspeedMps: 70, guideBankDeg: kidLocalizerBankDeg(0, track, x.pos.x), guideGammaDeg: 0,
         });
         shapeControls(cfg, st, s, dt, out);
@@ -372,7 +372,8 @@ describe('Kid automatic gear and flaps', () => {
   const b738 = AIRCRAFT_DATABASE.b738, c172 = AIRCRAFT_DATABASE.c172;
   it('descending low: gear down, approach flaps', () => {
     const c = autoConfigure(b738, { onGround: false, aglFt: 900, vsiFpm: -700, iasKts: 150 }, { gearDown: false, flapsIndex: 0 });
-    expect(c).toEqual({ gearDown: true, flapsIndex: 2 });
+    expect(c).toEqual({ gearDown: true, flapsIndex: 3 }); // flaps 30 (b738.landingFlapsIndex)
+    expect(autoConfigure(c172, { onGround: false, aglFt: 900, vsiFpm: -700, iasKts: 70 }, { gearDown: true, flapsIndex: 0 }).flapsIndex).toBe(2); // 20°
   });
   it('climbing away: gear up, then flaps up', () => {
     const c = autoConfigure(b738, { onGround: false, aglFt: 1200, vsiFpm: 1500, iasKts: 170 }, { gearDown: true, flapsIndex: 1 });
@@ -386,11 +387,11 @@ describe('Kid automatic gear and flaps', () => {
       .toEqual({ gearDown: true, flapsIndex: 1 });
   });
   it('keeps landing flaps already set', () => {
-    expect(autoConfigure(b738, { onGround: false, aglFt: 800, vsiFpm: -700, iasKts: 140 }, { gearDown: true, flapsIndex: 3 }).flapsIndex).toBe(3);
+    expect(autoConfigure(b738, { onGround: false, aglFt: 800, vsiFpm: -700, iasKts: 140 }, { gearDown: true, flapsIndex: 4 }).flapsIndex).toBe(4); // flaps 40
   });
   it('autothrottle target: Vref+5 with flaps, +30 clean', () => {
-    expect(kidTargetKts(b738, 2)).toBe(155);
-    expect(kidTargetKts(b738, 3)).toBe(146); // flaps 40: its own Vref 141 + 5
+    expect(kidTargetKts(b738, 3)).toBe(155);
+    expect(kidTargetKts(b738, 4)).toBe(146); // flaps 40: its own Vref 141 + 5
     expect(kidTargetKts(c172, 0)).toBe(92);
   });
 });

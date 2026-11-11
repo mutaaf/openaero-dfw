@@ -113,6 +113,10 @@ describe('takeoffTarget: the climb', () => {
     expect(coachText('toClimb')).toContain('74 kt');
     sim.aircraftKey = 'b738'; sim.spec = AIRCRAFT_DATABASE.b738; sim.flapsIndex = 1;
     takeoffPromptFor(st, sim, 0);
+    expect(st.vrKts).toBe(145); // flaps 5, the takeoff spawns' flap (0070)
+    expect(coachText('toRoll')).toContain('145 kt');
+    sim.flapsIndex = 2; // flaps 10: its own Vr
+    takeoffPromptFor(st, sim, 0);
     expect(st.vrKts).toBe(135);
     expect(coachText('toRoll')).toContain('135 kt');
   });
@@ -231,9 +235,9 @@ describe('first-timer panel', () => {
   it('too steep after lift-off (a held pull): nose down, above the gear call', () => {
     const st = rolled(createTakeoffCoach('b738', spec, 1));
     const air = { ...parked, onGround: false, throttle: 1, raFt: 40, aglFt: 50, vsiFpm: 3000, iasKts: 150, pitchDeg: 30 };
-    expect(takeoffTarget(st, air)).toBe('toSteep'); // 30° and 12 kt short of 162: the speed is going
+    expect(takeoffTarget(st, air)).toBe('toSteep'); // 30° and 24 kt short of flaps 5's 174: the speed is going
     expect(takeoffTarget(st, { ...air, pitchDeg: 15 })).toBe('toGear'); // a 737's normal climb attitude
-    expect(takeoffTarget(st, { ...air, pitchDeg: 19, iasKts: 162 })).toBe('toGear'); // trimmed at takeoff thrust: steep, not slow
+    expect(takeoffTarget(st, { ...air, pitchDeg: 19, iasKts: climbKts(spec, 1) })).toBe('toGear'); // trimmed at takeoff thrust: steep, not slow
   });
   it('a hop back onto the runway ends it: the landing grade has the card, not "rotate"', () => {
     const st = rolled(createTakeoffCoach('c172', AIRCRAFT_DATABASE.c172, 1));

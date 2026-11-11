@@ -27,7 +27,7 @@ describe('stallSpeedKts: the band\'s top', () => {
       }
     }
     // By value: the 737's band top comes down ~17 kt from flaps up to flaps 30 (34 px of tape).
-    expect(stallSpeedKts(b738, 0) - stallSpeedKts(b738, 2)).toBeGreaterThan(15);
+    expect(stallSpeedKts(b738, 0) - stallSpeedKts(b738, 3)).toBeGreaterThan(15); // notch 3: flaps 30
   });
 });
 

@@ -8,8 +8,9 @@ describe('speedLimitKts', () => {
   const b738 = AIRCRAFT.b738, c172 = AIRCRAFT.c172;
 
   it('737-800: VMO 340 clean (TCDS A16WE), the published placards at its flap notches', () => {
-    expect(b738.flapDetentsDeg).toEqual([0, 10, 30, 40]);
+    expect(b738.flapDetentsDeg).toEqual([0, 5, 10, 30, 40]);
     expect(speedLimitKts(b738, 0)).toBe(340);
+    expect(speedLimitKts(b738, 5)).toBe(250);
     expect(speedLimitKts(b738, 10)).toBe(210);
     expect(speedLimitKts(b738, 30)).toBe(175);
     expect(speedLimitKts(b738, 40)).toBe(162);
@@ -25,7 +26,8 @@ describe('speedLimitKts', () => {
 
   it('flaps in transit take the placard of where they are, including the 737\'s 15 and 25 on the way', () => {
     expect(speedLimitKts(b738, 0.3)).toBe(340); // a hair of travel is still clean
-    expect(speedLimitKts(b738, 4)).toBe(210);
+    expect(speedLimitKts(b738, 4)).toBe(250); // on the way to 5 (the 737's 1 and 5 share 250)
+    expect(speedLimitKts(b738, 7)).toBe(210);
     expect(speedLimitKts(b738, 12)).toBe(200);
     expect(speedLimitKts(b738, 15)).toBe(200);
     expect(speedLimitKts(b738, 20)).toBe(190);

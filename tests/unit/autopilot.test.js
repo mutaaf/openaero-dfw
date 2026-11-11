@@ -77,7 +77,7 @@ describe('directional stability', () => {
 describe('trimAoaDeg', () => {
   it('737 at Vref+5 with flaps 30 trims at ~5° AoA', () => {
     const s = AIRCRAFT_DATABASE.b738;
-    const a = trimAoaDeg(s, (s.vrefKts + 5) * 0.514444, 2);
+    const a = trimAoaDeg(s, (s.vrefKts + 5) * 0.514444, 3); // notch 3: flaps 30
     expect(a).toBeGreaterThan(4);
     expect(a).toBeLessThan(6);
   });

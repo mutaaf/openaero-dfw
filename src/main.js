@@ -34,7 +34,7 @@ import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './t
 import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './atmosphere.js';
 import {
   headingError, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
-  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor,
+  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor, vrFor, landingFlaps,
   takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN, speedLimitKts, overspeedStep, stallSpeedKts,
 } from './aero.js';
 import {
@@ -846,7 +846,7 @@ function checkStabilizedGate() {
   const gate = sim.gate = stabilizedGate({
     iasKt: sim.iasKts, vref: vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: gearLocked(sim),
     // The two landing notches (737: 30°/40°, 172: 20°/30°), set and there (not in transit).
-    flapsOk: sim.flapsIndex >= 2 && sim.flapPos >= 1.999,
+    flapsOk: flapsLanding(),
     glideDevDots: ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
     vmc: gs.armFt === GATE_VMC_FT,
   });
@@ -863,6 +863,8 @@ function checkStabilizedGate() {
 // the results card at 500 ft; landing anyway is capped (checkTouchdown). Scalars per frame.
 // goAround.js is a lazy chunk, loaded with the drill (loadScenario), not at boot.
 let goAroundLib = null;
+// The landing flaps (aero.js landingFlaps) or more set, and there (not in transit).
+const flapsLanding = (lf = landingFlaps(sim.spec)) => sim.flapsIndex >= lf && sim.flapPos >= lf - 0.001;
 const _gaIn = { gate: null, aaeFt: 0, vsFpm: 0, iasKts: 0, throttle: 0, flapsIndex: 0, onGround: false };
 // The missed approach is flown (and coached) from the call until it is over (goAround.js:
 // 2,000 ft, or descending again for another approach).
@@ -1314,7 +1316,7 @@ function updateCoach(dt) {
     // Localizer dots on the HUD bar's and the gate's antenna (0123).
     coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + locPastThresholdM(sim.activeEnd), LOC_DOT_DEG) : 0;
     coachInput.gearLocked = gearLocked(sim);
-    coachInput.flapsLanding = sim.flapsIndex >= 2 && sim.flapPos >= 1.999;
+    coachInput.flapsLanding = flapsLanding();
     coachInput.wet = sim.wetRunway;
     // The drill's missed approach (0047): coached from the gate's call to 2,000 ft. Here the
     // gear prompt means "still down" and the flaps prompt "still at landing flaps" (lever).
@@ -1688,7 +1690,7 @@ function checkTakeoffCallouts() {
   if (sim.loadedMission?.kind !== 'takeoff' || sim.takeoffCalloutIdx >= TAKEOFF_CALLOUTS.length - 1) return;
   // Wheel height, not sim.aglFt: that is the CG's, already ~11 ft with a 737's wheels down.
   const wheelFt = sim.onGround ? 0 : (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
-  const i = takeoffCalloutIndex(sim.iasKts, sim.vsiFpm, wheelFt, sim.spec.vrKts, sim.takeoffCalloutIdx, !!sim.spec.twoCrew);
+  const i = takeoffCalloutIndex(sim.iasKts, sim.vsiFpm, wheelFt, vrFor(sim.spec, sim.flapsIndex), sim.takeoffCalloutIdx, !!sim.spec.twoCrew);
   if (i < 0) return;
   sim.takeoffCalloutIdx = i;
   sim.takeoffCalls.push(TAKEOFF_CALLOUTS[i]);
@@ -2567,7 +2569,7 @@ function loadScenario(key, final = null) {
     const s = approachSpawn(end, mission.distNm, vTas, highM);
     sim.pos.set(s.pos.x, s.pos.y, s.pos.z);
     sim.vel.set(s.vel.x, s.vel.y, s.vel.z);
-    sim.flapsIndex = 2;
+    sim.flapsIndex = landingFlaps(sim.spec);
     // Spawn in trim: pitch = trim AoA − 3° path, so the final starts stable, not sinking.
     const pitch = (trimAoaDeg(sim.spec, vApp, sim.flapsIndex) - 3) * DEG_TO_RAD;
     sim.quat.setFromEuler(_euler.set(pitch, s.yawRad, 0, 'YXZ'));

@@ -92,7 +92,7 @@ export function dhPrompt(st, s, kid) {
   if (st.missed && !kid && !s.onGround) {
     if (s.throttle < 0.9) return 'maPower';
     if (s.vsiFpm <= 0) return 'maPitch';
-    if (s.flapsIndex >= 2) return 'maFlaps';
+    if (s.flapsIndex >= (s.spec.landingFlapsIndex ?? 2)) return 'maFlaps'; // aero.js landingFlaps, inlined
     if (s.gearDown && !s.spec.fixedGear) return 'maGear';
     return (s.pos.y - s.activeEnd.thrY) * M_TO_FT < 1500 ? 'maClimb' : 'maDone';
   }

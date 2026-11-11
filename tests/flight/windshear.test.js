@@ -29,7 +29,7 @@ import { createShear, stepShear, gradeShear, addShearWind, SHEAR_KEY, SHEAR_END 
 import { makeBody, fly, attitude, speedHoldPilot } from './harness.js';
 
 const b738 = AIRCRAFT_DATABASE.b738;
-const FLAPS_30 = 2;
+const FLAPS_30 = 3;
 const _e = new Euler(0, 0, 0, 'YXZ');
 
 // The drill's final, flown by `mode` from the warning + reactS:

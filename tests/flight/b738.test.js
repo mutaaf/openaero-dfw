@@ -15,7 +15,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { engineThrust, maxClimbThrustN, throttleForThrust } from '../../src/engine.js';
 import { airAt, ISA_P0 } from '../../src/atmosphere.js';
-import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor } from '../../src/aero.js';
+import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor, vrFor, landingFlaps } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { makeBody, fly, attitude, vsFpm, speedHoldPilot, steadyRoll } from './harness.js';
@@ -27,8 +27,9 @@ const vApp = (b738.vrefKts + 5) * 0.514444;
 const within = (measured, ref, tol) => expect(Math.abs(measured - ref) / ref).toBeLessThanOrEqual(tol);
 const LB_PER_KG = 2.20462;
 const MLW_KG = 66361; // ARC / ACAP: maximum landing weight 146,300 lb
-// The model's flap notches are 0/10/30/40 (b738.flapDetentsDeg); the real 737 lands with 30 or 40.
-const FLAPS_10 = 1, FLAPS_30 = 2, FLAPS_40 = 3;
+// The model's flap notches are 0/5/10/30/40 (b738.flapDetentsDeg); the real 737 lands with 30 or 40
+// and line crews mostly take off with 5 (0070).
+const FLAPS_5 = 1, FLAPS_10 = 2, FLAPS_30 = 3, FLAPS_40 = 4;
 
 // 14 CFR 25.125(b)(2): VREF ≥ 1.23 VSR0, the 1-g reference stall speed in the landing
 // configuration. Scaled to another mass by √(m / massKg) (same CL, same speed squared).
@@ -36,13 +37,14 @@ const vrefKts = (flaps, massKg = b738.massKg) => 1.23 * stallSpeedKts(b738, flap
 
 describe('Boeing 737-800', () => {
   it('flies a 3° final at Vref+5 on ~20–35% thrust (N1 ~55–60%), not near idle', () => {
-    const thr = trimThrottle(b738, vApp, 2, -3, true, airAt(200));
+    const thr = trimThrottle(b738, vApp, FLAPS_30, -3, true, airAt(200));
     expect(thr).toBeGreaterThan(0.2);
     expect(thr).toBeLessThan(0.35);
   });
 
   it('the game\'s Vref (HUD, assists, autoland, spawns) is the model\'s own 1.23 Vs at flaps 30', () => {
     expect(b738.flapDetentsDeg[FLAPS_30]).toBe(30);
+    expect(landingFlaps(b738)).toBe(FLAPS_30); // finals spawn with it, the gate and Kid's auto-flaps ask for it
     expect(Math.abs(b738.vrefKts - vrefKts(FLAPS_30))).toBeLessThanOrEqual(1);
   });
 
@@ -55,7 +57,7 @@ describe('Boeing 737-800', () => {
   // The speed tape's red band (0128) ends at stallSpeedKts: it must be where this airplane really
   // stalls. Flown at idle, wings level, slowing 1 kt/s until the wing passes its stall angle.
   it('flown to the stall at each flap notch, it stalls within 1 kt of the speed tape\'s red band (stallSpeedKts)', () => {
-    for (const flaps of [0, FLAPS_10, FLAPS_30, FLAPS_40]) {
+    for (const flaps of [0, FLAPS_5, FLAPS_10, FLAPS_30, FLAPS_40]) {
       const v0 = stallSpeedKts(b738, flaps) + 25;
       const b = makeBody(b738, { kts: v0, altM: 1500, flaps });
       let kts = null;
@@ -71,7 +73,7 @@ describe('Boeing 737-800', () => {
   it('landing configuration L/D is about 7–8', () => {
     const aoa = trimAoaDeg(b738, vApp, 2) * Math.PI / 180;
     const cl = liftCoefficient(b738, aoa, 2);
-    const ld = cl / dragCoefficient(b738, cl, true, 2, 1);
+    const ld = cl / dragCoefficient(b738, cl, true, FLAPS_30, 1);
     expect(ld).toBeGreaterThan(7);
     expect(ld).toBeLessThan(8.2);
   });
@@ -81,7 +83,7 @@ describe('Boeing 737-800', () => {
     const aoa = trimAoaDeg(b738, vApp, 2) * Math.PI / 180;
     const cl = liftCoefficient(b738, aoa, 2);
     const q = 0.5 * 1.225 * vApp * vApp;
-    const drag = dragCoefficient(b738, cl, true, 2, 1) * q * b738.wingAreaM2;
+    const drag = dragCoefficient(b738, cl, true, FLAPS_30, 1) * q * b738.wingAreaM2;
     const along = engineThrust(b738, 0, vApp, air, vApp / 340, q) + b738.massKg * 9.80665 * Math.sin(3 * Math.PI / 180) - drag;
     expect(along).toBeLessThan(0);
   });
@@ -202,7 +204,7 @@ function takeoff(flaps, { oei = false } = {}) {
   let rot = null, vr = null, liftoff = null;
   fly(b, b738, 120, (x, dt) => {
     const { pitchDeg, bankRightDeg } = attitude(x);
-    if (x.iasKts >= b738.vrKts) {
+    if (x.iasKts >= vrFor(b738, flaps)) {
       if (!vr) {
         vr = { t: x.t, pitchDeg };
         if (oei) x.throttle = (0.5 - b738.engine.idleFraction) / (1 - b738.engine.idleFraction);
@@ -223,25 +225,24 @@ function takeoff(flaps, { oei = false } = {}) {
 
 describe('Boeing 737-800 rotation and Vr (0058)', () => {
   // The test pilot rotates like a line crew, or the takeoff cards measure the pilot.
-  it('rotates at an average ~2.2–2.4°/s from Vr to lift-off, like crews do (ATSB 200500382, AO-2018-011; FCTM 2–3°/s)', () => {
-    const { ratePerS } = takeoff(FLAPS_10).liftoff;
-    expect(ratePerS).toBeGreaterThan(2.1);
-    expect(ratePerS).toBeLessThan(2.5);
+  it('rotates at an average ~2.2–2.4°/s from Vr to lift-off, like crews do (ATSB 200500382, AO-2018-011; FCTM 2–3°/s), flaps 5 and 10', () => {
+    for (const flaps of [FLAPS_5, FLAPS_10]) {
+      const { ratePerS } = takeoff(flaps).liftoff;
+      expect(ratePerS).toBeGreaterThan(2.1);
+      expect(ratePerS).toBeLessThan(2.5);
+    }
   });
 
   // NTSB (American Airlines 737-800, LAX, 2011), quoting the operator's 737 manual: rotate at
   // 2–3°/s, "normal lift-off attitude is 8–9°" at flaps 1 and 5, tail contact at 11°. ATSB
-  // AO-2018-011 quotes 8° for flaps 5; applied here to flaps 10. Vr is the speed from which that rotation lifts off at
-  // that attitude: rotate too late and the wing is flying before the pitch gets there (at Vr
-  // 142 the model lifted off at 7.0°, 157 kt, a long, flat takeoff). This card pins the
-  // model's Vr (b738.vrKts, flaps 10) against its own lift curve, not against a published
-  // Vr (none found; the flaps 10 lift itself is 0062).
-  // KNOWN GAP since the struts (0074): the wheels now leave when lift (plus the thrust's
-  // vertical part) carries the weight, at ~7.3°. The single contact point needed ~5% more
-  // lift to move off the runway, which is what put this at 8.3°. Closing it is the flaps 10
-  // lift / Vr fit (0062, shipped; 0070, open), not a looser tolerance.
-  it.fails('KNOWN GAP (0070): rotating at Vr, it lifts off at the normal 8–9° attitude, short of the 11° tailstrike (NTSB, operator 737 manual)', () => {
-    const { pitchDeg } = takeoff(FLAPS_10).liftoff;
+  // AO-2018-011 quotes 8° for flaps 5. Flown at flaps 5 (0070), the takeoff spawns' flap, from its
+  // published Vr (145): flaps 5's lift and stall angle are fitted to this and the V2 card below
+  // (aircraft.js). Logged 8.3°, 3.8 s after Vr. (At flaps 10 from Vr 135 the model lifts off at
+  // ~7.3°, since the struts (0074): the wheels leave when lift plus the thrust's vertical part
+  // carries the weight. That attitude is not carded: the manual's figure is for flaps 1 and 5.)
+  it('rotating at Vr with flaps 5, it lifts off at the normal 8–9° attitude, short of the 11° tailstrike (NTSB, operator 737 manual)', () => {
+    const { pitchDeg, seconds, kts } = takeoff(FLAPS_5).liftoff;
+    console.log(`[b738] flaps 5 lift-off: ${pitchDeg.toFixed(2)}° at ${kts.toFixed(1)} KIAS, ${seconds.toFixed(2)} s after Vr ${vrFor(b738, FLAPS_5)}`);
     expect(pitchDeg).toBeGreaterThanOrEqual(8);
     expect(pitchDeg).toBeLessThanOrEqual(9);
   });
@@ -254,6 +255,13 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
     const { kts35, ft35 } = takeoff(FLAPS_10, { oei: true });
     expect(kts35).toBeGreaterThanOrEqual(1.13 * stallSpeedKts(b738, FLAPS_10));
     expect(ft35).toBeLessThanOrEqual(5100);
+  });
+
+  // The same 25.107(e)(1)(iii) rule at flaps 5 from its published Vr. No field-length limit here:
+  // ACAP §3.3.29 is drawn for the optimum flap, which at 65 t and sea level is not the least one.
+  it('with flaps 5 and an engine failed at Vr it still reaches V2 (1.13 Vs, flaps 5) by 35 ft (14 CFR 25.107)', () => {
+    const { kts35 } = takeoff(FLAPS_5, { oei: true });
+    expect(kts35).toBeGreaterThanOrEqual(1.13 * stallSpeedKts(b738, FLAPS_5));
   });
 });
 
@@ -298,7 +306,7 @@ function secondSegment(flaps) {
   };
   const pilot = (x, dt) => {
     const { pitchDeg, bankRightDeg } = attitude(x);
-    if (!vr && x.iasKts >= b738.vrKts) vr = true;
+    if (!vr && x.iasKts >= vrFor(b738, FLAPS_10)) vr = true; // flaps 10's Vr for both runs (same speeds)
     if (!vr) return;
     x.throttle = oeiThrottle; // one engine out from Vr (the model: half the thrust)
     if (x.gearDown && !x.onGround && x.vel.y > 0 && hFt(x) > 10) x.gearDown = false; // positive rate, gear up
@@ -355,11 +363,13 @@ describe('Boeing 737-800 engine-out second-segment climb (14 CFR 25.121(b); 0168
 // stall-speed law V-speeds follow above the minimum-control speeds (737-800 VMCG/VMCA ~110
 // kt): VR 143.0–147.0, V2 145.7–150.1, V2 − VR 3–4 kt. Caveats: the scaled VR falls a little
 // with weight (146.9, 146.1, 144.4, 143.0), which may mean mixed flaps, and the 59 t case
-// was a derated takeoff (assumed 48 °C). The model has one takeoff notch, 10, and Boeing's field
-// length card above (optimum flap) caps how little lift it can have: with VR 145 the
-// model's all-engines takeoff would need ~5,500 ft. Line crews mostly take off with flaps
-// 1 or 5 on long runways, which lift less and fly faster: those cards are known gaps until
-// the model has a flaps 5 notch (0070).
+// was a derated takeoff (assumed 48 °C). Boeing's field length card above (optimum flap) caps
+// how little lift flaps 10 can have: with VR 145 its all-engines takeoff would need ~5,500 ft.
+// Line crews mostly take off with flaps 1 or 5 on long runways, which lift less and fly
+// faster: the cards below fly the model's flaps 5 (0070), the takeoff spawns' flap, whose lift
+// is fitted to these speeds and the lift-off attitude card above (two facts, two unknowns: ΔCL
+// and the stall angle; aircraft.js). So the Vr and V2 cards check the fit's arithmetic and the
+// takeoff that flies it, not an independent Boeing figure.
 const PUBLISHED_TAKEOFF = [ // { t, vr, v2 } at the crews' weights
   { t: 59, vr: 140, v2: 143 }, { t: 71.3, vr: 153, v2: 157 }, // AAIB 6/2019
   { t: 66.4, vr: 146, v2: 149 }, { t: 76.4, vr: 155, v2: 158 }, // ATSB AO-2014-162
@@ -370,8 +380,8 @@ const VR_65T = mean(PUBLISHED_TAKEOFF.map((p) => at65t(p.vr, p.t))); // 145.1 kt
 const V2_65T = mean(PUBLISHED_TAKEOFF.map((p) => at65t(p.v2, p.t))); // 148.3 kt
 
 describe('Boeing 737-800 takeoff speeds vs published crew data (0062)', () => {
-  // 14 CFR 25.107(b): V2 ≥ 1.13 VSR; the model's V2 is that floor at flaps 10.
-  const v2 = () => 1.13 * stallSpeedKts(b738, FLAPS_10);
+  // 14 CFR 25.107(b): V2 ≥ 1.13 VSR; the model's V2 is that floor at the flaps set.
+  const v2 = (flaps = FLAPS_5) => 1.13 * stallSpeedKts(b738, flaps);
 
   it('the published speeds agree with each other once scaled to 65 t (√m, within ±3 kt)', () => {
     for (const p of PUBLISHED_TAKEOFF) {
@@ -385,8 +395,8 @@ describe('Boeing 737-800 takeoff speeds vs published crew data (0062)', () => {
   // A model bound, not the source's: every published pair has V2 3–4 kt above VR (the
   // known-gap card below); 0062 brought the model from 8.4 kt (Vr 132, V2 140.4) to 6.8, and
   // this keeps it from sliding back.
-  it('V2 sits at most 7 kt above Vr (model bound; was 8.4 before 0062)', () => {
-    const gap = v2() - b738.vrKts;
+  it('at flaps 10, V2 sits at most 7 kt above Vr (model bound; was 8.4 before 0062)', () => {
+    const gap = v2(FLAPS_10) - vrFor(b738, FLAPS_10);
     expect(gap).toBeGreaterThanOrEqual(1);
     expect(gap).toBeLessThanOrEqual(7);
   });
@@ -396,23 +406,30 @@ describe('Boeing 737-800 takeoff speeds vs published crew data (0062)', () => {
   // setting". At full thrust the model gains ~5 kt a second, so it lifts off ~17 kt above Vr
   // (Vr + 13 measured at 75% thrust); the ticket's uncited "Vr + 5–10" is not used. This
   // card held before 0062 too (3.5 s): it guards the rotation, not the refit.
-  it('lifts off 3–4 s after Vr at full thrust (737 FCTM, quoted in AAIB Bulletin 6/2019)', () => {
-    const { seconds } = takeoff(FLAPS_10).liftoff;
-    expect(seconds).toBeGreaterThanOrEqual(3);
-    expect(seconds).toBeLessThanOrEqual(4);
+  it('lifts off 3–4 s after Vr at full thrust, flaps 5 and 10 (737 FCTM, quoted in AAIB Bulletin 6/2019)', () => {
+    for (const flaps of [FLAPS_5, FLAPS_10]) {
+      const { seconds } = takeoff(flaps).liftoff;
+      expect(seconds).toBeGreaterThanOrEqual(3);
+      expect(seconds).toBeLessThanOrEqual(4);
+    }
   });
 
-  it.fails('KNOWN GAP (0070): V2 is 3–4 kt above Vr, as in every published case', () => {
-    const gap = v2() - b738.vrKts;
+  it('the takeoff spawns set flaps 5 (lever notch 1), the takeoff flap these cards fly, and its Vr is the airframe\'s vrKts', () => {
+    expect(b738.flapDetentsDeg[FLAPS_5]).toBe(5);
+    expect(vrFor(b738, FLAPS_5)).toBe(b738.vrKts);
+  });
+
+  it('flaps 5: V2 is 3–4 kt above Vr, as in every published case', () => {
+    const gap = v2() - vrFor(b738, FLAPS_5);
     expect(gap).toBeGreaterThanOrEqual(3);
     expect(gap).toBeLessThanOrEqual(4);
   });
 
-  it.fails('KNOWN GAP (0070): Vr at 65 t is within 5 kt of the published 145 kt (flap not stated; likely 1 or 5)', () => {
-    expect(Math.abs(b738.vrKts - VR_65T)).toBeLessThanOrEqual(5);
+  it('flaps 5: Vr at 65 t is within 5 kt of the published 145 kt (flap not stated; likely 1 or 5)', () => {
+    expect(Math.abs(vrFor(b738, FLAPS_5) - VR_65T)).toBeLessThanOrEqual(5);
   });
 
-  it.fails('KNOWN GAP (0070): V2 (1.13 Vs) at 65 t is within 5 kt of the published 148 kt (flap not stated; likely 1 or 5)', () => {
+  it('flaps 5: V2 (1.13 Vs) at 65 t is within 5 kt of the published 148 kt (flap not stated; likely 1 or 5)', () => {
     expect(Math.abs(v2() - V2_65T)).toBeLessThanOrEqual(5);
   });
 });

@@ -14,29 +14,41 @@ export const AIRCRAFT_DATABASE = {
     cl0: 0.28,
     clAlpha: 5.2,
     clMaxFlaps: 2.65,
-    // The game's notches are flaps 0/10/30/40: 10 is a takeoff flap, 30 and 40 the real
-    // landing flaps (finals spawn with 30, the airlines' usual one). Flaps 30/40 lift and
+    // The game's notches are flaps 0/5/10/30/40: 5 and 10 are takeoff flaps (5 the takeoff spawns'
+    // one, what line crews use on long runways; 0070), 30 and 40 the real landing flaps (finals spawn
+    // with 30, the airlines' usual one: landingFlapsIndex). Flaps 30/40 lift and
     // stall AoA fitted to Boeing (tests/flight/b738.test.js): Vref40 142 kt at MLW 66,361 kg
     // (ARC Rev A) and pitch +0.9° at Vref40+5 on a 3° path (VLA Table A6-1, winglets) give
     // ΔCL 0.856 and CLmax 2.42 (stall 14.1°); pitch +3.2° at Vref30 (same table), with the
     // same stall AoA (the slats are fully out at both), gives ΔCL 0.559: Vref30 150 kt at 65 t.
     // No public Vref30 exists: that shared stall AoA is an assumption, and it sets Vref30
     // (±1° of stall AoA moves it 6–12 kt).
-    // Flaps 10 (the one takeoff notch, 0062): published crew speeds (VR ~145, V2 ~148 at 65 t,
+    // Flaps 10 (0062, then the one takeoff notch): published crew speeds (VR ~145, V2 ~148 at 65 t,
     // flap not stated) ask for less lift, but Boeing's field length (optimum flap) allows
     // little: ΔCL 0.38 (Vs 125.5 kt, V2 142, +1.2 kt) with Vr 135 leaves 43 ft of its 5,100;
-    // Vr 137 fails it. Most of 0062 is the Vr move; the rest waits for flaps 5 (0070).
-    flapDetentsDeg: [0, 10, 30, 40],
+    // Vr 137 fails it. So flaps 10 keeps Vr 135 (vrKtsByFlap) and the field-length card.
+    // Flaps 5 (0070): fitted to two published facts at 65 t, not to a Boeing lift curve (none is
+    // public): the crews' V2 ~148 kt (AAIB 6/2019, ATSB AO-2014-162, scaled; V2 = 1.13 Vs, so Vs
+    // ~131 kt) and the normal 8–9° lift-off attitude rotating at their VR ~145 (NTSB, quoting the
+    // operator's manual for flaps 1 and 5; ATSB AO-2018-011: 8° at flaps 5). One ΔCL can't meet both:
+    // any ΔCL that puts V2 near 148 lifts off at ~7.5° (the lift curve carries the weight too early),
+    // so the stall AoA is the second unknown: ΔCL 0.10 with the stall at 16° gives Vs 131.2, V2 148.3,
+    // lift-off 8.3° 3.8 s after Vr 145 (tests/flight/b738.test.js). 16° (1.2° above flaps 10's) is
+    // the fit's, not a measured figure; less flap stalling a little later is the usual direction.
+    // Everything keyed to the stall angle moves with it at flaps 5: the buffet onset (85%, 13.6°),
+    // the assists' AoA caps, the trim's nose-up stop (stall − 4°) and the stall-warning speed (Vs + 5).
+    flapDetentsDeg: [0, 5, 10, 30, 40],
+    landingFlapsIndex: 3, // flaps 30 (aero.js landingFlaps): finals, the stabilized gate, Kid's auto-flaps
     // Control-surface throws (°, surfaces.js; drawn on the stand-in only, the twin-jet model has
     // no separate surfaces yet): estimates, no public Boeing rigging
     // figures; the roll spoilers that help the 737's ailerons are not drawn.
     controlThrowsDeg: { aileronUp: 20, aileronDown: 15, elevatorUp: 20, elevatorDown: 15, rudder: 26 },
-    flapCl: [0, 0.38, 0.559, 0.856],
-    alphaStallDegByFlap: [14.8, 14.8, 14.12, 14.12],
-    // Flaps 0/10/30/40 drag. Landing flaps on an airliner are draggy: with gear down at
-    // Vref+5 the 737 flies at L/D ≈ 7.2 (flaps 30) / 6.7 (flaps 40) and needs ~25–30% thrust
+    flapCl: [0, 0.10, 0.38, 0.559, 0.856],
+    alphaStallDegByFlap: [14.8, 16, 14.8, 14.12, 14.12],
+    // Flaps 0/5/10/30/40 drag (flaps 5's is an estimate between clean and 10; no card reads it).
+    // Landing flaps on an airliner are draggy: with gear down at Vref+5 the 737 flies at L/D ≈ 7.2 (flaps 30) / 6.7 (flaps 40) and needs ~25–30% thrust
     // (N1 ~55–60%) on a 3° path.
-    flapCd: [0, 0.015, 0.077, 0.1],
+    flapCd: [0, 0.009, 0.015, 0.077, 0.1],
     // Auto ground spoilers (ACAP §3.4.3 assumes them): on the ground with the thrust levers
     // at idle they deploy over ~1 s, dump most of the wing's lift onto the brakes and add
     // drag. An estimate (no public 737 spoiler data): 80% of the lift dumped (whatever the
@@ -56,7 +68,7 @@ export const AIRCRAFT_DATABASE = {
     systems: {
       hydraulics: { psi: 3000 },
       gear: { extendS: 10, retractS: 7 },
-      flaps: { degPerS: 1.5, loadRelief: { fromIndex: 3, toIndex: 2, aboveKts: 162 } },
+      flaps: { degPerS: 1.5, loadRelief: { fromIndex: 4, toIndex: 3, aboveKts: 162 } },
       brakes: { tauS: 0.3, muMax: 0.55, tirePsi: 205, antiSkid: 0.8 },
       autobrake: { decelFtS2: [0, 4, 5, 7.2, 14] },
       reverser: { deployS: 2, effectiveness: 0.35 },
@@ -102,21 +114,24 @@ export const AIRCRAFT_DATABASE = {
     // really cruises at. A buffet boundary is not modelled.
     transonic: { kappaA: 0.95, tOverC: 0.1289, sweepDeg: 25 },
     vneKts: 340, // VMO (FAA TCDS A16WE, 737-800): the nose-down trim stop's hands-off speed (trim.js, 0094)
-    // Flap placard speeds (0127), [flap °, KIAS]: 10 210, 15 200, 25 190, 30 175, 40 162. The model's
-    // lever has 10/30/40, but the flaps pass 15 and 25 in transit, so their placards apply on the way.
+    // Flap placard speeds (0127), [flap °, KIAS]: 5 250, 10 210, 15 200, 25 190, 30 175, 40 162. The model's
+    // lever has 5/10/30/40, but the flaps pass 15 and 25 in transit, so their placards apply on the way.
     // These are the widely published 737-800 values (crew study cards; no public Boeing FCOM), not a
     // certified source; 14 CFR 25.1583 is the rule that a flight manual gives them.
-    vfeKtsByFlapDeg: [[10, 210], [15, 200], [25, 190], [30, 175], [40, 162]],
+    vfeKtsByFlapDeg: [[5, 250], [10, 210], [15, 200], [25, 190], [30, 175], [40, 162]],
     vrefKts: 150, // 1.23 Vs at flaps 30 (the landing flap finals spawn with), 65 t
-    vrefKtsByFlap: [null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
-    // The model's Vr at flaps 10, 65 t, fitted to its own lift curve: the speed from which a
+    vrefKtsByFlap: [null, null, null, 150, 141], // landing flaps 30 / 40 (aero.js vrefFor)
+    // Vr at the takeoff flap, 5 (0070): the crews' published VR at 65 t, ~145 kt (AAIB 6/2019,
+    // ATSB AO-2014-162, scaled; flaps 5's lift is fitted to it, above). Called out on the takeoff
+    // roll (0035) and coached (takeoffCoach.js) by the lever's notch: aero.js vrFor.
+    // Flaps 10's Vr, 65 t, fitted to its own lift curve: the speed from which a
     // normal 2–3°/s rotation (FCTM; ~2.3°/s average as flown, ATSB) lifts off at the normal
-    // 8–9° attitude (NTSB, operator's 737 manual, quoted for flaps 1/5): 8.3° at 135 kt, 3.5 s
-    // later (FCTM: 3–4 s), with V2 (1.13 Vs) 6.8 kt above it (crews' data: 3–4 kt). Published
+    // 8–9° attitude (NTSB, operator's 737 manual, quoted for flaps 1/5): 8.3° at 135 kt (7.3° since
+    // the struts, 0074; flaps 5 now carries that card), 3.5 s later (FCTM: 3–4 s), with V2 (1.13 Vs) 6.8 kt above it (crews' data: 3–4 kt). Published
     // VR at 65 t is ~145 (AAIB 6/2019, ATSB AO-2014-162, flap not stated): with this flap's
-    // lift the takeoff would then exceed Boeing's field length, so that gap waits for a
-    // flaps 5 notch (0070). Called out on the takeoff roll (0035).
-    vrKts: 135,
+    // lift the takeoff would then exceed Boeing's field length, so flaps 10 keeps 135.
+    vrKts: 145,
+    vrKtsByFlap: [null, 145, 135],
     twoCrew: true, // the pilot monitoring's takeoff callouts: eighty knots, V1 (0035)
     stallCleanKts: 114,
     gearHeight: 3.4,

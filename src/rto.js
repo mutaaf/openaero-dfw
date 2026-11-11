@@ -13,7 +13,7 @@ import { DRILL_TEXT, RANK } from './coach.js';
 
 export const RTO_KEY = 'kdfw_35c_rto';
 export const RTO_END = runwayEnd('KDFW', '35C');
-// The fire comes at a speed drawn from this window (the 737's V1 is Vr - 3 = 132 kt, aero.js),
+// The fire comes at a speed drawn from this window (the 737's V1 is Vr - 3: 142 kt at the takeoff spawns' flaps 5, 132 at flaps 10; aero.js),
 // so the drill can't be anticipated by the number.
 export const RTO_MIN_KTS = 75;
 export const RTO_MAX_KTS = 110;
