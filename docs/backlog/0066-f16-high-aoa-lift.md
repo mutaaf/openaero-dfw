@@ -1,12 +1,12 @@
 ---
 id: 0066
 title: Bend the F-16's lift curve over above 20° AoA like NASA's wind-tunnel data
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 226
 ---
 
 ## Why
@@ -30,10 +30,10 @@ change `stallSpeedKts`, and Pilot has no assists). `stallCleanKts` is read by no
 delete it or wire it. Promote the two `KNOWN GAP (0066)` cards to `it`.
 
 ## Acceptance criteria
-- [ ] Both 0066 cards in `tests/flight/f16.test.js` promoted to `it` and green
-- [ ] A new card pins CL(30°) to NASA's 1.82, ±5% (CX 0.15360, CZ −2.00800)
-- [ ] The 20° card and every C172 and 737 card stay green
-- [ ] `npm test -- tests/flight` green
+- [x] Both 0066 cards in `tests/flight/f16.test.js` promoted to `it` and green
+- [x] A new card pins CL(30°) to NASA's 1.82, ±5% (CX 0.15360, CZ −2.00800)
+- [x] The 20° card and every C172 and 737 card stay green
+- [x] `npm test -- tests/flight` green
 
 ## Test plan
 The cards are the test.
