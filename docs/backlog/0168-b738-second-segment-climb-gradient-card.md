@@ -1,12 +1,12 @@
 ---
 id: 0168
 title: 737 engine-out second-segment climb card: at V2, gear up, one engine out, it climbs at least 2.4%
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-10
-pr:
+pr: 225
 ---
 
 ## Why
@@ -30,10 +30,10 @@ Also assert it climbs more at flaps matching 25.121 than with the flaps one notc
 prove the card is sensitive to configuration.
 
 ## Acceptance criteria
-- [ ] The comment cites 25.121(b) with the flap setting and gear state it requires
-- [ ] The gradient is true-airspeed based and measured gear up, 400 ft or more above the field
-- [ ] A shortfall is a ticketed `it.fails` gap, not a loosened bound
-- [ ] `npm run check:fast` passes, gap ledger included
+- [x] The comment cites 25.121(b) with the flap setting and gear state it requires
+- [x] The gradient is true-airspeed based and measured gear up, 400 ft or more above the field
+- [x] A shortfall is a ticketed `it.fails` gap, not a loosened bound
+- [x] `npm run check:fast` passes, gap ledger included
 
 ## Test plan
 New cards in b738.test.js; `node scripts/check-gaps.mjs` accepts any `it.fails` it adds.
