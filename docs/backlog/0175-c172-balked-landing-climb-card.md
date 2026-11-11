@@ -53,3 +53,8 @@ mission coaches)" does not hold for the game's Cessna: its finals fly flaps 20 (
 landingFlapsIndex on the c172), so the go-around coach asks it for flaps 10; the drill itself flies the
 selected aircraft (the 737 by default). The card flies the POH's own go-around (30 to 20) and says so.
 Whether the Cessna's finals should be flaps 30 is a separate question for the Scout.
+Validation panel (physics): the Test plan's "removing the thrust model's full-throttle lapse fails it" cannot
+hold for a one-sided floor: removing engine.js's piston lapse adds thrust (flaps 30 5.59% -> 6.19%, still
+passing). The thrust x0.85 and throttle 0.85 mutations above replace it. The go-around run now spawns at
+flaps 30 and moves the lever to 20 after 0.5 s (before, the lever was set before the first step and the
+flaps were seeded at 20).

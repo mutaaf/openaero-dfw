@@ -323,7 +323,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, P
 // and 23.73(a): VREF is at least 1.3 VS1, here 1.3 x 48 KCAS (Fig. 5-3, flaps 30, 2550 lb) = 62.4.
 // The POH's 60 KIAS is 63 KCAS with flaps 30 and with flaps 10 (Fig. 5-1, normal static), so both
 // climbs fly 63 KCAS (the model's IAS has no instrument error): flaps 30 is §23.77's configuration,
-// and flaps 30 with the lever at 20 from the first frame is the POH's go-around. (The game's Cessna
+// and flaps 30 with the lever moved to 20 after 0.5 s (the flaps travel there) is the POH's go-around. (The game's Cessna
 // finals fly flaps 20, aero.js landingFlaps, so 0047's coach asks it for flaps 10, not 20.)
 // Full throttle, 2550 lb, ISA, spawned at 500 ft: settled for 60 s (rate and speed steady within a
 // few fpm), then measured over 10 s: flaps 30 at ~840-930 ft, flaps 20 at ~910-1,020 ft (σ ≥ 0.97;
@@ -334,9 +334,11 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, P
 const BALKED_KCAS = 63;
 function balkedClimb(lever, fdm) {
   const b = makeBody(c172, { kts: BALKED_KCAS, altM: 500 / M_TO_FT, throttle: 1, flaps: 3 });
-  b.flapsIndex = lever;
   const pilot = speedHoldPilot(() => BALKED_KCAS);
-  fly(b, c172, 60, pilot);
+  // Spawned with flaps 30 out; the lever moves after the first half second, so the flaps travel to it.
+  fly(b, c172, 0.5, pilot);
+  b.flapsIndex = lever;
+  fly(b, c172, 59.5, pilot);
   const h0 = b.pos.y, d0 = b.distM;
   let fpm = 0, ias = 0, n = 0;
   fly(b, c172, 10, (x, dt) => { pilot(x, dt); fpm += vsFpm(x); ias += x.iasKts; n++; });
@@ -360,7 +362,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S balked land
   afterAll(() => useFdm(null));
 
   // The pilot is checked on its own, so the cards below compare like with like (LESSONS 2026-11-11).
-  it('both climbs fly the same conditions: 63 KCAS within 1 kt, full throttle, gear down, the same 10 s window near sea level (under 1,200 ft), flaps where the lever is', () => {
+  it('both climbs fly the same conditions: 63 KCAS within 1 kt, full throttle, gear down, the same 60 s settle and 10 s window length near sea level (under 1,200 ft), flaps where the lever is', () => {
     for (const [k, x] of Object.entries(r)) {
       expect(Math.abs(x.ias - BALKED_KCAS), k).toBeLessThan(1);
       expect(x.throttle, k).toBe(1);
@@ -372,7 +374,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S balked land
     expect(Math.abs(r.f20.flapDeg - 20)).toBeLessThan(0.5);
   });
 
-  it('flaps 30, full throttle, gear down, at VREF (1.3 VS0 = 62.4 KCAS): a steady climb gradient of at least 3.3% (14 CFR 23.77(a), 23.73(a))', () => {
+  it('flaps 30, full throttle, gear down, at VREF (1.3 VS1, flaps 30 = 62.4 KCAS): a steady climb gradient of at least 3.3% (14 CFR 23.77(a), 23.73(a))', () => {
     expect(r.f30.gradient).toBeGreaterThanOrEqual(0.033);
   });
 
