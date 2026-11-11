@@ -1,7 +1,7 @@
 ---
 id: 0066
 title: Bend the F-16's lift curve over above 20° AoA like NASA's wind-tunnel data
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity

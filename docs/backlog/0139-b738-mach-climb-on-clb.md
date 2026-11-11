@@ -1,7 +1,7 @@
 ---
 id: 0139
 title: 737 on its max climb rating climbs FL240-FL350 at ~1,185 ft/min, just under APD's 1,500 ±20%
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
