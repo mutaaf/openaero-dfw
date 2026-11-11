@@ -1,12 +1,12 @@
 ---
 id: 0149
 title: Tyre rumble and brake sound on the ground roll
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 230
 ---
 
 ## Why
@@ -23,12 +23,17 @@ brakes are applied above ~40 kt (not on Kid-soft landings). No assets, same node
 the wind voice. Muted by `mute()`.
 
 ## Acceptance criteria
-- [ ] Rumble gain is 0 in the air and rises with ground speed (unit, fake context)
-- [ ] Brake burst fires once per application above 40 kt, not while stopped
-- [ ] Sound off silences it
+- [x] Rumble gain is 0 in the air and rises with ground speed (unit, fake context)
+- [x] Brake burst fires once per application above 40 kt, not while stopped
+- [x] Sound off silences it
 
 ## Test plan
-Unit in `tests/unit/audio.test.js` with the fake context.
+Unit in `tests/unit/rollSound.test.js` with the fake context (audio.js wiring included).
 
 ## Out of scope
 Samples, reverser noise, scrape on a tail strike.
+
+## Shipped (Builder, 2026-11-11, #230)
+Rumble and squeal in `src/rollSound.js` (engineSound.js's lazy chunk). The squeal follows the player's brakes
+(`brakesOn`), not the autobrake, and is a triangle tone (band-passed noise at a safe gain was inaudible). The "different
+thump on the wheels touching" in Why was not built: 0147's chirp and thump already cover the touchdown.

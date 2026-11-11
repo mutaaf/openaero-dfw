@@ -10,7 +10,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
   let engineOsc = null, engineFilter = null, engineGain = null;
   let windNoiseNode = null, windFilter = null, windGain = null;
   let stallOsc = null, stallGain = null;
-  let voice = null, session = null; const v = { hz: 150, gain: 0.08, filterHz: 450 }; // a plain drone until (or if never) it loads // engineSound.js (0148, lazy)
+  let voice = null, session = null, roll = null; const v = { hz: 150, gain: 0.08, filterHz: 450 }; // a plain drone until (or if never) it loads // engineSound.js (0148, lazy)
 
   function init() {
     if (audioCtx) {
@@ -34,7 +34,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
       engineFilter.connect(engineGain);
       engineGain.connect(audioCtx.destination);
       engineOsc.start();
-      import('./engineSound.js').then((m) => { voice = m.engineVoice; session = m.audioSession; }, () => {});
+      import('./engineSound.js').then((m) => { voice = m.engineVoice; session = m.audioSession; roll = m.rollSound(audioCtx); }, () => {}).catch(console.warn); // rollSound.js: the ground roll (0149)
 
       // Wind rush noise synthesis
       const bufferSize = audioCtx.sampleRate * 2;
@@ -163,6 +163,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
     windGain.gain.setTargetAtTime(0.015 + speedRatio * 0.065, now, 0.1);
     const stalling = isStallWarning(sim.iasKts, stallWarningKts(sim.spec, sim.flapsIndex), sim.onGround);
     stallGain.gain.setTargetAtTime(stalling ? 0.07 : 0.0, now, 0.05);
+    roll?.(sim);
   }
 
   // One-off callouts from the sim (the stabilized gate, ticket 0020): queued behind the
@@ -185,6 +186,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
     if (engineGain) engineGain.gain.value = 0;
     if (windGain) windGain.gain.value = 0;
     if (stallGain) stallGain.gain.value = 0;
+    roll?.(null);
   }
 
   // The autopilot tutor's voice: queued, never interrupting a callout.
