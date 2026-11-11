@@ -476,7 +476,7 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
 src/tower.js        the tower's landing clearance (0145, lazy chunk loaded on Start flight): towerClearance (pure) says
                     "<type>, wind <mag, nearest 10°> at <kt> [gusts], runway <digits> <left/center/right>, cleared to land"
                     (FAA JO 7110.65 3-10-5, 2-4-17, 2-4-21; the type is the call sign, no facility name); the caption reads
-                    "Tower: wind 350 at 10 · Runway 35C, cleared to land" ("scenario wind" off a live METAR, "KDFW wind" for another field's) and holds while it is said
+                    "Cleared to land 35C · Wind 350 at 23G32" (two parts ≤ 26 chars: two lines; "Scenario wind" off a live METAR, "KDFW wind" for another field's) and holds while it is said
                     (captions.js say's hold). towerStep: once per runway end (sim.towerFor, cleared by loadScenario), descending
                     on a lined-up final inside 5 NM at 800 ft above the threshold or 2 NM, never under 600 ft (GPWS's 500 ft call cancels speech), never in a drill
                     with its own voice (go-around, dead stick, engine out, RTO, windshear, stall, pattern, steep turns) or with

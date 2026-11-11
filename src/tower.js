@@ -25,7 +25,13 @@ export const FLOOR_FT = 600;
 const NM = 1852, FT = 0.3048;
 const QUIET = ['goAround', 'deadStick', 'engineOutFt', 'rto', 'windshear', 'stallDrill', 'pattern', 'steepTurns'];
 
-export const quietMission = (m) => !!m && QUIET.some((k) => m[k]);
+const CONE = Math.tan(5 * Math.PI / 180);
+// A plain loop: it runs every frame until the call (no closure per frame, AGENTS.md invariant 4).
+export function quietMission(m) {
+  if (!m) return false;
+  for (let i = 0; i < QUIET.length; i++) if (m[QUIET[i]]) return true;
+  return false;
+}
 
 export function towerClearance(end, wx, aircraftKey) {
   const [, num, side] = /^(\d+)([LCR]?)$/.exec(end.ident) ?? [, end.ident, ''];
@@ -42,10 +48,12 @@ export function towerClearance(end, wx, aircraftKey) {
   }
   const call = TOWER_CALLSIGN[aircraftKey];
   const speech = `${call ? `${call}, ` : ''}${windSay}, ${rwySay}, cleared to land.`;
-  // Whose words, and whose wind: a live METAR from another field (main.js currentWeather's DFW fallback) is named.
-  const station = wx?.live && wx.icao && wx.icao !== end.airport ? `${wx.icao} ` : '';
-  const wind = wx?.live ? `${station}${windText.toLowerCase()}` : `scenario ${windText.toLowerCase()}`;
-  const text = `Tower: ${wind} · Runway ${end.ident}, cleared to land`;
+  // Two parts (main.js keeps each on one line): the first short enough to keep its " ·" on its line at 375 px,
+  // the second at most 26 characters, so the caption is two lines at most: "Cleared to land 35C · Wind 350 at 23G32". Whose wind: "scenario" off a live METAR, and a live METAR from
+  // another field (main.js currentWeather's DFW fallback) is named, "KDFW wind ...".
+  const station = wx?.live && wx.icao && wx.icao !== end.airport ? `${wx.icao} wind` : wx?.live ? 'Wind' : 'Scenario wind';
+  const windShort = kts ? windText.replace(/^Wind /, '').replace(' gusts ', 'G') : 'calm';
+  const text = `Cleared to land ${end.ident} · ${station} ${windShort}`;
   // On the line while it is said: ~3 words a second at audio.js's voice (rate 1.35), and a second to read the end.
   return { speech, text, holdS: Math.max(4, speech.split(' ').length / 3 + 1) };
 }
@@ -57,7 +65,7 @@ export function towerStep(sim) {
   const aaeFt = (sim.pos.y - (end.thrY ?? 0)) / FT;
   if (sim.vel.y >= 0 || ap.distM <= 0 || ap.distM > 5 * NM || aaeFt < FLOOR_FT) return null;
   if (aaeFt > CLEAR_FT && ap.distM > CLEAR_NM * NM) return null;
-  if (Math.abs(ap.crossM) > ap.distM * Math.tan(5 * Math.PI / 180)) return null;
+  if (Math.abs(ap.crossM) > ap.distM * CONE) return null;
   const r = end.hdgT * Math.PI / 180, vh = Math.hypot(sim.vel.x, sim.vel.z);
   if (sim.vel.x * Math.sin(r) - sim.vel.z * Math.cos(r) < 0.8 * vh) return null;
   sim.towerFor = end.id;

@@ -20,12 +20,13 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
       await expect(page.locator('#onboardingModal')).toBeHidden();
       await recordCaptions(page);
       await page.evaluate(() => window.openaeroDebugFinal('KDFW', '18L', 2.3));
-      await expect(page.locator('#calloutCaption')).toContainText(/runway 18L, cleared to land/i, { timeout: 30_000 });
+      await expect(page.locator('#calloutCaption')).toContainText(/cleared to land 18L/i, { timeout: 30_000 });
       const caps = (await page.evaluate(() => window.__captions)).filter((c) => /cleared to land/i.test(c.text));
       expect(caps.length).toBeGreaterThan(0);
       for (const c of caps) {
         const hb = { x: c.w / 2 - 52, y: headingBoxTop(c.h / 2), width: 104, height: HEADING_BOX_H };
         expect(c.rect.width, c.text).toBeLessThanOrEqual(248);
+        expect(c.rect.height, `${c.text}: two lines at most`).toBeLessThanOrEqual(40);
         expect(c.rect.x).toBeGreaterThanOrEqual(0);
         expect(c.rect.x + c.rect.width).toBeLessThanOrEqual(c.w);
         expect(overlaps(c.rect, hb), `${c.text}: heading box`).toBe(false);

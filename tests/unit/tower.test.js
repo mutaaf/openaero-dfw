@@ -17,7 +17,7 @@ describe('towerClearance words (7110.65 3-10-5, 2-4-17, 2-4-21)', () => {
   it('KDFW 35C in a Cessna: type, wind, runway three five center, cleared to land', () => {
     const c = towerClearance(runwayEnd('KDFW', '35C'), LIVE, 'c172');
     expect(c.speech).toBe('Cessna one seventy-two, wind three five zero at one zero, runway three five center, cleared to land.');
-    expect(c.text).toBe('Tower: wind 350 at 10 · Runway 35C, cleared to land');
+    expect(c.text).toBe('Cleared to land 35C · Wind 350 at 10');
     expect(c.holdS).toBeGreaterThanOrEqual(4);
   });
   it('the runway words come from the end flown, for every end of the six airports', () => {
@@ -27,7 +27,12 @@ describe('towerClearance words (7110.65 3-10-5, 2-4-17, 2-4-21)', () => {
       const words = `runway ${[...num].map((d) => DIGIT[d]).join(' ')}${side ? ` ${SIDE[side]}` : ''}, cleared to land.`;
       const c = towerClearance(end, LIVE, 'b738');
       expect(c.speech, end.id).toMatch(new RegExp(`^Boeing seven thirty-seven, wind .*, ${words}$`));
-      expect(c.text, end.id).toContain(`Runway ${end.ident}, cleared to land`);
+      expect(c.text, end.id).toContain(`Cleared to land ${end.ident} · `);
+      // Two parts of ≤ 26 characters each, even with a scenario gust: the caption stays two lines.
+      const worst = towerClearance(end, { live: false, windDirDeg: 352.7, windKts: 23, gustKts: 32 }, 'b738').text;
+      const [first, second] = worst.split(' · ');
+      expect(first.length, first).toBeLessThanOrEqual(22); // with its " ·" inside 26
+      expect(second.length, second).toBeLessThanOrEqual(26);
     }
     expect(towerClearance(runwayEnd('KDFW', '17R'), LIVE, 'b738').speech).toContain('runway one seven right, cleared');
     expect(towerClearance(runwayEnd('KDFW', '18L'), LIVE, 'b738').speech).toContain('runway one eight left, cleared');
@@ -39,19 +44,19 @@ describe('towerClearance words (7110.65 3-10-5, 2-4-17, 2-4-21)', () => {
     const say = (wx) => towerClearance(end, { live: true, ...wx }, 'c172');
     expect(say({ windDirDeg: 2.7 + 4, windKts: 7 }).speech).toContain('wind three six zero at seven,');
     expect(say({ windDirDeg: 182.7, windKts: 14, gustKts: 22 }).speech).toContain('wind one eight zero at one four gusts two two,');
-    expect(say({ windDirDeg: 182.7, windKts: 14, gustKts: 22 }).text).toBe('Tower: wind 180 at 14 gusts 22 · Runway 17C, cleared to land');
+    expect(say({ windDirDeg: 182.7, windKts: 14, gustKts: 22 }).text).toBe('Cleared to land 17C · Wind 180 at 14G22');
     expect(say({ windDirDeg: 90, windKts: 0 }).speech).toBe('Cessna one seventy-two, wind calm, runway one seven center, cleared to land.');
     expect(say({ windDirDeg: null, windKts: 4 }).speech).toContain('wind variable at four,');
   });
   it('a wind that is not a live METAR is labelled scenario on the caption', () => {
     const c = towerClearance(runwayEnd('KDFW', '35C'), scenarioWeather(), 'c172');
-    expect(c.text).toMatch(/^Tower: scenario wind \d{3} at \d+/);
+    expect(c.text).toMatch(/^Cleared to land 35C · Scenario wind \d{3} at \d+/);
     expect(c.speech).not.toMatch(/scenario/i); // the tower's words stay the tower's
   });
   it('a live METAR from another field (the DFW fallback) is named on the caption', () => {
     const c = towerClearance(runwayEnd('KADS', '16'), { ...LIVE, icao: 'KDFW' }, 'c172');
-    expect(c.text).toBe('Tower: KDFW wind 350 at 10 · Runway 16, cleared to land');
-    expect(towerClearance(runwayEnd('KADS', '16'), { ...LIVE, icao: 'KADS' }, 'c172').text).toBe('Tower: wind 350 at 10 · Runway 16, cleared to land');
+    expect(c.text).toBe('Cleared to land 16 · KDFW wind 350 at 10');
+    expect(towerClearance(runwayEnd('KADS', '16'), { ...LIVE, icao: 'KADS' }, 'c172').text).toBe('Cleared to land 16 · Wind 350 at 10');
   });
 });
 

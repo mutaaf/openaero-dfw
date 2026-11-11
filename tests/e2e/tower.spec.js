@@ -29,7 +29,7 @@ test('the KDFW 35C 4 NM final: cleared once at ~800 ft with the METAR wind, spok
   const cleared = () => page.evaluate(() => window.__captions.filter((c) => /cleared to land/i.test(c.text)));
   await expect.poll(async () => (await cleared()).length, { timeout: 90_000, intervals: [250] }).toBeGreaterThan(0);
   const c = (await cleared())[0];
-  expect(c.text).toBe('Tower: wind 350 at 12 · Runway 35C, cleared to land');
+  expect(c.text).toBe('Cleared to land 35C · Wind 350 at 12');
   // At 800 ft above the 35C threshold, on the 3° path (Kid flies it): ~2.3 NM out, not at the 4 NM spawn
   // (the ground under the final dips, so the CG's AGL reads higher than the height above the threshold).
   const NM = 1852;
@@ -65,7 +65,7 @@ test('sound off still shows the clearance, and a scenario wind says so', async (
   await expect(page.locator('#onboardingModal')).toBeHidden();
   await recordCaptions(page);
   await page.evaluate(() => window.openaeroDebugFinal('KDFW', '17C', 2.3));
-  await expect(page.locator('#calloutCaption')).toContainText(/scenario wind .* runway 17C, cleared to land/i, { timeout: 30_000 });
+  await expect(page.locator('#calloutCaption')).toContainText(/cleared to land 17C · scenario wind \d{3} at \d+/i, { timeout: 30_000 });
   expect((await page.evaluate(() => window.openaeroDebug())).audio).toBe('off');
   expect(errors.filter((e) => !e.includes('503'))).toEqual([]); // the METAR stub's own 503
 });
