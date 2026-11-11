@@ -266,11 +266,13 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
 // weight existing when the airplane's landing gear is fully retracted"
 // (https://www.ecfr.gov/current/title-14/section-25.121, read 2026-11-11 through the eCFR versioner API;
 // also https://www.law.cornell.edu/cfr/text/14/25.121).
-// So: the takeoff flap (the model's one takeoff notch, flaps 10), gear up, one engine failed,
+// So: the takeoff flap (the model's one takeoff notch, flaps 10; the real 737-800 has 1, 5, 10, 15 and
+// 25, line crews most often fly 5, see 0070), gear up, one engine failed,
 // the other at full takeoff thrust, at V2. The card flies the engine-out-at-Vr takeoff above, raises
 // the gear at positive rate, holds V2 (1.13 Vs, flaps 10) with pitch, and measures the gradient once
-// the gear is up and the airplane is 400 ft or more above the runway (the 35.8 m span is out of
-// ground effect by ~120 ft): vertical speed over true airspeed (no wind in the harness, so the body's
+// the gear is up, in the second-segment configuration, from 400 ft above the runway (the usual
+// acceleration height ends the segment there; the card measures just above it so the 35.8 m span is
+// well clear of ground effect, out by ~120 ft): vertical speed over true airspeed (no wind in the harness, so the body's
 // speed is its TAS), averaged over 20 s. A gross gradient, the one 25.121 states.
 // Generous, as the 25.107 card above: the model has no windmilling drag from the dead engine and no
 // asymmetric thrust, so no sideslip or rudder drag either; the real 737 climbs less than this.
@@ -325,7 +327,7 @@ describe('Boeing 737-800 engine-out second-segment climb (14 CFR 25.121(b); 0168
     expect(r.gearPos).toBe(0);
     expect(r.gearUpFt).not.toBeNull();
     expect(r.fromFt).toBeGreaterThanOrEqual(400);
-    expect(r.engineN).toBeLessThan(0.55); // the failed engine stayed failed
+    expect(r.engineN).toBeLessThan(0.55); // thrust stayed at one engine's worth (half)
     expect(r.dev).toBeLessThanOrEqual(2); // steady at V2
     expect(r.gradient).toBeGreaterThanOrEqual(0.024);
   });
