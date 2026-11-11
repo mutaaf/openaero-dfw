@@ -28,8 +28,10 @@ export const AIRCRAFT_DATABASE = {
     // little: ΔCL 0.38 (Vs 125.5 kt, V2 142, +1.2 kt) with Vr 135 leaves 43 ft of its 5,100;
     // Vr 137 fails it. So flaps 10 keeps Vr 135 (vrKtsByFlap) and the field-length card.
     // Flaps 5 (0070): fitted to two published facts at 65 t, not to a Boeing lift curve (none is
-    // public): the crews' V2 ~148 kt (AAIB 6/2019, ATSB AO-2014-162, scaled; V2 = 1.13 Vs, so Vs
-    // ~131 kt) and the normal 8–9° lift-off attitude rotating at their VR ~145 (NTSB, quoting the
+    // public): the crews' V2 ~148 kt (AAIB 6/2019, ATSB AO-2014-162, scaled; their flap is not stated,
+    // likely 1 or 5), taking V2 = 1.13 Vs (an assumption: 14 CFR 25.107(b) makes 1.13 VSR a floor and
+    // a scheduled V2 may sit above it, which would put the real flaps 5 stall lower), so Vs ~131 kt;
+    // and the normal 8–9° lift-off attitude rotating at their VR ~145 (NTSB, quoting the
     // operator's manual for flaps 1 and 5; ATSB AO-2018-011: 8° at flaps 5). One ΔCL can't meet both:
     // any ΔCL that puts V2 near 148 lifts off at ~7.5° (the lift curve carries the weight too early),
     // so the stall AoA is the second unknown: ΔCL 0.10 with the stall at 16° gives Vs 131.2, V2 148.3,
@@ -132,6 +134,7 @@ export const AIRCRAFT_DATABASE = {
     // lift the takeoff would then exceed Boeing's field length, so flaps 10 keeps 135.
     vrKts: 145,
     vrKtsByFlap: [null, 145, 135],
+    gearVrKts: 135, // gear.js tailVsMainsAccel's authority scale: flaps 10's Vr, as before 0070
     twoCrew: true, // the pilot monitoring's takeoff callouts: eighty knots, V1 (0035)
     stallCleanKts: 114,
     gearHeight: 3.4,

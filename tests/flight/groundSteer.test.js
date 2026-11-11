@@ -114,7 +114,7 @@ function assistedRollout(spec, level, metarKts, crabDeg = 5) {
 // Pilot: the raw airplane, pedals neutral, wings level with the ailerons, full power to Vr.
 // The 737 rolls at flaps 10 to its Vr 135, the roll this card was written on (0110). At the takeoff
 // spawns' flaps 5 (0070) the roll to Vr 145 is ~10 kt longer and the same hands-off drift reaches
-// ~20.7 m (logged below, uncarded): the wheels a little past a 150 ft runway's edge with no pedals.
+// ~20.7 m: the wheels a little past a 150 ft runway's edge with no pedals (KNOWN GAP 0172, below).
 function pedalsNeutralRoll(spec, metarKts, flapsIndex = spec === b738 ? 2 : flaps(spec)) {
   const b = makeBody(spec, { throttle: 1, flaps: flapsIndex });
   const vr = vrFor(spec, flapsIndex);
@@ -191,10 +191,6 @@ describe('on the runway in a crosswind (ticket 0110)', () => {
     it(`${name} Pilot, pedals neutral: a 5 kt METAR crosswind turns the nose less than 3° on the roll to Vr`, () => {
       const r = pedalsNeutralRoll(spec, 5);
       console.log(`[0110 ${name} pilot] 5 kt crosswind, pedals neutral: heading ±${r.maxHdgDeg.toFixed(1)}°, ${r.offM.toFixed(1)} m off at ${r.iasKts.toFixed(0)} KIAS`);
-      if (spec === b738) {
-        const f5 = pedalsNeutralRoll(spec, 5, 1);
-        console.log(`[0110 ${name} pilot] flaps 5 (uncarded): heading ±${f5.maxHdgDeg.toFixed(1)}°, ${f5.offM.toFixed(1)} m off at ${f5.iasKts.toFixed(0)} KIAS`);
-      }
       expect(r.iasKts).toBeGreaterThanOrEqual(r.vr);
       expect(r.maxHdgDeg).toBeLessThan(3);
       // and the wheels stay on a 150 ft runway (the drift is the tyres' side slip: the hold is not rigid)
@@ -203,6 +199,15 @@ describe('on the runway in a crosswind (ticket 0110)', () => {
       expect(r.maxHdgDeg).toBeGreaterThan(0.2);
     });
   }
+  // The same card on the 737's takeoff spawns' flap (0070): the roll to Vr 145 is ~10 kt longer and
+  // the same hands-off drift reaches ~20.7 m, a main wheel ~0.7 m past a 150 ft runway's edge.
+  it.fails('KNOWN GAP (0172): 737 Pilot, pedals neutral, flaps 5: a 5 kt METAR crosswind roll to Vr 145 keeps the wheels on a 150 ft runway', () => {
+    const r = pedalsNeutralRoll(b738, 5, 1);
+    console.log(`[0110 737 pilot] flaps 5: heading ±${r.maxHdgDeg.toFixed(1)}°, ${r.offM.toFixed(1)} m off at ${r.iasKts.toFixed(0)} KIAS`);
+    expect(r.iasKts).toBeGreaterThanOrEqual(r.vr);
+    expect(r.maxHdgDeg).toBeLessThan(3);
+    expect(Math.abs(r.offM) + b738.gear.trackM / 2).toBeLessThan(22.9);
+  });
 });
 
 // 0150 physics panel: a Learner touchdown crabbed 15° (no de-crab) in a 20 kt METAR crosswind. The first cut's yaw-rate damping

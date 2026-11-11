@@ -29,7 +29,7 @@ describe('pitch trim (ticket 0094)', () => {
     expect(trimLimits(c172, 0).max).toBeCloseTo(stallAoaDeg(c172, 0) - 4, 9);
     expect(kts(c172, trimLimits(c172, 0).min)).toBeCloseTo(163, 6);
     expect(kts(b738, trimLimits(b738, 0).min)).toBeCloseTo(340, 6);
-    expect(kts(b738, trimLimits(b738, 3).min, 3)).toBeCloseTo(340, 6);
+    expect(kts(b738, trimLimits(b738, 4).min, 4)).toBeCloseTo(340, 6); // notch 4: flaps 40
     let a = trimLimits(c172, 0).max - 0.1;
     for (let i = 0; i < 100; i++) a = trimStep(a, 1, 0.1, c172, 0);
     expect(a).toBeCloseTo(trimLimits(c172, 0).max, 9);

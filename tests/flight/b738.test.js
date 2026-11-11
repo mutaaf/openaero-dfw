@@ -71,8 +71,8 @@ describe('Boeing 737-800', () => {
   });
 
   it('landing configuration L/D is about 7–8', () => {
-    const aoa = trimAoaDeg(b738, vApp, 2) * Math.PI / 180;
-    const cl = liftCoefficient(b738, aoa, 2);
+    const aoa = trimAoaDeg(b738, vApp, FLAPS_30) * Math.PI / 180;
+    const cl = liftCoefficient(b738, aoa, FLAPS_30);
     const ld = cl / dragCoefficient(b738, cl, true, FLAPS_30, 1);
     expect(ld).toBeGreaterThan(7);
     expect(ld).toBeLessThan(8.2);
@@ -80,8 +80,8 @@ describe('Boeing 737-800', () => {
 
   it('at idle on the final it cannot hold the path without slowing down (drag > idle thrust)', () => {
     const air = airAt(200);
-    const aoa = trimAoaDeg(b738, vApp, 2) * Math.PI / 180;
-    const cl = liftCoefficient(b738, aoa, 2);
+    const aoa = trimAoaDeg(b738, vApp, FLAPS_30) * Math.PI / 180;
+    const cl = liftCoefficient(b738, aoa, FLAPS_30);
     const q = 0.5 * 1.225 * vApp * vApp;
     const drag = dragCoefficient(b738, cl, true, FLAPS_30, 1) * q * b738.wingAreaM2;
     const along = engineThrust(b738, 0, vApp, air, vApp / 340, q) + b738.massKg * 9.80665 * Math.sin(3 * Math.PI / 180) - drag;
@@ -185,11 +185,20 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // model doesn't have.
   // 14 CFR 25.113(a): the takeoff distance is at least 115% of the all-engines distance to
   // 35 ft, so 1.15 × that distance can't exceed the field length (the engine-out cases
-  // only make it longer). Flown with full thrust from brake release at the model's takeoff
-  // flap (10; its other notches are the landing flaps 30 and 40), rotating at Vr like a line
+  // only make it longer). Flown with full thrust from brake release at flaps 10, the model's
+  // field-length flap (flaps 5, the takeoff spawns', needs more: the card below), rotating at Vr like a line
   // crew (see takeoff() below). (Before 0058: Vr 142 kt and a slower rotation, ~5,520 ft.)
   it('1.15 × the all-engines distance to 35 ft is within the 5,100 ft field length, 65 t, sea level (Boeing ACAP §3.3.29, 14 CFR 25.113)', () => {
     expect(1.15 * takeoff(FLAPS_10).ft35).toBeLessThanOrEqual(5100);
+  });
+
+  // The chart is the optimum flap's: with less flap and a faster Vr (0070) the takeoff is longer, so
+  // flaps 10 is the model's optimum at 65 t and sea level, as the comment above assumes.
+  // Logged ~5,845 ft (× 1.15) at flaps 5 vs ~5,061 at flaps 10.
+  it('flaps 5 needs more field than flaps 10 (less lift, Vr 145): the field-length chart is flaps 10\'s', () => {
+    const f5 = 1.15 * takeoff(FLAPS_5).ft35, f10 = 1.15 * takeoff(FLAPS_10).ft35;
+    console.log(`[b738] 1.15 × to 35 ft: flaps 5 ${f5.toFixed(0)} ft, flaps 10 ${f10.toFixed(0)} ft`);
+    expect(f5).toBeGreaterThan(f10);
   });
 });
 
@@ -274,8 +283,8 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
 // weight existing when the airplane's landing gear is fully retracted"
 // (https://www.ecfr.gov/current/title-14/section-25.121, read 2026-11-11 through the eCFR versioner API;
 // also https://www.law.cornell.edu/cfr/text/14/25.121).
-// So: the takeoff flap (the model's one takeoff notch, flaps 10; the real 737-800 has 1, 5, 10, 15 and
-// 25, line crews most often fly 5, see 0070), gear up, one engine failed,
+// So: the takeoff flap (the model's takeoff notches are 5 and 10, 0070; the real 737-800 has 1, 5, 10,
+// 15 and 25, line crews most often fly 5), gear up, one engine failed,
 // the other at full takeoff thrust, at V2. The card flies the engine-out-at-Vr takeoff above, raises
 // the gear at positive rate, holds V2 (1.13 Vs, flaps 10) with pitch, and measures the gradient once
 // the gear is up, in the second-segment configuration, from 400 ft above the runway (the usual
@@ -290,8 +299,9 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
 // 2.4% is the regulation's floor, not a measured 737 number: the card catches an engine-out climb that
 // could not be certified (it fails with the static thrust at 65% of the model's, 2.0%; at 75%, 3.5%,
 // it passes; cd0 × 3 still climbs 4.6%), not a few percent of error. The real gradient at 65 t is not public.
-function secondSegment(flaps) {
-  const v2 = 1.13 * stallSpeedKts(b738, FLAPS_10);
+// `speedFlaps`: the takeoff flap whose Vr and V2 are flown (flaps 10's for the comparison card).
+function secondSegment(flaps, speedFlaps = FLAPS_10) {
+  const v2 = 1.13 * stallSpeedKts(b738, speedFlaps);
   const oeiThrottle = (0.5 - b738.engine.idleFraction) / (1 - b738.engine.idleFraction);
   const b = makeBody(b738, { throttle: 1, flaps });
   let vr = false, rot = null, last = null, trend = 0, gearUpFt = null;
@@ -306,7 +316,7 @@ function secondSegment(flaps) {
   };
   const pilot = (x, dt) => {
     const { pitchDeg, bankRightDeg } = attitude(x);
-    if (!vr && x.iasKts >= vrFor(b738, FLAPS_10)) vr = true; // flaps 10's Vr for both runs (same speeds)
+    if (!vr && x.iasKts >= vrFor(b738, speedFlaps)) vr = true;
     if (!vr) return;
     x.throttle = oeiThrottle; // one engine out from Vr (the model: half the thrust)
     if (x.gearDown && !x.onGround && x.vel.y > 0 && hFt(x) > 10) x.gearDown = false; // positive rate, gear up
@@ -339,6 +349,19 @@ describe('Boeing 737-800 engine-out second-segment climb (14 CFR 25.121(b); 0168
     expect(r.engineN).toBeLessThan(0.55); // thrust stayed at one engine's worth (half)
     expect(r.dev).toBeLessThanOrEqual(2); // steady at V2
     expect(r.gradient).toBeGreaterThanOrEqual(0.024);
+  });
+
+  // The takeoff spawns' flap (0070), at its own Vr 145 and V2 148: its drag (flapCd 0.009) is an
+  // estimate, so the floor and "no worse than flaps 10" are what is carded.
+  it('flaps 5, gear up, one engine out, at its V2: at least 2.4%, and no less than flaps 10', () => {
+    const r = secondSegment(FLAPS_5, FLAPS_5), t = secondSegment(FLAPS_10);
+    console.log(`[b738] second segment, flaps 5: ${(100 * r.gradient).toFixed(2)}% at V2 ${r.v2.toFixed(1)} KIAS (±${r.dev.toFixed(1)} kt) from ${r.fromFt.toFixed(0)} ft (flaps 10: ${(100 * t.gradient).toFixed(2)}%)`);
+    expect(r.gearPos).toBe(0);
+    expect(r.fromFt).toBeGreaterThanOrEqual(400);
+    expect(r.engineN).toBeLessThan(0.55);
+    expect(r.dev).toBeLessThanOrEqual(2);
+    expect(r.gradient).toBeGreaterThanOrEqual(0.024);
+    expect(r.gradient).toBeGreaterThanOrEqual(t.gradient);
   });
 
   it('with the flaps one notch further (30) at the same speed it climbs less: the card sees the configuration', () => {

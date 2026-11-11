@@ -181,8 +181,9 @@ export function wheelScrubYawHold(body, spec, errRate, dt) {
 export function tailVsMainsAccel(body, spec, iasKts) {
   const m = body.mainPitchMomentNm ?? 0;
   if (!(m > 0)) return 0;
-  // The airframe's takeoff Vr (the 737's flaps 5 145 since 0070, was 135): a coarse authority scale, not per flap.
-  const cap = Math.min(1, (iasKts / (0.8 * (spec.vrKts ?? spec.vrefKts))) ** 2);
+  // A coarse authority scale, the same for every flap: the 737 keeps its pre-0070 135 kt (gearVrKts),
+  // not the flaps 5 Vr 145, so its landings de-rotate as before.
+  const cap = Math.min(1, (iasKts / (0.8 * (spec.gearVrKts ?? spec.vrKts ?? spec.vrefKts))) ** 2);
   return (-(body.elevInput ?? 0) * cap * m) / spec.inertia.pitch;
 }
 

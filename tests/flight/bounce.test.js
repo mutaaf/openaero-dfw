@@ -75,7 +75,7 @@ describe('bounced landings (0091)', () => {
     const kts = b738.vrefKts, v = kts * KTS_TO_MPS;
     const b = makeBody(b738, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: 3, throttle: trimThrottle(b738, v, 3, -3, true, airAt(15)) });
     b.vel.set(0, -v * Math.sin(3 * DEG_TO_RAD), -v * Math.cos(3 * DEG_TO_RAD));
-    const pitch0 = trimAoaDeg(b738, v, 2) - 3;
+    const pitch0 = trimAoaDeg(b738, v, 3) - 3; // notch 3: flaps 30
     b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
     const t = createBounceTracker();
     let td = false;
