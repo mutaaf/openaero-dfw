@@ -476,11 +476,11 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
 src/tower.js        the tower's landing clearance (0145, lazy chunk loaded on Start flight): towerClearance (pure) says
                     "<type>, wind <mag, nearest 10°> at <kt> [gusts], runway <digits> <left/center/right>, cleared to land"
                     (FAA JO 7110.65 3-10-5, 2-4-17, 2-4-21; the type is the call sign, no facility name); the caption reads
-                    "Wind 350 at 10 · Runway 35C, cleared to land" ("Scenario wind" off a live METAR) and holds while it is said
+                    "Tower: wind 350 at 10 · Runway 35C, cleared to land" ("scenario wind" off a live METAR, "KDFW wind" for another field's) and holds while it is said
                     (captions.js say's hold). towerStep: once per runway end (sim.towerFor, cleared by loadScenario), descending
-                    on a lined-up final inside 5 NM at 800 ft above the threshold or 2 NM, never under 500 ft, never in a drill
+                    on a lined-up final inside 5 NM at 800 ft above the threshold or 2 NM, never under 600 ft (GPWS's 500 ft call cancels speech), never in a drill
                     with its own voice (go-around, dead stick, engine out, RTO, windshear, stall, pattern, steep turns) or with
-                    the engine failed; spoken with audio.teach (queued behind the coach), captioned with sound off too
+                    the engine failed; spoken with audio.takeoffCall (at once, cutting stale coach lines), captioned with sound off too
 src/atis.js         ATIS-style briefing (0030, lazy chunk loaded on Start flight): buildAtis (pure) says the flown METAR
                     as FAA JO 7110.65 para 2-9-3 lists it (field, letter by the observation's UTC hour, time, wind magnetic to
                     10° (its own copy of magvar.js's 2.7°, pinned by a unit test: importing magvar.js split it out of boot),

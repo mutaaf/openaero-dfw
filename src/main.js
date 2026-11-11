@@ -1672,7 +1672,7 @@ function step6DofPhysics(dt) {
   updatePapi();
   checkStabilizedGate();
   const clr = towerLib?.towerStep(sim); // the tower's landing clearance (0145, tower.js): once per final
-  if (clr) { caption.say(clr.text, performance.now() / 1000, true, clr.holdS); audio.teach(clr.speech); }
+  if (clr) { caption.say(clr.text, performance.now() / 1000, true, clr.holdS); audio.takeoffCall(clr.speech); } // now, not behind queued coach lines
   checkGoAround();
   checkStallDrill(dt);
   if (sim.engineOut && eoLib.engineOutStep(sim.engineOut, sim)) sim.engineFailed = true;

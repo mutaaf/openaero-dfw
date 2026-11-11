@@ -1,5 +1,5 @@
 // The tower's landing clearance (ticket 0145; a lazy chunk, loaded on Start flight like atis.js). One call per final,
-// spoken (audio.js's queued voice, behind the coach) and captioned, sound on or off. Phraseology, FAA Order JO 7110.65
+// spoken at once (audio.js takeoffCall: it cuts off stale queued coach lines, which the coach says again) and captioned, sound on or off. Phraseology, FAA Order JO 7110.65
 // (faa.gov/air_traffic/publications/atpubs/atc_html/): para 3-10-5, "first state the runway number followed by the
 // landing clearance": RUNWAY (number) CLEARED TO LAND; para 3-10-1 lists the surface wind in the landing information;
 // para 2-4-17 says the wind ("wind", the direction's separate digits to the nearest 10°, "at", the knots' separate
@@ -15,12 +15,13 @@ export const TOWER_CALLSIGN = { c172: 'Cessna one seventy-two', b738: 'Boeing se
 
 // When: once per runway end, in the air on a steady final to it: descending, inside 5 NM, lined up (within 5° of
 // the centreline as seen from the threshold, tracking within ~35° of the runway), at 800 ft above the threshold
-// or 2 NM, whichever comes first, and not under 500 ft (the GPWS "five hundred" and the gate own that). A
+// or 2 NM, whichever comes first, and not under 600 ft: the call takes ~5 s and the GPWS "five hundred" (which
+// cancels the speech queue, audio.js) and the gate own 500 ft, so it starts at least ~8 s above them. A
 // go-around keeps the end cleared: a new final is a different end, or a new mission (main.js loadScenario clears
 // sim.towerFor). Never in a drill whose own coach speaks, nor with the engine out.
 export const CLEAR_FT = 800;
 export const CLEAR_NM = 2;
-export const FLOOR_FT = 500;
+export const FLOOR_FT = 600;
 const NM = 1852, FT = 0.3048;
 const QUIET = ['goAround', 'deadStick', 'engineOutFt', 'rto', 'windshear', 'stallDrill', 'pattern', 'steepTurns'];
 
@@ -41,8 +42,11 @@ export function towerClearance(end, wx, aircraftKey) {
   }
   const call = TOWER_CALLSIGN[aircraftKey];
   const speech = `${call ? `${call}, ` : ''}${windSay}, ${rwySay}, cleared to land.`;
-  const text = `${wx?.live ? windText : `Scenario ${windText.toLowerCase()}`} · Runway ${end.ident}, cleared to land`;
-  // On the line while it is said: ~3 words a second at audio.js's queued voice (rate 1.35), and a second to read the end.
+  // Whose words, and whose wind: a live METAR from another field (main.js currentWeather's DFW fallback) is named.
+  const station = wx?.live && wx.icao && wx.icao !== end.airport ? `${wx.icao} ` : '';
+  const wind = wx?.live ? `${station}${windText.toLowerCase()}` : `scenario ${windText.toLowerCase()}`;
+  const text = `Tower: ${wind} · Runway ${end.ident}, cleared to land`;
+  // On the line while it is said: ~3 words a second at audio.js's voice (rate 1.35), and a second to read the end.
   return { speech, text, holdS: Math.max(4, speech.split(' ').length / 3 + 1) };
 }
 

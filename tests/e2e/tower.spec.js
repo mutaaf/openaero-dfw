@@ -29,7 +29,7 @@ test('the KDFW 35C 4 NM final: cleared once at ~800 ft with the METAR wind, spok
   const cleared = () => page.evaluate(() => window.__captions.filter((c) => /cleared to land/i.test(c.text)));
   await expect.poll(async () => (await cleared()).length, { timeout: 90_000, intervals: [250] }).toBeGreaterThan(0);
   const c = (await cleared())[0];
-  expect(c.text).toBe('Wind 350 at 12 · Runway 35C, cleared to land');
+  expect(c.text).toBe('Tower: wind 350 at 12 · Runway 35C, cleared to land');
   // At 800 ft above the 35C threshold, on the 3° path (Kid flies it): ~2.3 NM out, not at the 4 NM spawn
   // (the ground under the final dips, so the CG's AGL reads higher than the height above the threshold).
   const NM = 1852;
@@ -45,8 +45,8 @@ test('the KDFW 35C 4 NM final: cleared once at ~800 ft with the METAR wind, spok
   expect(c.rect.width).toBeLessThanOrEqual(260);
   expect(overlaps(c.rect, hb)).toBe(false);
   expect(overlaps(c.rect, c.coach)).toBe(false);
-  // On down through 500 ft (under the window): never said again.
-  await expect.poll(() => page.evaluate(() => window.openaeroDebug().distM / 1852), { timeout: 60_000 }).toBeLessThan(1.4);
+  // On down through 600 ft (under the window): never said again.
+  await expect.poll(() => page.evaluate(() => window.openaeroDebug().distM / 1852), { timeout: 60_000 }).toBeLessThan(1.6);
   expect((await cleared()).filter((x, i, a) => i === 0 || !x.text.startsWith(a[i - 1].text))).toHaveLength(1);
   expect(await page.evaluate(() => window.__spoken.filter((t) => /cleared to land/.test(t)).length)).toBe(1);
   expect(errors).toEqual([]);
