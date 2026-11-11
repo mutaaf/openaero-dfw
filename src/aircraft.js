@@ -267,7 +267,9 @@ export const AIRCRAFT_DATABASE = {
     // The stall the game calls (stallSpeedKts, the stall warning and buffet, the drills) is the AoA
     // limiter's 25° (TP-1538 p. 12: α held "at or below 25°"; src/fbw.js), where the jet's usable lift
     // ends; the wing itself keeps lifting to its ~35° peak (clByAlphaDeg), so a transient past the
-    // limit does not drop it out of the sky.
+    // limit does not drop it out of the sky. The table is for positive α only: the negative stall is
+    // this angle too (−25°; TP-1538 sets no negative-AoA limit). Past 35° the generic exponential drop
+    // is the game's, not NASA's (it falls off faster than TP-1538's 40-45° rows would).
     alphaStallDeg: 25.0,
     maxThrustN: 130000, // F110-GE-129 afterburner
     engine: { type: 'turbofan', staticThrustN: 130000, idleFraction: 0.04, machLapse: [0.3, 0.3], densityExp: 0.8, spoolTau: 0.8 },

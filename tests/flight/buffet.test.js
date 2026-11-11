@@ -141,3 +141,15 @@ describe('stall buffet: it comes before the stall (0079)', () => {
     expect(atBreak).toBeGreaterThan(0.95);
   });
 });
+
+// The F-16 at its AoA limiter (0066): the stall the game calls is the limiter's 25° (aircraft.js), so a
+// full pull in Pilot that the limiter holds there buffets fully (the real jet buffets near its limit),
+// while the same jet at 20° (TP-1538's lift card, a hard turn under Fig. 63's knee) does not shake.
+describe('stall buffet: the F-16 shakes at its 25° AoA limiter, not below it (0066)', () => {
+  const f16 = AIRCRAFT_DATABASE.f16;
+  const body = { iasKts: 200, flapPos: 0 };
+  it('200 KIAS, flaps up: nothing at 20° α, full at the limiter\'s 25°', () => {
+    expect(wingBuffet(f16, body, 20)).toBe(0);
+    expect(wingBuffet(f16, body, 25)).toBe(1);
+  });
+});

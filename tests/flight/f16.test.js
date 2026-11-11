@@ -122,13 +122,22 @@ describe('F-16C vs NASA TP-1538 wind-tunnel data', () => {
   // 30°) and peaks near 35° (~1.89). Before 0066 the model's line ran on to a 28° stall (CL 1.91,
   // 1.72 at 25°, 10% high); aircraft.js clByAlphaDeg now carries Table III's rows above 20°.
   for (const deg of [25, 30, 35]) {
-    it(`lift coefficient at ${deg}° AoA is NASA's ${nasaCl(deg).toFixed(2)}, ±5% (0066)`, () => {
-      within(liftCoefficient(f16, deg * DEG_TO_RAD, 0), nasaCl(deg), 0.05);
+    it(`lift coefficient at ${deg}° AoA is NASA's ${nasaCl(deg).toFixed(2)}, ±1% (0066)`, () => {
+      within(liftCoefficient(f16, deg * DEG_TO_RAD, 0), nasaCl(deg), 0.01);
     });
   }
 
   // The curve's shape, not only its points: still rising from 20° to its ~35° peak (the jet's lift
   // never breaks before the limiter's 25°), and falling past it.
+  // The table's first point is written as the line's value at 20°: retuning cl0 or clAlpha without
+  // it would put a step in the curve there.
+  it('the lift curve is continuous where the table takes over from the line (20°), flaps up and down (0066)', () => {
+    for (const flaps of [0, 1.5, 3]) {
+      const step = liftCoefficient(f16, 20.001 * DEG_TO_RAD, flaps) - liftCoefficient(f16, 19.999 * DEG_TO_RAD, flaps);
+      expect(Math.abs(step)).toBeLessThan(0.001);
+    }
+  });
+
   it('lift rises from 20° to the ~35° peak and falls past it (0066)', () => {
     const cl = (deg) => liftCoefficient(f16, deg * DEG_TO_RAD, 0);
     for (let d = 20; d < 35; d += 1) expect(cl(d + 1)).toBeGreaterThan(cl(d));
