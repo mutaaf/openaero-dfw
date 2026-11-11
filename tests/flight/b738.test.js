@@ -271,8 +271,9 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
 // the other at full takeoff thrust, at V2. The card flies the engine-out-at-Vr takeoff above, raises
 // the gear at positive rate, holds V2 (1.13 Vs, flaps 10) with pitch, and measures the gradient once
 // the gear is up, in the second-segment configuration, from 400 ft above the runway (the usual
-// acceleration height ends the segment there; the card measures just above it so the 35.8 m span is
-// well clear of ground effect, out by ~120 ft): vertical speed over true airspeed (no wind in the harness, so the body's
+// acceleration height ends the segment there; the card measures just above it. The rule says "without
+// ground effect": at 400 ft aero.js's factor still trims ~4% of the induced drag, ~0.1 point of gradient
+// (forced to 1 the flaps 10 run climbs 7.00%, flaps 30 3.28%), well inside the margin): vertical speed over true airspeed (no wind in the harness, so the body's
 // speed is its TAS), averaged over 20 s. A gross gradient, the one 25.121 states.
 // Generous, as the 25.107 card above: the model has no windmilling drag from the dead engine and no
 // asymmetric thrust, so no sideslip or rudder drag either; the real 737 climbs less than this.
@@ -335,6 +336,9 @@ describe('Boeing 737-800 engine-out second-segment climb (14 CFR 25.121(b); 0168
   it('with the flaps one notch further (30) at the same speed it climbs less: the card sees the configuration', () => {
     const t = secondSegment(FLAPS_10), m = secondSegment(FLAPS_30);
     console.log(`[b738] second segment at V2 (flaps 10): flaps 10 ${(100 * t.gradient).toFixed(2)}%, flaps 30 ${(100 * m.gradient).toFixed(2)}%`);
+    expect(m.gearPos).toBe(0);
+    expect(m.gearUpFt).not.toBeNull();
+    expect(m.fromFt).toBeGreaterThanOrEqual(400); // measured where the first card measures
     expect(m.dev).toBeLessThanOrEqual(2);
     expect(m.gradient).toBeLessThan(t.gradient - 0.01);
   });
