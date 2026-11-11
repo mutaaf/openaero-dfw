@@ -257,6 +257,93 @@ describe('Boeing 737-800 rotation and Vr (0058)', () => {
   });
 });
 
+// Second segment (0168). 14 CFR 25.121(b), "Takeoff; landing gear retracted": "In the takeoff
+// configuration existing at the point of the flight path at which the landing gear is fully
+// retracted, and in the configuration used in § 25.111 but without ground effect: (1) The steady
+// gradient of climb may not be less than 2.4 percent for two-engine airplanes ... at V2 with:
+// (i) The critical engine inoperative, the remaining engines at the takeoff power or thrust
+// available at the time the landing gear is fully retracted ... (ii) The weight equal to the
+// weight existing when the airplane's landing gear is fully retracted"
+// (https://www.ecfr.gov/current/title-14/section-25.121, read 2026-11-11 through the eCFR versioner API;
+// also https://www.law.cornell.edu/cfr/text/14/25.121).
+// So: the takeoff flap (the model's one takeoff notch, flaps 10; the real 737-800 has 1, 5, 10, 15 and
+// 25, line crews most often fly 5, see 0070), gear up, one engine failed,
+// the other at full takeoff thrust, at V2. The card flies the engine-out-at-Vr takeoff above, raises
+// the gear at positive rate, holds V2 (1.13 Vs, flaps 10) with pitch, and measures the gradient once
+// the gear is up, in the second-segment configuration, from 400 ft above the runway (the usual
+// acceleration height ends the segment there; the card measures just above it. The rule says "without
+// ground effect": at 400 ft aero.js's factor still trims ~4% of the induced drag, ~0.1 point of gradient
+// (forced to 1 the flaps 10 run climbs 7.00%, flaps 30 3.28%), well inside the margin): vertical speed over true airspeed (no wind in the harness, so the body's
+// speed is its TAS), averaged over 20 s. A gross gradient, the one 25.121 states.
+// Generous, as the 25.107 card above: the model has no windmilling drag from the dead engine and no
+// asymmetric thrust, so no sideslip or rudder drag either; the real 737 climbs less than this.
+// Logged ~7.1% at flaps 10. Flaps 30 (the model's next notch; the real jet's 15 and 25 aren't
+// modelled) at the same speed climbs ~3.4%: the card sees the configuration.
+// 2.4% is the regulation's floor, not a measured 737 number: the card catches an engine-out climb that
+// could not be certified (it fails with the static thrust at 65% of the model's, 2.0%; at 75%, 3.5%,
+// it passes; cd0 × 3 still climbs 4.6%), not a few percent of error. The real gradient at 65 t is not public.
+function secondSegment(flaps) {
+  const v2 = 1.13 * stallSpeedKts(b738, FLAPS_10);
+  const oeiThrottle = (0.5 - b738.engine.idleFraction) / (1 - b738.engine.idleFraction);
+  const b = makeBody(b738, { throttle: 1, flaps });
+  let vr = false, rot = null, last = null, trend = 0, gearUpFt = null;
+  const hFt = (x) => (x.pos.y - b738.gearHeight) * M_TO_FT;
+  // Pitch for V2 (the go-around card's holdVref gains), wings level.
+  const holdV2 = (x, dt, pitchDeg) => {
+    if (last !== null) trend += ((x.iasKts - last) / dt - trend) * Math.min(1, dt * 4);
+    last = x.iasKts;
+    const err = x.iasKts - v2;
+    x.pitchTrim = (x.pitchTrim ?? pitchDeg) + err * 0.15 * dt;
+    x.elevInput = elevatorForPitch(Math.max(-15, Math.min(25, x.pitchTrim + err * 3 + trend * 8)), pitchDeg, x.angVel.x);
+  };
+  const pilot = (x, dt) => {
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    if (!vr && x.iasKts >= b738.vrKts) vr = true;
+    if (!vr) return;
+    x.throttle = oeiThrottle; // one engine out from Vr (the model: half the thrust)
+    if (x.gearDown && !x.onGround && x.vel.y > 0 && hFt(x) > 10) x.gearDown = false; // positive rate, gear up
+    if (x.gearPos === 0 && gearUpFt === null) gearUpFt = hFt(x);
+    if (hFt(x) > 35) holdV2(x, dt, pitchDeg);
+    else {
+      rot = (rot ?? pitchDeg) + 3 * dt;
+      x.elevInput = elevatorForPitch(Math.min(x.onGround ? b738.maxGroundPitchDeg - 1 : 15, rot), pitchDeg, x.angVel.x);
+    }
+    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+  };
+  fly(b, b738, 120, pilot, (x) => x.gearPos === 0 && hFt(x) >= 400);
+  const fromFt = hFt(b);
+  let sum = 0, n = 0, dev = 0;
+  fly(b, b738, 20, (x, dt) => {
+    pilot(x, dt);
+    sum += x.vel.y / x.vel.length(); n++;
+    dev = Math.max(dev, Math.abs(x.iasKts - v2));
+  });
+  return { gradient: sum / n, v2, dev, fromFt, gearUpFt, gearPos: b.gearPos, engineN: b.engineN };
+}
+
+describe('Boeing 737-800 engine-out second-segment climb (14 CFR 25.121(b); 0168)', () => {
+  it('flaps 10, gear up, one engine out, at V2, 400 ft+ above the runway: the steady gross gradient is at least 2.4%', () => {
+    const r = secondSegment(FLAPS_10);
+    console.log(`[b738] second segment, flaps 10: ${(100 * r.gradient).toFixed(2)}% at V2 ${r.v2.toFixed(1)} KIAS (±${r.dev.toFixed(1)} kt) from ${r.fromFt.toFixed(0)} ft, gear up by ${r.gearUpFt?.toFixed(0)} ft (25.121(b): ≥ 2.4%)`);
+    expect(r.gearPos).toBe(0);
+    expect(r.gearUpFt).not.toBeNull();
+    expect(r.fromFt).toBeGreaterThanOrEqual(400);
+    expect(r.engineN).toBeLessThan(0.55); // thrust stayed at one engine's worth (half)
+    expect(r.dev).toBeLessThanOrEqual(2); // steady at V2
+    expect(r.gradient).toBeGreaterThanOrEqual(0.024);
+  });
+
+  it('with the flaps one notch further (30) at the same speed it climbs less: the card sees the configuration', () => {
+    const t = secondSegment(FLAPS_10), m = secondSegment(FLAPS_30);
+    console.log(`[b738] second segment at V2 (flaps 10): flaps 10 ${(100 * t.gradient).toFixed(2)}%, flaps 30 ${(100 * m.gradient).toFixed(2)}%`);
+    expect(m.gearPos).toBe(0);
+    expect(m.gearUpFt).not.toBeNull();
+    expect(m.fromFt).toBeGreaterThanOrEqual(400); // measured where the first card measures
+    expect(m.dev).toBeLessThanOrEqual(2);
+    expect(m.gradient).toBeLessThan(t.gradient - 0.01);
+  });
+});
+
 // Published 737-800 takeoff speeds (0062). No Boeing table is public, but two accident
 // reports print the crews' performance-tool output, the right and the wrong one:
 //  - AAIB Bulletin 6/2019, YR-BMF (737-8Q8), Table 1: 59 t: VR 140, V2 143; 71.3 t: VR 153,
