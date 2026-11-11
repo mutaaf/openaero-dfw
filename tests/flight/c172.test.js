@@ -313,6 +313,76 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, P
   });
 });
 
+// Balked landing (ticket 0175). The 172S POH has no balked-landing climb chart: Section 4 gives the
+// procedure only (p. 4-17 checklist and p. 4-34 amplified: "Throttle -- FULL OPEN. Wing Flaps --
+// RETRACT TO 20°. Climb Speed -- 60 KIAS"; p. 4-5 "Balked Landing: Maximum Power, Flaps 20°, 60 KIAS").
+// The number is the certification floor, 14 CFR 23.77(a) (as in force to 2017-08-30, read through
+// the eCFR versioner): a reciprocating single of 6,000 lb or less "must be able to maintain a steady
+// gradient of climb at sea level of at least 3.3 percent with (1) Takeoff power ... (2) The landing
+// gear extended; (3) The wing flaps in the landing position ... and (4) A climb speed equal to VREF",
+// and 23.73(a): VREF is at least 1.3 VS1, here 1.3 x 48 KCAS (Fig. 5-3, flaps 30, 2550 lb) = 62.4.
+// The POH's 60 KIAS is 63 KCAS with flaps 30 and with flaps 10 (Fig. 5-1, normal static), so both
+// climbs fly 63 KCAS (the model's IAS has no instrument error): flaps 30 is §23.77's configuration,
+// and flaps 30 with the lever at 20 from the first frame is the POH's go-around (0047's coach).
+// Full throttle, 2550 lb, ISA, spawned at 500 ft: settled for 60 s (rate and speed steady within a
+// few fpm), then measured over 10 s at ~870-960 ft (σ 0.97; aero.js groundEffectFactor 0.995 there,
+// i.e. out of ground effect). Measured 2026-11-11: flaps 30 ~5.6% (flightModel.js) / ~5.1% (JSBSim),
+// flaps 20 ~6.6% / ~6.2%. The floor is one-sided: a lever at 0.85 already takes flaps 30 under it
+// (2.7% / 2.9%), so the card bites on lost power or extra flap drag.
+const BALKED_KCAS = 63;
+function balkedClimb(lever, fdm) {
+  const b = makeBody(c172, { kts: BALKED_KCAS, altM: 500 / M_TO_FT, throttle: 1, flaps: 3 });
+  b.flapsIndex = lever;
+  const pilot = speedHoldPilot(() => BALKED_KCAS);
+  fly(b, c172, 60, pilot);
+  const h0 = b.pos.y, d0 = b.distM;
+  let fpm = 0, ias = 0, n = 0;
+  fly(b, c172, 10, (x, dt) => { pilot(x, dt); fpm += vsFpm(x); ias += x.iasKts; n++; });
+  return {
+    fpm: fpm / n, ias: ias / n, gradient: (b.pos.y - h0) / (b.distM - d0),
+    fromFt: h0 * M_TO_FT, toFt: b.pos.y * M_TO_FT, throttle: b.throttle, gearDown: b.gearDown,
+    flapDeg: fdm ? fdm.get('fcs/flap-pos-deg') : b.flapDeg,
+  };
+}
+
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S balked landing, 14 CFR 23.77(a) (${model}, ticket 0175)`, () => {
+  const r = {};
+  beforeAll(async () => {
+    const fdm = model === 'jsbsim' ? await nodeJsbsim() : null;
+    useFdm(fdm);
+    r.f30 = balkedClimb(3, fdm);
+    r.f20 = balkedClimb(2, fdm);
+    console.log(`[c172 ${model}] balked landing at ${BALKED_KCAS} KCAS: ${Object.entries(r)
+      .map(([k, x]) => `${k} ${x.fpm.toFixed(0)} fpm ${(100 * x.gradient).toFixed(2)}% (${x.fromFt.toFixed(0)}-${x.toFt.toFixed(0)} ft, ${x.ias.toFixed(1)} kt)`).join(', ')}`);
+  }, 120000);
+  afterAll(() => useFdm(null));
+
+  // The pilot is checked on its own, so the cards below compare like with like (LESSONS 2026-11-11).
+  it('both climbs fly the same conditions: 63 KCAS within 1 kt, full throttle, gear down, the same 10 s window near sea level (under 1,200 ft), flaps where the lever is', () => {
+    for (const [k, x] of Object.entries(r)) {
+      expect(Math.abs(x.ias - BALKED_KCAS), k).toBeLessThan(1);
+      expect(x.throttle, k).toBe(1);
+      expect(x.gearDown, k).toBe(true);
+      expect(x.fromFt, k).toBeGreaterThan(0);
+      expect(x.toFt, k).toBeLessThan(1200);
+    }
+    expect(Math.abs(r.f30.flapDeg - 30)).toBeLessThan(0.5);
+    expect(Math.abs(r.f20.flapDeg - 20)).toBeLessThan(0.5);
+  });
+
+  it('flaps 30, full throttle, gear down, at VREF (1.3 VS0 = 62.4 KCAS): a steady climb gradient of at least 3.3% (14 CFR 23.77(a), 23.73(a))', () => {
+    expect(r.f30.gradient).toBeGreaterThanOrEqual(0.033);
+  });
+
+  // At one speed the wing flies one CL whatever the flaps, so the gain is the flap drag the lever
+  // takes off: ~+19% (flightModel.js) / ~+21% (JSBSim). With flaps 20 given flaps 30's drag it
+  // measured +0.3%, which a bare "greater" passes; 5% says it climbs clearly better, not by noise.
+  it('the POH go-around, flaps up to 20 at 60 KIAS (POH p. 4-17), out-climbs flaps 30 at the same speed by over 5%, in rate and in gradient', () => {
+    expect(r.f20.fpm).toBeGreaterThan(1.05 * r.f30.fpm);
+    expect(r.f20.gradient).toBeGreaterThan(1.05 * r.f30.gradient);
+  });
+});
+
 // Wind down the runway (ticket 0103). The airplane lifts off and touches down at an airspeed,
 // so a headwind takes groundspeed off both ends of the roll and a tailwind adds it. The wind is
 // body.windVec, where main.js puts the METAR's. Two references:
