@@ -938,6 +938,7 @@ let sunBeforeMission = null; // your When? choice, while a night or dusk mission
 let sunPickedFor = null; // the mission you picked a When? on: its reloads (METAR, assist, FLY AGAIN) keep your pick
 const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0, iasKts: 0, warnKts: 0 };
 let stallPullIn = 0; // the player's back stick this sub-step, before the assists
+let towerLib = null;
 let drillCoach = false; // the drill is always coached (its only instructions) until Skip
 const stallLive = () => sim.stallDrill && sim.stallDrill.phase !== 'complete' && sim.stallDrill.phase !== 'failed';
 function checkStallDrill(dt) {
@@ -1670,6 +1671,8 @@ function step6DofPhysics(dt) {
   updateActiveRunway(dt);
   updatePapi();
   checkStabilizedGate();
+  const clr = towerLib?.towerStep(sim); // the tower's landing clearance (0145, tower.js): once per final
+  if (clr) { caption.say(clr.text, performance.now() / 1000, true, clr.holdS); audio.takeoffCall(clr.speech); } // now, not behind queued coach lines
   checkGoAround();
   checkStallDrill(dt);
   if (sim.engineOut && eoLib.engineOutStep(sim.engineOut, sim)) sim.engineFailed = true;
@@ -2527,6 +2530,7 @@ function loadScenario(key, final = null) {
     if (sky.mode !== sim.timeOfDayMode) { sim.timeOfDayMode = sky.mode; applySun(); }
   }
   sim.missionKey = mission.key;
+  sim.towerFor = null;
   let trimAlpha = null;
   sim.loadedMission = mission;
   sim.brakesOn = false;
@@ -2900,6 +2904,7 @@ byId('btnStartFlight').addEventListener('click', () => {
   if (byId('chkAutoSound').checked) audio.init();
   applyCoachChoice();
   import('./atis.js').then((m) => m.showAtis(sim)).catch(() => {}); // the ATIS-style briefing (0030)
+  import('./tower.js').then((m) => { towerLib = m; }).catch(() => {});
   if (sim.loadedMission?.kind === 'takeoff') {
     const d = densityAltitudeText();
     showToast(`DA ${d.ft} at ${d.where}${d.thin ? ': thin air, longer roll, weaker climb' : ` (${d.src})`}`, 6000);

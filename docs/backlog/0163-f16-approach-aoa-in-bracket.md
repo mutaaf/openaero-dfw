@@ -41,3 +41,8 @@ The 0155 card; the full `tests/flight/f16.test.js`; tests/flight/kidFinal.test.j
 
 ## Out of scope
 An AoA bracket or indexer on the HUD; carrier approaches.
+
+## Source search (Builder, 2026-11-11)
+NASA TP-1538 (ntrs 19800005879, read as text) has the trailing-edge flap only in Fig. 47: δtef 20° with the
+leading-edge flap retracted, as a deep-stall pitching-moment increment (about -0.018 Cm at α 55-60°), no lift
+increment. A web search for an F-16 flaperon/TEF ΔCL in NASA reports found none. Still unblocked only by a new source.

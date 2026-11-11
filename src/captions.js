@@ -25,14 +25,15 @@ export function createCaption(show, holdS = CAPTION_HOLD_S) {
     // the two before it a warning outlasts a height count (else the later one stays), so a burst
     // at the gate keeps "unstabilized, go around". One that cuts it off replaces it. The same
     // words again inside the window are ignored, so a repeated call doesn't keep the line up.
-    say(words, now, queued = false) {
+    // holdS: a longer line keeps itself up while it is said (the tower's clearance, 0145).
+    say(words, now, queued = false, hold = holdS) {
       if (!words || (words === last && now < until)) return;
       const on = queued && now < until;
       const prev = on ? (kept && COUNT.test(last) && !COUNT.test(kept) ? kept : last) : '';
       text = prev ? `${prev} · ${words}` : words;
       kept = prev;
       last = words;
-      until = now + holdS;
+      until = now + hold;
       show(text);
     },
     update(now) {

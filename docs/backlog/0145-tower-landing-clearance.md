@@ -1,12 +1,12 @@
 ---
 id: 0145
 title: The tower clears you to land: a spoken, captioned landing clearance on every final
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-01
-pr:
+pr: 229
 ---
 
 ## Why
