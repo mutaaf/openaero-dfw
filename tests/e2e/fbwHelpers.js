@@ -5,7 +5,7 @@ import { stubTiles, collectErrors, enterCockpit } from './helpers.js';
 // α passes 15°, 1 g at ~25°; src/fbw.js), and the HUD's G-LOAD is the seat's load factor (the body
 // up axis), not the world-vertical acceleration. In Pilot, on the default final (~140 kt, slow
 // enough that the AoA limit binds before the g limit), full back stick for 12 s as it slows: α stops at ~25°
-// (≤ 27°, under the 28° stall: before 0121 it ran through it to 90°), and the readout climbs
+// (≤ 27°: before 0121 it ran through it to 90°), and the readout climbs
 // past 1.3 g. Flown by fbwLimit.spec.js (keyboard) and fbwLimit.mobile.spec.js (touch).
 export async function fullPullF16(page, pull, release) {
   const errors = collectErrors(page);
@@ -38,7 +38,7 @@ export async function fullPullF16(page, pull, release) {
   const r = await page.evaluate(() => { window.__pull.on = false; return window.__pull; });
   const s = await snap();
   console.log(`[fbw] max α ${r.maxAoa.toFixed(1)}°, max G-LOAD ${r.maxG.toFixed(2)}, ${r.frames} frames, ${s.iasKts.toFixed(0)} kt ${s.aglFt} ft`);
-  // ≤ 27°: under the model's 28° stall. The ticket's ≤ 26° is the headless card (tests/flight/f16.test.js,
+  // ≤ 27°: the limiter's 25° and a transient (the wing lifts to ~35°, 0066). The ticket's ≤ 26° is the headless card (tests/flight/f16.test.js,
   // still air); here the METAR's gusts ride on it (measured 25.4-25.9°; before 0121, 89.9°).
   expect(r.maxAoa).toBeLessThanOrEqual(27);
   expect(r.maxAoa).toBeGreaterThan(15); // the pull reached the limit, not a stick that never moved

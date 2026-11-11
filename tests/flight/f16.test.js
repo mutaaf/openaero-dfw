@@ -72,7 +72,10 @@ const THRUST_CLASS_N = 29000 * LBF_TO_N;
 // 25°: at low speed and AoA ≥ 20° it is fully down, so these rows apply as they are.
 // CL = −CZ·cos α + CX·sin α (X forward, Z down). δh = 0 is untrimmed: the trimmed lift at
 // 20–25° differs by the stabilator's own contribution, which these cards ignore.
-const TP1538 = { 20: { cx: 0.12830, cz: -1.41800 }, 25: { cx: 0.13000, cz: -1.65800 } };
+const TP1538 = {
+  20: { cx: 0.12830, cz: -1.41800 }, 25: { cx: 0.13000, cz: -1.65800 },
+  30: { cx: 0.15360, cz: -2.00800 }, 35: { cx: 0.16050, cz: -2.20000 },
+};
 const nasaCl = (aoaDeg) => {
   const { cx, cz } = TP1538[aoaDeg], a = aoaDeg * DEG_TO_RAD;
   return -cz * Math.cos(a) + cx * Math.sin(a);
@@ -115,16 +118,26 @@ describe('F-16C vs NASA TP-1538 wind-tunnel data', () => {
     within(liftCoefficient(f16, 20 * DEG_TO_RAD, 0), nasaCl(20), 0.05);
   });
 
-  // The model's lift is a straight line to a 28° stall (CL 1.91); NASA's curve bends over
-  // above 20° (1.56 at 25°), recovers (1.82 at 30°) and peaks near 35° (CX 0.16050, CZ
-  // −2.20000: ~1.89). Not a smooth bend: the fix (0066) has to match 30° too.
-  it.fails('KNOWN GAP (0066): lift coefficient at 25° AoA is NASA\'s 1.56, ±5% (model: 1.72)', () => {
-    within(liftCoefficient(f16, 25 * DEG_TO_RAD, 0), nasaCl(25), 0.05);
+  // NASA's curve is not a straight line past 20°: it bends over (1.56 at 25°), recovers (1.82 at
+  // 30°) and peaks near 35° (~1.89). Before 0066 the model's line ran on to a 28° stall (CL 1.91,
+  // 1.72 at 25°, 10% high); aircraft.js clByAlphaDeg now carries Table III's rows above 20°.
+  for (const deg of [25, 30, 35]) {
+    it(`lift coefficient at ${deg}° AoA is NASA's ${nasaCl(deg).toFixed(2)}, ±5% (0066)`, () => {
+      within(liftCoefficient(f16, deg * DEG_TO_RAD, 0), nasaCl(deg), 0.05);
+    });
+  }
+
+  // The curve's shape, not only its points: still rising from 20° to its ~35° peak (the jet's lift
+  // never breaks before the limiter's 25°), and falling past it.
+  it('lift rises from 20° to the ~35° peak and falls past it (0066)', () => {
+    const cl = (deg) => liftCoefficient(f16, deg * DEG_TO_RAD, 0);
+    for (let d = 20; d < 35; d += 1) expect(cl(d + 1)).toBeGreaterThan(cl(d));
+    expect(cl(45)).toBeLessThan(cl(35));
   });
 
-  // The model stalls at 28° on its steeper line, so its power-off 1-g stall comes ~12 kt
-  // below that speed (and its stall warning, stall + 5 kt, ~7 kt below).
-  it.fails('KNOWN GAP (0066): power-off 1-g stall at 12 t is the ~129 KEAS that TP-1538\'s CL gives at the 25° AoA limit, ±5% (model: 117)', () => {
+  // The stall the game calls (stallSpeedKts, the stall warning, the buffet) is the limiter's 25° AoA
+  // (aircraft.js alphaStallDeg), where the jet's usable lift ends; the wing itself peaks near 35°.
+  it('power-off 1-g stall at 12 t is the ~129 KEAS that TP-1538\'s CL gives at the 25° AoA limit, ±5% (0066)', () => {
     within(stallSpeedKts(f16, 0), vAtAoaLimitKts(), 0.05);
   });
 });
@@ -282,7 +295,8 @@ describe('F-16C full pull vs the 9 g limit (USAF) and the 25° AoA limit (TP-153
   });
 
   // Slow and with little power the limit is Fig. 63's 1-g end (~25°) with a transient: α ≤ 27°,
-  // below the model's 28° stall, held 25 s at throttle 0.3 (before: 28.7°; at idle 32.8°).
+  // held 25 s at throttle 0.3 (before 0121's fix: 28.7°; at idle 32.8°). The wing still lifts there
+  // (TP-1538's curve rises to ~35°, 0066); 27° bounds the limiter, not the lift.
   it('a full pull at 150 kt, 15,000 ft, throttle 0.3, held 25 s stays under the stall: α ≤ 27°', () => {
     expect(fullPull(150, 25, 0.3).maxAoa).toBeLessThanOrEqual(27);
   });
@@ -481,8 +495,8 @@ describe('F-16C level turns vs the FAA handbook (FAA-H-8083-25B ch. 5; 0152)', (
 
 // Accelerated stall (ticket 0159): stall speed × √(load factor), FAA-H-8083-3C ch. 5 "Load Factor
 // and Stalling Speed" (stallTurnCard.js says what each check catches). The F-16 has no stall a
-// pilot can reach: the limiter (0121, TP-1538 Fig. 63) holds α near 25°, under the model's 28°
-// stall, and in a turn it binds earlier (2 g at ~24.4°, less with its α-rate lead: flown to 24°,
+// pilot can reach: the limiter (0121, TP-1538 Fig. 63) holds α near 25° (the stall the game calls,
+// aircraft.js alphaStallDeg; the wing's lift peaks near 35°, 0066), and in a turn it binds earlier (2 g at ~24.4°, less with its α-rate lead: flown to 24°,
 // the 60° turn sagged to 1.67 g and broke 9% under the book). So the card measures the same law
 // where the limiter lets the wing work: the speed at which a level turn needs 20° of α, just under
 // Fig. 63's 20.4° knee, where the limiter allows 7.4 g (and where TP-1538's CL card above sits).

@@ -25,9 +25,24 @@ export const stallAoaDeg = (spec, flapsIndex) =>
   (spec.alphaStallDegByFlap ? notchValue(spec.alphaStallDegByFlap, flapsIndex, spec.alphaStallDeg) : spec.alphaStallDeg);
 
 // Lift coefficient: linear lift curve + flap increment, with an exponential post-stall drop.
+// An airframe with spec.clByAlphaDeg ([[deg, CL], ...], ascending, its first point on the line)
+// follows that table between its first and last points instead (the F-16's TP-1538 rows, 0066), and
+// its post-stall drop starts past the table's last point or the stall angle, whichever is later.
 export function liftCoefficient(spec, aoaRad, flapsIndex) {
   let cl = spec.cl0 + spec.clAlpha * aoaRad + flapDeltaCl(spec, flapsIndex);
-  const stallAngleRad = stallAoaDeg(spec, flapsIndex) * DEG_TO_RAD;
+  let stallAngleRad = stallAoaDeg(spec, flapsIndex) * DEG_TO_RAD;
+  const t = spec.clByAlphaDeg;
+  if (t && aoaRad > 0) {
+    const deg = aoaRad / DEG_TO_RAD, last = t[t.length - 1];
+    if (deg > t[0][0]) {
+      let i = 1;
+      while (i < t.length - 1 && deg > t[i][0]) i++;
+      const [d0, c0] = t[i - 1], [d1, c1] = t[i];
+      // Past the last point the table's last segment carries on, as the line did, until the drop.
+      cl = c0 + (c1 - c0) * (deg - d0) / (d1 - d0) + flapDeltaCl(spec, flapsIndex);
+    }
+    stallAngleRad = Math.max(stallAngleRad, last[0] * DEG_TO_RAD);
+  }
   if (Math.abs(aoaRad) > stallAngleRad) {
     const excess = Math.abs(aoaRad) - stallAngleRad;
     cl *= Math.exp(-excess * 4.0);
@@ -35,9 +50,9 @@ export function liftCoefficient(spec, aoaRad, flapsIndex) {
   return cl;
 }
 
-// 1 g stall speed (indicated, kt) for a flap setting, from CLmax.
+// 1 g stall speed (indicated, kt) for a flap setting, from the lift at the stall angle.
 export function stallSpeedKts(spec, flapsIndex) {
-  const clMax = spec.cl0 + spec.clAlpha * stallAoaDeg(spec, flapsIndex) * DEG_TO_RAD + flapDeltaCl(spec, flapsIndex);
+  const clMax = liftCoefficient(spec, stallAoaDeg(spec, flapsIndex) * DEG_TO_RAD, flapsIndex);
   return Math.sqrt((2 * spec.massKg * 9.80665) / (RHO_SEA_LEVEL * spec.wingAreaM2 * clMax)) / 0.514444;
 }
 

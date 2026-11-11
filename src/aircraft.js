@@ -258,12 +258,21 @@ export const AIRCRAFT_DATABASE = {
     // flaperons are also its flaps (surfaces.js adds the two).
     controlThrowsDeg: { aileronUp: 21.5, aileronDown: 21.5, elevatorUp: 25, elevatorDown: 25, rudder: 30 },
     flaperons: true,
-    alphaStallDeg: 28.0,
+    // Lift above 20° AoA (0066): NASA TP-1538 Table III (β = 0, δh = 0, the leading-edge flap at its
+    // 25° limit, fully down at low speed and α ≥ 20° by p. 34's schedule), CL = −CZ·cos α + CX·sin α:
+    // 25° (CX 0.13000, CZ −1.65800) 1.558, 30° (0.15360, −2.00800) 1.816, 35° (0.16050, −2.20000)
+    // 1.894, the peak. The line above (cl0 + clAlpha·α) carries it to 20° (1.407; NASA 1.376, +2%), the
+    // table's first point, so the curve is continuous. aero.js liftCoefficient drops it past 35°.
+    clByAlphaDeg: [[20, 0.15 + 3.6 * 20 * Math.PI / 180], [25, 1.558], [30, 1.816], [35, 1.894]],
+    // The stall the game calls (stallSpeedKts, the stall warning and buffet, the drills) is the AoA
+    // limiter's 25° (TP-1538 p. 12: α held "at or below 25°"; src/fbw.js), where the jet's usable lift
+    // ends; the wing itself keeps lifting to its ~35° peak (clByAlphaDeg), so a transient past the
+    // limit does not drop it out of the sky.
+    alphaStallDeg: 25.0,
     maxThrustN: 130000, // F110-GE-129 afterburner
     engine: { type: 'turbofan', staticThrustN: 130000, idleFraction: 0.04, machLapse: [0.3, 0.3], densityExp: 0.8, spoolTau: 0.8 },
     vrefKts: 148,
     vrKts: 155,
-    stallCleanKts: 120,
     gearHeight: 2.2,
     // Struts (gear.js): ~4.0 m wheelbase, 2.36 m track, the nose carrying ~13% (estimates
     // from published F-16 dimensions). Inertia: JSBSim f16 (9496 / 55814 / 63100 slug·ft²).

@@ -81,8 +81,8 @@ describe('stall buffet: still in trimmed flight (0079)', () => {
 
 // Kid and Learner never fly the wing that close: their AoA envelope (assists.js) stops the stick
 // 4° short of the stall (Kid's auto-flare 3°), under BUFFET_ONSET on the Cessna and the 737.
-// The F-16's 28° stall is far past its limiter's ~25° (fbw.js): 24° is 0.857 of it (a trace), Kid's
-// flare cap of 25° 0.89 (~0.2): at the limiter the real jet buffets too.
+// The F-16's stall the game calls is its limiter's 25° (fbw.js; 0066): Learner's and Kid's caps are under
+// the 85% onset, Kid's flare cap (22°) 0.88 of it (a trace): at the limiter the real jet buffets too.
 describe('stall buffet: Kid and Learner\'s AoA envelope stops short of it (0079)', () => {
   for (const [key, spec] of Object.entries(AIRCRAFT_DATABASE)) {
     it(`${key}: at every flap notch, Learner's and Kid's caps (the flare's too) buffet ${key === 'f16' ? 'under 0.01 (the flare\'s 0.25)' : 'not at all'}`, () => {
