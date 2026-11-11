@@ -23,6 +23,7 @@
 // rounder, the F-16 higher with a brighter rasp. Those two voicings are tuning, not data.
 
 export { audioSession } from './audioSession.js'; // iOS's silent switch (0169): rides in this lazy chunk
+export { rollSound } from './rollSound.js'; // the ground roll's rumble and brake squeal (0149): this chunk too
 
 const D = 1.9304; // m, 76 in
 const D5 = D ** 5;
