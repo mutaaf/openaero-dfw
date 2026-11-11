@@ -34,7 +34,7 @@ export function createAudio(sim, onStateChange, caption = () => {}) {
       engineFilter.connect(engineGain);
       engineGain.connect(audioCtx.destination);
       engineOsc.start();
-      import('./engineSound.js').then((m) => { voice = m.engineVoice; session = m.audioSession; roll = m.rollSound(audioCtx); }, () => {}); // rollSound.js: the ground roll (0149)
+      import('./engineSound.js').then((m) => { voice = m.engineVoice; session = m.audioSession; roll = m.rollSound(audioCtx); }, () => {}).catch(console.warn); // rollSound.js: the ground roll (0149)
 
       // Wind rush noise synthesis
       const bufferSize = audioCtx.sampleRate * 2;
