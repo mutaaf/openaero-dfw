@@ -326,10 +326,11 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, P
 // and flaps 30 with the lever at 20 from the first frame is the POH's go-around. (The game's Cessna
 // finals fly flaps 20, aero.js landingFlaps, so 0047's coach asks it for flaps 10, not 20.)
 // Full throttle, 2550 lb, ISA, spawned at 500 ft: settled for 60 s (rate and speed steady within a
-// few fpm), then measured over 10 s at ~870-960 ft (σ 0.97; aero.js groundEffectFactor 0.995 there,
-// i.e. out of ground effect). Measured 2026-11-11: flaps 30 ~5.6% (flightModel.js) / ~5.1% (JSBSim),
-// flaps 20 ~6.6% / ~6.2%. The floor is one-sided: a lever at 0.85 already takes flaps 30 under it
-// (2.7% / 2.9%), so the card bites on lost power or extra flap drag.
+// few fpm), then measured over 10 s: flaps 30 at ~840-930 ft, flaps 20 at ~910-1,020 ft (σ ≥ 0.97;
+// aero.js groundEffectFactor ≥ 0.995 there, i.e. out of ground effect; the flaps 20 window's thinner
+// air works against it). Measured 2026-11-11: flaps 30 ~5.6% (flightModel.js) / ~5.1% (JSBSim),
+// flaps 20 ~6.6% / ~6.2%. The floor is one-sided, and it bites: the throttle lever at 0.85 takes flaps
+// 30 to 2.7% / 2.9%, and flightModel.js's C172 thrust table x0.85 to 3.0%.
 const BALKED_KCAS = 63;
 function balkedClimb(lever, fdm) {
   const b = makeBody(c172, { kts: BALKED_KCAS, altM: 500 / M_TO_FT, throttle: 1, flaps: 3 });
