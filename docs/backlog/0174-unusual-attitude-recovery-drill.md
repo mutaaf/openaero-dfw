@@ -1,7 +1,7 @@
 ---
 id: 0174
 title: Unusual-attitude recovery drill: start nose-high or in a diving spiral, recover to level
-status: ready
+status: in-progress
 priority: P2
 size: M
 lens: content
@@ -40,3 +40,17 @@ from telemetry and that the results card renders at both viewports.
 
 ## Out of scope
 Inverted starts, aerobatics, spins, the 737 and F-16.
+
+## Builder notes (2026-11-12)
+- Source read: FAA-H-8083-15B, Instrument Flying Handbook, ch. 7 "Recovery from Unusual Attitudes", pp. 7-27/7-28
+  (nose-high: power, forward pressure, wings; nose-low: reduce power, wings level, smooth back pressure; "the
+  instinctive reaction to a nose-down attitude is to pull back"). It also says the instructor puts the airplane there.
+- The sim flies behind the start screen, so the set-up is not the spawn: the Cessna spawns level at 100 KIAS and the
+  instructor hands it over 1.5 s after the player starts flying (src/upset.js applyUpset). The nose-high set-up is
+  60 KIAS (not ~45: the model's clean stall is 53 KIAS, so 45 would start below it), α 4°, power 0.55.
+- The stall warning in the pass rule is the wing within 3° of its stall angle (stallDrill.js's margin), not the HUD's
+  banner: that one is IAS-based at 1 g, and it sounds through a correct zero-g push-over.
+- Hands off, the stick-fixed flightModel.js Cessna recovers by itself from both (nose-high: a phugoid dive to ~145 KIAS,
+  not level in 20 s; nose-low: rolls out of the 60° bank by itself at ~157 KIAS). So "do nothing" fails as not flown
+  ("Hands off the whole way"), not as a spiral; whether the real C172 is that spirally stable has no source in hand.
+- Boot: +0.31 kB for the two entries and the wiring, paid for by aliasing three's WebXRManager to src/noXr.js (−3.7 kB).
