@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { Quaternion, Vector3 } from 'three';
 import {
-  UPSETS, UPSET_TEXT, UPSET_HANDS_S, UPSET_ORDER_CAP, UPSET_LOST_CAP, UPSET_KID_NOTE,
+  UPSETS, UPSET_TEXT, UPSET_HANDS_S, UPSET_ORDER_CAP, UPSET_LOST_CAP, UPSET_KID_NOTE, UPSET_LEARNER_NOTE,
   createUpset, upsetStep, upsetPrompt, orderKept, gradeUpset, applyUpset, upsetSimStep,
 } from '../../src/upset.js';
 import { coachText } from '../../src/coach.js';
@@ -16,7 +16,7 @@ import { WebXRManager } from '../../src/noXr.js';
 
 const DT = 0.05;
 const base = (o = {}) => ({ dt: DT, started: true, altFt: 5500, iasKts: 100, pitchDeg: 0, bankDeg: 0, aoaDeg: 3, stallAoaDeg: 14.1,
-  throttle: 0.55, elevInput: 0, aileronInput: 0, g: 1, vneKts: 163, ...o });
+  throttle: 0.55, pitchIn: 0, rollIn: 0, assisted: false, g: 1, vneKts: 163, ...o });
 
 // Run the drill to the hand-over, then feed `trace(t)` (the step's input overrides) until it ends.
 function run(kind, trace, maxS = 30) {
@@ -28,10 +28,10 @@ function run(kind, trace, maxS = 30) {
 }
 
 // Nose-high, the handbook's way: power in at once, the nose down to the horizon over 2 s, speed builds.
-const highGood = (t) => ({ throttle: 1, pitchDeg: Math.max(-2, 35 - t * 18), iasKts: Math.max(55, 60 + (t - 2) * 6), elevInput: t < 2 ? 0.5 : 0 });
+const highGood = (t) => ({ throttle: 1, pitchDeg: Math.max(-2, 35 - t * 18), iasKts: Math.max(55, 60 + (t - 2) * 6), pitchIn: t < 2 ? 0.5 : 0 });
 // Nose-low, the handbook's way: idle, the wings level over 2 s, then ease back to the horizon.
 const lowGood = (t) => ({ throttle: 0, bankDeg: Math.min(0, -60 + t * 30), pitchDeg: t < 2 ? -25 : Math.min(0, -25 + (t - 2) * 8),
-  iasKts: 130 + Math.min(t, 3) * 3, aileronInput: t < 2 ? 0.6 : 0, elevInput: t < 2 ? 0 : -0.15, altFt: 5500 - t * 60, g: t < 2 ? 1.1 : 1.6 });
+  iasKts: 130 + Math.min(t, 3) * 3, rollIn: t < 2 ? 0.6 : 0, pitchIn: t < 2 ? 0 : -0.15, altFt: 5500 - t * 60, g: t < 2 ? 1.1 : 1.6 });
 
 describe('unusual-attitude missions (0174)', () => {
   it('both drills are in the picker\'s Drills group for the Cessna, deep-linkable, never the recommended first flight', () => {
@@ -73,13 +73,13 @@ describe('upset.js state machine', () => {
     expect(r.ev).toBe('done');
     expect(orderKept(r.st)).toBe(false);
     expect(r.grade.score).toBeLessThanOrEqual(UPSET_ORDER_CAP);
-    expect(r.grade.reason).toMatch(/power first/);
+    expect(r.grade.reason).toMatch(/full power first/);
   });
   it('nose-high, held up: the stall warning after 3 s fails it, and a stall fails it', () => {
-    const warn = run('high', (t) => ({ pitchDeg: 30, iasKts: 50, aoaDeg: t > 4 ? 11.5 : 5, elevInput: 0.2 }));
+    const warn = run('high', (t) => ({ pitchDeg: 30, iasKts: 50, aoaDeg: t > 4 ? 11.5 : 5, pitchIn: 0.2 }));
     expect(warn.ev).toBe('failed');
     expect(warn.st.why).toBe('warn');
-    const stall = run('high', (t) => ({ pitchDeg: 30, iasKts: 45, aoaDeg: t > 1 ? 15 : 5, elevInput: -0.5 }));
+    const stall = run('high', (t) => ({ pitchDeg: 30, iasKts: 45, aoaDeg: t > 1 ? 15 : 5, pitchIn: -0.5 }));
     expect(stall.st.why).toBe('stall');
     expect(stall.grade.score).toBeLessThanOrEqual(UPSET_LOST_CAP);
     expect(stall.grade.reason).toMatch(/Stalled/);
@@ -93,30 +93,45 @@ describe('upset.js state machine', () => {
     expect(['S', 'A']).toContain(r.grade.grade);
   });
   it('nose-low, pulling in the bank: the pull is named, recovered or not', () => {
-    const pullThenLevel = run('low', (t) => ({ ...lowGood(t), elevInput: t < 1 ? -0.5 : lowGood(t).elevInput }));
+    const pullThenLevel = run('low', (t) => ({ ...lowGood(t), pitchIn: t < 1 ? -0.5 : lowGood(t).pitchIn }));
     expect(pullThenLevel.st.pulled).toBe(true);
     expect(pullThenLevel.grade.score).toBeLessThanOrEqual(UPSET_ORDER_CAP);
     expect(pullThenLevel.grade.reason).toMatch(/pulled while banked/);
-    const overG = run('low', (t) => ({ bankDeg: -60, pitchDeg: -20, elevInput: -0.8, aileronInput: 0, g: 2 + t * 4, throttle: 0.75 }));
+    const overG = run('low', (t) => ({ bankDeg: -60, pitchDeg: -20, pitchIn: -0.8, rollIn: 0, g: 2 + t * 4, throttle: 0.75 }));
     expect(overG.st.why).toBe('g');
     expect(overG.grade.reason).toMatch(/pulled while banked/);
   });
   it('VNE fails it, and so do 20 s without level', () => {
-    expect(run('low', (t) => ({ bankDeg: -60, pitchDeg: -25, iasKts: 130 + t * 8, aileronInput: 0.3, throttle: 0.75 })).st.why).toBe('vne');
-    const slow = run('low', () => ({ bankDeg: -20, pitchDeg: -3, iasKts: 120, aileronInput: 0.3, throttle: 0 }));
+    expect(run('low', (t) => ({ bankDeg: -60, pitchDeg: -25, iasKts: 130 + t * 8, rollIn: 0.3, throttle: 0.75 })).st.why).toBe('vne');
+    const slow = run('low', () => ({ bankDeg: -20, pitchDeg: -3, iasKts: 120, rollIn: 0.3, throttle: 0 }));
     expect(slow.st.why).toBe('time');
     expect(slow.grade.reason).toMatch(/20 s/);
   });
   it('hands off the whole way is not a recovery: failed in its own words', () => {
     const r = run('low', (t) => ({ throttle: 0.75, bankDeg: Math.min(0, -60 + t * 10), pitchDeg: t < 6 ? -10 : 0, iasKts: 150 }));
     expect(r.st.why).toBe('hands');
-    expect(r.grade.reason).toMatch(/Hands off/);
+    expect(r.grade.reason).toMatch(/didn't touch the controls.*throttle to idle/);
     expect(r.grade.reason).not.toMatch(/pulled/);
   });
   it('Kid\'s recovery carries the note; a failed one does not', () => {
     const st = run('high', highGood).st;
-    expect(gradeUpset(st, true).note).toBe(UPSET_KID_NOTE);
-    expect(gradeUpset(run('high', () => ({ pitchDeg: 30, iasKts: 45, aoaDeg: 15 })).st, true).note).toBeNull();
+    expect(gradeUpset(st, 'kid').note).toBe(UPSET_KID_NOTE);
+    expect(gradeUpset(run('high', () => ({ pitchDeg: 30, iasKts: 45, aoaDeg: 15 })).st, 'kid').note).toBeNull();
+  });
+  // Panel (first-timer): Learner's assists roll back past 45° and hold the nose. The drill reads the player's own
+  // stick (main.js sim.pitchIn / rollIn), never the assists' output: hands off on Kid or Learner is the assists'
+  // recovery (a note), not a fail and not the player's pull.
+  it('Kid and Learner hands off: the assists level it, no "hands" fail, no pull, Learner gets its own note', () => {
+    const assists = (t) => ({ assisted: true, throttle: 0.75, bankDeg: Math.min(0, -60 + t * 20), pitchDeg: Math.min(0, -25 + t * 6), iasKts: 140 });
+    const r = run('low', assists);
+    expect(r.ev).toBe('done');
+    expect(r.st.moved).toBe(false);
+    expect(r.st.pulled).toBe(false);
+    expect(gradeUpset(r.st, 'learner').note).toBe(UPSET_LEARNER_NOTE);
+    expect(gradeUpset(r.st, 'kid').note).toBe(UPSET_KID_NOTE);
+    // A Learner who flew it gets no note.
+    const flown = run('low', (t) => ({ ...lowGood(t), assisted: true }));
+    expect(gradeUpset(flown.st, 'learner').note).toBeNull();
   });
 });
 

@@ -1013,7 +1013,7 @@ let upLib = null;
 function checkUpset(dt) {
   const ev = sim.upset && upLib.upsetSimStep(sim.upset, sim, dt, cockpitEntered && !modalOpen());
   if (ev !== 'done' && ev !== 'failed') return;
-  const result = upLib.gradeUpset(sim.upset, sim.assist === 'kid');
+  const result = upLib.gradeUpset(sim.upset, sim.assist);
   sim.upset = null;
   drillCard(result, upLib.UPSET_PLACE);
 }
@@ -1760,6 +1760,7 @@ function integrateSubStep(dt) {
   }
 
   stallPullIn = Math.max(0, -targetPitch); // elevator + = nose down
+  sim.pitchIn = targetPitch; sim.rollIn = targetRoll; // the player's own stick, before the assists (upset.js, 0174)
   // The assists and a pitch-holding autopilot trim as they fly; Pilot's trim stays where the
   // spawn (or the autopilot it took over from) set it, so a released stick flies that trim (0090).
   sim.autoTrim = sim.assist !== 'pilot' || (sim.apMaster && (sim.apApproach || sim.apAltHold));

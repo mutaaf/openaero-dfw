@@ -261,8 +261,9 @@ src/upset.js        unusual-attitude recovery (0174, lazy chunk loaded with its 
                     Recovered = wings ±10°, nose ±5°, ≥ 70 KIAS for 1 s. Graded on time, height, the order
                     (FAA-H-8083-15B pp. 7-27/7-28: nose-high power, nose down, wings; nose-low idle, wings, ease back;
                     out of order ≤ B) and peak g; failed (D) by a stall, the stall warning (α within 3°) after 3 s,
-                    VNE, +3.8 g, 20 s, or hands off the whole way (the stick-fixed Cessna recovers itself). A pull
-                    in the bank, nose low, is named. Its ua* words reach coach.js through s.ds.
+                    VNE, +3.8 g, 20 s, or, on Pilot, hands off the whole way (the game's stick-fixed Cessna comes round
+                    itself). "Hands off" and a pull in the bank (named) read the player's own stick (main.js
+                    sim.pitchIn / rollIn), never the assists' output. Its ua* words reach coach.js through s.ds.
                     Cards: tests/flight/upset.test.js
 src/noXr.js         a stand-in for three's WebXRManager (vite.config.js aliases WebGLRenderer's import to it): XR
                     off, ~3.7 kB gz off boot (0174). tests/unit/upset.test.js checks it has every `xr.` member

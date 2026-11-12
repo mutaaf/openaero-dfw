@@ -39,27 +39,28 @@ export const UPSET_FAIL_S = 20;
 export const UPSET_GRACE_S = 3;
 export const UPSET_WARN_MARGIN_DEG = 3;
 export const UPSET_G_LIMIT = 3.8;
-// Flown, not watched: the stick 0.1 or more off centre either way, or the lever 0.05 off the hand-over's,
-// at some point. Hands off, the stick-fixed Cessna's own stability brings it round (tests/flight/upset.test.js:
-// nose-low, out of the bank at 157 KIAS; nose-high, a dive to ~145 kt): that is not the pilot's recovery.
+// Flown, not watched: the player's own stick (before the assists: main.js sim.pitchIn / rollIn) 0.1 or more
+// off centre either way, or the lever 0.05 off the hand-over's, at some point. Hands off, the game's stick-fixed
+// Cessna comes round by itself (tests/flight/upset.test.js: nose-low, out of the bank at 157 KIAS; nose-high, a
+// dive to ~145 kt): on Pilot that is not the pilot's recovery. On Kid and Learner the assists fly it (a note).
 export const UPSET_MOVED = 0.1;
 // The power steps: "increase power" is the lever 0.2 above the hand-over's (or full); "reduce" is 0.25 or less.
 export const UPSET_POWER_UP = 0.2;
 export const UPSET_POWER_IDLE = 0.25;
-// Back pressure (the elevator 0.2 nose-up or more) with more than 30° of bank, nose low: pulling in the bank.
+// Back pressure (the player's stick 0.2 nose-up or more) with more than 30° of bank, nose low: pulling in the bank.
 export const UPSET_PULL = 0.2;
 export const UPSET_PULL_BANK_DEG = 30;
 export const UPSET_PLACE = { name: 'Over Grapevine Lake · 5,000 ft' };
 
 export const UPSET_TEXT = {
-  uaHands: 'Hands off: your instructor has the airplane. Yours in a moment',
-  uaPower: 'Nose high, slowing: full power',
-  uaPush: 'Push: nose down to the horizon',
+  uaHands: 'Get ready: your instructor tips the plane in a moment. Then it\'s yours to fix',
+  uaPower: 'Your airplane! Nose high, slowing: throttle full',
+  uaPush: 'Stick forward: nose down to the horizon',
   uaWings: 'Level the wings',
   uaBuild: 'Nose on the horizon: let the speed build',
-  uaIdle: 'Diving: power to idle',
+  uaIdle: 'Your airplane! Diving: throttle to idle',
   uaRoll: 'Roll the wings level first: don\'t pull yet',
-  uaEase: 'Now ease back to the horizon, smoothly',
+  uaEase: 'Now pull gently: nose up to the horizon',
   uaHold: 'Level: hold it there',
   uaKid: 'Let go: the plane levels itself. Watch the horizon',
 };
@@ -93,7 +94,8 @@ export function applyUpset(body, u) {
 }
 
 // One step. s: { dt, started (the player is flying: the start screen is closed), altFt, iasKts,
-// pitchDeg, bankDeg (+ = right), aoaDeg, stallAoaDeg, throttle, elevInput (− = nose up), aileronInput, g, vneKts }.
+// pitchDeg, bankDeg (+ = right), aoaDeg, stallAoaDeg, throttle, pitchIn and rollIn (the player's own stick, before
+// any assist; pitchIn − = nose up), assisted (Kid or Learner: the assists fly too), g, vneKts }.
 // Returns 'handover' (the caller applies the set-up), 'done', 'failed' or ''.
 export function upsetStep(st, s) {
   if (st.phase === 'done' || st.phase === 'failed') return '';
@@ -115,8 +117,8 @@ export function upsetStep(st, s) {
   if (st.tPower < 0 && powered) st.tPower = st.t;
   if (st.tNose < 0 && Math.abs(s.pitchDeg) <= UPSET_LEVEL_PITCH_DEG) st.tNose = st.t;
   if (st.tWings < 0 && bank <= UPSET_LEVEL_BANK_DEG) st.tWings = st.t;
-  if (Math.abs(s.elevInput) >= UPSET_MOVED || Math.abs(s.aileronInput) >= UPSET_MOVED || Math.abs(s.throttle - st.thr0) >= UPSET_MOVED / 2) st.moved = true;
-  if (st.kind === 'low' && bank > UPSET_PULL_BANK_DEG && s.pitchDeg < 0 && -s.elevInput >= UPSET_PULL) st.pulled = true;
+  if (Math.abs(s.pitchIn) >= UPSET_MOVED || Math.abs(s.rollIn) >= UPSET_MOVED || Math.abs(s.throttle - st.thr0) >= UPSET_MOVED / 2) st.moved = true;
+  if (st.kind === 'low' && bank > UPSET_PULL_BANK_DEG && s.pitchDeg < 0 && -s.pitchIn >= UPSET_PULL) st.pulled = true;
   const why = s.aoaDeg > s.stallAoaDeg ? 'stall'
     : s.iasKts > s.vneKts ? 'vne'
       : s.g > UPSET_G_LIMIT ? 'g'
@@ -126,7 +128,7 @@ export function upsetStep(st, s) {
   const level = bank <= UPSET_LEVEL_BANK_DEG && Math.abs(s.pitchDeg) <= UPSET_LEVEL_PITCH_DEG && s.iasKts >= UPSET_MIN_KTS;
   st.held = level ? st.held + s.dt : 0;
   if (st.held < UPSET_HOLD_S) return '';
-  if (!st.moved) { st.why = 'hands'; st.phase = 'failed'; return 'failed'; }
+  if (!st.moved && !s.assisted) { st.why = 'hands'; st.phase = 'failed'; return 'failed'; }
   st.phase = 'done';
   return 'done';
 }
@@ -159,22 +161,24 @@ const WEIGHTS = { time: 0.3, alt: 0.2, order: 0.3, g: 0.2 };
 export const UPSET_ORDER_CAP = 84; // the top of a B: out of the IFH's order is not an A
 export const UPSET_LOST_CAP = 54; // the top of a D
 export const UPSET_KID_NOTE = 'The plane recovered for you';
+export const UPSET_LEARNER_NOTE = 'Learner level: the assists levelled it for you. Try it yourself, or on Pilot';
 const ORDER_TEXT = {
-  high: 'Order: power, nose down, wings level',
-  low: 'Order: idle, wings level, ease back',
+  high: 'Order: full power, nose down, wings level',
+  low: 'Order: idle, wings level, nose up',
 };
 const FAIL_TEXT = {
-  stall: 'Stalled: push the nose down to the horizon first, then the power. A wing slowing nose-high stalls.',
-  warn: 'At the stall warning after the hand-over: push the nose down sooner, the power with it.',
-  vne: 'Over the never-exceed speed (163 KIAS): power to idle first, wings level, then ease back.',
-  g: 'Over the +3.8 g limit: ease back smoothly, and level the wings before you pull.',
-  time: 'Not recovered in 20 s: wings level, nose on the horizon, and the power set.',
-  hands: 'Hands off the whole way: the Cessna\'s own stability came round this time, the long way. Fly it: power, wings, nose.',
-  pulled: 'You pulled while banked: the spiral tightened. Power idle, roll the wings level, then ease back.',
+  stall: 'Stalled: too slow with the nose up. Full power and stick forward together, sooner, to put the nose on the horizon.',
+  warn: 'The wing got close to stalling (nose too high, too slow): stick forward sooner, with full power.',
+  vne: 'Too fast: over the Cessna\'s never-exceed speed, 163 knots. Throttle to idle first, wings level, then pull gently.',
+  g: 'Pulled too hard: over the Cessna\'s +3.8 g limit. Level the wings first, then pull gently.',
+  time: 'Not level in 20 s. Nose high: full power, nose down, wings level. Nose low: idle, wings level, nose up.',
+  hands: { high: 'You didn\'t touch the controls: the plane sorted itself out slowly and dived. Fly it: full power, stick forward, wings level.',
+    low: 'You didn\'t touch the controls: the plane sorted itself out slowly, much too fast. Fly it: throttle to idle, wings level, then pull gently.' },
+  pulled: 'You pulled while banked: the spiral tightened. Throttle to idle, roll the wings level, then pull gently.',
 };
 
-// The grade from the drill's state at 'done' or 'failed'.
-export function gradeUpset(st, kid = false) {
+// The grade from the drill's state at 'done' or 'failed'. level: the assist level ('kid', 'learner', 'pilot').
+export function gradeUpset(st, level = 'pilot') {
   const failed = st.phase === 'failed', kept = orderKept(st);
   const factors = [
     { key: 'time', label: 'Time to straight and level', value: failed ? 'not level' : `${st.t.toFixed(1)} s`,
@@ -190,19 +194,20 @@ export function gradeUpset(st, kid = false) {
   let reason = null;
   if (failed) {
     score = Math.min(score, UPSET_LOST_CAP);
-    reason = st.pulled && st.why !== 'stall' ? FAIL_TEXT.pulled : FAIL_TEXT[st.why];
+    reason = st.pulled && st.why !== 'stall' ? FAIL_TEXT.pulled : st.why === 'hands' ? FAIL_TEXT.hands[st.kind] : FAIL_TEXT[st.why];
   } else if (!kept) {
     score = Math.min(score, UPSET_ORDER_CAP);
     reason = st.pulled ? 'You pulled while banked: roll the wings level first. No better than a B.'
-      : `Out of order: ${st.kind === 'high' ? 'power first, then the nose down' : 'power to idle before the wings come level'}. No better than a B.`;
+      : `Out of order: ${st.kind === 'high' ? 'full power first, then the nose down' : 'throttle to idle before the wings come level'}. No better than a B.`;
   }
   return { kind: 'upset', title: failed ? 'Not recovered' : st.kind === 'high' ? 'Nose-high recovery' : 'Nose-low recovery',
-    grade: letterGrade(score), score, factors, reason, note: kid && !failed ? UPSET_KID_NOTE : null };
+    grade: letterGrade(score), score, factors, reason,
+    note: failed ? null : level === 'kid' ? UPSET_KID_NOTE : level === 'learner' && !st.moved ? UPSET_LEARNER_NOTE : null };
 }
 
 // The game's adapter: reads the sim (its quaternion's YXZ angles, as steepTurns.js does) into one
 // reused input, applies the set-up at the hand-over and returns the step's transition.
-const _s = { dt: 0, started: false, altFt: 0, iasKts: 0, pitchDeg: 0, bankDeg: 0, aoaDeg: 0, stallAoaDeg: 0, throttle: 0, elevInput: 0, aileronInput: 0, g: 1, vneKts: 0 };
+const _s = { dt: 0, started: false, altFt: 0, iasKts: 0, pitchDeg: 0, bankDeg: 0, aoaDeg: 0, stallAoaDeg: 0, throttle: 0, pitchIn: 0, rollIn: 0, assisted: false, g: 1, vneKts: 0 };
 export function upsetSimStep(st, sim, dt, started) {
   const { x, y, z, w } = sim.quat;
   _s.dt = dt;
@@ -214,8 +219,10 @@ export function upsetSimStep(st, sim, dt, started) {
   _s.aoaDeg = sim.aoaDeg ?? 0;
   _s.stallAoaDeg = stallAoaDeg(sim.spec, sim.flapsIndex);
   _s.throttle = sim.throttle;
-  _s.elevInput = sim.elevInput;
-  _s.aileronInput = sim.aileronInput;
+  // The player's own stick (main.js, before the assists); a headless body flies its inputs directly.
+  _s.pitchIn = sim.pitchIn ?? sim.elevInput;
+  _s.rollIn = sim.rollIn ?? sim.aileronInput;
+  _s.assisted = sim.assist === 'kid' || sim.assist === 'learner';
   _s.g = sim.loadFactor ?? 1;
   _s.vneKts = sim.spec.vneKts;
   const ev = upsetStep(st, _s);
