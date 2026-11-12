@@ -6,8 +6,9 @@
 // dispose(), and no blend mode (WebGLBackground; the real one's answer without a session). What
 // WebGLRenderer asks only while presenting (getCamera, updateCamera, getDepthSensingMesh) is never
 // reached. tests/unit/upset.test.js reads three's WebGL renderer sources for every `xr.` member they
-// use, so a three upgrade that asks for more fails there. If a feature ever wants WebXR, drop the
-// alias in vite.config.js.
+// use, so a three upgrade that asks for more fails there. `npm run dev` keeps the real manager (Vite's
+// dependency pre-bundling doesn't apply the alias): the build, `npm run preview` and the e2e run this one.
+// If a feature ever wants WebXR, drop the alias in vite.config.js.
 import { EventDispatcher } from 'three/src/core/EventDispatcher.js';
 
 export class WebXRManager extends EventDispatcher {

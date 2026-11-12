@@ -203,10 +203,13 @@ describe('noXr.js (the boot\'s WebXRManager stand-in)', () => {
     expect(xr.getEnvironmentBlendMode()).toBeUndefined();
   });
   it('has every member three\'s WebGL renderer reads outside a presenting session (a three upgrade that asks for more fails here)', () => {
-    const dir = 'node_modules/three/src/renderers/';
-    const files = ['WebGLRenderer.js', ...readdirSync(`${dir}webgl`).map((f) => `webgl/${f}`)];
+    // Every three source but the XR manager itself and the WebGPU side (renderers/common, nodes, webgpu).
+    const dir = 'node_modules/three/src/';
+    const files = readdirSync(dir, { recursive: true }).filter((f) => f.endsWith('.js')
+      && !/^(renderers[\\/](webxr|common|webgpu)|nodes)([\\/]|$)/.test(f));
     const used = new Set();
     for (const f of files) for (const m of readFileSync(dir + f, 'utf8').matchAll(/\bxr\.(\w+)/g)) used.add(m[1]);
+    expect(files.length).toBeGreaterThan(300);
     // Only behind `xr.isPresenting === true`, which the stand-in never is.
     const presenting = ['getCamera', 'updateCamera', 'getDepthSensingMesh'];
     const xr = new WebXRManager();

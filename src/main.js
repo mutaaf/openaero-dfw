@@ -66,6 +66,7 @@ const byId = (id) => document.getElementById(id);
 // --- Simulation State ---
 const sim = {
   paused: false,
+  pitchIn: 0, rollIn: 0, // the player's own stick, before the assists (upset.js, 0174)
   aircraftKey: 'b738',
   spec: AIRCRAFT_DATABASE.b738,
 
