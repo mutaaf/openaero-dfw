@@ -18,6 +18,7 @@ import { makeBody, fly, attitude, vsFpm } from './harness.js';
 const coachIn = (x, raFt, pitchDeg) => ({
   onGround: x.onGround, raFt, aglFt: raFt, iasKts: x.iasKts, gsKts: x.iasKts, vsiFpm: vsFpm(x), throttle: x.throttle,
   brakesOn: false, gearDown: true, kid: false, crossM: x.pos.x, pitchDeg,
+  pitchRateDegS: x.angVel.x * 180 / Math.PI, // as main.js feeds it: the tail call looks 0.5 s ahead at it (0173)
 });
 
 function coachedTakeoff(key) {
