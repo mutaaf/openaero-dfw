@@ -700,7 +700,8 @@ describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim
 // (public/jsbsim/aircraft/c172/c172.xml). Mutation: CDβ 0 in that file gives 637 fpm, less than the
 // straight glide, and fails (a). flightModel.js has no drag due to sideslip at all (its only slip drag is
 // the side force's ~sin β share along the wind): KNOWN GAP (0178). Roskam's 0.17·|β| added to
-// flightModel.js's CD (not shipped here) gave 1,445 fpm (+68%) at 68 KIAS.
+// flightModel.js's CD (not shipped here) gave 1,445 fpm (+68%) at 68.1 KIAS. Both models hold the track with
+// only 6-7° of bank at full rudder: the sink cannot come from tilting the lift, it is the drag.
 // Not carded: full LEFT rudder in JSBSim runs out of aileron (mean 0.85, right wing down) and the slip
 // turns ~22° off the track; flightModel.js is symmetric. The handbook allows either wing; a fuel-
 // starvation slip limit (C172S POH Section 2) is out of scope.

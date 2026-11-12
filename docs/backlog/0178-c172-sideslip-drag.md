@@ -18,10 +18,14 @@ public/jsbsim C172 with Roskam's drag due to sideslip (CDβ 0.17·|β|), sinks 1
 has no sideslip drag term at all (aero.js dragCoefficient reads only CL, gear, flaps, ground effect and
 Mach), so a player who slips off extra height in the game (the 0177 mission) barely gets any.
 
+The handbook also ties the slip's sink to its bank ("the steeper the bank, the steeper the descent"): the game holds
+the track with only ~6° of bank at full rudder (JSBSim ~7°), so almost none of the sink can come from tilting the
+lift. Drag is the missing piece, but check the bank is still credible after the fix.
+
 ## What
 Add a per-airframe `cdBeta` to `src/aircraft.js` (the C172's Roskam 0.17, the same source and value as
 public/jsbsim/aircraft/c172/c172.xml) and add `cdBeta·|β|` to the drag in flightModel.js (or aero.js
-dragCoefficient, with β passed in). A probe of exactly that (not shipped) gave 1,445 fpm (+68%) at 68 KIAS.
+dragCoefficient, with β passed in). A probe of exactly that (not shipped) gave 1,445 fpm at 68.1 KIAS (+68% on the straight glide's 861 fpm at 68.7 KIAS; IAS within the card's 5 kt).
 Leave the 737 and F-16 at 0 unless a cited value is found. Re-run the crosswind cards: the 15 kt
 wing-low landing (and the slip-bank comparison with JSBSim) fly a ~12° slip and may move.
 
