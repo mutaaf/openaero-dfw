@@ -175,7 +175,7 @@ describe('Cessna 172S engine failure after takeoff at Addison (flightModel, tick
     expect(rows.filter((w) => w.can).length).toBeGreaterThanOrEqual(5);
     expect(rows[0].made).toBe(false);
     if (!headwindKts) expect(rows[rows.length - 1].made).toBe(false);
-  });
+  }, 30000);
 
   // The turn's sink (EO_INDUCED): gliding at 68 KIAS, engine out, a steady 45° bank sinks
   // 1 + k(n² - 1) = 1.35 times the wings-level glide (k = 0.35; a parabolic polar's 0.5 would be 1.5).

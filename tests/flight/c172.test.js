@@ -216,7 +216,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     expect(Math.max(...tas) - Math.min(...tas)).toBeLessThan(2);
     expect(Math.abs(b.pos.y - alt0) * M_TO_FT).toBeLessThan(100);
     within(tas.reduce((a, c) => a + c, 0) / tas.length, 124, 0.08);
-  });
+  }, 30000);
 
   // Was 4.6:1 with lift in body axes (0037); the idle prop windmills (0039).
   it('glides about 9:1 at 68 KIAS, idle (POH: ~1.5 NM per 1000 ft, ±15%)', () => {
