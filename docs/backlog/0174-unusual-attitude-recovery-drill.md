@@ -1,12 +1,12 @@
 ---
 id: 0174
 title: Unusual-attitude recovery drill: start nose-high or in a diving spiral, recover to level
-status: in-progress
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-11
-pr:
+pr: 238
 ---
 
 ## Why
