@@ -11,7 +11,7 @@
 //
 // The wake-turbulence lesson (0115, wake.js): with sim.wake set, the flight's first jet lands on the player's own
 // runway end, wake.js WAKE_AHEAD_NM ahead of the player, spawned once the player starts flying (sim.wake.ready)
-// and kept whatever the device or the hour (the lesson needs it; one model). Its wheel height along the final and
+// and kept on a struggling device (the lesson needs it; one model; not after dark). Its CG height along the final and
 // its touchdown point are written into sim.wake (no wake force is simulated). Parallel traffic follows it as usual.
 //
 // The flight model's functions come in as `fm` = { stepFlightModel, trimThrottle, rollHoldScale }
@@ -243,10 +243,10 @@ export function stepTrafficJet(j, dt) {
   j.prevIas = b.iasKts;
 
   const wheelH = b.pos.y - b.groundY - spec.gearHeight;
-  // The wake lesson (0115): the jet's wheels (sim Y) along its final, in wake.js's bins (no objects).
+  // The wake lesson (0115): the jet's CG (sim Y) along its final, in wake.js's bins (no objects).
   if (w && !b.onGround && j.phase !== 'rollout') {
     const i = Math.floor((along - w.fromM) / w.binM);
-    if (i >= 0 && i < w.path.length) w.path[i] = b.pos.y - spec.gearHeight;
+    if (i >= 0 && i < w.path.length) w.path[i] = b.pos.y;
   }
   if (!b.onGround && j.phase !== 'rollout') {
     b.aileronInput = aileronForBank(bankCommandForHeading(headingError(trkCmd, trk), tasMps), bankRightDeg, -b.angVel.z, j.fm.rollHoldScale(spec, tasMps));
@@ -332,8 +332,15 @@ export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
         st.nextAt = t + FIRST_SPAWN_S;
       }
     }
+    // The wake lesson (device panel): a jet recording into a wake that is no longer the sim's (a reload under 1 km, an
+    // assist change, another aircraft picked) is dropped, so the new lesson gets its own; and while the lesson's chunk is
+    // still on its way (sim.wake not made yet) no parallel jet takes its place.
+    if (st.jet?.wake && st.jet.wake !== wake) st.jet = null;
+    if (!st.jet && !wake && sim.loadedMission?.wake) return st;
     if (!allowed) st.off = true;
-    // The wake lesson's jet flies whatever the device or the hour; nothing else does.
+    // The wake lesson's jet flies whatever the device; nothing else does. After dark (the player's When? pick over the
+    // mission's midday) it is not spawned: no lights yet, and the card says why.
+    if (wakeWanted && dark && wake.ready) { wake.spawned = true; wake.noJet = 'after dark: the traffic has no lights yet'; return st; }
     if ((st.off || dark) && !wakeWanted && !st.jet?.wake) { st.jet = null; if (dark) st.nextAt = null; return st; }
     if (!st.jet && wakeWanted) {
       if (!wake.ready || !(dt > 0)) return st;

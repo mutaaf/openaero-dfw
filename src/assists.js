@@ -224,8 +224,9 @@ export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
 // it lands (0098: stopped at the threshold, level flight floated the runway). Past the threshold
 // only a landing: under ~100 ft over the first third of the runway, never steeper than 2° (an
 // airplane let go higher, later or climbing away is not dived at the runway). Leaves out.guide*
-// alone (level flight) off the final. liftM: the path that much higher, its aim point further down the runway (the
-// wake lesson, 0115: past the jet's touchdown point, wake.js kidLiftM).
+// alone (level flight) off the final. liftM: the path that much higher, its aim point liftM / tan 3° further down the
+// runway (the wake lesson, 0115: past the jet's touchdown point, wake.js kidLiftM): the threshold allowance (30 m +
+// liftM), the first third and the 2° floor (3° on a lifted path: it is still the path) move with it.
 export function kidFinalGuide(end, ap, noseDeg, trackDeg, out, liftM = 0) {
   const past = ap.distM < 0;
   if (past && ap.heightAbovePathM + ap.pathHeightM > 30 + liftM) return;
@@ -233,9 +234,9 @@ export function kidFinalGuide(end, ap, noseDeg, trackDeg, out, liftM = 0) {
     // The line-up holds the centreline low over all the runway (0100 panel: the de-crab's slip drifted a long
     // float 12 m downwind; the bank, under the flare's 5° cap, puts the wing down into the wind).
     out.guideBankDeg = kidLocalizerBankDeg(end.hdgT, trackDeg, ap.crossM);
-    if (past && -ap.distM > (end.lengthM - end.displacedM) / 3) return; // no path to dive at past the first third
+    if (past && -ap.distM > (end.lengthM - end.displacedM) / 3 + liftM * 19.08) return; // no path to dive at past the first third (19.08 = 1 / tan 3°)
     out.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM - liftM);
-    if (past) out.guideGammaDeg = Math.max(out.guideGammaDeg, -2);
+    if (past) out.guideGammaDeg = Math.max(out.guideGammaDeg, liftM > 0 ? -3 : -2);
   }
 }
 

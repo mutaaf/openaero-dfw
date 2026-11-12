@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3 } from 'three';
 import {
-  createWake, wakeStep, wakePrompt, wakeResult, jetPathY, kidLiftM, gateHeightAbovePathM, BELOW_FT, BELOW_S, CHECK_NM, CAP_SCORE, ZONE_W, DONE_NOTE, SAY_S, KID_AIM_PAST_M,
+  createWake, wakeStep, wakePrompt, wakeResult, jetPathY, kidLiftM, gateHeightAbovePathM, BELOW_FT, BELOW_S, CHECK_NM, CAP_SCORE, ZONE_W, DONE_NOTE, SAY_S, KID_AIM_PAST_M, KID_HEAD_M, EXPECTED_TD_M,
 } from '../../src/wake.js';
 import { createTrafficScheduler, wakeSpawnFor, WAKE_AHEAD_NM, distToThresholdNm, MAX_TAILWIND_KTS } from '../../src/traffic.js';
 import { gradeLanding } from '../../src/landing.js';
@@ -74,32 +74,66 @@ describe('the path check (AIM 7-4-6: at or above its path)', () => {
 });
 
 describe('the coach\'s words', () => {
-  it('first the jet ahead, then (after a pause) the landing coach, its touchdown point in feet when it lands, below the path at once', () => {
+  // main.js coachInput, steady on the final unless a case says otherwise.
+  const S = (o = {}) => ({ aglFt: 1000, kid: false, papiWhite: 2, iasKts: 67, targetKts: 67, vsiFpm: -350, flapsLanding: true, locDots: 0, ...o });
+  const after = (w, s) => { for (let i = 0; i < 60 * s; i++) wakeStep(w, -5 * NM_TO_M, 500, false, 1 / 60); };
+  it('first the jet ahead; once it lands, its touchdown point in feet; below its path at once', () => {
     const w = flown();
     w.tdAlongM = null;
     wakeStep(w, -5 * NM_TO_M, 500, false, 1 / 60);
-    expect(wakePrompt(w, 1500, false)).toBe('wkWatch');
-    expect(wakePrompt(w, 1500, true)).toBe('wkWatchKid');
-    for (let i = 0; i < 60 * SAY_S; i++) wakeStep(w, -5 * NM_TO_M, 500, false, 1 / 60);
-    expect(wakePrompt(w, 1500, false)).toBeNull(); // the PAPI coaching goes on
+    expect(wakePrompt(w, S(), 0)).toBe('wkWatch');
+    expect(wakePrompt(w, S({ kid: true }), 0)).toBe('wkWatchKid');
+    after(w, SAY_S);
+    expect(wakePrompt(w, S(), 5)).toBeNull(); // a little above the 3° path: the landing coach's own words
     w.tdAlongM = 676;
     wakeStep(w, -3 * NM_TO_M, 500, false, 1 / 60);
-    expect(wakePrompt(w, 1000, false)).toBe('wkLanded');
-    expect(coachText('wkLanded')).toBe('The jet touched down 2200 ft in: land beyond that');
-    expect(wakePrompt(w, 1000, true)).toBe('wkLandedKid');
-    for (let i = 0; i < 60 * SAY_S; i++) wakeStep(w, -3 * NM_TO_M, 500, false, 1 / 60);
-    expect(wakePrompt(w, 1000, false)).toBeNull();
+    expect(wakePrompt(w, S(), 0)).toBe('wkLanded');
+    expect(coachText('wkLanded')).toBe('The jet touched down 2,200 feet down the runway: land beyond that');
+    expect(wakePrompt(w, S({ kid: true }), 0)).toBe('wkLandedKid');
+    after(w, SAY_S);
     fly(w, -60, -0.5 * NM_TO_M, -1.9 * NM_TO_M);
-    expect(wakePrompt(w, 300, false)).toBe('wkBelow');
-    expect(wakePrompt(w, 80, false)).toBeNull(); // the flare's words own the last 100 ft
-    expect(wakePrompt(w, 300, true)).not.toBe('wkBelow'); // Kid's guide flies the path
+    expect(wakePrompt(w, S({ aglFt: 300 }), -18)).toBe('wkBelow');
+    expect(wakePrompt(w, S({ aglFt: 80 }), -18)).toBeNull(); // the flare's words own the last 100 ft
+    expect(wakePrompt(w, S({ aglFt: 300, kid: true }), -18)).not.toBe('wkBelow'); // Kid's guide flies the path
     expect(RANK.wkBelow).toBeGreaterThan(RANK.papi);
   });
-  it('silent with no jet', () => {
+  it('on the 3° path (or under it) the PAPI\'s "two white, two red" lands short of the jet: it says so (first-timer panel)', () => {
+    const w = flown();
+    after(w, 2 * SAY_S);
+    expect(wakePrompt(w, S({ papiWhite: 2 }), 0)).toBe('wkAim');
+    expect(wakePrompt(w, S({ papiWhite: 1 }), -5)).toBe('wkAim');
+    expect(coachText('wkAim')).toMatch(/land short of the jet: fly a bit high/);
+  });
+  it('high on the PAPI inside the lesson\'s band, before the jet lands too: not "You\'re high"; above it, the landing coach\'s', () => {
+    const w = flown();
+    w.tdAlongM = null;
+    after(w, 2 * SAY_S);
+    expect(wakePrompt(w, S({ papiWhite: 3 }), 10)).toBe('wkHigh'); // the expected point stands in until it lands
+    expect(coachText('wkHigh')).toMatch(/A bit high is right here/);
+    expect(wakePrompt(w, S({ papiWhite: 4 }), kidLiftM(w) + 20)).toBeNull();
+    expect(wakePrompt(w, S({ papiWhite: 3, kid: true }), 10)).toBeNull();
+  });
+  it('a safety prompt wins over the lesson\'s words: slow, sinking fast, flaps, off the centreline (first-timer panel)', () => {
+    const w = flown();
+    after(w, 2 * SAY_S);
+    for (const o of [{ iasKts: 55 }, { vsiFpm: -1500, aglFt: 800 }, { flapsLanding: false }, { locDots: 1 }]) {
+      expect(wakePrompt(w, S({ papiWhite: 3, ...o }), 10), JSON.stringify(o)).toBeNull();
+      expect(wakePrompt(w, S({ papiWhite: 2, ...o }), 0), JSON.stringify(o)).toBeNull();
+    }
+  });
+  it('no jet: the reason in plain words, once, then the landing coach', () => {
     const w = createWake(END);
-    w.spawned = true; w.noJet = 'too close';
+    w.spawned = true; w.noJet = "a 14 kt tailwind, over the 737's 10 kt limit";
     wakeStep(w, -1000, 100, false, 1 / 60);
-    expect(wakePrompt(w, 500, false)).toBeNull();
+    expect(wakePrompt(w, S(), 0)).toBe('wkNoJet');
+    expect(coachText('wkNoJet')).toBe('No jet today (the wind is behind you): fly a normal landing');
+    after(w, SAY_S);
+    expect(wakePrompt(w, S(), 0)).toBeNull();
+  });
+  it('under the jet\'s path is not counted where its CG was under 100 ft (the flare\'s, and a flare beyond it passes under nothing)', () => {
+    const w = flown();
+    for (let i = 0; i < 300; i++) wakeStep(w, -200, END.thrY + 1, false, 1 / 60); // the jet's path is 87 ft up there
+    expect(w.below).toBe(false);
   });
 });
 
@@ -148,38 +182,27 @@ describe('the grade (0115 acceptance)', () => {
   });
 });
 
-describe('the stabilized gate and the PAPI\'s "high" on the lesson', () => {
-  it('from the 3° path up to a path past the jet\'s point is on path; under it or above that, the distance', () => {
+describe('the stabilized gate on the lesson, and Kid\'s path', () => {
+  it('from the 3° path up to Kid\'s (aimed past the jet\'s expected, then real, point) is on path; under it or above that, the distance', () => {
     const w = createWake(END);
-    expect(gateHeightAbovePathM(w, 10)).toBe(10); // the jet not down yet: the 3° path's error
-    w.tdAlongM = 676;
+    const pre = kidLiftM(w);
+    expect(pre).toBeCloseTo((EXPECTED_TD_M + KID_AIM_PAST_M - AIM_POINT_M) * TAN3, 6);
+    w.tdAlongM = 564;
     const lift = kidLiftM(w);
-    expect(lift).toBeGreaterThan(20);
+    expect(lift).toBeLessThan(pre);
     expect(gateHeightAbovePathM(w, 0)).toBe(0);
     expect(gateHeightAbovePathM(w, lift / 2)).toBe(0);
     expect(gateHeightAbovePathM(w, lift + 5)).toBeCloseTo(5, 6);
     expect(gateHeightAbovePathM(w, -7)).toBe(-7);
   });
-  it('high on the PAPI inside that band: the lesson\'s words, not "You\'re high"; above it, the landing coach\'s', () => {
-    const w = flown();
-    wakeStep(w, -3 * NM_TO_M, 500, false, 1 / 60);
-    for (let i = 0; i < 60 * 2 * SAY_S; i++) wakeStep(w, -3 * NM_TO_M, 500, false, 1 / 60);
-    expect(wakePrompt(w, 800, false, 3, 10)).toBe('wkHigh');
-    expect(coachText('wkHigh')).toMatch(/Above the jet's path: good/);
-    expect(wakePrompt(w, 800, false, 2, 0)).toBeNull();
-    expect(wakePrompt(w, 800, false, 4, kidLiftM(w) + 20)).toBeNull();
-    expect(wakePrompt(w, 800, true, 3, 10)).toBeNull();
-  });
-});
-
-describe("Kid's guide aims past the jet", () => {
-  it('nothing until the jet lands; then a path KID_AIM_PAST_M past its touchdown point', () => {
-    const w = createWake(END);
-    expect(kidLiftM(w, AIM_POINT_M)).toBe(0);
-    w.tdAlongM = 676;
-    expect(kidLiftM(w, AIM_POINT_M)).toBeCloseTo((676 + KID_AIM_PAST_M - AIM_POINT_M) * TAN3, 6);
+  it('Kid aims further down the runway into a headwind (its flare lands shorter), never less for a tailwind', () => {
+    const w = Object.assign(createWake(END), { tdAlongM: 676 });
+    const calm = kidLiftM(w);
+    const head = kidLiftM(w, AIM_POINT_M, { windDirDeg: END.hdgT, windKts: 20 });
+    expect(head - calm).toBeCloseTo(20 * KID_HEAD_M * TAN3, 6);
+    expect(kidLiftM(w, AIM_POINT_M, { windDirDeg: (END.hdgT + 180) % 360, windKts: 10 })).toBeCloseTo(calm, 6);
     w.tdAlongM = 100;
-    expect(kidLiftM(w, AIM_POINT_M)).toBe(0); // never below the standard path
+    expect(kidLiftM(w)).toBe(0); // never below the standard path
   });
 });
 
@@ -187,7 +210,7 @@ describe('the mission', () => {
   it('the Cessna on a 5 NM final to KDFW 35C at midday, in the KDFW group, saying no wake is simulated', () => {
     const m = missionByKey('kdfw_35c_wake');
     expect(m).toMatchObject({ key: 'kdfw_35c_wake', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 5, aircraft: 'c172', wake: true, sun: 'Noon' });
-    expect(m.blurb).toMatch(/no wake is simulated/i);
+    expect(m.blurb).toMatch(/No real wake will push you/);
     expect(MISSIONS.filter((x) => x.key === m.key)).toHaveLength(1);
     expect(groupMissions(MISSIONS).find((g) => g.id === 'KDFW').missions).toContain(m);
   });
@@ -214,13 +237,44 @@ describe('the scheduler flies the lesson\'s jet on the player\'s own runway (011
     expect(ahead).toBeCloseTo(WAKE_AHEAD_NM, 1);
     expect(sch.jet.body.pos.distanceTo(sim.pos)).toBeGreaterThan(NM_TO_M);
   });
-  it('kept on a struggling device and after dark (the lesson needs it); ordinary traffic is not', () => {
+  it('kept on a struggling device (the lesson needs it); ordinary traffic is not', () => {
     const sim = final(), sch = createTrafficScheduler(sim);
     sim.wake.ready = true;
-    run(sim, sch, 1, false, true);
+    run(sim, sch, 1, false);
     expect(sch.jet?.wake).toBe(sim.wake);
-    run(sim, sch, 5, false, true);
+    run(sim, sch, 5, false);
     expect(sch.jet?.wake).toBe(sim.wake);
+  });
+  it('after dark (a When? picked over the midday): no jet, and the card says why', () => {
+    const sim = final(), sch = createTrafficScheduler(sim);
+    sim.wake.ready = true;
+    run(sim, sch, 2, true, true);
+    expect(sch.jet).toBeNull();
+    expect(sim.wake.noJet).toMatch(/after dark/);
+  });
+  it('a reload under 1 km (an assist change, the same mission again): the old jet goes, the new lesson gets its own (device panel)', () => {
+    const sim = final(), sch = createTrafficScheduler(sim);
+    sim.wake.ready = true;
+    run(sim, sch, 1);
+    const old = sch.jet;
+    expect(old.wake).toBe(sim.wake);
+    sim.wake = Object.assign(createWake(END), { ready: true }); // main.js startDrills on the reload
+    run(sim, sch, 0.1);
+    expect(sch.jet).not.toBe(old);
+    expect(sch.jet.wake).toBe(sim.wake);
+    sim.wake = null; // another aircraft picked mid-lesson
+    run(sim, sch, 0.1);
+    expect(sch.jet?.wake).toBeUndefined();
+  });
+  it('while the lesson\'s chunk is still loading (no sim.wake yet), no parallel jet takes its place (device panel)', () => {
+    const sim = final(), sch = createTrafficScheduler(sim);
+    sim.wake = null;
+    sim.loadedMission = { key: 'kdfw_35c_wake', wake: true };
+    run(sim, sch, 20);
+    expect(sch.jet).toBeNull();
+    sim.wake = Object.assign(createWake(END), { ready: true });
+    run(sim, sch, 0.1);
+    expect(sch.jet.wake).toBe(sim.wake);
   });
   it('records its path and touchdown point, then parallel traffic follows as usual', () => {
     const sim = final(), sch = createTrafficScheduler(sim, { rand: () => 0 });

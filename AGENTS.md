@@ -367,13 +367,15 @@ src/wake.js         wake-turbulence lesson (0115, lazy chunk loaded with `kdfw_3
                     final to KDFW 35C at midday): AIM 7-4-6, behind a larger aircraft on the same runway, stay at or above
                     its path, note its touchdown point, land beyond it. Once the player starts flying (sim.wake.ready),
                     traffic.js spawns its jet on the player's own end 2 NM closer in (wakeSpawnFor; none in a tailwind over
-                    10 kt or inside 3.5 NM: the card says why), kept on a struggling device or after dark, and records its
-                    wheel height along the final (5 m bins) and its touchdown point into sim.wake. wakeStep checks the
-                    player's wheels inside 2 NM up to that point (20 ft under for 2 s = below); wakeResult rescores the
-                    touchdown zone from the jet's point (full marks 30-750 m past it) and caps short or below at C.
-                    The gate's glideslope and the coach's "high" accept 3° up to Kid's path (aimed 100 m past the jet:
-                    kidLiftM, assists.js kidFinalGuide's liftM). No vortex is simulated (the card says so). Cards:
-                    tests/flight/wake.test.js, kidFinal.test.js (Kid lands beyond it in calm, wind and a tailwind)
+                    10 kt, inside 3.5 NM or after dark: coached and carded), kept on a struggling device, and records its
+                    CG height along the final (5 m bins) and its touchdown point into sim.wake. While the chunk loads no
+                    parallel jet spawns; a jet whose wake is no longer sim.wake (a reload) is dropped. wakeStep checks the
+                    player's CG inside 2 NM to where the jet's path was 100 ft up (20 ft under for 2 s = below); wakeResult
+                    rescores the touchdown zone from the jet's point (full marks 30-750 m past it) and caps short or below
+                    at C. The gate's glideslope and the coach (wkHigh, wkAim on the 3° path: it lands short) accept 3° up to
+                    Kid's path (kidLiftM: 100 m + 10 m per headwind knot past the jet, 675 m expected until it lands;
+                    assists.js kidFinalGuide liftM). No vortex is simulated (the card says so). Cards:
+                    tests/flight/wake.test.js, kidFinal.test.js (Kid lands beyond it from 20 kt headwind to 10 kt tailwind)
 src/traffic.js      ambient traffic (0080, lazy chunk fetched by runwayLights.js's touchdown-feel hook, as fuel.js is):
                     one 737 at a time on a parallel final into DFW (only while the player's end is at KDFW; same flow,
                     2,500 ft+ beside the player's runway first, JO 7110.65 §5-9-6; placed never on their runway and

@@ -5,8 +5,8 @@
 // aircraft to a Cessna, not a Heavy (AIM 7-4-9): the words say "the jet", never "the heavy".
 //
 // A graded procedure, not a wake model: no vortex pushes the airplane (the mission card says so). traffic.js
-// records the jet's own wheel height along its final (w.path, binned as laid out here) and its touchdown
-// point (w.tdAlongM); this module checks the player's wheels against that path inside CHECK_NM and the
+// records the jet's own CG height along its final (w.path, binned as laid out here) and its touchdown
+// point (w.tdAlongM); this module checks the player's CG against that path inside CHECK_NM and the
 // touchdown against that point. A lazy chunk, loaded with the mission (main.js startDrills); boot carries the
 // mission's entry and the hooks. Pure (no THREE, no DOM): tests/unit/wake.test.js, tests/flight/wake.test.js.
 import { curve, letterGrade } from './landing.js';
@@ -20,13 +20,14 @@ export const WAKE_KEY = 'kdfw_35c_wake';
 // tailwind over the 737's 10 kt limit) is traffic.js wakeSpawnFor's.
 // The path is checked inside this distance from the threshold (the ticket's 2 NM), up to the jet's touchdown point.
 export const CHECK_NM = 2;
-// "Below its path": the player's wheels more than BELOW_FT under the jet's, for BELOW_S. A game tolerance: the jet's
-// own wheels hold the 3° path within ~2 ft (tests/flight/wake.test.js), so 20 ft is a gust's margin, not a band to
-// hide in. The PAPI's on-path band (3° ±10', AC 150/5340-30J) is wider than that low down: its lower edge is ~30 ft
-// under the jet's path at 2 NM, and the coach says so (wkBelow) as it happens. A gust's dip is not a decision.
+// "Below its path": the player's CG more than BELOW_FT under the jet's (CG to CG: the vortices come off its wing, not
+// its wheels), for BELOW_S. A game tolerance: the jet holds the 3° path within ~2 ft (tests/flight/wake.test.js), so
+// 20 ft is a gust's margin, not a band to hide in. The PAPI's on-path band (3° ±10', AC 150/5340-30J) is wider than
+// that far out: its lower edge is ~38 ft under the jet's path at 2 NM (20 ft at ~1 NM), so a pilot low in the PAPI's
+// "two white, two red" is under the jet, as the AIM means; the coach says so (wkBelow) as it happens.
 export const BELOW_FT = 20;
 export const BELOW_S = 2;
-// The path's layout: one wheel height (sim Y) every BIN_M metres (0.9 ft of a 3° path) from FROM_M before the
+// The path's layout: one CG height (sim Y) every BIN_M metres (0.9 ft of a 3° path) from FROM_M before the
 // threshold to TO_M past it: ~1,400 numbers, made once per flight.
 export const BIN_M = 5;
 export const FROM_M = -CHECK_NM * NM_TO_M - 200;
@@ -43,16 +44,25 @@ export const ZONE_W = 0.2;
 const ZONE_PTS = [[0, 80], [30, 100], [750, 100], [1200, 40], [1800, 20]];
 
 export const WAKE_TEXT = {
-  wkWatch: 'A jet is landing ahead: stay at or above its path',
-  wkWatchKid: 'A jet is landing ahead: your plane stays above its path',
+  wkWatch: 'A jet is landing ahead: stay a little above its path',
+  wkWatchKid: 'A jet is landing ahead: your plane flies above its path',
   wkBelow: "Below the jet's path, in its wake: climb back above it",
-  wkLanded: 'The jet touched down: land beyond its touchdown point', // wakeStep words it with the feet
+  wkLanded: 'The jet touched down: land beyond that point', // wakeStep words it with the distance
   wkLandedKid: 'The jet touched down: your plane will land past it',
-  wkHigh: "Above the jet's path: good. Hold it, land beyond its touchdown",
+  wkHigh: 'A bit high is right here: land past the jet',
+  wkAim: 'On the PAPI you land short of the jet: fly a bit high',
+  wkNoJet: 'No jet today: just fly a normal landing', // wakeStep words it with the reason
 };
 Object.assign(DRILL_TEXT, WAKE_TEXT);
 // Below the path interrupts the landing coach at once; the others wait their turn.
 Object.assign(RANK, { wkBelow: 3 });
+// Where the jet usually touches down before it has (calm air, tests/flight/wake.test.js: 675 m): the lesson's band
+// and Kid's path use it until the real point is known, so "a little above its path" is right from the start.
+export const EXPECTED_TD_M = 675;
+// The under-path check stops where the jet's CG was under this height (the flare's words own the last 100 ft,
+// and a correct flare beyond the jet passes under nothing: its path is on the runway by then).
+export const CHECK_FLOOR_FT = 100;
+const NO_JET_WORDS = { tailwind: 'the wind is behind you', 'too close': 'you started too close', dark: "it's dark" };
 
 // end: the drill's runway end (airports.js). Allocates (a mission load, not a frame).
 export function createWake(end) {
@@ -65,26 +75,30 @@ export function createWake(end) {
   };
 }
 
-// The jet's recorded wheel height (sim Y) at alongM past the threshold (- before it), or NaN where it hasn't flown.
+// The jet's recorded CG height (sim Y) at alongM past the threshold (- before it), or NaN where it hasn't flown.
 export function jetPathY(w, alongM) {
   const i = Math.floor((alongM - w.fromM) / w.binM);
   return i >= 0 && i < w.path.length ? w.path[i] : NaN;
 }
 
 // One frame, once the player is flying (main.js: cockpitEntered, no modal). alongM: the player's metres past
-// the drill's threshold along its centreline (- before it); wheelY: the player's wheels (sim Y). Mutates w,
+// the drill's threshold along its centreline (- before it); cgY: the player's CG (sim Y). Mutates w,
 // allocates nothing except the touchdown words, once.
-export function wakeStep(w, alongM, wheelY, onGround, dt) {
+export function wakeStep(w, alongM, cgY, onGround, dt) {
   if (w.readyT === null) w.readyT = w.t;
   w.t += dt;
   if (w.tdAlongM !== null && w.tdT === null) {
     w.tdT = w.t;
-    DRILL_TEXT.wkLanded = `The jet touched down ${Math.round(w.tdAlongM * M_TO_FT / 100) * 100} ft in: land beyond that`;
+    DRILL_TEXT.wkLanded = `The jet touched down ${(Math.round(w.tdAlongM * M_TO_FT / 100) * 100).toLocaleString('en-US')} feet down the runway: land beyond that`;
+  }
+  if (w.noJet && w.readyT === w.t - dt) {
+    const k = Object.keys(NO_JET_WORDS).find((x) => w.noJet.includes(x));
+    DRILL_TEXT.wkNoJet = `No jet today (${k ? NO_JET_WORDS[k] : w.noJet}): fly a normal landing`;
   }
   const jy = jetPathY(w, alongM);
   const inside = !onGround && alongM > -CHECK_NM * NM_TO_M && (w.tdAlongM === null || alongM < w.tdAlongM);
-  if (!inside || Number.isNaN(jy)) { w.underFt = null; w.belowS = 0; return w; }
-  const under = (jy - wheelY) * M_TO_FT;
+  if (!inside || Number.isNaN(jy) || (jy - w.end.thrY) * M_TO_FT < CHECK_FLOOR_FT) { w.underFt = null; w.belowS = 0; return w; }
+  const under = (jy - cgY) * M_TO_FT;
   w.underFt = under;
   if (under > w.worstFt) w.worstFt = under;
   if (under > BELOW_FT) {
@@ -94,27 +108,42 @@ export function wakeStep(w, alongM, wheelY, onGround, dt) {
   return w;
 }
 
-// The coach's key (through coach.js s.ds), or null for the landing coach's own. aglFt: the player's height;
-// below 100 ft the flare's words win (the grade still counts the path). papiWhite and heightAbovePathM (the
-// 3° path's, airports.js approachGeometry): on the PAPI's high side but inside the lesson's band (gateHeightAbovePathM)
-// the landing coach would say "You're high": here that is the lesson, so it says so instead.
-export function wakePrompt(w, aglFt, kid, papiWhite = null, heightAbovePathM = 0, aimPointM = AIM_POINT_M) {
-  if (!w.spawned || w.noJet || w.readyT === null) return null;
-  if (!kid && w.underFt !== null && w.underFt > BELOW_FT && aglFt > 100) return 'wkBelow';
+// The coach's key (through coach.js s.ds, which comes before the landing coach's own), or null for the landing
+// coach's. s: main.js coachInput (aglFt, kid, papiWhite, iasKts, targetKts, vsiFpm, flapsLanding, locDots);
+// heightAbovePathM: the 3° path's (airports.js approachGeometry). Under the jet's path is said at once; otherwise the
+// lesson's words wait while a safety prompt applies (slow, sinking fast, flaps, off the centreline: the landing coach
+// says those), and none below 100 ft (the flare's). On the PAPI's high side inside the lesson's band "You're high"
+// would contradict it (wkHigh); on the 3° path or under it, after the opening words, it lands short (wkAim): a normal
+// flare from the PAPI's 1,000 ft aim point touches down ~400 m in, short of the jet's ~560-730 m (first-timer panel).
+export function wakePrompt(w, s, heightAbovePathM = 0, aimPointM = AIM_POINT_M) {
+  if (w.readyT === null) return null;
+  const kid = s.kid;
+  if (w.noJet) return w.t - w.readyT < SAY_S ? 'wkNoJet' : null;
+  if (!w.spawned) return null;
+  if (!kid && w.underFt !== null && w.underFt > BELOW_FT && s.aglFt > 100) return 'wkBelow';
   if (w.tdT !== null && w.t - w.tdT < SAY_S) return kid ? 'wkLandedKid' : 'wkLanded';
   if (w.tdT === null && w.t - w.readyT < SAY_S) return kid ? 'wkWatchKid' : 'wkWatch';
-  if (!kid && papiWhite >= 3 && aglFt > 100 && heightAbovePathM > 0 && gateHeightAbovePathM(w, heightAbovePathM, aimPointM) === 0) return 'wkHigh';
+  if (kid || s.aglFt <= 100) return null;
+  const urgent = s.flapsLanding === false || (s.aglFt < 1000 && s.vsiFpm < -1200) || s.iasKts - s.targetKts < -5 || Math.abs(s.locDots ?? 0) > 0.6;
+  if (urgent) return null;
+  const band = gateHeightAbovePathM(w, heightAbovePathM, aimPointM);
+  if (s.papiWhite >= 3 && band === 0) return 'wkHigh';
+  if (heightAbovePathM <= 0 && s.papiWhite !== null && s.papiWhite <= 2) return 'wkAim';
   return null;
 }
 
-// Kid's guide flies a 3° path aimed KID_AIM_PAST_M past the jet's touchdown point once it is known (the path's
-// lift above the standard one, metres, for assists.js kidFinalGuide). Kid's flare lands short of its aim point into
-// a headwind and long in calm air (the guide's 2° floor past the threshold): 100 m lands it ~55 m past the jet in
-// 15 kt on the nose, ~440 m past it in calm air and ~600 m in a 5 kt tailwind (tests/flight/kidFinal.test.js), inside
-// the drill's full marks.
+// Kid's guide flies a 3° path aimed KID_AIM_PAST_M past the jet's touchdown point (EXPECTED_TD_M until it lands),
+// plus KID_HEAD_M per knot of the METAR's headwind (wx: weather.js's windDirDeg/windKts): Kid's flare lands ~100 m past
+// its aim point in calm air and short of it into wind (~14 m per knot), and the jet lands shorter into wind too. The
+// path's lift above the standard one, metres, for assists.js kidFinalGuide. Kid lands 140-350 m past the jet from a
+// 20 kt headwind to a 10 kt tailwind (tests/flight/kidFinal.test.js), inside the drill's full marks.
 const TAN3 = Math.tan(3 * Math.PI / 180);
 export const KID_AIM_PAST_M = 100;
-export const kidLiftM = (w, aimPointM = AIM_POINT_M) => (w.tdAlongM === null ? 0 : Math.max(0, w.tdAlongM + KID_AIM_PAST_M - aimPointM) * TAN3);
+export const KID_HEAD_M = 10;
+export function kidLiftM(w, aimPointM = AIM_POINT_M, wx = null) {
+  const head = wx?.windKts ? Math.max(0, wx.windKts * Math.cos((wx.windDirDeg - w.end.hdgT) * Math.PI / 180)) : 0;
+  return Math.max(0, (w.tdAlongM ?? EXPECTED_TD_M) + KID_AIM_PAST_M + KID_HEAD_M * head - aimPointM) * TAN3;
+}
 
 // The stabilized gate's glide-path error on the lesson (metres above the path, for main.js's glideslope dots,
 // aero.js stabilizedGate): anywhere from the 3° path up to Kid's (aimed past the jet's point) is on the lesson's
@@ -145,16 +174,17 @@ export function wakeResult(result, w, pastThresholdM) {
   };
   let score = Math.round(result.score + (zone.score - (old?.score ?? 0)) * ZONE_W);
   const caps = [];
-  if (past < 0) caps.push("Landed short of the jet's touchdown point, where its wake settles: best grade C.");
+  const keepD = result.grade === 'D' && result.reason;
+  if (past < 0 && !keepD) caps.push("Landed short of the jet's touchdown point, where its wake settles: best grade C.");
   if (w.below) caps.push(`Flew under the jet's path inside ${CHECK_NM} NM (${Math.round(w.worstFt)} ft under): best grade C.`);
   if (caps.length) score = Math.min(score, CAP_SCORE);
-  const keepD = result.grade === 'D' && result.reason;
   return {
     ...result,
     factors: result.factors.map((f) => (f.key === 'zone' ? zone : f)),
     score,
     grade: keepD ? 'D' : letterGrade(score),
     reason: [...caps, result.reason].filter(Boolean).join(' ') || null,
+    wake: true, // results.js: the note shows beside the gate's verdict
     note: caps.length || keepD ? result.note ?? null : DONE_NOTE,
   };
 }

@@ -1028,7 +1028,7 @@ function checkWake(dt) {
   if (!w) return;
   if (!w.ready) { if (!cockpitEntered || modalOpen()) return; w.ready = true; }
   const e = w.end, r = e.hdgT * DEG_TO_RAD;
-  wakeLib.wakeStep(w, (sim.pos.x - e.thrX) * Math.sin(r) - (sim.pos.z - e.thrZ) * Math.cos(r), sim.pos.y - sim.spec.gearHeight, sim.onGround, dt);
+  wakeLib.wakeStep(w, (sim.pos.x - e.thrX) * Math.sin(r) - (sim.pos.z - e.thrZ) * Math.cos(r), sim.pos.y, sim.onGround, dt);
 }
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
@@ -1358,7 +1358,7 @@ function updateCoach(dt) {
       : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
       : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
       : sim.upset ? upLib.upsetCoach(sim.upset, coachInput.kid)
-      : sim.wake ? wakeLib.wakePrompt(sim.wake, sim.aglFt, coachInput.kid, sim.papiWhite, sim.approach.heightAbovePathM)
+      : sim.wake ? wakeLib.wakePrompt(sim.wake, coachInput, sim.approach.heightAbovePathM)
       : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
       : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
     coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach) ? coachInput.ds : null;
@@ -2475,7 +2475,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   } else if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
-    kidFinalGuide(sim.activeEnd, ap, noseDeg, trackDeg, _assistIn, sim.wake?.end.id === sim.activeEnd.id ? wakeLib.kidLiftM(sim.wake) : 0);
+    kidFinalGuide(sim.activeEnd, ap, noseDeg, trackDeg, _assistIn, sim.wake?.end.id === sim.activeEnd.id ? wakeLib.kidLiftM(sim.wake, undefined, sim.wx) : 0);
   }
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
   // Addison, not a glidepath it can't hold (deadStick.js kidGuide).

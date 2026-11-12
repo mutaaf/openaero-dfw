@@ -19,7 +19,7 @@ test('?mission=kdfw_35c_wake on Kid: the jet lands ahead on 35C, the coach says 
   await page.locator('#onboardingModal').waitFor({ state: 'visible' });
   const card = page.locator('#missionList section', { hasText: 'KDFW' }).locator('[data-scenario="kdfw_35c_wake"]');
   await expect(card).toBeVisible();
-  await expect(page.locator('#onboardingModal')).toContainText(/No wake is simulated/);
+  await expect(page.locator('#onboardingModal')).toContainText(/No real wake will push you/);
   await expect.poll(async () => (await snap(page)).wake?.end, { timeout: 10_000 }).toBe('KDFW_35C');
   const spawn = await snap(page);
   expect(spawn).toMatchObject({ mission: 'kdfw_35c_wake', aircraft: 'c172', activeRunway: 'KDFW_35C' });

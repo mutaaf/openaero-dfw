@@ -14,7 +14,7 @@ test('phone, Learner: the jet ahead on 35C, the coach\'s words on screen, no scr
   await page.locator('#btnStartFlight').tap();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   await expect.poll(() => page.evaluate(() => window.openaeroTraffic?.().jet?.endId), { timeout: 15_000 }).toBe('KDFW_35C');
-  await expect(page.locator('#txtCoach')).toHaveText(/A jet is landing ahead: stay at or above its path/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/A jet is landing ahead: stay a little above its path/, { timeout: 10_000 });
   const coach = await page.locator('#coach').boundingBox();
   expect(coach.y).toBeGreaterThanOrEqual(0);
   expect(coach.y + coach.height).toBeLessThanOrEqual(844);

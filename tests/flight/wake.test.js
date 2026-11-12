@@ -10,14 +10,12 @@ import { createTrafficJet, stepTrafficJet, STEP_S } from '../../src/traffic.js';
 import { createWake, wakeStep, jetPathY, wakeResult, CHECK_NM, BELOW_FT } from '../../src/wake.js';
 import { runwayEnd, AIM_POINT_M } from '../../src/airports.js';
 import { REF_ELEV_M } from '../../src/terrain.js';
-import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { gradeLanding } from '../../src/landing.js';
 import { stepFlightModel, trimThrottle, rollHoldScale } from '../../src/flightModel.js';
 import { NM_TO_M, M_TO_FT, DEG_TO_RAD } from '../../src/constants.js';
 
 const FM = { stepFlightModel, trimThrottle, rollHoldScale };
 const END = runwayEnd('KDFW', '35C');
-const C172 = AIRCRAFT_DATABASE.c172;
 const TDZ_M = 3000 * 0.3048;
 
 function flyJet(distNm, wx = null) {
@@ -28,10 +26,10 @@ function flyJet(distNm, wx = null) {
   return { w, j };
 }
 // The Cessna's CG on a path `deg` steep to the PAPI's aim point, from 3 NM to the threshold at ~65 kt: the wake
-// check's verdict and its deepest point under the jet's wheels.
+// check's verdict and its deepest point under the jet's CG.
 function flyPath(w, deg) {
   const tan = Math.tan(deg * DEG_TO_RAD);
-  for (let a = -3 * NM_TO_M; a < 0; a += 33 / 60) wakeStep(w, a, END.thrY + (AIM_POINT_M - a) * tan - C172.gearHeight, false, 1 / 60);
+  for (let a = -3 * NM_TO_M; a < 0; a += 33 / 60) wakeStep(w, a, END.thrY + (AIM_POINT_M - a) * tan, false, 1 / 60);
   return w;
 }
 const fresh = (w) => Object.assign(createWake(END), { path: w.path, tdAlongM: w.tdAlongM });
@@ -48,11 +46,11 @@ describe('the jet ahead on the same runway records its path and touchdown point 
       for (let a = -CHECK_NM * NM_TO_M; a < -300; a += 50) {
         const y = jetPathY(w, a);
         expect(Number.isNaN(y), `${a} m`).toBe(false);
-        const pathWheels = END.thrY + (AIM_POINT_M - a) * Math.tan(3 * DEG_TO_RAD) - j.spec.gearHeight;
+        const pathWheels = END.thrY + (AIM_POINT_M - a) * Math.tan(3 * DEG_TO_RAD); // the CG's 3° path
         worst = Math.max(worst, Math.abs(y - pathWheels) * M_TO_FT);
         n++;
       }
-      console.log(`[wake jet] ${name}: touchdown ${w.tdAlongM.toFixed(0)} m (${(w.tdAlongM * M_TO_FT).toFixed(0)} ft) past the threshold; wheels within ${worst.toFixed(1)} ft of the 3° path over ${n} samples`);
+      console.log(`[wake jet] ${name}: touchdown ${w.tdAlongM.toFixed(0)} m (${(w.tdAlongM * M_TO_FT).toFixed(0)} ft) past the threshold; CG within ${worst.toFixed(1)} ft of the 3° path over ${n} samples`);
       expect(worst).toBeLessThan(10);
     });
   }
@@ -60,12 +58,11 @@ describe('the jet ahead on the same runway records its path and touchdown point 
 
 describe('a Cessna on the PAPI\'s 3° path or above is at or above the jet\'s path; at the band\'s lower edge or under it is not (0115)', () => {
   const { w } = flyJet(3);
-  // The on-path band: 3° ±10' (2 white, 2 red), the PAPI read by the CG; the Cessna's wheels sit 1.65 m under it, the
-  // 737's 3.4 m: on the same path the Cessna's wheels are higher.
+  // The on-path band: 3° ±10' (2 white, 2 red), the PAPI read by the CG; compared CG to CG.
   for (const deg of [3, 3 + 10 / 60, 3.5]) {
     it(`CG on a ${deg.toFixed(2)}° path: never below`, () => {
       const r = flyPath(fresh(w), deg);
-      console.log(`[wake path] ${deg.toFixed(2)}°: deepest ${r.worstFt.toFixed(1)} ft under the jet's wheels`);
+      console.log(`[wake path] ${deg.toFixed(2)}°: deepest ${r.worstFt.toFixed(1)} ft under the jet's CG`);
       expect(r.below).toBe(false);
       expect(r.worstFt).toBeLessThan(BELOW_FT);
     });
@@ -74,7 +71,7 @@ describe('a Cessna on the PAPI\'s 3° path or above is at or above the jet\'s pa
   for (const deg of [3 - 10 / 60, 2.7, 2.5]) {
     it(`CG on a ${deg.toFixed(2)}° path: below, capped`, () => {
       const r = flyPath(fresh(w), deg);
-      console.log(`[wake path] ${deg.toFixed(2)}°: deepest ${r.worstFt.toFixed(1)} ft under the jet's wheels`);
+      console.log(`[wake path] ${deg.toFixed(2)}°: deepest ${r.worstFt.toFixed(1)} ft under the jet's CG`);
       expect(r.below).toBe(true);
       const g = gradeLanding({ vsFpm: -150, crossM: 0, pastThresholdM: w.tdAlongM + 150, runwayLengthM: END.lengthM - END.displacedM, runwayWidthM: END.widthM, pitchDeg: 4, bankDeg: 0, iasKts: 62, vrefKts: 61 });
       expect(wakeResult(g, r, w.tdAlongM + 150).grade).toBe('C');
