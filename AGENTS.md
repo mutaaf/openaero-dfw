@@ -121,7 +121,9 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`); the assist
    level `openaero_assist_v1 = { v: 1, level, at }` (`src/assists.js`); the clean view
    `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`); haptics
-   `openaero_haptics_v1 = { v: 1, on, at }` (`src/haptics.js`). Kid and Learner keep
+   `openaero_haptics_v1 = { v: 1, on, at }` (`src/haptics.js`); the player's keys
+   `openaero_keys_v1 = { v: 1, map, labels, at }` (`src/keyMap.js`, 0171; anything invalid falls back
+   to the default keys). Kid and Learner keep
    their personal bests under `<missionKey>@kid` / `@learner` in `openaero_best`; Pilot keeps
    the plain mission key.
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
@@ -567,7 +569,8 @@ src/lowIfr.js       low-ceiling ILS (0092, lazy chunk loaded with kdfw_35c_low_i
                     camera's height each step (~120 m in cloud above ~440 ft, the report's 2 SM below 380); the runway
                     lamps dim only past a 1 SM fog (runwayLights.js, Allard). The wind box reads 'LIFR SCN' / 'IFR METAR'
                     for any IFR/LIFR report (hudLayout.js windReadout); atis.js says "this mission's" for wx.scripted
-src/input.js        keyboard state → control targets, virtual stick mapping (main.js bindStick: a held touch control ends on its own pointer's
+src/input.js        keyboard state → control targets (keyCode, 0171: the code a key sends → the default code of the action it is
+                    bound to, so every handler reads the default keys; null for a default key the player moved away), virtual stick mapping (main.js bindStick: a held touch control ends on its own pointer's
                     end anywhere or the window's blur, 0136, tests/e2e/handsOff.mobile.spec.js); tillerRudder: Pilot taxiing
                     (< 40 kt) steers the nose wheel with the stick's sideways push (touch has no pedals, 0110);
                     touchGroundRudder: otherwise (thumb not steering, or above 40 kt) Pilot on touch gets
@@ -590,6 +593,13 @@ src/rollSound.js    the ground roll's sound (0149, in engineSound.js's lazy chun
                     player's brakes (sim.brakesOn, not the autobrake) above 40 kt GS, once per application, ≥ 1.5 s apart, not for
                     brakes set before the touchdown, none on Kid, only while the context runs. Tuned by ear, not data.
                     tests/unit/rollSound.test.js
+src/keyMap.js       rebindable keys (0171, lazy, in controlsSheet.js's chunk): DEFAULT_KEYS (action → codes; the first is the
+                    one a player rebinds, the arrows / Num 7 / Num 1 / right-hand Shift and Ctrl stay), rebindKey (a code another
+                    action has is refused, naming it; Tab, Escape and the OS keys reserved), keyTable (the Map input.js setKeyMap
+                    takes), readKeys (openaero_keys_v1, validated), keyLabel (the key it printed when bound, else Chromium's
+                    keyboard layout map, else US names). main.js fetches the chunk at boot only when a map is stored
+                    (controlsSheet.js useStoredKeys); the sheet's ⌨ CHANGE KEYS view binds one with click-then-press; the
+                    sheet's rows and the in-flight key strip (#keyHints kbd data-k) print the player's keys
 src/captions.js     callout captions (0117): #calloutCaption shows each spoken call's words for 1.2 s, in
                     the takeoff call's slot under the heading box (it wins it), left of the wind box; a queued
                     call joins the line, two calls at most: the newest, and of the two before it a warning over a height count (0137); plainCaption gives Kid/Learner plain words (pure, tested)
@@ -659,7 +669,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
+2026-11-12 (0171): 198.47 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
+fetch, +0.13 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
 and assists.js kidFinalGuide's liftM, +0.46 kB; wake.js is a lazy chunk). 2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid
 for by aliasing three's WebXRManager to src/noXr.js, −3.7 kB: WebGLRenderer built the whole WebXR stack, its controllers and
 depth sensing, for a sim that never starts an XR session). ~3.4 kB of headroom: spend it on features, not by default.

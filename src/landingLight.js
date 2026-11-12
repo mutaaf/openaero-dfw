@@ -17,6 +17,7 @@
 // steeply than the city lights (lampGain): at sunset the sky outshines any landing light.
 // Nothing here changes the boot shaders or the physics (sim is only read).
 import * as THREE from 'three';
+import { keyCode } from './input.js';
 
 // Per aircraft, in the body frame (m from the CG, +X right, +Y up, nose -Z): one lamp standing in
 // for the pair, aimed `downDeg` below the body axis, `halfDeg` the beam's half-angle. Approximate
@@ -208,7 +209,7 @@ export function createLandingLight(sim, root, heightAt) {
     btn.addEventListener('click', () => set(!on));
   }
   globalThis.addEventListener?.('keydown', (e) => {
-    if (e.code !== 'KeyL' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (keyCode(e.code) !== 'KeyL' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.target?.closest?.('input, select, textarea')) return; // typing in a field, not flying
     set(!on);
   });

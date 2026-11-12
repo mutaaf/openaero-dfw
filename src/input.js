@@ -3,6 +3,19 @@ import { KTS_TO_MPS } from './constants.js';
 
 export const keys = {};
 
+// Rebindable keys (0171): keyCode turns the code a key really sends into the default code of the
+// action it is bound to, so everything below and in main.js reads the default keys. The table, its
+// storage and the rebinding are src/keyMap.js (lazy, loaded only when a map is stored or the Keys sheet
+// opens), which hands setKeyMap a Map: code -> default code, plus ' ' + each default code, so a default
+// key the player moved away (KeyA once bank left is KeyJ) gives null and does nothing. Any other key
+// passes through and nothing reads it. null: the defaults.
+let toDefault = null;
+export const keyCode = (c) => (!toDefault ? c : toDefault.get(c) ?? (toDefault.has(' ' + c) ? null : c));
+export function setKeyMap(m) {
+  for (const k in keys) keys[k] = false; // a key held through a rebind must not stay down
+  toDefault = m;
+}
+
 export function pilotTargets(k) {
   let pitch = 0, roll = 0, yaw = 0;
   if (k.KeyW || k.ArrowDown) pitch += 1.0;

@@ -1,7 +1,7 @@
 ---
 id: 0171
 title: Rebindable keyboard controls, saved on this device
-status: ready
+status: in-progress
 priority: P2
 size: M
 lens: accessibility
