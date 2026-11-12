@@ -209,7 +209,7 @@ export function createLandingLight(sim, root, heightAt) {
     btn.addEventListener('click', () => set(!on));
   }
   globalThis.addEventListener?.('keydown', (e) => {
-    if (keyCode(e.code) !== 'KeyL' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (keyCode(e.code) !== 'KeyL' || e.repeat || (e.ctrlKey && !/^Control/.test(e.code)) || e.metaKey || e.altKey) return; // bound to Ctrl itself (0171): its own press
     if (e.target?.closest?.('input, select, textarea')) return; // typing in a field, not flying
     set(!on);
   });

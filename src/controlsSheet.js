@@ -6,7 +6,7 @@
 // acts (0171): keyMap.js actions; the sheet prints the player's own keys for those rows (codes stay the
 // defaults, which is what every handler reads through input.js keyCode).
 import { setKeyMap } from './input.js';
-import { DEFAULT_KEYS, ACTION_WORDS, defaultMap, keyTable, rebindKey, keyLabel, pressedLabel, saveKeys, clearKeys, loadKeys } from './keyMap.js';
+import { DEFAULT_KEYS, ACTION_WORDS, defaultMap, keyTable, rebindKey, keyLabel, keyNames, pressedLabel, saveKeys, clearKeys, loadKeys } from './keyMap.js';
 
 export const KEYBOARD = [
   { input: 'W or ↓', does: 'Nose down', codes: ['KeyW', 'ArrowDown'], acts: ['pitchDown'] },
@@ -72,7 +72,7 @@ try { navigator.keyboard?.getLayoutMap?.().then((m) => { layout = m; labelKeys()
 const label = (code) => keyLabel(code, bound.labels, layout);
 // A row's keys as the player has them: each action's keys (one name once: Shift, not "Shift or Shift").
 export function keysText(acts, map = bound.map, name = label) {
-  return acts.map((a) => [...new Set(map[a].map(name))].join(' or ')).join(' / ');
+  return acts.map((a) => keyNames(map[a], name).join(' or ')).join(' / ');
 }
 // The in-flight key strip (index.html #keyHints, kbd data-k = an action) prints the player's key.
 export function labelKeys() {
@@ -90,6 +90,7 @@ let opener = null;
 let resume = null; // undoes the pause on close, if the sheet made it
 let lastTouch = false;
 let capturing = null; // the action whose key the next keypress binds (Keys view)
+let inKeys = false; // the Keys view is up: Escape goes back to the sheet
 const el = (id) => document.getElementById(id);
 const isOpen = () => !el('controlsSheet').classList.contains('hidden');
 const make = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -97,6 +98,7 @@ const H3 = 'text-[11px] font-bold uppercase tracking-wider text-sky-300 mb-1';
 
 function fill(touch) {
   capturing = null;
+  inKeys = false;
   const body = el('controlsBody');
   body.textContent = '';
   for (const s of sheetSections(touch)) {
@@ -118,32 +120,38 @@ function fill(touch) {
 // capture; a key another action has is refused, naming it; Reset to defaults; Back to the sheet.
 function showKeys(focusId, msg = '') {
   capturing = null;
+  inKeys = true;
   const body = el('controlsBody');
   body.textContent = '';
   const sec = make('section', 'col-span-full');
   sec.append(make('h3', H3, 'Your keys'),
-    make('p', 'text-xs text-slate-300 mb-2', 'Press a button, then the key you want. Esc cancels. Saved on this device; the arrows, Num 7 / Num 1 and the right-hand Shift and Ctrl keep working.'));
+    make('p', 'text-xs text-slate-300 mb-2', 'Press a button, then the key you want (Esc cancels; Esc again goes back). Saved on this device. The arrow keys, Num 7 / Num 1 and the right Shift and Ctrl always work too and can\'t be changed.'));
   const dl = make('dl', 'controls-list keys-list');
   for (const a in DEFAULT_KEYS) {
-    const [first, ...rest] = bound.map[a];
+    const first = bound.map[a][0];
     const b = make('button', 'hud-btn min-h-[44px] min-w-[64px] px-3 rounded-lg text-xs font-bold font-mono text-white', label(first));
     b.id = 'btnKeys_' + a;
     b.dataset.act = a;
     b.setAttribute('aria-label', `${ACTION_WORDS[a]}: ${label(first)}. Change`);
     b.addEventListener('click', () => {
+      if (capturing === a) return showKeys(b.id, 'Not changed.'); // a second tap cancels (a phone has no Esc)
+      if (capturing) showKeys(b.id); // another button was waiting: that one is off
       capturing = a;
-      b.textContent = 'Press a key…';
-      el('txtKeysMsg').textContent = `Press the key for ${ACTION_WORDS[a]}, or Esc to cancel.`;
+      el(b.id).textContent = 'Press…';
+      el(b.id).setAttribute('aria-label', `${ACTION_WORDS[a]}: press a key now`);
+      el('txtKeysMsg').textContent = `Press the key for ${ACTION_WORDS[a]}. Esc, or this button again, cancels.`;
     });
     const dd = make('dd', 'flex items-center gap-2');
     dd.append(b);
-    const alt = [...new Set(rest.map(label))].filter((n) => n !== label(first));
+    const alt = keyNames(bound.map[a], label).filter((n) => n !== label(first));
     if (alt.length) dd.append(make('span', 'text-xs text-slate-300', 'also ' + alt.join(', ')));
     dl.append(make('dt', null, ACTION_WORDS[a]), dd);
   }
-  const status = make('p', 'text-xs text-amber-200 min-h-[1.25rem] mt-2', msg);
+  const status = make('p', 'text-xs text-amber-200 min-h-[1.25rem] mt-2');
   status.id = 'txtKeysMsg';
   status.setAttribute('role', 'status');
+  // A live region inserted with its text already in it is often not read out: put the words in after.
+  if (msg) setTimeout(() => { if (status.isConnected) status.textContent = msg; }, 60);
   const row = make('div', 'flex flex-wrap gap-2 mt-1');
   const reset = make('button', 'hud-btn min-h-[44px] px-3 rounded-lg text-xs font-bold text-slate-200', 'RESET TO DEFAULTS');
   reset.id = 'btnKeysReset';
@@ -169,11 +177,11 @@ function capture(e) {
   const a = capturing;
   if (e.key === 'Escape') return showKeys('btnKeys_' + a, 'Not changed.');
   const r = rebindKey(bound.map, a, e.code);
-  const name = pressedLabel(e);
-  if (r.reserved) return showKeys('btnKeys_' + a, `${name} can't be a flight key: the browser or the menus use it. Pick a letter, number or arrow.`);
-  if (r.conflict) return showKeys('btnKeys_' + a, r.conflict === a
-    ? `${name} is already ${ACTION_WORDS[a]}.`
-    : `${name} is already ${ACTION_WORDS[r.conflict]}: change that one first.`);
+  const name = pressedLabel(e) || 'That key';
+  const again = 'Press the button again and pick another key.';
+  if (r.reserved) return showKeys('btnKeys_' + a, `${name} can't be a flight key: the browser uses it. Press the button again and pick a letter or number.`);
+  if (r.fixed) return showKeys('btnKeys_' + a, `${name} always does ${ACTION_WORDS[r.fixed]} and can't be moved. ${again}`);
+  if (r.conflict) return showKeys('btnKeys_' + a, `${name} is already ${ACTION_WORDS[r.conflict]}: change that one first, or pick another key.`);
   const labels = { ...bound.labels, [e.code]: name };
   for (const c in labels) if (!Object.values(r.map).some((l) => l.includes(c))) delete labels[c];
   bound = { map: r.map, labels };
@@ -211,6 +219,7 @@ export function openControls({ from, touch, pause }) {
       e.stopImmediatePropagation();
       if (e.repeat) { e.preventDefault(); return; } // a held "?" must not flicker it
       if (capturing) { e.preventDefault(); capture(e); return; } // the Keys view waits for a key (0171)
+      if (inKeys && e.key === 'Escape') { e.preventDefault(); fill(lastTouch); focusIn('btnKeys'); return; }
       if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); closeControls(); return; }
       if (e.key !== 'Tab') return;
       const panel = el('controlsPanel');

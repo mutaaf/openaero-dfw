@@ -23,17 +23,27 @@ test('bank left on J: J banks left, A does nothing, the sheet and key strip say 
 
   // Escape cancels a capture without closing the sheet.
   await page.locator('#btnKeys_bankLeft').click();
-  await expect(page.locator('#btnKeys_bankLeft')).toHaveText('Press a key…');
+  await expect(page.locator('#btnKeys_bankLeft')).toHaveText('Press…');
   await page.keyboard.press('Escape');
   await expect(page.locator('#controlsSheet')).toBeVisible();
   await expect(page.locator('#txtKeysMsg')).toHaveText('Not changed.');
   await expect(page.locator('#btnKeys_bankLeft')).toHaveText('A');
   await expect(page.locator('#btnKeys_bankLeft')).toBeFocused();
 
+  // A second tap on the waiting button cancels too (a phone has no Esc).
+  await page.locator('#btnKeys_bankLeft').click();
+  await page.locator('#btnKeys_bankLeft').click();
+  await expect(page.locator('#txtKeysMsg')).toHaveText('Not changed.');
+  await expect(page.locator('#btnKeys_bankLeft')).toHaveText('A');
+
   // A key another action has is refused, naming the action.
   await page.locator('#btnKeys_bankLeft').click();
   await page.keyboard.press('KeyD');
-  await expect(page.locator('#txtKeysMsg')).toHaveText('D is already Bank right: change that one first.');
+  await expect(page.locator('#txtKeysMsg')).toHaveText('D is already Bank right: change that one first, or pick another key.');
+  // A key that never moves says so (panel: "change that one first" was a dead end for an arrow).
+  await page.locator('#btnKeys_bankLeft').click();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('#txtKeysMsg')).toHaveText("↑ always does Nose up and can't be moved. Press the button again and pick another key.");
   await expect(page.locator('#btnKeys_bankLeft')).toHaveText('A');
 
   await page.locator('#btnKeys_bankLeft').click();
@@ -46,8 +56,10 @@ test('bank left on J: J banks left, A does nothing, the sheet and key strip say 
   expect(await lowContrastLabels(page, '#controlsSheet')).toEqual([]);
   await page.screenshot({ path: 'test-results/keys-1280x720.png' });
 
-  // Back: the sheet's row prints the player's key.
-  await page.locator('#btnKeysBack').click();
+  // Esc (not waiting for a key) goes back to the sheet, whose row prints the player's key.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#controlsSheet')).toBeVisible();
+  await expect(page.locator('#btnKeys')).toBeFocused();
   await expect(page.locator('#controlsBody dt', { hasText: 'J or ← / D or →' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('#controlsSheet')).toBeHidden();
@@ -75,7 +87,8 @@ test('bank left on J: J banks left, A does nothing, the sheet and key strip say 
   await openKeys(page);
   await page.locator('#btnKeysReset').click();
   await expect(page.locator('#btnKeys_bankLeft')).toHaveText('A');
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape'); // back
+  await page.keyboard.press('Escape'); // closed
   await expect(page.locator('#keyHints kbd[data-k="bankLeft"]')).toHaveText('A');
   expect(await page.evaluate(() => localStorage.getItem('openaero_keys_v1'))).toBe(null);
   await page.keyboard.down('KeyA');
@@ -93,6 +106,7 @@ test('a toggle key moves too: brakes on U, B does nothing (0171)', async ({ page
   await expect(page.locator('#txtKeysMsg')).toContainText("N can't be a flight key");
   await page.locator('#btnKeys_brakes').click();
   await page.keyboard.press('KeyU');
+  await page.keyboard.press('Escape'); // back to the sheet
   await page.keyboard.press('Escape');
   await expect(page.locator('#controlsSheet')).toBeHidden();
   const before = await page.locator('#txtBrakes').textContent();

@@ -99,7 +99,7 @@ describe('touchGroundRudder', () => {
 
 // 0171: rebindable keys. keyMap.js holds the table, storage and rebinding; input.js keyCode reads the Map.
 import { keys, keyCode, setKeyMap } from '../../src/input.js';
-import { DEFAULT_KEYS, ACTION_WORDS, defaultMap, keyTable, readKeys, rebindKey, keyLabel, pressedLabel } from '../../src/keyMap.js';
+import { DEFAULT_KEYS, ACTION_WORDS, defaultMap, keyTable, readKeys, rebindKey, keyLabel, keyNames, pressedLabel } from '../../src/keyMap.js';
 describe('rebindable keys (0171)', () => {
   const stored = (map, extra = {}) => JSON.stringify({ v: 1, map, at: 1, ...extra });
   const press = (code) => { const c = keyCode(code); if (c) keys[c] = true; return c; };
@@ -151,7 +151,9 @@ describe('rebindable keys (0171)', () => {
 
   it('refuses a key another action has, naming it; Tab and Escape are reserved', () => {
     expect(rebindKey(defaultMap(), 'bankLeft', 'KeyD')).toEqual({ conflict: 'bankRight' });
-    expect(rebindKey(defaultMap(), 'bankLeft', 'ArrowLeft')).toEqual({ conflict: 'bankLeft' }); // its own second key
+    expect(rebindKey(defaultMap(), 'bankLeft', 'ArrowLeft')).toEqual({ fixed: 'bankLeft' }); // its own second key
+    expect(rebindKey(defaultMap(), 'gear', 'ArrowUp')).toEqual({ fixed: 'pitchUp' }); // a key that never moves
+    expect(rebindKey(defaultMap(), 'gear', 'ShiftRight')).toEqual({ fixed: 'powerUp' });
     expect(rebindKey(defaultMap(), 'bankLeft', 'KeyA').map.bankLeft).toEqual(['KeyA', 'ArrowLeft']); // the same key: fine
     expect(rebindKey(defaultMap(), 'gear', 'Tab')).toEqual({ reserved: true });
     expect(rebindKey(defaultMap(), 'gear', 'Escape')).toEqual({ reserved: true });
@@ -193,7 +195,9 @@ describe('rebindable keys (0171)', () => {
     expect(keyLabel('Digit5')).toBe('5');
     expect(keyLabel('Numpad7')).toBe('Num 7');
     expect(keyLabel('ArrowLeft')).toBe('←');
-    expect(keyLabel('ControlRight')).toBe('Ctrl');
+    expect(keyLabel('ControlRight')).toBe('Right Ctrl');
+    expect(keyNames(['ShiftLeft', 'ShiftRight'])).toEqual(['Shift']); // the default row: Shift
+    expect(keyNames(['KeyP', 'ShiftRight'])).toEqual(['P', 'Right Shift']); // says which one is left
     expect(keyLabel('BracketLeft')).toBe('[');
     expect(keyLabel('KeyQ', {}, new Map([['KeyQ', 'a']]))).toBe('A'); // AZERTY
     expect(keyLabel('KeyQ', { KeyQ: 'Ä' }, new Map([['KeyQ', 'a']]))).toBe('Ä');

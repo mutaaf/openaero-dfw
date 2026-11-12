@@ -24,7 +24,7 @@ export const ACTION_WORDS = {
   trimDown: 'Trim nose down', trimUp: 'Trim nose up', center: 'Center the controls', gear: 'Gear up / down',
   flaps: 'Flaps: next notch', brakes: 'Brakes on / off', autobrake: 'Autobrake setting (737)',
   reverse: 'Reverse thrust (737)', autopilot: 'Autopilot on / off', camera: 'Next camera view',
-  mouseYoke: 'Fly with the mouse', panels: 'Show / hide the panels', landingLight: 'Landing light',
+  mouseYoke: 'Fly with the mouse', panels: 'Show / hide the panels', landingLight: 'Landing light on / off',
 };
 
 export const KEYS_STORE = 'openaero_keys_v1';
@@ -68,13 +68,15 @@ export function readKeys(raw) {
 
 export const ownerOf = (map, code) => Object.keys(map).find((a) => map[a].includes(code)) ?? null;
 
-// Bind `code` as `act`'s key (its first slot). Returns { map } (a new map), or { conflict: action } when
-// another action (or another slot of this one) has the code, or { reserved: true } for a key CODE leaves out.
+// Bind `code` as `act`'s key (its first slot). Returns { map } (a new map), { conflict: action } when another
+// action's key is the code, { fixed: action } when it is one of the keys that never move (an action's second
+// slot), or { reserved: true } for a key CODE leaves out.
 export function rebindKey(map, act, code) {
   if (!DEFAULT_KEYS[act]) throw new Error(`no action ${act}`);
   if (!CODE.test(code)) return { reserved: true };
   const owner = ownerOf(map, code);
-  if (owner && !(owner === act && map[act][0] === code)) return { conflict: owner };
+  if (owner && map[owner][0] !== code) return { fixed: owner }; // an arrow, Num 7/1, right Shift/Ctrl: never moves
+  if (owner && owner !== act) return { conflict: owner };
   const next = Object.fromEntries(Object.entries(map).map(([a, l]) => [a, [...l]]));
   next[act][0] = code;
   return { map: next };
@@ -83,8 +85,8 @@ export function rebindKey(map, act, code) {
 // A key's name on screen: the one it printed when bound (labels), else the keyboard layout's (Chromium's
 // navigator.keyboard.getLayoutMap, `layout`), else a name from the code (US layout).
 const NAMED = {
-  ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', ShiftLeft: 'Shift', ShiftRight: 'Shift',
-  ControlLeft: 'Ctrl', ControlRight: 'Ctrl', AltLeft: 'Alt', AltRight: 'Alt', BracketLeft: '[', BracketRight: ']',
+  ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', ShiftLeft: 'Shift', ShiftRight: 'Right Shift',
+  ControlLeft: 'Ctrl', ControlRight: 'Right Ctrl', AltLeft: 'Alt', AltRight: 'Alt', BracketLeft: '[', BracketRight: ']',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\', Minus: '-', Equal: '=',
   Backquote: '`', Space: 'Space', Enter: 'Enter', Backspace: 'Backspace', IntlBackslash: '\\',
 };
@@ -93,6 +95,12 @@ export function keyLabel(code, labels = {}, layout = null) {
   const l = layout?.get?.(code);
   if (typeof l === 'string' && l.length === 1 && l !== ' ') return l.toUpperCase();
   return NAMED[code] ?? code.replace(/^Key|^Digit/, '').replace(/^Numpad(\w+)/, 'Num $1');
+}
+// An action's keys by name, each once; "Right Shift" goes without saying next to Shift (the default row
+// reads "Shift"), and says which one is left once Shift itself is moved.
+export function keyNames(codes, name = keyLabel) {
+  const n = [...new Set(codes.map(name))];
+  return n.filter((x) => !(x.startsWith('Right ') && n.includes(x.slice(6))));
 }
 // The name to keep for a key pressed in the Keys sheet: the character it typed, if it typed one.
 export const pressedLabel = (e) => (e.key?.length === 1 && e.key !== ' ' ? e.key.toUpperCase() : keyLabel(e.code));

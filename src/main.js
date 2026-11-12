@@ -3405,7 +3405,9 @@ window.addEventListener('keydown', e => {
   if (!modalOpen() && ((e.ctrlKey && /Key[RB]/.test(e.code + code)) || code !== e.code)) e.preventDefault();
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
-  if (code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
+  // "?" first: on AZERTY it is Shift + the M key (0171 panel), which must not also fly by mouse.
+  if (e.key === '?') { if (!e.repeat) showControls(); }
+  else if (code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
   else if (code === 'KeyF') { moveFlapLever(); }
   else if (code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (code === 'KeyK') { byId('btnAutobrake').click(); }
@@ -3414,7 +3416,6 @@ window.addEventListener('keydown', e => {
   else if (code === 'KeyM') { byId('btnMouseYoke').click(); }
   else if (code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }
   else if (code === 'KeyZ') { byId('btnApMaster').click(); }
-  else if (e.key === '?' && !e.repeat) { showControls(); }
   else if (code === 'Space') {
     sim.elevInput = 0; sim.aileronInput = 0; sim.rudderInput = 0;
     sim.angVel.set(0, 0, 0);

@@ -74,5 +74,6 @@ describe('controls cheat sheet (0049)', () => {
     expect(keysText(['bankLeft', 'bankRight'], defaultMap())).toBe('A or ← / D or →');
     expect(keysText(['powerUp', 'powerDown'], defaultMap())).toBe('Shift / Ctrl');
     expect(keysText(['bankLeft'], rebindKey(defaultMap(), 'bankLeft', 'KeyJ').map)).toBe('J or ←');
+    expect(keysText(['powerUp'], rebindKey(defaultMap(), 'powerUp', 'KeyP').map)).toBe('P or Right Shift');
   });
 });
