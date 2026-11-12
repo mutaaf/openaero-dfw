@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   SLOW_KEY, SLOW_TEXT, SLOW_ACS_CAP, SLOW_WARN_CAP, SLOW_LOST_CAP, SLOW_HOLD_S, SLOW_HOLD_MAX_S, SLOW_FAIL_SLOWING_S,
-  SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_KID_DECEL_KTS_S,
-  createSlowFlight, slowFlightStep, slowSimStep, slowPrompt, slowKidGuide, slowKidKts, gradeSlowFlight,
+  SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_KID_DECEL_KTS_S, SLOW_GUST_SHARE,
+  createSlowFlight, slowFlightStep, slowSimStep, slowPrompt, slowKidGuide, slowKidKts, gradeSlowFlight, slowBandWords, warnAoaDeg,
 } from '../../src/slowFlight.js';
-import { coachText } from '../../src/coach.js';
+import { coachText, DRILL_TEXT } from '../../src/coach.js';
 import { MISSIONS, missionByKey, groupMissions } from '../../src/missions.js';
 import { missionFromLink } from '../../src/deeplink.js';
 import { quietMission } from '../../src/tower.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
-import { stallWarningKts, stallAoaDeg } from '../../src/aero.js';
+import { stallWarningKts, stallAoaDeg, stallSpeedKts, liftCoefficient } from '../../src/aero.js';
 import { M_TO_FT } from '../../src/constants.js';
 
 const DT = 0.1;
@@ -18,13 +18,13 @@ const TARGET = WARN + SLOW_TARGET_OVER_WARN_KTS; // 63
 
 // A scripted slow flight: `started` after 1 s on the start screen, then kts(t), alt(t), hdg(t) each step
 // until graded or `seconds` pass. Returns every transition.
-function flySlow(st, { kts = (t) => Math.max(68, 95 - t), alt = () => 5000, hdg = () => 0, stalledAt = null, seconds = 400, warn = WARN } = {}) {
+function flySlow(st, { kts = (t) => Math.max(68, 95 - t), alt = () => 5000, hdg = () => 0, stalledAt = null, seconds = 400, warn = WARN, aoa = () => 6, gustAdd = 0 } = {}) {
   const events = [];
   let t = 0;
-  for (let i = 0; i < 10; i++) { const e = slowFlightStep(st, { dt: DT, started: false, altFt: 5000, iasKts: 95, warnKts: warn, hdgDeg: 0, stalled: false }); if (e) events.push(e); }
+  for (let i = 0; i < 10; i++) { const e = slowFlightStep(st, { dt: DT, started: false, altFt: 5000, iasKts: 95, warnKts: warn, gustAddKts: 0, aoaDeg: 2, warnAoaDeg: 11, hdgDeg: 0, stalled: false }); if (e) events.push(e); }
   for (let n = 0; n < seconds / DT && st.phase !== 'complete' && st.phase !== 'failed'; n++) {
     t += DT;
-    const e = slowFlightStep(st, { dt: DT, started: true, altFt: alt(t), iasKts: kts(t), warnKts: warn, hdgDeg: (hdg(t) + 360) % 360, stalled: stalledAt !== null && t >= stalledAt });
+    const e = slowFlightStep(st, { dt: DT, started: true, altFt: alt(t), iasKts: kts(t), warnKts: warn, gustAddKts: gustAdd, aoaDeg: aoa(t), warnAoaDeg: 11, hdgDeg: (hdg(t) + 360) % 360, stalled: stalledAt !== null && t >= stalledAt });
     if (e) events.push(e);
   }
   return events;
@@ -46,7 +46,7 @@ describe('slowFlightStep (0164): slow to the band, hold it 45 s', () => {
   });
   it('on the start screen nothing runs: the height and heading are taken when the player starts', () => {
     const st = createSlowFlight();
-    for (let i = 0; i < 50; i++) slowFlightStep(st, { dt: DT, started: false, altFt: 5000 - i, iasKts: 95, warnKts: WARN, hdgDeg: i, stalled: false });
+    for (let i = 0; i < 50; i++) slowFlightStep(st, { dt: DT, started: false, altFt: 5000 - i, iasKts: 95, warnKts: WARN, gustAddKts: 0, aoaDeg: 2, warnAoaDeg: 11, hdgDeg: i, stalled: false });
     expect(st.phase).toBe('wait');
     expect(st.t).toBe(0);
     expect(st.alt0).toBe(4951);
@@ -67,6 +67,25 @@ describe('slowFlightStep (0164): slow to the band, hold it 45 s', () => {
     expect(g.score).toBeLessThanOrEqual(SLOW_WARN_CAP);
     expect(g.grade).toBe('C');
     expect(g.reason).toMatch(/stall warning/);
+  });
+  it('the wing at the horn\'s angle warns at any speed (a gust, a pull): held 1 s it caps at C', () => {
+    const st = createSlowFlight();
+    flySlow(st, { aoa: (t) => (t > 50 && t < 52 ? 11.5 : 6) });
+    expect(st.warned).toBe(true);
+    expect(gradeSlowFlight(st).grade).toBe('C');
+  });
+  it('short warnings add up: over 2 s in all is a warning', () => {
+    const st = createSlowFlight();
+    flySlow(st, { kts: (t) => (t > 40 && t < 75 && (t % 5) < 0.6 ? 57 : Math.max(66, 95 - t)) });
+    expect(st.warnRunS).toBeLessThan(1);
+    expect(st.warned).toBe(true);
+  });
+  it('a gusty METAR raises the band by half the gust spread', () => {
+    const st = createSlowFlight();
+    flySlow(st, { gustAdd: 5, kts: (t) => Math.max(72, 95 - t) });
+    expect(st.targetKts).toBe(TARGET + 5);
+    expect(st.phase).toBe('complete');
+    expect(SLOW_GUST_SHARE).toBe(0.5);
   });
   it('a gust\'s blip under the horn (under a second) is not the pilot\'s', () => {
     const st = createSlowFlight();
@@ -121,18 +140,23 @@ describe('slowFlightStep (0164): slow to the band, hold it 45 s', () => {
 });
 
 describe('the coach and Kid (0164)', () => {
-  const s = (o) => ({ dt: DT, started: true, altFt: 5000, iasKts: 68, warnKts: WARN, hdgDeg: 0, stalled: false, ...o });
+  const s = (o) => ({ dt: DT, started: true, altFt: 5000, iasKts: 68, warnKts: WARN, gustAddKts: 0, aoaDeg: 6, warnAoaDeg: 11, hdgDeg: 0, stalled: false, throttle: 0.6, ...o });
   it('every prompt has words, and the horn outranks the rest', () => {
-    for (const key of Object.keys(SLOW_TEXT)) expect(coachText(key)).toBe(SLOW_TEXT[key]);
+    for (const key of Object.keys(SLOW_TEXT)) expect(coachText(key)).toBeTruthy();
     const st = createSlowFlight();
     flySlow(st, { seconds: 40 });
     expect(st.phase).toBe('holding');
     expect(slowPrompt(st, s({ iasKts: 57 }), false)).toBe('sfwHorn');
+    expect(slowPrompt(st, s({ aoaDeg: 11.2 }), false)).toBe('sfwHorn');
     st.iasF = 61; expect(slowPrompt(st, s({ iasKts: 61 }), false)).toBe('sfwTooSlow');
     st.iasF = 68; expect(slowPrompt(st, s({ altFt: 4900 }), false)).toBe('sfwSink');
     expect(slowPrompt(st, s({ altFt: 5100 }), false)).toBe('sfwClimb');
     st.iasF = 76; expect(slowPrompt(st, s({ iasKts: 76 }), false)).toBe('sfwFast');
-    st.iasF = 68; expect(slowPrompt(st, s({ hdgDeg: 8 }), false)).toBe('sfwHdg');
+    expect(slowPrompt(st, s({ iasKts: 76, altFt: 4900 }), false)).toBe('sfwFastSink'); // power would speed the dive
+    st.iasF = 68;
+    expect(slowPrompt(st, s({ altFt: 5100, throttle: 0.1 }), false)).toBe('sfwClimbNose');
+    expect(slowPrompt(st, s({ hdgDeg: 8 }), false)).toBe('sfwHdgR');
+    expect(slowPrompt(st, s({ hdgDeg: 352 }), false)).toBe('sfwHdgL');
     expect(slowPrompt(st, s(), false)).toBe('sfwHold');
     expect(slowPrompt(st, s(), true)).toBe('sfwKid');
   });
@@ -143,6 +167,8 @@ describe('the coach and Kid (0164)', () => {
     flySlow(st, { seconds: 5 });
     expect(st.phase).toBe('slowing');
     expect(slowPrompt(st, s({ iasKts: 90, altFt: 4920 }), false)).toBe('sfwSlowing');
+    expect(slowPrompt(st, s({ iasKts: 90, altFt: 5080 }), false)).toBe('sfwSlowHigh');
+    st.iasF = 76; expect(slowPrompt(st, s({ iasKts: 76 }), false)).toBe('sfwNear');
   });
   it('Kid\'s guide: back to the start heading (≤ 10° of bank) and height; the autothrottle slows 1 kt/s to the band\'s middle', () => {
     const st = createSlowFlight();
@@ -163,6 +189,23 @@ describe('the coach and Kid (0164)', () => {
   });
 });
 
+describe('the words and the wing (0164)', () => {
+  it('the band\'s numbers go into the words', () => {
+    slowBandWords(63);
+    expect(DRILL_TEXT.sfwSlow).toMatch(/73 kt/);
+    expect(DRILL_TEXT.sfwTooSlow).toMatch(/under 63 kt/);
+    expect(DRILL_TEXT.sfwFast).toMatch(/over 73 kt/);
+    expect(DRILL_TEXT.sfwHold).toMatch(/63-73 kt/);
+  });
+  it('warnAoaDeg: the wing\'s 1 g angle at the warning speed, between the cruise and the stall', () => {
+    const c = AIRCRAFT_DATABASE.c172;
+    const a = warnAoaDeg(c, 0), r = stallSpeedKts(c, 0) / stallWarningKts(c, 0);
+    expect(a).toBeGreaterThan(8);
+    expect(a).toBeLessThan(stallAoaDeg(c, 0));
+    expect(liftCoefficient(c, a * Math.PI / 180, 0)).toBeCloseTo(liftCoefficient(c, stallAoaDeg(c, 0) * Math.PI / 180, 0) * r * r, 3);
+  });
+});
+
 describe('the mission (0164)', () => {
   it('is a Cessna drill over Grapevine Lake, 4,500 ft up, at 95 KIAS, in the Drills group and deep-linkable', () => {
     const m = missionByKey(SLOW_KEY);
@@ -176,7 +219,7 @@ describe('the mission (0164)', () => {
   it('the adapter reads the sim: the horn\'s speed for where the flaps are, the nose\'s heading, the stall', () => {
     const c172 = AIRCRAFT_DATABASE.c172;
     const st = createSlowFlight();
-    const sim = { quat: { x: 0, y: 0, z: 0, w: 1 }, pos: { y: 5000 / M_TO_FT }, iasKts: 95, spec: c172, flapsIndex: 0, flapPos: 0, aoaDeg: 2 };
+    const sim = { quat: { x: 0, y: 0, z: 0, w: 1 }, pos: { y: 5000 / M_TO_FT }, iasKts: 95, spec: c172, flapsIndex: 0, flapPos: 0, aoaDeg: 2, throttle: 0.7, wx: { windKts: 8, gustKts: 4 } };
     expect(slowSimStep(st, sim, DT, false)).toBe('');
     expect(st.targetKts).toBeCloseTo(stallWarningKts(c172, 0) + SLOW_TARGET_OVER_WARN_KTS, 5);
     expect(st.hdg0).toBe(0);

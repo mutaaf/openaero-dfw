@@ -1,21 +1,22 @@
 // Slow flight (ticket 0164) flown headless: the C172 through flightModel.js at the mission's 95 KIAS
 // and ~5,000 ft MSL (4,500 ft over Grapevine Lake), slowed to the drill's band (the stall warning + 5 kt,
 // +10/-0: FAA-S-ACS-6C Area VII Task A, S5) and held there for 45 s. A test pilot sets the speed with the
-// nose and the height with the power (FAA-H-8083-3C ch. 5: slow flight is behind the power curve) and
+// nose and the height with the power (near the bottom of the model's power curve, ~70 KIAS, the nose is the quicker lever on speed) and
 // the ball with the rudder. The card checks the drill against the airplane: a pilot who flies the
-// standard grades A or better without the horn, one who flies at the horn is capped at C, and Kid and
-// Learner, whose angle-of-attack protection (assists.js, stall α − 4°) bottoms out under the band, can
-// reach it: the drill adds no floor of its own.
+// standard grades A or better without the horn, one who flies at the horn is capped at C, Kid flies it
+// hands off, and Learner, whose angle-of-attack protection (assists.js, stall α − 4°) bottoms out under the
+// band, can reach the horn: the drill adds no floor of its own.
 import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { FT_TO_M, GRAVITY, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { elevatorForPitch, aileronForBank, autothrottleCommand } from '../../src/autopilot.js';
 import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
-import { createSlowFlight, slowSimStep, gradeSlowFlight, kidGuide, slowKidKts, SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER } from '../../src/slowFlight.js';
+import { createSlowFlight, slowSimStep, gradeSlowFlight, kidGuide, slowKidKts, SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_GUST_SHARE } from '../../src/slowFlight.js';
 import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
 import { assistConfig, createAssistState, shapeControls, slewRudder } from '../../src/assists.js';
+import { gustFactor } from '../../src/weather.js';
 import { makeBody, fly, attitude } from './harness.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -25,15 +26,19 @@ const WARN = stallWarningKts(c172, 0);
 const TARGET = WARN + SLOW_TARGET_OVER_WARN_KTS;
 
 // holdKts: the speed the pilot slows to and holds (the band's middle unless asked otherwise).
-function slowFlight({ holdKts = TARGET + SLOW_KTS_OVER / 2 } = {}) {
+// tail: a METAR wind from behind (kts, gust kts), the air the game's updateWind adds (weather.js gustFactor).
+function slowFlight({ holdKts = null, tail = null } = {}) {
+  holdKts ??= TARGET + (tail ? SLOW_GUST_SHARE * (tail[1] - tail[0]) : 0) + SLOW_KTS_OVER / 2;
   const b = makeBody(c172, { kts: KTS, altM: ALT_FT * FT_TO_M, throttle: 0 });
   b.spec = c172;
+  if (tail) b.wx = { windKts: tail[0], gustKts: tail[1] };
   b.throttle = b.engineN = trimThrottle(c172, KTS * KTS_TO_MPS, 0, 0, true, airAt(b.pos.y));
   const st = createSlowFlight();
   const alt0 = b.pos.y;
   const prevVel = b.vel.clone(), f = new Vector3(), inv = new Quaternion();
   let rudInt = 0, thrInt = b.throttle, ev = '', maxAoa = 0, minIas = Infinity, target = KTS, lastIas = null, trend = 0;
   const pilot = (x, dt) => {
+    if (tail) x.windVec.set(0, 0, -gustFactor(x.t, tail[0], tail[1]) * KTS_TO_MPS); // heading north, the air blowing north
     const { pitchDeg, bankRightDeg } = attitude(x);
     // The speed with the nose: back from 95 at 1 kt/s to the hold speed, damped by the speed trend.
     target = Math.max(holdKts, target - dt);
@@ -89,6 +94,20 @@ describe('C172 slow flight (0164, FAA-S-ACS-6C Area VII Task A)', () => {
     line('horn', r);
     expect(r.st.phase).toBe('complete');
     expect(r.st.warned).toBe(true);
+    expect(['C', 'D']).toContain(r.grade.grade);
+  });
+  it('a gusty tailwind (15G25 from behind, DFW\'s southerly on the mission\'s heading): the band rises by half the gust; flown there, no stall', () => {
+    const r = slowFlight({ tail: [15, 25] });
+    line('tail 15G25', r);
+    expect(r.st.targetKts).toBeCloseTo(TARGET + 5, 5);
+    expect(r.st.phase).toBe('complete');
+    expect(r.maxAoa).toBeLessThan(stallAoaDeg(c172, 0));
+  });
+  it('the same gusts flown at the calm-air band\'s middle: the wing\'s warning (α at the horn\'s 1 g angle) comes first, or a stall', () => {
+    const r = slowFlight({ tail: [15, 25], holdKts: TARGET + SLOW_KTS_OVER / 2 });
+    line('tail 15G25 low', r);
+    // Each gust from behind drops the IAS and lifts α: the drill counts the wing's warning as the horn and the coach says it.
+    expect(r.st.warnS).toBeGreaterThan(0);
     expect(['C', 'D']).toContain(r.grade.grade);
   });
 });
