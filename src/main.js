@@ -3400,10 +3400,11 @@ try { if (localStorage.getItem('openaero_keys_v1')) import('./controlsSheet.js')
 window.addEventListener('keydown', e => {
   const code = keyCode(e.code);
   keys[code] = true;
-  // Ctrl winds the power back: Ctrl+R (reverse) and Ctrl+B (brakes) must not reload or bookmark (0107).
-  if (e.ctrlKey && (code === 'KeyR' || code === 'KeyB') && !modalOpen()) e.preventDefault();
+  // Ctrl winds the power back: Ctrl+R (reverse) and Ctrl+B (brakes) must not reload or bookmark (0107),
+  // whichever of the two keys the player has them on. A moved key is a flight key, not the browser's.
+  if (!modalOpen() && ((e.ctrlKey && /Key[RB]/.test(e.code + code)) || code !== e.code)) e.preventDefault();
   // Space is a flight key (center controls): it must not also press a focused HUD button.
-  if (code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
+  if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
   if (code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
   else if (code === 'KeyF') { moveFlapLever(); }
   else if (code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }

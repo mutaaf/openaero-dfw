@@ -84,18 +84,22 @@ test('bank left on J: J banks left, A does nothing, the sheet and key strip say 
   expect(errors).toEqual([]);
 });
 
-test('a toggle key moves too: brakes on N, B does nothing (0171)', async ({ page }) => {
+test('a toggle key moves too: brakes on U, B does nothing (0171)', async ({ page }) => {
   await enterCockpit(page);
   await openKeys(page);
+  // A key the browser would still act on is refused (panel: Ctrl, the power key, + N opens a window).
   await page.locator('#btnKeys_brakes').click();
   await page.keyboard.press('KeyN');
+  await expect(page.locator('#txtKeysMsg')).toContainText("N can't be a flight key");
+  await page.locator('#btnKeys_brakes').click();
+  await page.keyboard.press('KeyU');
   await page.keyboard.press('Escape');
   await expect(page.locator('#controlsSheet')).toBeHidden();
   const before = await page.locator('#txtBrakes').textContent();
   await page.keyboard.press('KeyB');
   await page.waitForTimeout(200);
   await expect(page.locator('#txtBrakes')).toHaveText(before);
-  await page.keyboard.press('KeyN');
+  await page.keyboard.press('KeyU');
   await expect(page.locator('#txtBrakes')).not.toHaveText(before);
 });
 

@@ -170,7 +170,7 @@ function capture(e) {
   if (e.key === 'Escape') return showKeys('btnKeys_' + a, 'Not changed.');
   const r = rebindKey(bound.map, a, e.code);
   const name = pressedLabel(e);
-  if (r.reserved) return showKeys('btnKeys_' + a, `${name} can't be a flight key: it runs the menus. Pick another.`);
+  if (r.reserved) return showKeys('btnKeys_' + a, `${name} can't be a flight key: the browser or the menus use it. Pick a letter, number or arrow.`);
   if (r.conflict) return showKeys('btnKeys_' + a, r.conflict === a
     ? `${name} is already ${ACTION_WORDS[a]}.`
     : `${name} is already ${ACTION_WORDS[r.conflict]}: change that one first.`);

@@ -157,6 +157,13 @@ describe('rebindable keys (0171)', () => {
     expect(rebindKey(defaultMap(), 'gear', 'Escape')).toEqual({ reserved: true });
     expect(rebindKey(defaultMap(), 'gear', 'MetaLeft')).toEqual({ reserved: true });
     expect(rebindKey(defaultMap(), 'gear', '')).toEqual({ reserved: true });
+    // Keys whose browser default would still run, or that latch (panel): F5 reloads, CapsLock sends no
+    // keyup on macOS, Slash/Quote open Firefox's quick find (and Shift+/ is "?"), Alt the menu bar,
+    // Ctrl (power) + N/T opens a window.
+    for (const c of ['F5', 'F11', 'CapsLock', 'NumLock', 'Slash', 'Quote', 'AltLeft', 'AltGraph', 'KeyN', 'KeyT', 'ContextMenu'])
+      expect(rebindKey(defaultMap(), 'gear', c)).toEqual({ reserved: true });
+    for (const c of ['KeyJ', 'Digit5', 'Numpad5', 'Semicolon', 'Enter', 'Backquote'])
+      expect(rebindKey(defaultMap(), 'gear', c).map.gear).toEqual([c]);
   });
 
   it('reset: the default map again is no table at all', () => {
@@ -171,7 +178,7 @@ describe('rebindable keys (0171)', () => {
     for (const raw of [null, '', '{', 'null', '[]', '42', JSON.stringify({ v: 2, map: m }), JSON.stringify({ v: 1 })]) expect(readKeys(raw)).toBe(null);
     // A code bound twice drops the map; a bad action keeps its default.
     expect(readKeys(stored({ ...m, gear: ['KeyJ'] }))).toBe(null);
-    const bad = readKeys(stored({ ...m, gear: 'KeyG', flaps: ['Tab'], brakes: ['KeyB', 'KeyN'], camera: [7] }));
+    const bad = readKeys(stored({ ...m, gear: 'KeyG', flaps: ['F5'], brakes: ['KeyB', 'KeyN'], camera: [7] }));
     expect(bad.map.gear).toEqual(['KeyG']);
     expect(bad.map.flaps).toEqual(['KeyF']);
     expect(bad.map.brakes).toEqual(['KeyB']);

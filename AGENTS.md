@@ -595,7 +595,7 @@ src/rollSound.js    the ground roll's sound (0149, in engineSound.js's lazy chun
                     tests/unit/rollSound.test.js
 src/keyMap.js       rebindable keys (0171, lazy, in controlsSheet.js's chunk): DEFAULT_KEYS (action → codes; the first is the
                     one a player rebinds, the arrows / Num 7 / Num 1 / right-hand Shift and Ctrl stay), rebindKey (a code another
-                    action has is refused, naming it; Tab, Escape and the OS keys reserved), keyTable (the Map input.js setKeyMap
+                    action has is refused, naming it; only plain keys: no Tab/Escape, F-keys, CapsLock, Alt, Slash, Quote, or N/T (Ctrl+N/T opens a window)), keyTable (the Map input.js setKeyMap
                     takes), readKeys (openaero_keys_v1, validated), keyLabel (the key it printed when bound, else Chromium's
                     keyboard layout map, else US names). main.js fetches the chunk at boot only when a map is stored
                     (controlsSheet.js useStoredKeys); the sheet's ⌨ CHANGE KEYS view binds one with click-then-press; the
@@ -669,8 +669,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-12 (0171): 198.47 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
-fetch, +0.13 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
+2026-11-12 (0171): 198.50 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
+fetch, +0.16 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
 and assists.js kidFinalGuide's liftM, +0.46 kB; wake.js is a lazy chunk). 2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid
 for by aliasing three's WebXRManager to src/noXr.js, −3.7 kB: WebGLRenderer built the whole WebXR stack, its controllers and
 depth sensing, for a sim that never starts an XR session). ~3.4 kB of headroom: spend it on features, not by default.

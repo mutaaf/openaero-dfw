@@ -28,9 +28,11 @@ export const ACTION_WORDS = {
 };
 
 export const KEYS_STORE = 'openaero_keys_v1';
-// Keys a flight key can't take: Tab and Escape run the menus and this sheet; the OS keys belong to the OS.
-const RESERVED = /^(Tab|Escape|Meta\w*|OS\w*|ContextMenu|Unidentified)?$/;
-const CODE = /^[A-Z]\w{1,24}$/;
+// The keys a flight key can take: letters, digits, the numpad, arrows, Shift/Ctrl, a few punctuation
+// keys, Space and Enter. Not Tab/Escape (menus, this sheet), F-keys (F5 reloads), CapsLock/NumLock (no
+// keyup until the next press on macOS: a latched control), Alt (the menu bar), Slash/Quote (Firefox's
+// quick find; Shift+/ is "?"), KeyN/KeyT (Ctrl, the power key, + N/T opens a window the page can't stop).
+const CODE = /^(Key[A-MO-SU-Z]|Digit\d|Numpad(\d|Add|Subtract|Multiply|Divide|Decimal|Enter)|Arrow(Up|Down|Left|Right)|(Shift|Control)(Left|Right)|Bracket(Left|Right)|Semicolon|Comma|Period|Backslash|IntlBackslash|Minus|Equal|Backquote|Space|Enter)$/;
 
 export const defaultMap = () => Object.fromEntries(Object.entries(DEFAULT_KEYS).map(([a, l]) => [a, [...l]]));
 
@@ -53,7 +55,7 @@ export function readKeys(raw) {
   const map = {}, seen = new Set();
   for (const a in DEFAULT_KEYS) {
     const l = o.map[a];
-    const ok = Array.isArray(l) && l.length === DEFAULT_KEYS[a].length && l.every((c) => typeof c === 'string' && CODE.test(c) && !RESERVED.test(c));
+    const ok = Array.isArray(l) && l.length === DEFAULT_KEYS[a].length && l.every((c) => typeof c === 'string' && CODE.test(c));
     map[a] = ok ? [...l] : [...DEFAULT_KEYS[a]];
     for (const c of map[a]) { if (seen.has(c)) return null; seen.add(c); }
   }
@@ -67,10 +69,10 @@ export function readKeys(raw) {
 export const ownerOf = (map, code) => Object.keys(map).find((a) => map[a].includes(code)) ?? null;
 
 // Bind `code` as `act`'s key (its first slot). Returns { map } (a new map), or { conflict: action } when
-// another action (or another slot of this one) has the code, or { reserved: true } for Tab/Escape/OS keys.
+// another action (or another slot of this one) has the code, or { reserved: true } for a key CODE leaves out.
 export function rebindKey(map, act, code) {
   if (!DEFAULT_KEYS[act]) throw new Error(`no action ${act}`);
-  if (RESERVED.test(code) || !CODE.test(code)) return { reserved: true };
+  if (!CODE.test(code)) return { reserved: true };
   const owner = ownerOf(map, code);
   if (owner && !(owner === act && map[act][0] === code)) return { conflict: owner };
   const next = Object.fromEntries(Object.entries(map).map(([a, l]) => [a, [...l]]));
