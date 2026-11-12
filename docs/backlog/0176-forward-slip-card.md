@@ -1,7 +1,7 @@
 ---
 id: 0176
 title: Cessna forward slip: crossed controls lose height without gaining speed (flight card)
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
