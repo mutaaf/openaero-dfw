@@ -16,6 +16,8 @@ import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src/airports.js';
 import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
 import { missionByKey } from '../../src/missions.js';
+import { kidLiftM, wakeResult, createWake, DONE_NOTE } from '../../src/wake.js';
+import { AIM_POINT_M } from '../../src/airports.js';
 import { makeBody, fly, attitude } from './harness.js';
 
 const _e = new Euler(0, 0, 0, 'YXZ');
@@ -25,7 +27,8 @@ const _e = new Euler(0, 0, 0, 'YXZ');
 // rollS: keep rolling that long past the touchdown (idle, no brakes, Kid's pedals: main.js runwayUnderWheels).
 // learnerBelowM: the player switches to Learner that low (no de-crab: a crabbed touchdown; the rollout is Learner's).
 // every: the assist runs every that many 1/120 s sub-steps, as main.js runs it once a frame (4: 30 fps).
-function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1) {
+// lift(ap): the wake lesson's lift of the path (0115, wake.js kidLiftM) for approachGeometry's ap, else 0.
+function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1, lift = null) {
   const spec = AIRCRAFT_DATABASE[acKey];
   const m = missionByKey(missionKey);
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
@@ -57,7 +60,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   const bank = { maxDeg: 0, flips: 0, lastP: 0 };
   let step = 0, lastRud = 0, lastStep = 0;
   const papi = [0, 0, 0, 0, 0]; // samples by white lamps (main.js updatePapi: the CG to the box), 200 ft up and higher
-  fly(b, spec, 240, (x, dt) => {
+  fly(b, spec, 700, (x, dt) => { // 700 s: a 5 NM Cessna final into 25 kt (the wake lesson) takes ~450
     const ap = approachGeometry(end, x.pos);
     const wheelM = x.pos.y - spec.gearHeight;
     if (wheelM < learnerBelowM && !x.onGround) cfg = assistConfig('learner');
@@ -67,7 +70,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
     const noseDeg = -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI;
-    kidFinalGuide(end, ap, noseDeg, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s);
+    kidFinalGuide(end, ap, noseDeg, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s, lift ? lift(ap) : 0);
     Object.assign(s, {
       pitchIn: stick ? stick(wheelM * M_TO_FT) : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS),
       yawRateRight: -x.angVel.y, driftDeg: driftAngleDeg(noseDeg, x.vel.x, x.vel.z),
@@ -380,6 +383,31 @@ describe('Kid hands off, the F-16 holds its bank on the final without oscillatio
       expect(r.bank.maxDeg).toBeLessThan(15);
       expect(r.bank.flips).toBeLessThan(6);
       expectLanded(r);
+    });
+  }
+});
+
+// The wake lesson (0115): the jet ahead touches down ~560-680 m in (tests/flight/wake.test.js); once it has, Kid's
+// guide aims 100 m past that point (wake.js kidLiftM) and its flare lands the Cessna beyond it, gently, in the drill's
+// full-marks zone (to 750 m beyond), graded clear of the wake. A tailwind floats both further (the jet ~720 m in at 5 kt). In the game the jet lands while the Cessna is ~3.5 NM out: the lift
+// arrives then, not at the spawn.
+describe('Kid hands off on the wake lesson lands the Cessna beyond the jet (ticket 0115)', () => {
+  for (const [tdM, name, wind] of [[676, 'calm', {}], [564, '15 kt headwind', { fromDeg: 350, kts: 15 }], [521, '20 kt headwind', { fromDeg: 350, kts: 20 }], [676, '10 kt crosswind', { fromDeg: 80, kts: 10 }], [720, '5 kt tailwind', { fromDeg: 170, kts: 5 }], [734, '10 kt tailwind', { fromDeg: 170, kts: 10 }]]) {
+    it(`kdfw_35c_wake, ${name}, the jet down ${tdM} m in: Kid touches down past it, gently, graded clear of its wake`, () => {
+      const w = createWake(runwayEnd('KDFW', '35C'));
+      // The expected point until the jet is down (the Cessna ~3.5 NM out), then its own.
+      const r = flyKidFinal('c172', 'kdfw_35c_wake', wind, null, null, 0, 0, 1, (ap) => { if (ap.distM < 3.5 * 1852) w.tdAlongM = tdM; return kidLiftM(w, AIM_POINT_M, { windDirDeg: wind.fromDeg ?? 0, windKts: wind.kts ?? 0 }); });
+      log('c172', 'kdfw_35c_wake', name, r);
+      expect(r.td).not.toBeNull();
+      expect(r.td.pastThrM).toBeGreaterThan(tdM + 30);
+      expect(r.td.pastThrM).toBeLessThan(tdM + 450); // inside the drill's full marks (750) with room
+      expect(r.td.vsFpm).toBeGreaterThan(-240);
+      expect(Math.abs(r.td.crossM)).toBeLessThan(8);
+      const g = gradeLanding({ vsFpm: r.td.vsFpm, crossM: r.td.crossM, pastThresholdM: r.td.pastThrM, runwayLengthM: 4000, runwayWidthM: r.td.widthM,
+        pitchDeg: r.td.pitchDeg, bankDeg: r.td.bankDeg, iasKts: r.td.iasKts, vrefKts: AIRCRAFT_DATABASE.c172.vrefKts });
+      const res = wakeResult(g, w, r.td.pastThrM);
+      expect(res.note).toBe(DONE_NOTE);
+      expect(res.reason).toBeNull();
     });
   }
 });

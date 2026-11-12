@@ -147,6 +147,7 @@ const sim = {
   goAround: null,
   // Stall recovery drill (0087, stallDrill.js): its state on that mission, else null
   stallDrill: null,
+  wake: null, // the wake-turbulence lesson (0115, wake.js): its state on that mission, the jet ahead's path (traffic.js)
   // Dead-stick challenge (0036, deadStick.js): its state on that mission, and the dead engine
   deadStick: null,
   engineOut: null, // engine failure after takeoff (0104, engineOut.js)
@@ -848,7 +849,8 @@ function checkStabilizedGate() {
     iasKt: sim.iasKts, vref: vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: gearLocked(sim),
     // The two landing notches (737: 30°/40°, 172: 20°/30°), set and there (not in transit).
     flapsOk: flapsLanding(),
-    glideDevDots: ilsDots(ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
+    // The wake lesson (0115): above the 3° path up to a path past the jet's touchdown point is on path (wake.js).
+    glideDevDots: ilsDots(sim.wake?.end.id === end.id ? wakeLib.gateHeightAbovePathM(sim.wake, ap.heightAbovePathM) : ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
     vmc: gs.armFt === GATE_VMC_FT,
   });
   gate.runway = end.id;
@@ -1018,6 +1020,16 @@ function checkUpset(dt) {
   sim.upset = null;
   drillCard(result, upLib.UPSET_PLACE);
 }
+// Wake turbulence (0115, wake.js): once the player is flying, the jet ahead lands on the same runway (traffic.js
+// spawns it on sim.wake.ready and records its path); the player's wheels are checked against that path.
+let wakeLib = null;
+function checkWake(dt) {
+  const w = sim.wake;
+  if (!w) return;
+  if (!w.ready) { if (!cockpitEntered || modalOpen()) return; w.ready = true; }
+  const e = w.end, r = e.hdgT * DEG_TO_RAD;
+  wakeLib.wakeStep(w, (sim.pos.x - e.thrX) * Math.sin(r) - (sim.pos.z - e.thrZ) * Math.cos(r), sim.pos.y, sim.onGround, dt);
+}
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
 // only instructions) until Skip; their state is null on every other mission.
@@ -1028,10 +1040,11 @@ function startDrills(mission) {
   sim.engineOut = null;
   sim.rto = null;
   sim.windshear = null;
-  sim.steepTurns = sim.upset = null;
+  sim.steepTurns = sim.upset = sim.wake = null;
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake);
+  if (mission.wake) loadDrill(mission, wakeLib, () => import('./wake.js'), (lib) => { wakeLib = lib; if (sim.aircraftKey === mission.aircraft) sim.wake = lib.createWake(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
@@ -1123,6 +1136,7 @@ function checkTouchdown(dt) {
   });
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
+  if (sim.wake?.end.id === end.id) result = wakeLib.wakeResult(result, sim.wake, -g.distM); // 0115: past the jet's point, above its path
   if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos);
   else if (glideLib) result = eoLib.engineOutResult(result, sim.engineOut, end, sim.pos);
   if (kidSoftLanding(result)) return;
@@ -1314,7 +1328,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.wake || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1344,6 +1358,7 @@ function updateCoach(dt) {
       : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
       : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
       : sim.upset ? upLib.upsetCoach(sim.upset, coachInput.kid)
+      : sim.wake ? wakeLib.wakePrompt(sim.wake, coachInput, sim.approach.heightAbovePathM)
       : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
       : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
     coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach) ? coachInput.ds : null;
@@ -1692,6 +1707,7 @@ function step6DofPhysics(dt) {
   checkWindshear(dt);
   checkSteepTurns(dt);
   checkUpset(dt);
+  checkWake(dt);
   if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in
     if (ifrLib.dhStep(sim.dh, sim)) audio.callout('minimums');
     if (sim.activeEnd) scene.fog.density = ifrLib.cloudFog((camera.position.y - sim.activeEnd.thrY) * M_TO_FT);
@@ -2459,7 +2475,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   } else if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
-    kidFinalGuide(sim.activeEnd, ap, noseDeg, trackDeg, _assistIn);
+    kidFinalGuide(sim.activeEnd, ap, noseDeg, trackDeg, _assistIn, sim.wake?.end.id === sim.activeEnd.id ? wakeLib.kidLiftM(sim.wake, undefined, sim.wx) : 0);
   }
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
   // Addison, not a glidepath it can't hold (deadStick.js kidGuide).
@@ -2981,7 +2997,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.deadStick = null;
   sim.engineOut = null;
   sim.rto = null;
-  sim.steepTurns = sim.upset = null;
+  sim.steepTurns = sim.upset = sim.wake = null;
   sim.windshear = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
@@ -3548,6 +3564,7 @@ window.openaeroDebug = () => {
     windshear: sim.windshear ? { ...sim.windshear } : null,
     steepTurns: sim.steepTurns ? { ...sim.steepTurns } : null,
     upset: sim.upset ? { ...sim.upset } : null,
+    wake: sim.wake ? { ...sim.wake, path: undefined, end: sim.wake.end.id } : null,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,

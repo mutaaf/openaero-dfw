@@ -363,6 +363,19 @@ src/windsock.js     wind cones (0027, lazy chunk after boot): one beside every r
                     and swung there as a damped pendulum on the sim clock; gusts and the log-law thinning are
                     weather.js's, passed in. Two InstancedMesh draws; a minimum 0.7° on screen (≤ 7x) at range;
                     lit at night. ?debug: openaeroDebug().windsocks (debugScreen.js reads the handle), window.openaeroWindsocks
+src/wake.js         wake-turbulence lesson (0115, lazy chunk loaded with `kdfw_35c_wake`, `wake: true`, the C172 on a 5 NM
+                    final to KDFW 35C at midday): AIM 7-4-6, behind a larger aircraft on the same runway, stay at or above
+                    its path, note its touchdown point, land beyond it. Once the player starts flying (sim.wake.ready),
+                    traffic.js spawns its jet on the player's own end 2 NM closer in (wakeSpawnFor; none in a tailwind over
+                    10 kt, inside 3.5 NM or after dark: coached and carded), kept on a struggling device, and records its
+                    CG height along the final (5 m bins) and its touchdown point into sim.wake. While the chunk loads no
+                    parallel jet spawns; a jet whose wake is no longer sim.wake (a reload) is dropped. wakeStep checks the
+                    player's CG inside 2 NM to where the jet's path was 100 ft up (20 ft under for 2 s = below); wakeResult
+                    rescores the touchdown zone from the jet's point (full marks 30-750 m past it) and caps short or below
+                    at C. The gate's glideslope and the coach (wkHigh, wkAim on the 3° path: it lands short) accept 3° up to
+                    Kid's path (kidLiftM: 100 m + 10 m per headwind knot past the jet, 675 m expected until it lands;
+                    assists.js kidFinalGuide liftM). No vortex is simulated (the card says so). Cards:
+                    tests/flight/wake.test.js, kidFinal.test.js (Kid lands beyond it from 20 kt headwind to 10 kt tailwind)
 src/traffic.js      ambient traffic (0080, lazy chunk fetched by runwayLights.js's touchdown-feel hook, as fuel.js is):
                     one 737 at a time on a parallel final into DFW (only while the player's end is at KDFW; same flow,
                     2,500 ft+ beside the player's runway first, JO 7110.65 §5-9-6; placed never on their runway and
@@ -635,7 +648,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid
+2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
+and assists.js kidFinalGuide's liftM, +0.46 kB; wake.js is a lazy chunk). 2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid
 for by aliasing three's WebXRManager to src/noXr.js, −3.7 kB: WebGLRenderer built the whole WebXR stack, its controllers and
 depth sensing, for a sim that never starts an XR session). ~3.4 kB of headroom: spend it on features, not by default.
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
