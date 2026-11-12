@@ -1,12 +1,12 @@
 ---
 id: 0164
 title: Slow-flight mission: hold 5-10 kt over the stall warning, level, graded to the FAA test standard
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-06
-pr:
+pr: 241
 ---
 
 ## Why
