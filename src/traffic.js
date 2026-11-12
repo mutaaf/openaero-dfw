@@ -5,9 +5,14 @@
 //
 // Placement: only while the player's runway end is at KDFW, on another KDFW runway in the same
 // flow (within 30° of the player's heading), 2,500 ft or more beside it where there is one, never the player's runway (either end) and never
-// within 1 NM of the player. The first jet of a flight sits 2 NM closer to its runway than the
+// within 1 NM of the player (the wake-turbulence lesson's jet is the one exception, below). The first jet of a flight sits 2 NM closer to its runway than the
 // player is to theirs (2-8 NM out), so it is ahead, where a pilot on the default 4 NM final looks;
 // each one after it starts 4-8 NM out. No collision, no wake, no ATC; one jet at a time.
+//
+// The wake-turbulence lesson (0115, wake.js): with sim.wake set, the flight's first jet lands on the player's own
+// runway end, wake.js WAKE_AHEAD_NM ahead of the player, spawned once the player starts flying (sim.wake.ready)
+// and kept whatever the device or the hour (the lesson needs it; one model). Its wheel height along the final and
+// its touchdown point are written into sim.wake (no wake force is simulated). Parallel traffic follows it as usual.
 //
 // The flight model's functions come in as `fm` = { stepFlightModel, trimThrottle, rollHoldScale }
 // (main.js sim.fm; the tests pass flightModel.js's): importing flightModel.js here also moved aero.js
@@ -215,6 +220,7 @@ function autoThrottle(j, kts, gammaDeg, dt) {
 export function stepTrafficJet(j, dt) {
   const b = j.body, spec = j.spec, e = j.end;
   if (j.phase === 'done') return;
+  const w = j.wake;
   const rx = b.pos.x - e.thrX, rz = b.pos.z - e.thrZ;
   const along = rx * j.dx + rz * j.dz, crossM = rx * -j.dz + rz * j.dx;
   const heightAbovePathM = b.pos.y - e.thrY - (AIM_POINT_M - along) * TAN_GLIDE;
@@ -237,6 +243,11 @@ export function stepTrafficJet(j, dt) {
   j.prevIas = b.iasKts;
 
   const wheelH = b.pos.y - b.groundY - spec.gearHeight;
+  // The wake lesson (0115): the jet's wheels (sim Y) along its final, in wake.js's bins (no objects).
+  if (w && !b.onGround && j.phase !== 'rollout') {
+    const i = Math.floor((along - w.fromM) / w.binM);
+    if (i >= 0 && i < w.path.length) w.path[i] = b.pos.y - spec.gearHeight;
+  }
   if (!b.onGround && j.phase !== 'rollout') {
     b.aileronInput = aileronForBank(bankCommandForHeading(headingError(trkCmd, trk), tasMps), bankRightDeg, -b.angVel.z, j.fm.rollHoldScale(spec, tasMps));
     // The de-crab (an autoland's align mode): in the last 2 m the rudder (up to half) yaws the nose onto
@@ -260,6 +271,7 @@ export function stepTrafficJet(j, dt) {
     if (j.phase !== 'rollout') {
       j.phase = 'rollout';
       j.touchdown = { alongM: along, crossM, vsFpm: b.lastAirVsi ?? b.vel.y * M_TO_FT * 60, iasKts: b.iasKts, driftDeg: Math.abs(headingError(e.hdgT, hdg)) };
+      if (w) w.tdAlongM = along;
       // A long float (a tailwind, downhill 35R, a hot day): under 1,800 m of runway left, MAX autobrake,
       // as a crew would brake harder (physics panel: a 10 kt tailwind at ISA+25 on 35R ran past the end at 3).
       if (e.lengthM - e.displacedM - along < 1800) b.autobrake = 4;
@@ -274,6 +286,17 @@ export function stepTrafficJet(j, dt) {
   trafficWind(j);
   j.fm.stepFlightModel(b, spec, dt);
   j.t += dt;
+}
+
+// The wake lesson's jet (0115): on the player's own end, wake.js WAKE_AHEAD_NM (2) closer in than the player and
+// at least 1.5 NM out, never with a tailwind over MAX_TAILWIND_KTS. wake.js wakeSpawnNm's rule, inlined (this chunk
+// doesn't import the lesson's): { distNm, reason } with distNm null when there is no room or the wind says no.
+export const WAKE_AHEAD_NM = 2, WAKE_MIN_NM = 1.5;
+export function wakeSpawnFor(end, sim) {
+  const tw = tailwindKts(sim.wx, end.hdgT);
+  if (tw > MAX_TAILWIND_KTS) return { distNm: null, reason: `a ${Math.round(tw)} kt tailwind, over the 737's ${MAX_TAILWIND_KTS} kt limit` };
+  const d = Math.min(8, distToThresholdNm(end, sim.pos) - WAKE_AHEAD_NM);
+  return d >= WAKE_MIN_NM ? { distNm: d, reason: null } : { distNm: null, reason: 'too close to the runway to fit it in ahead of you' };
 }
 
 // Whether traffic may fly: off once the adaptive resolution sits on its floor (resScale.js
@@ -298,18 +321,33 @@ export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
     // same mission object, so a jump of over 1 km between two frames is a new flight too (a respawn).
     const p = sim.pos, jumped = Math.hypot(p.x - st.px, p.z - st.pz) > 1000;
     st.px = p.x; st.pz = p.z;
+    const wake = sim.wake ?? null, wakeWanted = !!wake && !wake.spawned;
     if (jumped || sim.loadedMission !== st.mission || (sim.activeEnd?.id ?? null) !== st.endId) {
       const newFlight = jumped || sim.loadedMission !== st.mission;
       st.mission = sim.loadedMission;
       st.endId = sim.activeEnd?.id ?? null;
       if (newFlight) { st.first = true; st.off = false; }
-      if (newFlight || (st.jet && (!sim.activeEnd || sameRunway(st.jet.end, sim.activeEnd) || sim.activeEnd.airport !== TRAFFIC_AIRPORT))) {
+      if (newFlight || (st.jet && !st.jet.wake && (!sim.activeEnd || sameRunway(st.jet.end, sim.activeEnd) || sim.activeEnd.airport !== TRAFFIC_AIRPORT))) {
         st.jet = null;
         st.nextAt = t + FIRST_SPAWN_S;
       }
     }
     if (!allowed) st.off = true;
-    if (st.off || dark) { st.jet = null; if (dark) st.nextAt = null; return st; }
+    // The wake lesson's jet flies whatever the device or the hour; nothing else does.
+    if ((st.off || dark) && !wakeWanted && !st.jet?.wake) { st.jet = null; if (dark) st.nextAt = null; return st; }
+    if (!st.jet && wakeWanted) {
+      if (!wake.ready || !(dt > 0)) return st;
+      wake.spawned = true;
+      const s = wakeSpawnFor(wake.end, sim);
+      if (s.distNm === null) { wake.noJet = s.reason; return st; }
+      st.jet = createTrafficJet(wake.end, s.distNm, sim, sim.fm);
+      st.jet.wake = wake;
+      st.first = false;
+      st.spawned++;
+      st.acc = 0;
+      return st;
+    }
+    if (!st.jet && (st.off || dark)) { if (dark) st.nextAt = null; return st; }
     if (!st.jet) {
       if (st.nextAt === null) st.nextAt = t + FIRST_SPAWN_S;
       if (t < st.nextAt || !(dt > 0)) return st;
@@ -327,6 +365,7 @@ export function createTrafficScheduler(sim, { rand = Math.random } = {}) {
       stepTrafficJet(st.jet, STEP_S);
       st.acc -= STEP_S;
     }
+    if (st.jet.phase === 'done' && st.jet.wake) st.jet.wake.jetDone = true;
     if (st.jet.phase === 'done') retire(GAP_S[0] + rand() * (GAP_S[1] - GAP_S[0]));
     return st;
   };

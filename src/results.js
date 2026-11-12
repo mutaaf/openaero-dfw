@@ -40,6 +40,7 @@ export function showResults(sim, result, best, end, gate) {
       : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ')}`;
     // The drill flown back to stable: landing was the right call (0047).
     if (gate.stable && sim.goAround) gateEl.textContent += ' You fixed it: landing was right';
+    if (result.note) gateEl.textContent += ` · ${result.note}`; // the wake lesson's verdict (0115) beside the gate's
     gateEl.classList.toggle('text-emerald-300', gate.stable); // over the amber default (later in the CSS)
   } else if (result.note) {
     gateEl.textContent = `${result.note} ✓`;
