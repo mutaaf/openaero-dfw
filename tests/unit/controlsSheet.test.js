@@ -15,7 +15,7 @@ describe('controls cheat sheet (0049)', () => {
 
   it('lists every key code a handler binds (e.code, the held-keys table, input.js)', () => {
     const bound = new Set([
-      ...grab(all, /e\.code === '(\w+)'/g),
+      ...grab(all, /\b(?:e\.)?code [!=]== '(\w+)'/g), // main.js reads keyCode(e.code) as `code` (0171)
       ...grab(all, /keys\['(\w+)'\]/g),
       ...grab(src('input.js'), /\bk\.([A-Z]\w+)/g),
     ]);
@@ -59,5 +59,21 @@ describe('controls cheat sheet (0049)', () => {
   it('puts touch first on a touch screen, the keyboard first otherwise', () => {
     expect(sheetSections(true).map((s) => s.title)).toEqual(['Touch', 'Keyboard and mouse', 'Gamepad']);
     expect(sheetSections(false).map((s) => s.title)).toEqual(['Keyboard and mouse', 'Gamepad', 'Touch']);
+  });
+
+  it('every rebindable action has its row, holding exactly its default keys (0171)', async () => {
+    const { DEFAULT_KEYS } = await import('../../src/keyMap.js');
+    const acts = KEYBOARD.flatMap((r) => r.acts ?? []);
+    expect([...acts].sort()).toEqual(Object.keys(DEFAULT_KEYS).sort());
+    for (const r of KEYBOARD.filter((r) => r.acts)) expect([...r.codes].sort()).toEqual(r.acts.flatMap((a) => DEFAULT_KEYS[a]).sort());
+  });
+
+  it("prints the player's keys in a row, each name once (0171)", async () => {
+    const { defaultMap, rebindKey } = await import('../../src/keyMap.js');
+    const { keysText } = await import('../../src/controlsSheet.js');
+    expect(keysText(['bankLeft', 'bankRight'], defaultMap())).toBe('A or ← / D or →');
+    expect(keysText(['powerUp', 'powerDown'], defaultMap())).toBe('Shift / Ctrl');
+    expect(keysText(['bankLeft'], rebindKey(defaultMap(), 'bankLeft', 'KeyJ').map)).toBe('J or ←');
+    expect(keysText(['powerUp'], rebindKey(defaultMap(), 'powerUp', 'KeyP').map)).toBe('P or Right Shift');
   });
 });

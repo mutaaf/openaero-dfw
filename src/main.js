@@ -42,7 +42,7 @@ import {
   autoConfigure, kidTargetKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
   groundSteerRudder,
 } from './assists.js';
-import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare } from './input.js';
+import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare, keyCode } from './input.js';
 import { trimStep, trimSpeedKts, clampTrim, takeoffTrimAoaDeg } from './trim.js';
 import { createAudio } from './audio.js';
 import { createWakeLock } from './wakeLock.js';
@@ -3393,29 +3393,35 @@ window.addEventListener('wheel', e => {
   sim.orbitDist = THREE.MathUtils.clamp(sim.orbitDist + e.deltaY * 0.05, 12, 160);
 }, { passive: true });
 
-// Keyboard Listeners
+// Keyboard Listeners. The player's own keys (0171, input.js keyCode): `code` is the default key of
+// the action the pressed key is bound to; a stored map (keyMap.js, through the sheet's chunk) is set and
+// relabels the key strip a moment after boot.
+try { if (localStorage.getItem('openaero_keys_v1')) import('./controlsSheet.js').then((m) => m.useStoredKeys()).catch(console.warn); } catch { /* storage that throws: the default keys */ }
 window.addEventListener('keydown', e => {
-  keys[e.code] = true;
-  // Ctrl winds the power back: Ctrl+R (reverse) and Ctrl+B (brakes) must not reload or bookmark (0107).
-  if (e.ctrlKey && (e.code === 'KeyR' || e.code === 'KeyB') && !modalOpen()) e.preventDefault();
+  const code = keyCode(e.code);
+  keys[code] = true;
+  // Ctrl winds the power back: Ctrl+R (reverse) and Ctrl+B (brakes) must not reload or bookmark (0107),
+  // whichever of the two keys the player has them on. A moved key is a flight key, not the browser's.
+  if (!modalOpen() && ((e.ctrlKey && /Key[RB]/.test(e.code + code)) || code !== e.code)) e.preventDefault();
   // Space is a flight key (center controls): it must not also press a focused HUD button.
   if (e.code === 'Space' && e.target.closest?.('button') && !onboardingModal.contains(e.target)) e.preventDefault();
-  if (e.code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
-  else if (e.code === 'KeyF') { moveFlapLever(); }
-  else if (e.code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
-  else if (e.code === 'KeyK') { byId('btnAutobrake').click(); }
-  else if (e.code === 'KeyR') { byId('btnReverse').click(); }
-  else if (e.code === 'KeyC') { byId('btnCamera').click(); }
-  else if (e.code === 'KeyM') { byId('btnMouseYoke').click(); }
-  else if (e.code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }
-  else if (e.code === 'KeyZ') { byId('btnApMaster').click(); }
-  else if (e.key === '?' && !e.repeat) { showControls(); }
-  else if (e.code === 'Space') {
+  // "?" first: on AZERTY it is Shift + the M key (0171 panel), which must not also fly by mouse.
+  if (e.key === '?') { if (!e.repeat) showControls(); }
+  else if (code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
+  else if (code === 'KeyF') { moveFlapLever(); }
+  else if (code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
+  else if (code === 'KeyK') { byId('btnAutobrake').click(); }
+  else if (code === 'KeyR') { byId('btnReverse').click(); }
+  else if (code === 'KeyC') { byId('btnCamera').click(); }
+  else if (code === 'KeyM') { byId('btnMouseYoke').click(); }
+  else if (code === 'KeyH') { setCleanView(!document.body.classList.contains('view-clean')); }
+  else if (code === 'KeyZ') { byId('btnApMaster').click(); }
+  else if (code === 'Space') {
     sim.elevInput = 0; sim.aileronInput = 0; sim.rudderInput = 0;
     sim.angVel.set(0, 0, 0);
   }
 });
-window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('keyup', e => { keys[keyCode(e.code)] = false; });
 
 byId('btnAudio').addEventListener('click', () => {
   if (!audio.ctx) audio.init();

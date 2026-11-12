@@ -3,25 +3,29 @@
 // them to the bindings (tests/unit/controlsSheet.test.js fails when a bound key has no row).
 // codes: KeyboardEvent.code values (main.js e.code / keys[], input.js), keys: KeyboardEvent.key values,
 // buttons: gamepad.js BUTTON names, ids: the touch deck's element ids (index.html).
+// acts (0171): keyMap.js actions; the sheet prints the player's own keys for those rows (codes stay the
+// defaults, which is what every handler reads through input.js keyCode).
+import { setKeyMap } from './input.js';
+import { DEFAULT_KEYS, ACTION_WORDS, defaultMap, keyTable, rebindKey, keyLabel, keyNames, pressedLabel, saveKeys, clearKeys, loadKeys } from './keyMap.js';
 
 export const KEYBOARD = [
-  { input: 'W or ↓', does: 'Nose down', codes: ['KeyW', 'ArrowDown'] },
-  { input: 'S or ↑', does: 'Nose up', codes: ['KeyS', 'ArrowUp'] },
-  { input: 'A or ←  /  D or →', does: 'Bank left / right', codes: ['KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight'] },
-  { input: 'Q / E', does: 'Rudder: swing the nose left / right', codes: ['KeyQ', 'KeyE'] },
-  { input: 'Shift / Ctrl (hold)', does: 'More power / less power', codes: ['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight'] },
-  { input: '[ / ]  (Num 7 / Num 1)', does: 'Trim (holds the nose where you set it) down / up (Pilot; not the F-16)', codes: ['BracketLeft', 'BracketRight', 'Numpad7', 'Numpad1'] },
-  { input: 'Space', does: 'Center the controls and stop any rotation (a sim helper)', codes: ['Space'] },
-  { input: 'G', does: 'Gear up / down (in the air; not the Cessna)', codes: ['KeyG'] },
-  { input: 'F', does: 'Flaps: next notch', codes: ['KeyF'] },
-  { input: 'B', does: 'Brakes on / off', codes: ['KeyB'] },
-  { input: 'K', does: 'Autobrake setting (737)', codes: ['KeyK'] },
-  { input: 'R', does: 'Reverse thrust on the ground (737; power goes to idle)', codes: ['KeyR'] },
-  { input: 'Z', does: 'Autopilot on / off', codes: ['KeyZ'] },
-  { input: 'C', does: 'Next camera view', codes: ['KeyC'] },
-  { input: 'M', does: 'Fly with the mouse on / off', codes: ['KeyM'] },
-  { input: 'H', does: 'Show / hide the instrument panels', codes: ['KeyH'] },
-  { input: 'L', does: 'Landing light on / off (it lights the ground ahead at night)', codes: ['KeyL'] },
+  { input: 'W or ↓', does: 'Nose down', codes: ['KeyW', 'ArrowDown'], acts: ['pitchDown'] },
+  { input: 'S or ↑', does: 'Nose up', codes: ['KeyS', 'ArrowUp'], acts: ['pitchUp'] },
+  { input: 'A or ←  /  D or →', does: 'Bank left / right', codes: ['KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight'], acts: ['bankLeft', 'bankRight'] },
+  { input: 'Q / E', does: 'Rudder: swing the nose left / right', codes: ['KeyQ', 'KeyE'], acts: ['yawLeft', 'yawRight'] },
+  { input: 'Shift / Ctrl (hold)', does: 'More power / less power', codes: ['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight'], acts: ['powerUp', 'powerDown'], hold: true },
+  { input: '[ / ]  (Num 7 / Num 1)', does: 'Trim (holds the nose where you set it) down / up (Pilot; not the F-16)', codes: ['BracketLeft', 'BracketRight', 'Numpad7', 'Numpad1'], acts: ['trimDown', 'trimUp'] },
+  { input: 'Space', does: 'Center the controls and stop any rotation (a sim helper)', codes: ['Space'], acts: ['center'] },
+  { input: 'G', does: 'Gear up / down (in the air; not the Cessna)', codes: ['KeyG'], acts: ['gear'] },
+  { input: 'F', does: 'Flaps: next notch', codes: ['KeyF'], acts: ['flaps'] },
+  { input: 'B', does: 'Brakes on / off', codes: ['KeyB'], acts: ['brakes'] },
+  { input: 'K', does: 'Autobrake setting (737)', codes: ['KeyK'], acts: ['autobrake'] },
+  { input: 'R', does: 'Reverse thrust on the ground (737; power goes to idle)', codes: ['KeyR'], acts: ['reverse'] },
+  { input: 'Z', does: 'Autopilot on / off', codes: ['KeyZ'], acts: ['autopilot'] },
+  { input: 'C', does: 'Next camera view', codes: ['KeyC'], acts: ['camera'] },
+  { input: 'M', does: 'Fly with the mouse on / off', codes: ['KeyM'], acts: ['mouseYoke'] },
+  { input: 'H', does: 'Show / hide the instrument panels', codes: ['KeyH'], acts: ['panels'] },
+  { input: 'L', does: 'Landing light on / off (it lights the ground ahead at night)', codes: ['KeyL'], acts: ['landingLight'] },
   { input: '?', does: 'This controls sheet', keys: ['?'] },
   { input: 'Esc', does: 'Close a menu, the ATIS briefing or this sheet', keys: ['Escape'] },
   { input: 'Tab', does: 'Move between buttons in a menu', keys: ['Tab'] },
@@ -61,37 +65,134 @@ export function sheetSections(touch) {
   return touch ? [t, kb, pad] : [kb, pad, t];
 }
 
+// --- The player's keys (0171). bound: the map in use and the names keys printed when bound. ---
+let bound = loadKeys() ?? { map: defaultMap(), labels: {} };
+let layout = null; // Chromium's keyboard layout map: an AZERTY "A" on KeyQ reads A
+try { navigator.keyboard?.getLayoutMap?.().then((m) => { layout = m; labelKeys(); }, () => {}); } catch { /* no layout API */ }
+const label = (code) => keyLabel(code, bound.labels, layout);
+// A row's keys as the player has them: each action's keys (one name once: Shift, not "Shift or Shift").
+export function keysText(acts, map = bound.map, name = label) {
+  return acts.map((a) => keyNames(map[a], name).join(' or ')).join(' / ');
+}
+// The in-flight key strip (index.html #keyHints, kbd data-k = an action) prints the player's key.
+export function labelKeys() {
+  for (const k of document.querySelectorAll('#keyHints kbd[data-k]')) k.textContent = label(bound.map[k.dataset.k][0]);
+}
+// main.js at boot when a map is stored: use it.
+export function useStoredKeys() {
+  setKeyMap(keyTable(bound.map));
+  labelKeys();
+}
+
 // --- The sheet itself (DOM). The shell is #controlsSheet in index.html. ---
 let filled = false;
 let opener = null;
 let resume = null; // undoes the pause on close, if the sheet made it
+let lastTouch = false;
+let capturing = null; // the action whose key the next keypress binds (Keys view)
+let inKeys = false; // the Keys view is up: Escape goes back to the sheet
 const el = (id) => document.getElementById(id);
 const isOpen = () => !el('controlsSheet').classList.contains('hidden');
+const make = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const H3 = 'text-[11px] font-bold uppercase tracking-wider text-sky-300 mb-1';
 
 function fill(touch) {
+  capturing = null;
+  inKeys = false;
   const body = el('controlsBody');
   body.textContent = '';
   for (const s of sheetSections(touch)) {
-    const sec = document.createElement('section');
-    const h = document.createElement('h3');
-    h.className = 'text-[11px] font-bold uppercase tracking-wider text-sky-300 mb-1';
-    h.textContent = s.title;
-    const dl = document.createElement('dl');
-    dl.className = 'controls-list';
-    for (const r of s.rows) {
-      const dt = document.createElement('dt');
-      dt.textContent = r.input;
-      const dd = document.createElement('dd');
-      dd.textContent = r.does;
-      dl.append(dt, dd);
+    const sec = make('section');
+    const dl = make('dl', 'controls-list');
+    for (const r of s.rows) dl.append(make('dt', null, r.acts ? keysText(r.acts) + (r.hold ? ' (hold)' : '') : r.input), make('dd', null, r.does));
+    sec.append(make('h3', H3, s.title), dl);
+    if (s.rows === KEYBOARD) {
+      const b = make('button', 'hud-btn mt-2 min-h-[44px] px-3 rounded-lg text-xs font-bold text-slate-200', '⌨ CHANGE KEYS');
+      b.id = 'btnKeys';
+      b.addEventListener('click', () => showKeys('btnKeys_' + Object.keys(DEFAULT_KEYS)[0]));
+      sec.append(b);
     }
-    sec.append(h, dl);
     body.append(sec);
   }
 }
 
+// The Keys view: each action, its key on a button; press the button, then the key. Escape cancels a
+// capture; a key another action has is refused, naming it; Reset to defaults; Back to the sheet.
+function showKeys(focusId, msg = '') {
+  capturing = null;
+  inKeys = true;
+  const body = el('controlsBody');
+  body.textContent = '';
+  const sec = make('section', 'col-span-full');
+  sec.append(make('h3', H3, 'Your keys'),
+    make('p', 'text-xs text-slate-300 mb-2', 'Press a button, then the key you want (Esc cancels; Esc again goes back). Saved on this device. The arrow keys, Num 7 / Num 1 and the right Shift and Ctrl always work too and can\'t be changed.'));
+  const dl = make('dl', 'controls-list keys-list');
+  for (const a in DEFAULT_KEYS) {
+    const first = bound.map[a][0];
+    const b = make('button', 'hud-btn min-h-[44px] min-w-[64px] px-3 rounded-lg text-xs font-bold font-mono text-white', label(first));
+    b.id = 'btnKeys_' + a;
+    b.dataset.act = a;
+    b.setAttribute('aria-label', `${ACTION_WORDS[a]}: ${label(first)}. Change`);
+    b.addEventListener('click', () => {
+      if (capturing === a) return showKeys(b.id, 'Not changed.'); // a second tap cancels (a phone has no Esc)
+      if (capturing) showKeys(b.id); // another button was waiting: that one is off
+      capturing = a;
+      el(b.id).textContent = 'Press…';
+      el(b.id).setAttribute('aria-label', `${ACTION_WORDS[a]}: press a key now`);
+      el('txtKeysMsg').textContent = `Press the key for ${ACTION_WORDS[a]}. Esc, or this button again, cancels.`;
+    });
+    const dd = make('dd', 'flex items-center gap-2');
+    dd.append(b);
+    const alt = keyNames(bound.map[a], label).filter((n) => n !== label(first));
+    if (alt.length) dd.append(make('span', 'text-xs text-slate-300', 'also ' + alt.join(', ')));
+    dl.append(make('dt', null, ACTION_WORDS[a]), dd);
+  }
+  const status = make('p', 'text-xs text-amber-200 min-h-[1.25rem] mt-2');
+  status.id = 'txtKeysMsg';
+  status.setAttribute('role', 'status');
+  // A live region inserted with its text already in it is often not read out: put the words in after.
+  if (msg) setTimeout(() => { if (status.isConnected) status.textContent = msg; }, 60);
+  const row = make('div', 'flex flex-wrap gap-2 mt-1');
+  const reset = make('button', 'hud-btn min-h-[44px] px-3 rounded-lg text-xs font-bold text-slate-200', 'RESET TO DEFAULTS');
+  reset.id = 'btnKeysReset';
+  reset.addEventListener('click', () => {
+    bound = { map: defaultMap(), labels: {} };
+    clearKeys();
+    useStoredKeys();
+    showKeys('btnKeysReset', 'Every key is back to the default.');
+  });
+  const back = make('button', 'hud-btn min-h-[44px] px-3 rounded-lg text-xs font-bold text-slate-200', '← BACK');
+  back.id = 'btnKeysBack';
+  back.addEventListener('click', () => { fill(lastTouch); focusIn('btnKeys'); });
+  row.append(reset, back);
+  sec.append(dl, status, row);
+  body.append(sec);
+  if (focusId === 'btnKeys_' + Object.keys(DEFAULT_KEYS)[0]) body.scrollTop = 0; // in from the sheet: the top
+  focusIn(focusId);
+}
+const focusIn = (id) => { const n = el(id); n?.focus({ preventScroll: true }); n?.scrollIntoView({ block: 'nearest' }); };
+
+// A key pressed while a Keys button waits for one.
+function capture(e) {
+  const a = capturing;
+  if (e.key === 'Escape') return showKeys('btnKeys_' + a, 'Not changed.');
+  const r = rebindKey(bound.map, a, e.code);
+  const name = pressedLabel(e) || 'That key';
+  const again = 'Press the button again and pick another key.';
+  if (r.reserved) return showKeys('btnKeys_' + a, `${name} can't be a flight key: the browser uses it. Press the button again and pick a letter or number.`);
+  if (r.fixed) return showKeys('btnKeys_' + a, `${name} always does ${ACTION_WORDS[r.fixed]} and can't be moved. ${again}`);
+  if (r.conflict) return showKeys('btnKeys_' + a, `${name} is already ${ACTION_WORDS[r.conflict]}: change that one first, or pick another key.`);
+  const labels = { ...bound.labels, [e.code]: name };
+  for (const c in labels) if (!Object.values(r.map).some((l) => l.includes(c))) delete labels[c];
+  bound = { map: r.map, labels };
+  const saved = saveKeys(bound.map, bound.labels);
+  useStoredKeys();
+  showKeys('btnKeys_' + a, `${ACTION_WORDS[a]} is now ${name}.` + (saved ? '' : " (This browser won't keep it after a reload.)"));
+}
+
 export function closeControls(restoreFocus = true) {
   if (!isOpen()) return;
+  capturing = null;
   el('controlsSheet').classList.add('hidden');
   resume?.();
   resume = null;
@@ -103,9 +204,10 @@ export function closeControls(restoreFocus = true) {
 // pause(): pauses the flight and returns a function that undoes it (or null if it was already paused).
 export function openControls({ from, touch, pause }) {
   if (isOpen()) return;
+  lastTouch = !!touch;
+  fill(lastTouch); // every open: the rows print the player's keys as they are now
   if (!filled) {
     filled = true;
-    fill(touch);
     el('btnCloseControls').addEventListener('click', (e) => closeControls(e.detail === 0));
     // A tap on the dimmed backdrop closes it on click, not pointerdown: closing on pointerdown let the
     // tap's click land on the control behind (GEAR, ☰ Menu).
@@ -116,6 +218,8 @@ export function openControls({ from, touch, pause }) {
       if (!isOpen()) return;
       e.stopImmediatePropagation();
       if (e.repeat) { e.preventDefault(); return; } // a held "?" must not flicker it
+      if (capturing) { e.preventDefault(); capture(e); return; } // the Keys view waits for a key (0171)
+      if (inKeys && e.key === 'Escape') { e.preventDefault(); fill(lastTouch); focusIn('btnKeys'); return; }
       if (e.key === 'Escape' || e.key === '?') { e.preventDefault(); closeControls(); return; }
       if (e.key !== 'Tab') return;
       const panel = el('controlsPanel');

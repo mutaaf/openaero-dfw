@@ -96,3 +96,113 @@ describe('touchGroundRudder', () => {
     expect(touchGroundRudder(0.2, 30 * kt, wb, steer, -0.4)).toBe(-0.4);
   });
 });
+
+// 0171: rebindable keys. keyMap.js holds the table, storage and rebinding; input.js keyCode reads the Map.
+import { keys, keyCode, setKeyMap } from '../../src/input.js';
+import { DEFAULT_KEYS, ACTION_WORDS, defaultMap, keyTable, readKeys, rebindKey, keyLabel, keyNames, pressedLabel } from '../../src/keyMap.js';
+describe('rebindable keys (0171)', () => {
+  const stored = (map, extra = {}) => JSON.stringify({ v: 1, map, at: 1, ...extra });
+  const press = (code) => { const c = keyCode(code); if (c) keys[c] = true; return c; };
+
+  it('the default table is the old keys, every action named', () => {
+    expect(DEFAULT_KEYS.pitchDown).toEqual(['KeyW', 'ArrowDown']);
+    expect(DEFAULT_KEYS.bankLeft).toEqual(['KeyA', 'ArrowLeft']);
+    expect(DEFAULT_KEYS.powerDown).toEqual(['ControlLeft', 'ControlRight']);
+    expect(DEFAULT_KEYS.trimUp).toEqual(['BracketRight', 'Numpad1']);
+    const all = Object.values(DEFAULT_KEYS).flat();
+    expect(new Set(all).size).toBe(all.length); // no code twice
+    expect(Object.keys(ACTION_WORDS).sort()).toEqual(Object.keys(DEFAULT_KEYS).sort());
+    expect(keyTable(defaultMap())).toBe(null); // the defaults need no table
+  });
+
+  it('with no map every key passes through unchanged', () => {
+    setKeyMap(null);
+    for (const c of ['KeyW', 'KeyA', 'ShiftLeft', 'KeyX', 'Space']) expect(keyCode(c)).toBe(c);
+  });
+
+  it('bank left on KeyJ: KeyJ banks left, KeyA does nothing, the arrow still banks', () => {
+    const r = rebindKey(defaultMap(), 'bankLeft', 'KeyJ');
+    expect(r.map.bankLeft).toEqual(['KeyJ', 'ArrowLeft']);
+    setKeyMap(keyTable(r.map));
+    expect(keyCode('KeyJ')).toBe('KeyA');
+    expect(keyCode('KeyA')).toBe(null);
+    expect(keyCode('ArrowLeft')).toBe('ArrowLeft');
+    expect(keyCode('KeyW')).toBe('KeyW');
+    expect(keyCode('KeyX')).toBe('KeyX'); // unbound: passes through, nothing reads it
+    for (const k in keys) keys[k] = false;
+    press('KeyJ');
+    expect(pilotTargets(keys).roll).toBe(-1);
+    for (const k in keys) keys[k] = false;
+    press('KeyA');
+    expect(pilotTargets(keys).roll).toBe(0);
+    setKeyMap(null);
+  });
+
+  it('a moved key can take another action; setKeyMap lets go of held keys', () => {
+    let m = rebindKey(defaultMap(), 'bankLeft', 'KeyJ').map;
+    m = rebindKey(m, 'gear', 'KeyA').map;
+    keys.KeyW = true;
+    setKeyMap(keyTable(m));
+    expect(keys.KeyW).toBe(false);
+    expect(keyCode('KeyA')).toBe('KeyG');
+    expect(keyCode('KeyG')).toBe(null);
+    setKeyMap(null);
+  });
+
+  it('refuses a key another action has, naming it; Tab and Escape are reserved', () => {
+    expect(rebindKey(defaultMap(), 'bankLeft', 'KeyD')).toEqual({ conflict: 'bankRight' });
+    expect(rebindKey(defaultMap(), 'bankLeft', 'ArrowLeft')).toEqual({ fixed: 'bankLeft' }); // its own second key
+    expect(rebindKey(defaultMap(), 'gear', 'ArrowUp')).toEqual({ fixed: 'pitchUp' }); // a key that never moves
+    expect(rebindKey(defaultMap(), 'gear', 'ShiftRight')).toEqual({ fixed: 'powerUp' });
+    expect(rebindKey(defaultMap(), 'bankLeft', 'KeyA').map.bankLeft).toEqual(['KeyA', 'ArrowLeft']); // the same key: fine
+    expect(rebindKey(defaultMap(), 'gear', 'Tab')).toEqual({ reserved: true });
+    expect(rebindKey(defaultMap(), 'gear', 'Escape')).toEqual({ reserved: true });
+    expect(rebindKey(defaultMap(), 'gear', 'MetaLeft')).toEqual({ reserved: true });
+    expect(rebindKey(defaultMap(), 'gear', '')).toEqual({ reserved: true });
+    // Keys whose browser default would still run, or that latch (panel): F5 reloads, CapsLock sends no
+    // keyup on macOS, Slash/Quote open Firefox's quick find (and Shift+/ is "?"), Alt the menu bar,
+    // Ctrl (power) + N/T opens a window.
+    for (const c of ['F5', 'F11', 'CapsLock', 'NumLock', 'Slash', 'Quote', 'AltLeft', 'AltGraph', 'KeyN', 'KeyT', 'ContextMenu'])
+      expect(rebindKey(defaultMap(), 'gear', c)).toEqual({ reserved: true });
+    for (const c of ['KeyJ', 'Digit5', 'Numpad5', 'Semicolon', 'Enter', 'Backquote'])
+      expect(rebindKey(defaultMap(), 'gear', c).map.gear).toEqual([c]);
+  });
+
+  it('reset: the default map again is no table at all', () => {
+    const m = rebindKey(defaultMap(), 'powerDown', 'KeyX').map;
+    expect(keyTable(m)).not.toBe(null);
+    expect(keyTable(rebindKey(m, 'powerDown', 'ControlLeft').map)).toBe(null);
+  });
+
+  it('reads a stored map; corrupt or foreign data falls back to the defaults', () => {
+    const m = rebindKey(defaultMap(), 'bankLeft', 'KeyJ').map;
+    expect(readKeys(stored(m, { labels: { KeyJ: 'J', KeyZ: 'nope' } }))).toEqual({ map: m, labels: { KeyJ: 'J', KeyZ: 'nope' } });
+    for (const raw of [null, '', '{', 'null', '[]', '42', JSON.stringify({ v: 2, map: m }), JSON.stringify({ v: 1 })]) expect(readKeys(raw)).toBe(null);
+    // A code bound twice drops the map; a bad action keeps its default.
+    expect(readKeys(stored({ ...m, gear: ['KeyJ'] }))).toBe(null);
+    const bad = readKeys(stored({ ...m, gear: 'KeyG', flaps: ['F5'], brakes: ['KeyB', 'KeyN'], camera: [7] }));
+    expect(bad.map.gear).toEqual(['KeyG']);
+    expect(bad.map.flaps).toEqual(['KeyF']);
+    expect(bad.map.brakes).toEqual(['KeyB']);
+    expect(bad.map.camera).toEqual(['KeyC']);
+    expect(bad.map.bankLeft).toEqual(['KeyJ', 'ArrowLeft']);
+    // Labels only for bound codes, short strings.
+    expect(readKeys(stored(m, { labels: { KeyJ: 'J', KeyY: 'Y', KeyW: 'x'.repeat(40) } })).labels).toEqual({ KeyJ: 'J' });
+  });
+
+  it('names a key by what it printed, else the layout, else its code', () => {
+    expect(keyLabel('KeyJ')).toBe('J');
+    expect(keyLabel('Digit5')).toBe('5');
+    expect(keyLabel('Numpad7')).toBe('Num 7');
+    expect(keyLabel('ArrowLeft')).toBe('←');
+    expect(keyLabel('ControlRight')).toBe('Right Ctrl');
+    expect(keyNames(['ShiftLeft', 'ShiftRight'])).toEqual(['Shift']); // the default row: Shift
+    expect(keyNames(['KeyP', 'ShiftRight'])).toEqual(['P', 'Right Shift']); // says which one is left
+    expect(keyLabel('BracketLeft')).toBe('[');
+    expect(keyLabel('KeyQ', {}, new Map([['KeyQ', 'a']]))).toBe('A'); // AZERTY
+    expect(keyLabel('KeyQ', { KeyQ: 'Ä' }, new Map([['KeyQ', 'a']]))).toBe('Ä');
+    expect(pressedLabel({ key: 'j', code: 'KeyJ' })).toBe('J');
+    expect(pressedLabel({ key: ' ', code: 'Space' })).toBe('Space');
+    expect(pressedLabel({ key: 'Shift', code: 'ShiftLeft' })).toBe('Shift');
+  });
+});
