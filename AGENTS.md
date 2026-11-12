@@ -254,6 +254,20 @@ src/steepTurns.js   steep turns (0161, lazy chunk loaded with the mission): the 
                     and Learner get a 53° bank cap there (assists.js s.bankMaxDeg: full stick = 45°), Kid's guide flies the
                     turns (pitch for the path less α(1 − cos φ)) and Kid's autothrottle holds 95. sim.steepTurns is null once
                     graded (KEEP FLYING is free flight). Cards: tests/flight/steepTurns.test.js
+src/upset.js        unusual-attitude recovery (0174, lazy chunk loaded with its two missions, `upset: 'high' | 'low'`):
+                    the C172 spawns level at 100 KIAS, 5,000 ft AGL over Grapevine Lake; 1.5 s after the player starts
+                    flying (the sim runs behind the start screen, so never before) the instructor hands it over
+                    (applyUpset): nose-high +35°, 60 KIAS, slowing; or nose-low −25° in a 60° left bank, 130 KIAS.
+                    Recovered = wings ±10°, nose ±5°, ≥ 70 KIAS for 1 s. Graded on time, height, the order
+                    (FAA-H-8083-15B pp. 7-27/7-28: nose-high power, nose down, wings; nose-low idle, wings, ease back;
+                    out of order ≤ B) and peak g; failed (D) by a stall, the stall warning (α within 3°) after 3 s,
+                    VNE, +3.8 g, 20 s, or, on Pilot, hands off the whole way (the game's stick-fixed Cessna comes round
+                    itself). "Hands off" and a pull in the bank (named) read the player's own stick (main.js
+                    sim.pitchIn / rollIn), never the assists' output. Its ua* words reach coach.js through s.ds.
+                    Cards: tests/flight/upset.test.js
+src/noXr.js         a stand-in for three's WebXRManager (vite.config.js aliases WebGLRenderer's import to it): XR
+                    off, ~3.7 kB gz off boot (0174). tests/unit/upset.test.js checks it has every `xr.` member
+                    three's WebGL renderer reads outside a presenting session. Want WebXR: drop the alias.
 src/apTutor.js      autopilot "show and teach": what it is doing and why, per phase (pure
                     state machine like coach.js); shown in the coach card, spoken, Your turn.
                     A lazy chunk fetched right after boot (0091); its on/off flag and blank
@@ -621,6 +635,9 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid
+for by aliasing three's WebXRManager to src/noXr.js, −3.7 kB: WebGLRenderer built the whole WebXR stack, its controllers and
+depth sensing, for a sim that never starts an XR session). ~3.4 kB of headroom: spend it on features, not by default.
 2026-10-26 (0078): 200.89 kB (magvar +70 B, paid for by `byId` for main.js's ~200
 `document.getElementById` calls, −180 B). 2026-10-26 (0087): 200.99 kB (main was 199.89 after 0086/0034/0085; the drill's wiring and prompts, its
 state machine, grade and card text are a lazy chunk). 2026-10-26 (0090): 200.98 kB (pitch stability +90 B, paid for by

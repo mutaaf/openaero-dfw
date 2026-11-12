@@ -1,12 +1,12 @@
 ---
 id: 0174
 title: Unusual-attitude recovery drill: start nose-high or in a diving spiral, recover to level
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-11
-pr:
+pr: 238
 ---
 
 ## Why
@@ -40,3 +40,20 @@ from telemetry and that the results card renders at both viewports.
 
 ## Out of scope
 Inverted starts, aerobatics, spins, the 737 and F-16.
+
+## Builder notes (2026-11-12)
+- Source read: FAA-H-8083-15B, Instrument Flying Handbook, ch. 7 "Recovery from Unusual Attitudes", pp. 7-27/7-28
+  (nose-high: power, forward pressure, wings; nose-low: reduce power, wings level, smooth back pressure; "the
+  instinctive reaction to a nose-down attitude is to pull back"). It also says the instructor puts the airplane there.
+- The sim flies behind the start screen, so the set-up is not the spawn: the Cessna spawns level at 100 KIAS and the
+  instructor hands it over 1.5 s after the player starts flying (src/upset.js applyUpset). The nose-high set-up is
+  60 KIAS (not ~45: the model's clean stall is 53 KIAS, so 45 would start below it), α 4°, power 0.55.
+- The stall warning in the pass rule is the wing within 3° of its stall angle (stallDrill.js's margin), not the HUD's
+  banner: that one is IAS-based at 1 g, and it sounds through a correct zero-g push-over.
+- Hands off, the stick-fixed flightModel.js Cessna recovers by itself from both (nose-high: a phugoid dive to ~145 KIAS,
+  not level in 20 s; nose-low: rolls out of the 60° bank by itself at ~157 KIAS). The JSBSim C172 stays in the spiral
+  (physics panel: bank −46° to −72° for 20 s). So on Pilot "do nothing" (under 1 s of stick in all) fails as not flown,
+  not as a spiral; which model is right about the real C172's spiral stability has no source in hand (a Scout ticket).
+- The drill reads the player's own stick (main.js sim.pitchIn / rollIn, before the assists); a pull in the bank is the
+  stick back with 1.5 g felt, or 0.2 of stick; the stall warning fails after 1 s in the band with the nose up.
+- Boot: +0.31 kB for the two entries and the wiring, paid for by aliasing three's WebXRManager to src/noXr.js (−3.7 kB).
