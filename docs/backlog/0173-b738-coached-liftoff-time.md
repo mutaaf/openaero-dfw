@@ -1,7 +1,7 @@
 ---
 id: 0173
 title: The coached 737 takeoff lifts off 3–4 s after Vr, as the FCTM says
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: player-feel

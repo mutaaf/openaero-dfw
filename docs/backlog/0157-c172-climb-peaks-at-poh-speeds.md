@@ -1,7 +1,7 @@
 ---
 id: 0157
 title: The Cessna climbs steepest at Vx (62 KIAS) and fastest at Vy (74 KIAS), as the POH says
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
