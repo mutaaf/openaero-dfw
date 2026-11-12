@@ -18,7 +18,7 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts, stallSpeedKts, isStallWarning } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
-import { DT, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, steadyRoll } from './harness.js';
+import { DT, loadFactorMeter, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, steadyRoll } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
@@ -1408,4 +1408,116 @@ describe('Cessna 172S fuel burn vs POH (flightModel, ticket 0162)', () => {
     expect(b.engineN).toBeLessThan(0.01);
     expect(brakePowerPct(b, engineRpm)).toBe(0);
   });
+});
+
+// Maneuvering speed (ticket 0167; first cut by the Validator in #228). Va (maneuvering speed) is the
+// speed below which one full, abrupt pull stalls the wing before it reaches the limit load. The POH
+// prints it (172S POH July 8/98, Section 2, Fig. 2-1 "Airspeed Limitations", p. 2-4: VA 102 KCAS /
+// 105 KIAS at 2,550 lb, 95 / 98 at 2,200 lb, 88 / 90 at 1,900 lb; VNO 126 / 129, VNE 160 / 163), with
+// the normal-category limit on p. 2-10 ("Flight Load Factor Limits", 2,550 lb, flaps up: +3.8 g,
+// -1.52 g). The physics behind the number is the certification rule the 172S was built to: Va >=
+// Vs x sqrt(n) (former 14 CFR 23.335(c)(1)) with n = +3.8 g (former 23.337(a)(1)), both removed by
+// Amendment 23-64 in 2017; FAA-H-8083-3C ch. 5, "Maneuvering speed": Va falls with weight. It covers
+// one full deflection on one axis, not combined or reversed inputs. The model has no instrument
+// error, so the cards fly the POH's KCAS; the height (4,900 ft, the steep-turn cards') does not
+// change a calibrated speed's load factor (3.59 g at sea level too). The model does not enforce the
+// limit (nothing breaks above Va): these cards say what a pilot would feel.
+// The model's 1-g stall is fitted to POH Fig. 5-3 (53 KCAS clean), so the first cards link two POH
+// figures (Fig. 2-1's Va and Fig. 5-3's stall) through the model's lift curve: it reads 103.5 / 96.2 /
+// 89.4 KCAS at 2,550 / 2,200 / 1,900 lb, 1.2-1.6% over the printed rows. Those three rows are no flight
+// (Va from the formula scales with sqrt(W) by construction, and so do the POH's rows); the 2,200 lb
+// pull is the card that flies the weight. The spec's own mass is 1,150 kg (2,535 lb), so the cards
+// set 2,550 lb.
+// Measured (0.5 s stick ramp to full aft, then held 3.5 s, trim held where it was): at Va 3.56 g
+// (flightModel.js) / 3.32 g (JSBSim, whose 1-g stall is a little higher: it passes the POH's Va with
+// more margin), at 1.3 Va 5.94 / 5.65 g, each peak at the clean stall AoA; at 2,200 lb 3.56 g at its
+// own Va and 4.08 g at the 2,550 lb Va.
+const POH_VA_KCAS = [[2550, 102], [2200, 95], [1900, 88]]; // POH Fig. 2-1, p. 2-4
+const LIMIT_G = 3.8; // POH p. 2-10, normal category, flaps up
+const LB_TO_KG = 0.45359237;
+const atLb = (lb) => ({ ...c172, massKg: lb * LB_TO_KG });
+const vaModelKts = (spec) => stallSpeedKts(spec, 0) * Math.sqrt(LIMIT_G);
+// At `kts` at 4,900 ft on the power for level flight (full throttle where that is not enough: 1.3 Va
+// is past the C172's top speed, so it is held in a shallow dive), then the stick full aft in 0.5 s
+// and held. The trim stops following the AoA (autoTrim off, as fullBackAfterStall does): a trim
+// that chases α zeroes the stability that resists the stick and the pull ends at 90°. Returns the
+// speed when the pull began, the peak seat load factor and the angle of attack at that peak.
+function fullPull(spec, kts) {
+  const altM = 1500;
+  const throttle = Math.min(1, trimThrottle(spec, kts * KTS_TO_MPS, 0, 0, true, airAt(altM)));
+  const b = makeBody(spec, { kts, altM, throttle });
+  const hold = speedHoldPilot(() => kts);
+  fly(b, spec, 40, (x, dt) => { hold(x, dt); x.throttle = throttle; });
+  b.autoTrim = false;
+  const meter = loadFactorMeter();
+  meter(b);
+  const t0 = b.t, startKts = b.iasKts;
+  let peakG = 0, aoaAtPeak = 0;
+  fly(b, spec, 4, (x) => {
+    x.elevInput = -Math.min(1, (x.t - t0) / 0.5); // - = back stick
+    x.aileronInput = 0;
+  }, (x) => {
+    const g = meter(x);
+    if (g > peakG) { peakG = g; aoaAtPeak = x.aoaDeg; }
+    return false;
+  });
+  return { peakG, aoaAtPeak, startKts };
+}
+
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S maneuvering speed Va, POH Fig. 2-1 (${model}, ticket 0167)`, () => {
+  const r = {};
+  const va = POH_VA_KCAS[0][1];
+  const gross = atLb(2550); // JSBSim's C172 is 2,550 lb from its own mass and payload
+  beforeAll(async () => {
+    useFdm(model === 'jsbsim' ? await nodeJsbsim() : null);
+    r.atVa = fullPull(gross, va);
+    r.above = fullPull(gross, 1.3 * va);
+    console.log(`[c172 ${model}] start ${r.atVa.startKts.toFixed(1)} / ${r.above.startKts.toFixed(1)} kt; full pull at Va ${va} KCAS: `
+      + `${r.atVa.peakG.toFixed(2)} g, AoA at the peak ${r.atVa.aoaAtPeak.toFixed(1)}°; `
+      + `at 1.3 Va ${(1.3 * va).toFixed(0)} KCAS: ${r.above.peakG.toFixed(2)} g, AoA at the peak ${r.above.aoaAtPeak.toFixed(1)}°`);
+  }, 120000);
+  afterAll(() => useFdm(null));
+
+  // The pull is checked on its own (LESSONS 2026-11-11): it starts at the speed asked and really does
+  // take the wing to the stall in both runs (the peak g comes at the stall angle, not short of it on
+  // a stick that ran out), so a weak pull cannot pass the ceiling or the 1.3 Va card.
+  it('each pull starts at the speed asked (±1 kt) and its peak g comes at the stall angle of attack (±2°)', () => {
+    for (const [k, x, kts] of [['Va', r.atVa, va], ['1.3 Va', r.above, 1.3 * va]]) {
+      expect(Math.abs(x.startKts - kts), k).toBeLessThan(1);
+      expect(Math.abs(x.aoaAtPeak - stallAoaDeg(c172, 0)), k).toBeLessThanOrEqual(2);
+    }
+  });
+  // No transient allowance (the ticket offered +0.3 g): the pull peaks under the steady value
+  // (102/53)^2 = 3.7 g, so the bare limit holds. With the clean stall AoA raised 14.1 -> 15.8°
+  // (~12% more CLmax) it reads 3.83 g and this card fails; with the 0.3 g allowance it passed.
+  // (14.1 -> 15.0°, ~5% more, passes here at 3.71 g and fails the one-sided Va rows below.)
+  // The floor is the steady value less ~10% (JSBSim's higher stall: 3.0 g): mass x1.1 read 3.28 g.
+  it('a full, abrupt pull at the POH Va (102 KCAS, 2,550 lb) stalls the wing at or under the +3.8 g limit', () => {
+    expect(r.atVa.peakG).toBeLessThanOrEqual(LIMIT_G);
+    expect(r.atVa.peakG).toBeGreaterThan(model === 'jsbsim' ? 3.0 : 3.3);
+  });
+  it('the same pull at 1.3 Va goes past +3.8 g: the wing can pull more than the POH limit load', () => {
+    expect(r.above.peakG).toBeGreaterThan(LIMIT_G);
+  });
+});
+
+describe('Cessna 172S Va vs weight, POH Fig. 2-1 (flightModel, ticket 0167)', () => {
+  // Each POH row against the model's 1-g stall x sqrt(3.8) at that weight. One-sided: the model's Va
+  // may not sit under the printed one (less 0.5%, the POH's whole-knot rounding), or a full pull at
+  // the printed Va would pass the limit; and at most 3% over it.
+  for (const [lb, kcas] of POH_VA_KCAS) {
+    it(`at ${lb} lb the model's 1-g stall x sqrt(3.8) is the POH's Va ${kcas} KCAS, -0.5% / +3%`, () => {
+      const ratio = vaModelKts(atLb(lb)) / kcas;
+      expect(ratio).toBeGreaterThanOrEqual(0.995);
+      expect(ratio).toBeLessThanOrEqual(1.03);
+    });
+  }
+  it('at 2,200 lb a full pull at its own Va (95 KCAS) stays within +3.8 g, and at the 2,550 lb Va it makes over 0.3 g more', () => {
+    const light = atLb(2200);
+    const own = fullPull(light, 95), grossVa = fullPull(light, 102);
+    console.log(`[c172 flightModel] 2,200 lb full pull at 95 KCAS ${own.peakG.toFixed(2)} g (AoA ${own.aoaAtPeak.toFixed(1)}°), at 102 KCAS ${grossVa.peakG.toFixed(2)} g`);
+    expect(Math.abs(own.aoaAtPeak - stallAoaDeg(c172, 0))).toBeLessThanOrEqual(2);
+    expect(own.peakG).toBeLessThanOrEqual(LIMIT_G);
+    expect(grossVa.peakG).toBeGreaterThan(own.peakG + 0.3);
+  }, 30000);
 });

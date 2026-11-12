@@ -1,12 +1,12 @@
 ---
 id: 0167
 title: Cessna maneuvering-speed card: a full back-stick pull at Va stalls before it reaches the 3.8 g limit
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-10
-pr:
+pr: 233
 ---
 
 ## Why
@@ -41,3 +41,17 @@ The new cards in c172.test.js against the flightModel (and JSBSim if the harness
 
 ## Out of scope
 Structural failure or a break-up animation; an overspeed warning (0127 owns Vne/Vno/Vfe).
+
+## Build notes (Builder, 2026-11-11)
+The POH is readable (befa.org copy, `pdftotext -layout`): Fig. 2-1 "Airspeed Limitations" (p. 2-4) prints VA
+102 KCAS / 105 KIAS at 2,550 lb, 95 / 98 at 2,200 lb, 88 / 90 at 1,900 lb (VNO 126 / 129, VNE 160 / 163);
+"Flight Load Factor Limits" (p. 2-10) +3.8 g / -1.52 g flaps up. So the cards fly the printed Va (KCAS: the
+model has no instrument error) and check the weight scaling against the POH's own 2,200 and 1,900 lb rows, not
+the ticket's 2,100 lb. Started from the Validator's draft (#228). The +0.3 g allowance is not used: the pull
+peaks under its steady value, and with it a +12% CLmax mutation passed; without it that mutation fails.
+Flown at 4,900 ft (the steep-turn cards' height) instead of sea level: Va is a calibrated speed, so the height
+does not change the pull (3.59 g at sea level too). The ticket's `law.cornell.edu/cfr/text/14/23.337` link is
+dead: Va >= Vs sqrt(n) was former 14 CFR 23.335(c)(1) and n = 3.8 former 23.337(a)(1), both removed by
+Amendment 23-64 (2017). Validation panel: the pull now flies with the trim held (autoTrim off: a trim chasing
+α took it to 90°), both pulls must peak at the stall AoA, the Va rows are one-sided (-0.5% / +3%: a +5%
+CLmax mutation now fails), floors 3.3 g / 3.0 g (JSBSim), and the gross cards fly 2,550 lb (the spec is 2,535).
