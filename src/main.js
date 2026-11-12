@@ -1025,7 +1025,7 @@ let sfLib = null;
 function checkSlowFlight(dt) {
   const ev = sim.slowFlight && sfLib.slowSimStep(sim.slowFlight, sim, dt, cockpitEntered && !modalOpen());
   // Kid's autothrottle: the slow-down's integral trim is not the hold's (wound up, it sagged the Cessna under the band).
-  if (ev === 'holding') sim.apAt.trim = 0;
+  if (ev === 'holding' && sim.assist === 'kid') sim.apAt.trim = 0;
   if (ev !== 'complete' && ev !== 'failed') return;
   const result = sfLib.gradeSlowFlight(sim.slowFlight, sim.assist === 'kid');
   sim.slowFlight = null;
@@ -1057,7 +1057,7 @@ function startDrills(mission) {
   drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight);
   if (mission.wake) loadDrill(mission, wakeLib, () => import('./wake.js'), (lib) => { wakeLib = lib; if (sim.aircraftKey === mission.aircraft) sim.wake = lib.createWake(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
-  if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; sim.slowFlight = lib.createSlowFlight(); });
+  if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
   if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
