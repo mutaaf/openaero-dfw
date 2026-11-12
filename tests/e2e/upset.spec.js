@@ -34,7 +34,7 @@ test('?mission=upset_nose_low on Pilot: the briefing, the hand-over in a diving 
   await page.screenshot({ path: test.info().outputPath('upset-low-1280.png') });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('#resultsCard')).toContainText(/Not recovered/);
-  await expect(page.locator('#resultsCard')).toContainText(/didn't touch the controls/);
+  await expect(page.locator('#resultsCard')).toContainText(/hardly touched the stick/);
   await expect(page.locator('#resultsCard')).not.toContainText(/pulled/);
   await page.screenshot({ path: test.info().outputPath('upset-low-card-1280.png') });
   expect(errors).toEqual([]);
@@ -54,6 +54,6 @@ test('?mission=upset_nose_low on Learner, hands off: the card never blames the p
   await expect.poll(async () => (await snap(page)).upset?.phase, { timeout: 10_000 }).toBe('recover');
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 60_000 });
   await expect(page.locator('#resultsCard')).toContainText(/assists levelled it for you|Not level in 20 s/);
-  await expect(page.locator('#resultsCard')).not.toContainText(/pulled|didn't touch/);
+  await expect(page.locator('#resultsCard')).not.toContainText(/pulled|hardly touched/);
   expect(errors).toEqual([]);
 });

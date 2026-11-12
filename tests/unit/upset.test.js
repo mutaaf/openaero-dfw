@@ -110,7 +110,7 @@ describe('upset.js state machine', () => {
   it('hands off the whole way is not a recovery: failed in its own words', () => {
     const r = run('low', (t) => ({ throttle: 0.75, bankDeg: Math.min(0, -60 + t * 10), pitchDeg: t < 6 ? -10 : 0, iasKts: 150 }));
     expect(r.st.why).toBe('hands');
-    expect(r.grade.reason).toMatch(/didn't touch the controls.*throttle to idle/);
+    expect(r.grade.reason).toMatch(/hardly touched the stick.*throttle to idle/);
     expect(r.grade.reason).not.toMatch(/pulled/);
   });
   it('Kid\'s recovery carries the note; a failed one does not', () => {
@@ -121,6 +121,19 @@ describe('upset.js state machine', () => {
   // Panel (first-timer): Learner's assists roll back past 45° and hold the nose. The drill reads the player's own
   // stick (main.js sim.pitchIn / rollIn), never the assists' output: hands off on Kid or Learner is the assists'
   // recovery (a note), not a fail and not the player's pull.
+  it('the throttle alone, or a nudge of the stick, is not flying it (physics panel: idle only graded B 78)', () => {
+    const idleOnly = run('low', (t) => ({ throttle: 0, bankDeg: Math.min(0, -60 + t * 10), pitchDeg: t < 6 ? -10 : 0, iasKts: 140 }));
+    expect(idleOnly.st.why).toBe('hands');
+    const nudge = run('low', (t) => ({ throttle: 0, rollIn: t < 0.3 ? 0.5 : 0, bankDeg: Math.min(0, -60 + t * 10), pitchDeg: t < 6 ? -10 : 0, iasKts: 140 }));
+    expect(nudge.st.why).toBe('hands');
+  });
+  it('a gentle pull in the bank is caught by the g it pulls; a brush with the stall band is not a stall warning', () => {
+    const gentle = run('low', (t) => ({ ...lowGood(t), pitchIn: t < 3 ? -0.1 : lowGood(t).pitchIn, g: t < 3 ? 2.4 : lowGood(t).g, bankDeg: t < 3 ? -55 : 0 }));
+    expect(gentle.st.pulled).toBe(true);
+    // α in the band for 0.5 s with the nose up, after 3 s: not the warning; nose below the horizon: not either.
+    expect(run('high', (t) => ({ ...highGood(t), aoaDeg: t > 3.2 && t < 3.7 ? 11.5 : 3 })).ev).toBe('done');
+    expect(run('high', (t) => ({ ...highGood(t), aoaDeg: t > 3.2 && t < 5 ? 11.5 : 3, pitchDeg: -4 })).ev).toBe('done');
+  });
   it('Kid and Learner hands off: the assists level it, no "hands" fail, no pull, Learner gets its own note', () => {
     const assists = (t) => ({ assisted: true, throttle: 0.75, bankDeg: Math.min(0, -60 + t * 20), pitchDeg: Math.min(0, -25 + t * 6), iasKts: 140 });
     const r = run('low', assists);
@@ -158,7 +171,7 @@ describe('upset.js coach', () => {
 describe('applyUpset', () => {
   it('sets the attitude, keeps the heading, and points the velocity aoaDeg under the nose at the set-up\'s IAS', () => {
     const q = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.PI / 2); // heading 090
-    const body = { quat: q, vel: new Vector3(55, 0, 0), angVel: new Vector3(1, 2, 3), iasKts: 100, throttle: 0.6, engineN: 0.6 }; // east, 55 m/s TAS at 100 KIAS
+    const body = { quat: q, vel: new Vector3(55, 0, 0), angVel: new Vector3(1, 2, 3), iasKts: 100, tasKts: 55 / KTS_TO_MPS, throttle: 0.6, engineN: 0.6 }; // east, 55 m/s TAS at 100 KIAS
     applyUpset(body, UPSETS.low);
     const st = createUpset('low');
     const sim = { ...body, pos: new Vector3(0, 1600, 0), aoaDeg: 1, spec: AIRCRAFT_DATABASE.c172, flapsIndex: 0, elevInput: 0, aileronInput: 0, loadFactor: 1 };

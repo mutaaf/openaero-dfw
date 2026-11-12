@@ -33,22 +33,28 @@ export const UPSET_LEVEL_PITCH_DEG = 5;
 export const UPSET_MIN_KTS = 70;
 export const UPSET_HOLD_S = 1;
 // Not recovered within 20 s fails; so does a stall, VNE or the +3.8 g limit. The stall warning (the
-// wing within 3° of its stall angle, as stallDrill.js's) after the first 3 s fails too: the push
-// comes before the stall, not after it.
+// wing within 3° of its stall angle, as stallDrill.js's) held 1 s with the nose above the horizon, after
+// the first 3 s, fails too: the push comes before the stall, not after it. (A gust's or a bunt's passing
+// brush with the band is not it: the physics panel failed a correct 10°/s push in 6 of 30 gust phases.)
 export const UPSET_FAIL_S = 20;
 export const UPSET_GRACE_S = 3;
 export const UPSET_WARN_MARGIN_DEG = 3;
+export const UPSET_WARN_S = 1;
 export const UPSET_G_LIMIT = 3.8;
 // Flown, not watched: the player's own stick (before the assists: main.js sim.pitchIn / rollIn) 0.1 or more
-// off centre either way, or the lever 0.05 off the hand-over's, at some point. Hands off, the game's stick-fixed
-// Cessna comes round by itself (tests/flight/upset.test.js: nose-low, out of the bank at 157 KIAS; nose-high, a
-// dive to ~145 kt): on Pilot that is not the pilot's recovery. On Kid and Learner the assists fly it (a note).
+// off centre either way for UPSET_FLOWN_S in all (a nudge, or the throttle alone, is not flying it). Hands off,
+// flightModel.js's stick-fixed Cessna comes round by itself (tests/flight/upset.test.js: nose-low, out of the bank
+// at 157 KIAS; nose-high, a dive to ~145 kt; the JSBSim C172 stays in the spiral, physics panel): on Pilot that
+// is not the pilot's recovery. On Kid and Learner the assists fly it (a note).
 export const UPSET_MOVED = 0.1;
+export const UPSET_FLOWN_S = 1;
 // The power steps: "increase power" is the lever 0.2 above the hand-over's (or full); "reduce" is 0.25 or less.
 export const UPSET_POWER_UP = 0.2;
 export const UPSET_POWER_IDLE = 0.25;
-// Back pressure (the player's stick 0.2 nose-up or more) with more than 30° of bank, nose low: pulling in the bank.
+// Pulling in the bank: more than 30° of it with the nose low, the player's stick back (0.05 or more) and the pull
+// felt (1.5 g or more), or the stick 0.2 back or more. Read by its effect too: −0.19 held 3 s pulled 2.65 g (panel).
 export const UPSET_PULL = 0.2;
+export const UPSET_PULL_G = 1.5;
 export const UPSET_PULL_BANK_DEG = 30;
 export const UPSET_PLACE = { name: 'Over Grapevine Lake · 5,000 ft' };
 
@@ -70,23 +76,25 @@ Object.assign(RANK, { uaHands: 1, uaPower: 2, uaPush: 2, uaWings: 2, uaBuild: 1,
 // phase: 'brief' (before the hand-over, flying level), 'recover', 'done' or 'failed' (graded).
 export const createUpset = (kind) => ({
   kind, phase: 'brief', wait: 0, t: 0, held: 0, alt0: 0, thr0: 0, maxKts: 0, maxG: 1, maxAltDevFt: 0,
-  tPower: -1, tNose: -1, tWings: -1, pulled: false, moved: false, why: null,
+  tPower: -1, tNose: -1, tWings: -1, pulled: false, moved: false, stickS: 0, warnS: 0, why: null,
 });
 
 // The airplane in the set-up's attitude and speed, its heading kept: body.quat, vel, angVel, throttle.
-// The speed is the set-up's IAS at today's IAS-to-TAS ratio. Allocates nothing.
+// The speed is the set-up's IAS at today's IAS-to-TAS ratio, through the air. Allocates nothing.
 export function applyUpset(body, u) {
   const { x, y, z, w } = body.quat;
   const yaw = Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y));
-  const ratio = body.iasKts > 1 ? body.vel.length() / (body.iasKts * KTS_TO_MPS) : 1;
+  const ratio = body.iasKts > 1 && body.tasKts > 1 ? body.tasKts / body.iasKts : 1; // TAS per IAS here
   // YXZ Euler (yaw, pitch, roll; roll + = left wing up, three's sense) to a quaternion, as three's setFromEuler.
   const c1 = Math.cos(u.pitchDeg * DEG_TO_RAD / 2), s1 = Math.sin(u.pitchDeg * DEG_TO_RAD / 2);
   const c2 = Math.cos(yaw / 2), s2 = Math.sin(yaw / 2);
   const c3 = Math.cos(-u.bankDeg * DEG_TO_RAD / 2), s3 = Math.sin(-u.bankDeg * DEG_TO_RAD / 2);
   body.quat.set(s1 * c2 * c3 + c1 * s2 * s3, c1 * s2 * c3 - s1 * c2 * s3, c1 * c2 * s3 - s1 * s2 * c3, c1 * c2 * c3 + s1 * s2 * s3);
-  // The relative wind meets the wing aoaDeg under the nose: the velocity points that far below it, in body axes.
+  // The relative wind meets the wing aoaDeg under the nose: the air-relative velocity points that far below it,
+  // in body axes; the ground velocity adds the wind (as the game's spawn does), so the set-up is the same in any wind.
   const a = u.aoaDeg * DEG_TO_RAD;
   body.vel.set(0, -Math.sin(a), -Math.cos(a)).applyQuaternion(body.quat).multiplyScalar(u.kts * KTS_TO_MPS * ratio);
+  if (body.windVec) body.vel.add(body.windVec);
   body.angVel.set(0, 0, 0);
   body.throttle = u.throttle;
   body.engineN = u.throttle;
@@ -117,12 +125,15 @@ export function upsetStep(st, s) {
   if (st.tPower < 0 && powered) st.tPower = st.t;
   if (st.tNose < 0 && Math.abs(s.pitchDeg) <= UPSET_LEVEL_PITCH_DEG) st.tNose = st.t;
   if (st.tWings < 0 && bank <= UPSET_LEVEL_BANK_DEG) st.tWings = st.t;
-  if (Math.abs(s.pitchIn) >= UPSET_MOVED || Math.abs(s.rollIn) >= UPSET_MOVED || Math.abs(s.throttle - st.thr0) >= UPSET_MOVED / 2) st.moved = true;
-  if (st.kind === 'low' && bank > UPSET_PULL_BANK_DEG && s.pitchDeg < 0 && -s.pitchIn >= UPSET_PULL) st.pulled = true;
+  if (Math.abs(s.pitchIn) >= UPSET_MOVED || Math.abs(s.rollIn) >= UPSET_MOVED) st.stickS += s.dt;
+  if (st.stickS >= UPSET_FLOWN_S) st.moved = true;
+  if (st.kind === 'low' && bank > UPSET_PULL_BANK_DEG && s.pitchDeg < 0
+    && (-s.pitchIn >= UPSET_PULL || (-s.pitchIn >= UPSET_MOVED / 2 && s.g >= UPSET_PULL_G))) st.pulled = true;
+  st.warnS = s.pitchDeg > 0 && s.aoaDeg > s.stallAoaDeg - UPSET_WARN_MARGIN_DEG ? st.warnS + s.dt : 0;
   const why = s.aoaDeg > s.stallAoaDeg ? 'stall'
     : s.iasKts > s.vneKts ? 'vne'
       : s.g > UPSET_G_LIMIT ? 'g'
-        : st.t > UPSET_GRACE_S && s.aoaDeg > s.stallAoaDeg - UPSET_WARN_MARGIN_DEG ? 'warn'
+        : st.t > UPSET_GRACE_S && st.warnS >= UPSET_WARN_S ? 'warn'
           : st.t > UPSET_FAIL_S ? 'time' : null;
   if (why) { st.why = why; st.phase = 'failed'; return 'failed'; }
   const level = bank <= UPSET_LEVEL_BANK_DEG && Math.abs(s.pitchDeg) <= UPSET_LEVEL_PITCH_DEG && s.iasKts >= UPSET_MIN_KTS;
@@ -172,8 +183,8 @@ const FAIL_TEXT = {
   vne: 'Too fast: over the Cessna\'s never-exceed speed, 163 knots. Throttle to idle first, wings level, then pull gently.',
   g: 'Pulled too hard: over the Cessna\'s +3.8 g limit. Level the wings first, then pull gently.',
   time: 'Not level in 20 s. Nose high: full power, nose down, wings level. Nose low: idle, wings level, nose up.',
-  hands: { high: 'You didn\'t touch the controls: the plane sorted itself out slowly and dived. Fly it: full power, stick forward, wings level.',
-    low: 'You didn\'t touch the controls: the plane sorted itself out slowly, much too fast. Fly it: throttle to idle, wings level, then pull gently.' },
+  hands: { high: 'You hardly touched the stick: the plane came round on its own, slowly, in a dive. Fly it: full power, stick forward, wings level.',
+    low: 'You hardly touched the stick: the plane came round on its own, slowly and much too fast. Fly it: throttle to idle, wings level, then pull gently.' },
   pulled: 'You pulled while banked: the spiral tightened. Throttle to idle, roll the wings level, then pull gently.',
 };
 

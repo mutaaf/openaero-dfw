@@ -19,27 +19,33 @@ const c172 = AIRCRAFT_DATABASE.c172;
 const KTS = 100;
 
 // pilot(x, dt, st, t): the recovery after the hand-over (nothing before it).
-function upset(kind, pilot) {
+// windMps: a wind from the north (the drill flies heading 000: a headwind), as main.js's windVec, m/s.
+function upset(kind, pilot, windMps = 0) {
   const b = makeBody(c172, { kts: KTS, altM: 5500 * FT_TO_M, throttle: 0 });
   b.spec = c172;
   b.throttle = b.engineN = trimThrottle(c172, KTS * KTS_TO_MPS, 0, 0, true, airAt(b.pos.y));
   b.apMaster = false;
   b.autoTrim = false;
   b.trimAlphaDeg = trimAoaDeg(c172, KTS * KTS_TO_MPS, 0);
+  b.windVec.set(0, 0, windMps);
+  b.vel.z += windMps; // in trim through the air
   const st = createUpset(kind);
-  let ev = '', at = null, maxKts = 0, minKts = Infinity, maxG = 0, start = null;
+  let ev = '', at = null, maxKts = 0, minKts = Infinity, maxG = 0, start = null, first = null;
   fly(b, c172, 40, (x, dt) => {
     if (st.phase === 'recover') pilot(x, dt, st);
   }, (x) => {
     ev = upsetSimStep(st, x, 1 / 120, true);
     if (ev === 'handover') start = { ...attitude(x), kts: x.iasKts, thr: x.throttle };
+    if (st.phase === 'recover' && st.t > 0 && !first) first = { kts: x.iasKts, aoa: x.aoaDeg };
     if (st.phase === 'recover' && st.t > 0) { maxKts = Math.max(maxKts, x.iasKts); minKts = Math.min(minKts, x.iasKts); maxG = Math.max(maxG, x.loadFactor); }
     return ev === 'done' || ev === 'failed';
   });
   at = attitude(b);
-  return { st, grade: gradeUpset(st), start, end: { ...at, kts: b.iasKts }, maxKts, minKts, maxG };
+  return { st, grade: gradeUpset(st), start, first, end: { ...at, kts: b.iasKts }, maxKts, minKts, maxG };
 }
 
+// The cards fly without main.js's stick auto-trim (a held stick trimmed away over ~8 s on Pilot until the
+// player first trims): a centred stick doesn't trim, so the hands-off numbers are the game's.
 // Slew a command toward a target at `rate` per second (a pilot's hand, not a step).
 const slew = (v, target, rate, dt) => v + Math.max(-rate * dt, Math.min(rate * dt, target - v));
 
@@ -87,6 +93,15 @@ describe('C172 unusual-attitude recovery (0174, FAA-H-8083-15B ch. 7)', () => {
       expect(r.start.thr).toBe(u.throttle);
     }
   });
+  // Physics panel: the set-up is through the air, so a wind does not change it (a 20 kt headwind put the
+  // first cut's nose-high hand-over at α 12°, a gust at the stall before the pilot could move).
+  it('the hand-over is the same in a 20 kt headwind and tailwind: 60 KIAS, α ~4° on the first step', () => {
+    for (const w of [10.3, -10.3]) {
+      const r = upset('high', () => {}, w);
+      expect(Math.abs(r.first.kts - 60)).toBeLessThan(1.5);
+      expect(Math.abs(r.first.aoa - 4)).toBeLessThan(1);
+    }
+  });
   it('nose-high: power, nose down, wings level recovers inside the limits and grades A or better', () => {
     const r = upset('high', noseHighPilot());
     log('high, handbook', r);
@@ -112,15 +127,22 @@ describe('C172 unusual-attitude recovery (0174, FAA-H-8083-15B ch. 7)', () => {
     expect(r.maxG).toBeLessThan(3.8);
     expect(['S', 'A']).toContain(r.grade.grade);
   });
-  it('nose-low, pulling in the bank: the spiral tightens and the drill fails with the pull named', () => {
+  it('nose-low, pulling hard in the bank: past +3.8 g within a second, the drill fails with the pull named', () => {
     const r = upset('low', noseLowPilot({ pullFirst: true }));
     log('low, pull', r);
     expect(r.st.phase).toBe('failed');
     expect(r.st.pulled).toBe(true);
     expect(r.grade.reason).toMatch(/pulled while banked/);
   });
+  // Physics panel: a gentle pull (a quarter of the stick, no aileron) is still a pull in the bank.
+  it('nose-low, a gentle pull with no aileron: the pull is named', () => {
+    const r = upset('low', (x, dt) => { x.throttle = slew(x.throttle, 0, 4, dt); x.elevInput = -0.25; x.aileronInput = 0; });
+    log('low, gentle pull', r);
+    expect(r.st.pulled).toBe(true);
+    expect(r.grade.reason).toMatch(/pulled while banked/);
+  });
   // Hands off, flightModel.js's Cessna rolls itself out of the bank (dihedral and the roll damping)
-  // and levels at ~157 KIAS: the drill fails it as not flown, in other words than the pull's.
+  // and levels at ~157 KIAS (the JSBSim C172 stays in the spiral: a lateral-model difference, panel): the drill fails it as not flown, in other words than the pull's.
   it('nose-low, doing nothing: the drill fails, in other words than the pull\'s', () => {
     const r = upset('low', () => {});
     log('low, nothing', r);

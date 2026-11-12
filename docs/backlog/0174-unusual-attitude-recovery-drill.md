@@ -51,6 +51,9 @@ Inverted starts, aerobatics, spins, the 737 and F-16.
 - The stall warning in the pass rule is the wing within 3° of its stall angle (stallDrill.js's margin), not the HUD's
   banner: that one is IAS-based at 1 g, and it sounds through a correct zero-g push-over.
 - Hands off, the stick-fixed flightModel.js Cessna recovers by itself from both (nose-high: a phugoid dive to ~145 KIAS,
-  not level in 20 s; nose-low: rolls out of the 60° bank by itself at ~157 KIAS). So "do nothing" fails as not flown
-  ("Hands off the whole way"), not as a spiral; whether the real C172 is that spirally stable has no source in hand.
+  not level in 20 s; nose-low: rolls out of the 60° bank by itself at ~157 KIAS). The JSBSim C172 stays in the spiral
+  (physics panel: bank −46° to −72° for 20 s). So on Pilot "do nothing" (under 1 s of stick in all) fails as not flown,
+  not as a spiral; which model is right about the real C172's spiral stability has no source in hand (a Scout ticket).
+- The drill reads the player's own stick (main.js sim.pitchIn / rollIn, before the assists); a pull in the bank is the
+  stick back with 1.5 g felt, or 0.2 of stick; the stall warning fails after 1 s in the band with the nose up.
 - Boot: +0.31 kB for the two entries and the wiring, paid for by aliasing three's WebXRManager to src/noXr.js (−3.7 kB).
