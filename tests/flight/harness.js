@@ -371,6 +371,54 @@ export function crosswindLanding(spec, xwKts, { kts = 70, flaps = 1, fromFt = 50
   return { td, maxRollOffFt, finalRudder: finalRudder / finalN, finalAileron: finalAileron / finalN, finalBankDeg: finalBank / finalN, finalBetaDeg: finalBeta / finalN, stopped: Math.hypot(b.vel.x, b.vel.z) < 1 };
 }
 
+// Forward slip (FAA-H-8083-3C ch. 9, p. 9-13, "Forward Slip"): idle, flaps `flaps`, `kts` held with
+// the elevator, from `fromFt` heading north in still air. `glideS` of straight, wings-level glide
+// first (the baseline), then the pedal goes to `rudder` (full right by default: the nose swings off
+// the flight path) over 2 s and the ailerons lower the other wing just enough to keep the airplane
+// on its original flight path (bank towards the line: an integral on the track for the steady
+// cross-controlled bank, a term on the distance off it). The glide's last `measureS` is the baseline (60 s
+// lets the speed settle on `kts`: at 30 s it was still 1.3 kt slow and 8% off its steady sink); the slip
+// settles `settleS`, then measures `measureS`: descent rate, IAS, bank, sideslip, how far the nose points off
+// the track, the mean aileron and the share of the window it sat at full throw, and the worst track off the
+// start heading over the whole slip. `rudder: 0` flies the baseline twice (the windows' self-check).
+export function forwardSlip(spec, { kts = 70, flaps = 0, fromFt = 3000, rudder = 1, glideS = 60, settleS = 10, measureS = 10 } = {}) {
+  const b = makeBody(spec, { kts, altM: fromFt / M_TO_FT, flaps, throttle: 0 });
+  const hold = speedHoldPilot(() => kts);
+  const trackRightDeg = (x) => Math.atan2(x.vel.x, -x.vel.z) * RAD_TO_DEG;
+  const window = () => ({ fpm: 0, ias: 0, bank: 0, beta: 0, noseOff: 0, ail: 0, sat: 0, n: 0 });
+  const sample = (w, x) => {
+    w.fpm += vsFpm(x); w.ias += x.iasKts; w.bank += attitude(x).bankRightDeg; w.beta += x.betaDeg;
+    w.noseOff += -yawLeftDegOf(x) - trackRightDeg(x); w.ail += x.aileronInput; w.sat += Math.abs(x.aileronInput) > 0.98 ? 1 : 0; w.n++;
+  };
+  const mean = (w) => ({ fpm: w.fpm / w.n, iasKts: w.ias / w.n, bankRightDeg: w.bank / w.n, betaDeg: w.beta / w.n, noseOffTrackDeg: w.noseOff / w.n, aileron: w.ail / w.n, aileronSaturated: w.sat / w.n });
+  const base = window(), slip = window();
+  let slipT = null, bankInt = 0, worstTrackDeg = 0, minIas = Infinity, maxIas = 0;
+  fly(b, spec, glideS + 2 * settleS + measureS + 2, (x, dt) => {
+    const t = x.t;
+    hold(x, dt); // pitch for the speed (it also levels the wings: the slip's ailerons replace that)
+    x.throttle = 0;
+    if (t < glideS) {
+      x.rudderInput = 0;
+      if (t >= glideS - measureS) sample(base, x);
+      return;
+    }
+    slipT ??= t;
+    const s = t - slipT;
+    x.rudderInput = rudder * Math.min(1, s / 2);
+    const track = trackRightDeg(x);
+    bankInt = Math.max(-30, Math.min(30, bankInt - (track * 2 + x.pos.x * 0.1) * dt));
+    const bankCmd = Math.max(-30, Math.min(30, bankInt - track * 3 - x.pos.x * 0.3));
+    const { bankRightDeg } = attitude(x);
+    x.aileronInput = Math.max(-1, Math.min(1, aileronForBank(bankCmd, bankRightDeg, -x.angVel.z) / 0.6));
+    worstTrackDeg = Math.max(worstTrackDeg, Math.abs(track));
+    if (s >= settleS) {
+      sample(slip, x);
+      minIas = Math.min(minIas, x.iasKts); maxIas = Math.max(maxIas, x.iasKts);
+    }
+  }, (x) => slipT !== null && x.t - slipT >= settleS + measureS);
+  return { baseline: mean(base), slip: { ...mean(slip), minIasKts: minIas, maxIasKts: maxIas, rudder: b.rudderInput }, worstTrackDeg, offM: b.pos.x };
+}
+
 // POH short-field landing (Section 4, Fig. 5-11): flaps 30, power off, 61 KIAS (= KCAS here,
 // no instrument error) crossing a 50 ft obstacle on a 3° path, the nose lowered to keep 61
 // at idle; a round-out from 20 ft (a sink that shrinks with the height, 2 s time constant)

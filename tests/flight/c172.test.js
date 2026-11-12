@@ -18,7 +18,7 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg, stallWarningKts, stallSpeedKts, isStallWarning } from '../../src/aero.js';
 import { elevatorForPitch, aileronForBank, trimAoaDeg } from '../../src/autopilot.js';
 import { createStallDrill, stallDrillState, gradeStallRecovery, stallResultInput } from '../../src/stallDrill.js';
-import { DT, loadFactorMeter, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, attitude, useFdm, steadyRoll } from './harness.js';
+import { DT, loadFactorMeter, makeBody, noseWheelOn, fly, speedHoldPilot, settle, vsFpm, shortFieldTakeoff, shortFieldLanding, stallInTurn, crosswindTakeoff, crosswindLanding, forwardSlip, attitude, useFdm, steadyRoll } from './harness.js';
 import { nodeJsbsim } from './jsbsimNode.js';
 import { missionByKey } from '../../src/missions.js';
 import { runwayEnd, approachGeometry } from '../../src/airports.js';
@@ -682,6 +682,72 @@ describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim
     expect(r.finalAileron).toBeGreaterThan(0.05);
     expect(Math.abs(calm.finalAileron)).toBeLessThan(0.02);
   }, 20000);
+});
+
+// Ticket 0176: the forward slip. FAA-H-8083-3C (Airplane Flying Handbook) ch. 9, p. 9-13: "A forward
+// slip is used to dissipate altitude and increase descent rate without increasing airspeed. In a forward
+// slip, the airplane's direction of motion continues the same as before the slip was begun", the wing
+// lowered with the ailerons and "sufficient opposite rudder" so the nose points off the flight path;
+// power to idle, "the pilot controls airspeed using elevator control". In most light airplanes the
+// slip's steepness is limited by the rudder's travel, so the card flies full rudder.
+// harness.js forwardSlip: 70 KIAS, flaps up, idle, from 3,000 ft in still air; 60 s of straight glide
+// (the last 10 s the baseline, settled on 70 KIAS), then full right rudder over 2 s, the left wing lowered to
+// hold the original track, 10 s to settle and 10 s measured. The handbook gives no number, so the bounds are
+// the ticket's: (a) at least 30% more descent, (b) IAS within 5 kt of the glide's, (c) the track within 15°
+// of the start heading while the nose points 10°+ off it.
+// Measured (baseline → slip, fpm; bank, β): flightModel.js 798 → 943 (+18%; 5.6° left, β 23°); JSBSim
+// 759 → 1,332 (+75%; 8.3° left, β 27°, aileron mean 0.86, never at full throw). JSBSim's drag due to sideslip
+// is Roskam's CDβ 0.17·|β| (public/jsbsim/aircraft/c172/c172.xml), and its whole margin is that line: with
+// CDβ 0 the slip sinks 637 fpm, less than the glide, and fails (a) and (b). So JSBSim checks the
+// coefficient, not separate slip physics. flightModel.js has no drag due to sideslip at all (its only slip
+// drag is the side force's ~sin β share along the wind): KNOWN GAP (0178). Roskam's 0.17·|β| added to
+// flightModel.js's CD (not shipped here) gave 1,427 fpm (+79%) at 67.9 KIAS. Both models hold the track
+// with only 6-8° of bank at full rudder, so the sink cannot come from tilting the lift: it is the drag.
+// Self-checks: the glide has settled (IAS within 0.5 kt of 70); flightModel.js flown with no rudder
+// repeats its baseline (797 vs 798 fpm). JSBSim with no rudder wanders (its ailerons alone, uncoordinated:
+// 9° off track, +14%), so that check is flightModel.js's only. The slip must not ride the aileron stops
+// (under 10% of the window at full throw: a slip limited by the ailerons is not the handbook's, which is
+// limited by the rudder's travel).
+// Not carded: full LEFT rudder in JSBSim runs out of aileron (mean 0.88, at the stop 15% of the window)
+// and turns ~47° off the track; flightModel.js is symmetric. The handbook allows either wing; a fuel-
+// starvation slip limit (C172S POH Section 2) is out of scope.
+const SLIP_GAPS = { flightModel: new Map([['slipSink', '0178']]), jsbsim: new Map() };
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S forward slip, FAA-H-8083-3C ch. 9 (${model}, ticket 0176)`, () => {
+  const card = (id) => gapCard(SLIP_GAPS[model], id);
+  let r;
+  beforeAll(async () => {
+    useFdm(model === 'jsbsim' ? await nodeJsbsim() : null);
+    r = forwardSlip(c172);
+    const f = (w) => `${(-w.fpm).toFixed(0)} fpm at ${w.iasKts.toFixed(1)} KIAS, bank ${w.bankRightDeg.toFixed(1)}° right, β ${w.betaDeg.toFixed(1)}°, nose ${w.noseOffTrackDeg.toFixed(1)}° right of the track`;
+    console.log(`[c172 ${model}] forward slip: glide ${f(r.baseline)}; slip ${f(r.slip)} (IAS ${r.slip.minIasKts.toFixed(1)}-${r.slip.maxIasKts.toFixed(1)}, `
+      + `aileron mean ${r.slip.aileron.toFixed(2)}, ${(100 * r.slip.aileronSaturated).toFixed(0)}% at full throw), worst track ${r.worstTrackDeg.toFixed(1)}°`);
+  }, 60000);
+  afterAll(() => useFdm(null));
+
+  it('the windows compare like with like: the glide has settled on 70 KIAS (±0.5 kt)' + (model === 'flightModel' ? ', and with no rudder the slip window repeats its sink (±3%)' : ''), () => {
+    expect(Math.abs(r.baseline.iasKts - 70)).toBeLessThan(0.5);
+    if (model === 'flightModel') {
+      const twice = forwardSlip(c172, { rudder: 0 });
+      within(-twice.slip.fpm, -r.baseline.fpm, 0.03);
+    }
+  });
+
+  it('crossed controls, full right rudder and the left wing down: the airplane keeps its track (within 15°) while the nose points 10°+ off it', () => {
+    expect(r.slip.rudder).toBe(1);
+    expect(r.slip.bankRightDeg).toBeLessThan(-2); // the wing lowered against the rudder
+    expect(r.slip.noseOffTrackDeg).toBeGreaterThan(10);
+    expect(r.worstTrackDeg).toBeLessThan(15);
+    expect(r.slip.aileronSaturated).toBeLessThan(0.1); // the rudder limits the slip, not the ailerons
+  });
+
+  it('the slip holds the airspeed: IAS stays within 5 kt of the straight glide\'s, flown with the elevator (it must not gain speed)', () => {
+    expect(r.slip.maxIasKts).toBeLessThan(r.baseline.iasKts + 5);
+    expect(r.slip.minIasKts).toBeGreaterThan(r.baseline.iasKts - 5);
+  });
+
+  card('slipSink')('the slip descends at least 30% faster than the straight glide at the same speed ("dissipate altitude ... without increasing airspeed")', () => {
+    expect(-r.slip.fpm).toBeGreaterThan(-r.baseline.fpm * 1.3);
+  });
 });
 
 // Ticket 0087: the stall recovery drill (src/stallDrill.js) flown headless on both models.
