@@ -1020,6 +1020,17 @@ function checkUpset(dt) {
   sim.upset = null;
   drillCard(result, upLib.UPSET_PLACE);
 }
+// Slow flight (0164, slowFlight.js): timed from when the player starts flying; graded after the hold (or not).
+let sfLib = null;
+function checkSlowFlight(dt) {
+  const ev = sim.slowFlight && sfLib.slowSimStep(sim.slowFlight, sim, dt, cockpitEntered && !modalOpen());
+  // Kid's autothrottle: the slow-down's integral trim is not the hold's (wound up, it sagged the Cessna under the band).
+  if (ev === 'holding') sim.apAt.trim = 0;
+  if (ev !== 'complete' && ev !== 'failed') return;
+  const result = sfLib.gradeSlowFlight(sim.slowFlight, sim.assist === 'kid');
+  sim.slowFlight = null;
+  drillCard(result, sfLib.SLOW_PLACE);
+}
 // Wake turbulence (0115, wake.js): once the player is flying, the jet ahead lands on the same runway (traffic.js
 // spawns it on sim.wake.ready and records its path); the player's wheels are checked against that path.
 let wakeLib = null;
@@ -1040,12 +1051,13 @@ function startDrills(mission) {
   sim.engineOut = null;
   sim.rto = null;
   sim.windshear = null;
-  sim.steepTurns = sim.upset = sim.wake = null;
+  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = null;
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight);
   if (mission.wake) loadDrill(mission, wakeLib, () => import('./wake.js'), (lib) => { wakeLib = lib; if (sim.aircraftKey === mission.aircraft) sim.wake = lib.createWake(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
+  if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; sim.slowFlight = lib.createSlowFlight(); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
   if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
@@ -1328,7 +1340,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.wake || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.wake || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1358,6 +1370,7 @@ function updateCoach(dt) {
       : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
       : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
       : sim.upset ? upLib.upsetCoach(sim.upset, coachInput.kid)
+      : sim.slowFlight ? sfLib.slowCoach(sim.slowFlight, coachInput.kid)
       : sim.wake ? wakeLib.wakePrompt(sim.wake, coachInput, sim.approach.heightAbovePathM)
       : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
       : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
@@ -1706,6 +1719,7 @@ function step6DofPhysics(dt) {
   checkRto();
   checkWindshear(dt);
   checkSteepTurns(dt);
+  checkSlowFlight(dt);
   checkUpset(dt);
   checkWake(dt);
   if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in
@@ -2486,6 +2500,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   // Steep turns (0161): Kid's guide flies the turns, and returns Kid's and Learner's 53° cap (full stick = 45°).
   _assistIn.bankMaxDeg = sim.steepTurns ? stLib.kidGuide(sim.steepTurns, _assistIn) : 0;
+  if (sim.slowFlight) sfLib.kidGuide(sim.slowFlight, _assistIn); // slow flight (0164): level, on the heading
   _assistIn.noFloor = sim.engineFailed;
   // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
   runwayUnderWheels(gsMps, noseDeg);
@@ -2518,7 +2533,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : 0;
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : 0;
       sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
@@ -2997,7 +3012,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.deadStick = null;
   sim.engineOut = null;
   sim.rto = null;
-  sim.steepTurns = sim.upset = sim.wake = null;
+  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = null;
   sim.windshear = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
@@ -3564,6 +3579,7 @@ window.openaeroDebug = () => {
     windshear: sim.windshear ? { ...sim.windshear } : null,
     steepTurns: sim.steepTurns ? { ...sim.steepTurns } : null,
     upset: sim.upset ? { ...sim.upset } : null,
+    slowFlight: sim.slowFlight ? { ...sim.slowFlight } : null,
     wake: sim.wake ? { ...sim.wake, path: undefined, end: sim.wake.end.id } : null,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)

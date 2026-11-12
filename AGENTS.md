@@ -254,6 +254,17 @@ src/steepTurns.js   steep turns (0161, lazy chunk loaded with the mission): the 
                     and Learner get a 53° bank cap there (assists.js s.bankMaxDeg: full stick = 45°), Kid's guide flies the
                     turns (pitch for the path less α(1 − cos φ)) and Kid's autothrottle holds 95. sim.steepTurns is null once
                     graded (KEEP FLYING is free flight). Cards: tests/flight/steepTurns.test.js
+src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_slow_flight`): the C172 clean at 95 KIAS,
+                    4,500 ft AGL over Grapevine Lake; slow to the band and hold it, graded to FAA-S-ACS-6C Area VII Task A
+                    (S5: altitude ±100 ft, heading ±10°, airspeed +10/−0; S4: no stall warning). The band is the airplane's
+                    own: aero.js stallWarningKts for where the flaps are + 5 kt (C172 clean 63-73). Nothing runs until the
+                    player starts flying (cockpitEntered && !modalOpen()); the height and heading are the start's. 45 s
+                    inside every tolerance ends it (graded anyway at 90 s in the band's reach). The horn held 1 s ≤ C, outside
+                    a tolerance or under 90% in the band ≤ B, more than 200 ft off ≤ D; a stall, 500 ft or 120 s without
+                    slowing fail (D). Its sfw* words reach coach.js through s.ds. Kid: the guide holds the height and heading
+                    (≤ 10° bank) and the autothrottle slows 1 kt/s to the band's middle; main.js zeroes sim.apAt.trim on
+                    'holding' (wound up through the slow-down, it sagged the Cessna under the band). Kid/Learner's α
+                    protection (stall α − 4°) still lets the speed reach the horn. Cards: tests/flight/slowFlight.test.js
 src/upset.js        unusual-attitude recovery (0174, lazy chunk loaded with its two missions, `upset: 'high' | 'low'`):
                     the C172 spawns level at 100 KIAS, 5,000 ft AGL over Grapevine Lake; 1.5 s after the player starts
                     flying (the sim runs behind the start screen, so never before) the instructor hands it over
@@ -648,7 +659,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
+2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
 and assists.js kidFinalGuide's liftM, +0.46 kB; wake.js is a lazy chunk). 2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid
 for by aliasing three's WebXRManager to src/noXr.js, −3.7 kB: WebGLRenderer built the whole WebXR stack, its controllers and
 depth sensing, for a sim that never starts an XR session). ~3.4 kB of headroom: spend it on features, not by default.

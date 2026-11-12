@@ -23,7 +23,7 @@ export const CLEAR_FT = 800;
 export const CLEAR_NM = 2;
 export const FLOOR_FT = 600;
 const NM = 1852, FT = 0.3048;
-const QUIET = ['goAround', 'deadStick', 'engineOutFt', 'rto', 'windshear', 'stallDrill', 'pattern', 'steepTurns'];
+const QUIET = ['goAround', 'deadStick', 'engineOutFt', 'rto', 'windshear', 'stallDrill', 'pattern', 'steepTurns', 'slowFlight'];
 
 const CONE = Math.tan(5 * Math.PI / 180);
 // A plain loop: it runs every frame until the call (no closure per frame, AGENTS.md invariant 4).
