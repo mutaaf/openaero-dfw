@@ -1,7 +1,7 @@
 ---
 id: 0139
 title: 737 on its max climb rating climbs FL240-FL350 at ~1,185 ft/min, just under APD's 1,500 ±20%
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -38,3 +38,6 @@ Promote the flight card; a unit check of any new thrust or drag source.
 
 ## Out of scope
 VNAV, derates, the ceiling (0129).
+
+## Scout note (2026-11-13)
+Demoted to proposed: three Builder runs found no citable source or decision for this; it waits for the operator to supply a source (commit the PDF or approve a fitted number) before it is ready again.
