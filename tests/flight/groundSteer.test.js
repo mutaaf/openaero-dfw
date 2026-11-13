@@ -119,15 +119,13 @@ function pedalsNeutralRoll(spec, metarKts, flapsIndex = spec === b738 ? 2 : flap
   const b = makeBody(spec, { throttle: 1, flaps: flapsIndex });
   const vr = vrFor(spec, flapsIndex);
   let maxHdgDeg = 0;
-  let windM = 0; // the crosswind at the wheels (m/s) over the roll's time: a fully weathervaned airplane's drift
-  fly(b, spec, 120, (x, dt) => {
+  fly(b, spec, 120, (x) => {
     gameCrosswind(x, metarKts);
-    windM -= x.windVec.x * dt;
     x.rudderInput = 0;
     x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z) / 0.6;
     maxHdgDeg = Math.max(maxHdgDeg, Math.abs(noseRightDeg(x)));
   }, (x) => x.iasKts >= vr);
-  return { maxHdgDeg, offM: b.pos.x, iasKts: b.iasKts, vr, hdgRightDeg: noseRightDeg(b), windM };
+  return { maxHdgDeg, offM: b.pos.x, iasKts: b.iasKts, vr, hdgRightDeg: noseRightDeg(b), yawRightDegS: -b.angVel.y * RAD_TO_DEG };
 }
 
 // Pilot on a phone (0106): no pedals, the stick's sideways push is the tiller to 40 kt and the
@@ -212,19 +210,17 @@ describe('on the runway in a crosswind (ticket 0110)', () => {
   });
   // What the 0172 drift is (Builder, 2026-11-13): not the tyres sliding. With the pedals neutral the nose
   // weathervanes into the wind (the fin's directional stability turns the nose toward the relative wind)
-  // and the jet rolls where it points, upwind: the wind here is from the right (windVec −x) and
-  // the nose and the drift go right. On tyres that make no side force at zero slip, the steady state is
-  // the nose on the relative wind (β = 0), rolling at the crosswind's speed across the runway: drift =
-  // the wind × the time. The model lags that (its nose-tyre hold, gear.js noseWheelYawHold, resists the
-  // turn), so the drift is under that bound, never past it. Stiffer tyres slow the turn, they don't
-  // stop it (docs/backlog/0172: the measurements and why no cited fix keeps it on the runway).
-  it('737 Pilot, pedals neutral, flaps 5 and 10: the 5 kt drift is the weathervane: nose and drift into the wind, under the wind × time', () => {
+  // and the jet rolls where it points, upwind: the wind here is from the right (windVec −x) and the nose
+  // and the drift go right. Rolling where it points, the crosswind stays on the fin whatever the heading,
+  // so the nose is still turning into the wind at Vr: there is no steady heading hands-off, and the drift
+  // grows with the roll (docs/backlog/0172 has the trace).
+  it('737 Pilot, pedals neutral, flaps 5 and 10: the 5 kt drift is the weathervane: nose and drift into the wind, still turning into it at Vr', () => {
     for (const fl of [1, 2]) {
       const r = pedalsNeutralRoll(b738, 5, fl);
-      console.log(`[0172 737 pilot] flaps index ${fl}: nose ${r.hdgRightDeg.toFixed(2)}° right, ${r.offM.toFixed(1)} m right; wind × time ${r.windM.toFixed(1)} m`);
+      console.log(`[0172 737 pilot] flaps index ${fl}: nose ${r.hdgRightDeg.toFixed(2)}° right, turning ${r.yawRightDegS.toFixed(3)}°/s right, ${r.offM.toFixed(1)} m right at Vr`);
       expect(r.hdgRightDeg).toBeGreaterThan(0.5);
       expect(r.offM).toBeGreaterThan(0);
-      expect(r.offM).toBeLessThan(r.windM);
+      expect(r.yawRightDegS).toBeGreaterThan(0.02);
     }
   });
 });
