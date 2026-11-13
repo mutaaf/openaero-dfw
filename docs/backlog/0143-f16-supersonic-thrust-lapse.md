@@ -56,3 +56,9 @@ Not shipped: the thesis PDF would not download here (connection reset; the CDN r
 was not read from a copy, and TR (the theta break) needs its own source for the F110. A rough check with TR 1.07: at
 40,000 ft the lapse is ~0.63 at Mach 1.6 and ~0.39 at Mach 2 (the model's σ^0.8·(1 − 0.3M + 0.3M²) gives 0.52 at
 Mach 2), about the 25% that would put thrust under the airframe's drag before Mach 2.
+Builder, 2026-11-13 (second run): the thesis PDF is still unreachable from the sandbox (diva-portal.org: connection
+reset with curl, HTTP 503 to WebFetch). Other open copies a search found carry the theta break only as a concept, not
+the lapse equation: Chalmers' "Design Considerations of Low Bypass Ratio Mixed Flow Turbofan Engines" (Fluids 2022, 7, 21:
+θ0 = Tt2/288.15; the break is where the T4 limiter takes over) and NASA/TM-2005-213659 (off-design cycle analysis). Still
+open: a readable copy of the lapse equation and a source for the F110's TR. If the operator can drop the thesis PDF
+(or Mattingly's Aircraft Engine Design, 2nd ed., the installed-lapse section) into docs/sources/, this ticket unblocks.
