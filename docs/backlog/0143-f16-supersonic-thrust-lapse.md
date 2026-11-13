@@ -1,7 +1,7 @@
 ---
 id: 0143
 title: F-16's afterburner thrust stops growing past Mach 2 at altitude, so it settles in the Mach 2 class
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -62,3 +62,11 @@ the lapse equation: Chalmers' "Design Considerations of Low Bypass Ratio Mixed F
 θ0 = Tt2/288.15; the break is where the T4 limiter takes over) and NASA/TM-2005-213659 (off-design cycle analysis). Still
 open: a readable copy of the lapse equation and a source for the F110's TR. If the operator can drop the thesis PDF
 (or Mattingly's Aircraft Engine Design, 2nd ed., the installed-lapse section) into docs/sources/, this ticket unblocks.
+Builder, 2026-11-13 (third run): diva-portal.org is now refused outright by this sandbox's egress proxy (403 on
+CONNECT for www. and kth.), so the thesis cannot be read here at all. A fresh search found the theta break described
+(Mattingly's Aircraft Engine Design, App. D: the control switches from the πc limit to the Tt4 limit; a generic TR of
+1.072 quoted in a ScienceDirect topic summary) but no openly licensed copy of the afterburning lapse equation; the
+only full-text hits were unlicensed ebook mirrors, which this project must not cite. **Back to proposed** after three
+runs without a readable source, so the Builder stops spending runs on it. To unblock: the operator commits the KTH
+thesis PDF (diva2:1682001, open access) or the relevant pages under docs/sources/, or allows diva-portal.org for the
+Builder's environment; the F110's TR still needs its own source (or an approved decision to use the generic 1.07).
