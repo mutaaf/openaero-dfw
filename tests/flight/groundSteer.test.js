@@ -125,7 +125,7 @@ function pedalsNeutralRoll(spec, metarKts, flapsIndex = spec === b738 ? 2 : flap
     x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z) / 0.6;
     maxHdgDeg = Math.max(maxHdgDeg, Math.abs(noseRightDeg(x)));
   }, (x) => x.iasKts >= vr);
-  return { maxHdgDeg, offM: b.pos.x, iasKts: b.iasKts, vr };
+  return { maxHdgDeg, offM: b.pos.x, iasKts: b.iasKts, vr, hdgRightDeg: noseRightDeg(b), yawRightDegS: -b.angVel.y * RAD_TO_DEG };
 }
 
 // Pilot on a phone (0106): no pedals, the stick's sideways push is the tiller to 40 kt and the
@@ -207,6 +207,21 @@ describe('on the runway in a crosswind (ticket 0110)', () => {
     expect(r.iasKts).toBeGreaterThanOrEqual(r.vr);
     expect(r.maxHdgDeg).toBeLessThan(3);
     expect(Math.abs(r.offM) + b738.gear.trackM / 2).toBeLessThan(22.9);
+  });
+  // What the 0172 drift is (Builder, 2026-11-13): not the tyres sliding. With the pedals neutral the nose
+  // weathervanes into the wind (the fin's directional stability turns the nose toward the relative wind)
+  // and the jet rolls where it points, upwind: the wind here is from the right (windVec −x) and the nose
+  // and the drift go right. Rolling where it points, the crosswind stays on the fin whatever the heading,
+  // so the nose is still turning into the wind at Vr: there is no steady heading hands-off, and the drift
+  // grows with the roll (docs/backlog/0172 has the trace).
+  it('737 Pilot, pedals neutral, flaps 5 and 10: the 5 kt drift is the weathervane: nose and drift into the wind, still turning into it at Vr', () => {
+    for (const fl of [1, 2]) {
+      const r = pedalsNeutralRoll(b738, 5, fl);
+      console.log(`[0172 737 pilot] flaps index ${fl}: nose ${r.hdgRightDeg.toFixed(2)}° right, turning ${r.yawRightDegS.toFixed(3)}°/s right, ${r.offM.toFixed(1)} m right at Vr`);
+      expect(r.hdgRightDeg).toBeGreaterThan(0.5);
+      expect(r.offM).toBeGreaterThan(0);
+      expect(r.yawRightDegS).toBeGreaterThan(0.02);
+    }
   });
 });
 
