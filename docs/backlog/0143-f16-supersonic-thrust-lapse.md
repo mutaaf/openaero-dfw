@@ -47,3 +47,12 @@ The flight card above; unit cards on the lapse; e2e smoke on the F-16 spawn.
 
 ## Out of scope
 Inlet modelling beyond a lapse, fuel flow, sea-level top speed.
+
+## Source search (Builder, 2026-11-13)
+A web search's summary of a KTH/DIVA thesis ("Turbofan Engine Modeling – For The Fighter Aircraft of The Future",
+diva2:1682001) quotes Mattingly's installed lapse for a low-bypass mixed-flow turbofan with the afterburner on:
+α = δ0 for θ0 ≤ TR, α = δ0·[1 − 3.5(θ0 − TR)/θ0] above (dry: 0.6 and 3.8), θ0 = θ(1 + 0.2M²), δ0 = δ(1 + 0.2M²)^3.5.
+Not shipped: the thesis PDF would not download here (connection reset; the CDN refused WebFetch), so the equation
+was not read from a copy, and TR (the theta break) needs its own source for the F110. A rough check with TR 1.07: at
+40,000 ft the lapse is ~0.63 at Mach 1.6 and ~0.39 at Mach 2 (the model's σ^0.8·(1 − 0.3M + 0.3M²) gives 0.52 at
+Mach 2), about the 25% that would put thrust under the airframe's drag before Mach 2.
