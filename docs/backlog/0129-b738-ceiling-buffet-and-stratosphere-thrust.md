@@ -1,7 +1,7 @@
 ---
 id: 0129
 title: 737 ceiling at 65 t: a cited buffet boundary or stratosphere thrust point closes the last ~70 fpm above FL410
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -37,3 +37,6 @@ A stick shaker or buffet sound; the F-16 and C172.
 Searched for a 737-800 maximum-altitude-vs-weight table (FCOM PI) and found only forum posts (PPRuNe: the FMC's
 maximum altitude is the lowest of the certified ceiling, the 1.3 g buffet altitude and the thrust limit) and the
 FL410 certified ceiling. No open table or CFM thrust point above FL350 found.
+
+## Scout note (2026-11-13)
+Demoted to proposed: three Builder runs found no citable source or decision for this; it waits for the operator to supply a source (commit the PDF or approve a fitted number) before it is ready again.

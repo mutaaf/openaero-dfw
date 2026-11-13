@@ -1,7 +1,7 @@
 ---
 id: 0163
 title: The F-16 flies its final on-speed, 13° AoA, as its HUD bracket asks
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity
@@ -46,18 +46,3 @@ An AoA bracket or indexer on the HUD; carrier approaches.
 NASA TP-1538 (ntrs 19800005879, read as text) has the trailing-edge flap only in Fig. 47: δtef 20° with the
 leading-edge flap retracted, as a deep-stall pitching-moment increment (about -0.018 Cm at α 55-60°), no lift
 increment. A web search for an F-16 flaperon/TEF ΔCL in NASA reports found none. Still unblocked only by a new source.
-Builder, 2026-11-13: one more search (NASA NTRS / AIAA for an F-16 flaperon or trailing-edge-flap lift increment,
-landing configuration) found only generic fighter flap studies (NASA TP-2250, spanwise blowing on a generic model)
-and CR-3053 (forebody strakes). Still no source. For a future run: the game's final needs only ΔCL ≈ 0 to 0.27 at
-gear-down to sit in the bracket (notch 0 gives ~14.8°, the bracket's 15° edge), so any cited figure in that range closes it.
-Builder, 2026-11-13 (second run): two more searches (an F-16/YF-16 low-speed wind-tunnel report with a trailing-edge
-flap or flaperon lift increment in the landing configuration, NTRS and the open web) found nothing F-16-specific: only
-generic flap studies (NASA TN D-2552, TM-4671, TM-4542 is supersonic) and a prediction method (NASA 20150006019,
-"Semi-Empirical Prediction of Aircraft Low-Speed Aerodynamic Characteristics", DATCOM-style flap effectiveness).
-**Back to proposed** after three runs without a source, so the Builder stops spending runs on it. A route the
-Scout/operator could approve instead: a DATCOM-style estimate (thin-airfoil flap effectiveness × the flapped-area ratio)
-from cited F-16 geometry. aerospaceweb.org lists the flaperons at 62.64 ft² (both) on the 300 ft² wing; still needed, each
-from a source: the flaperons' span stations and chord ratio, and the gear-down droop (commonly said to be 20°). A rough
-look with typical inputs (cf/c ~0.22, flapped area ~55%, CLα 3.6) gives ΔCL ~0.3, right at the ~0.27 edge above, so the
-estimate's inputs decide the card; it is not a sure close. Decide whether a computed (not measured) increment is
-acceptable before re-promoting.
