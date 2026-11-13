@@ -12,12 +12,13 @@ export const FULL_VIEW = {
   cookies: [],
   origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'openaero_view_v1', value: '{"v":1,"clean":false,"at":0}' }, PILOT] }],
 };
-// Desktop specs draw the 3D view at half resolution (a screen under 1x keeps its ratio, so CSS
-// layout and the HUD are unchanged). CI's SwiftShader pays per pixel and, past ~250 ms a frame,
-// sim time falls behind wall time: at 1x a heavier scene pushed the suite past CI's 20 min
-// limit (#52). Specs that measure canvas pixels use FULL_RES (tests/e2e/helpers.js); the perf
-// probe measures at 1x.
-const DESKTOP = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 }, deviceScaleFactor: 0.5, storageState: FULL_VIEW };
+// Desktop specs draw the 3D view at quarter resolution (a screen under 1x keeps its ratio, so CSS
+// layout and the HUD canvas are unchanged). CI's SwiftShader pays per pixel and, past ~250 ms a
+// frame, sim time falls behind wall time: at 1x a heavier scene pushed the suite past CI's 20 min
+// limit (#52); 0.5 → 0.25 took the boot-and-check specs 2.6 → 2.1 min when main's CI hit its
+// 30 min limit again with every test green (2026-11-13). Specs that measure 3D canvas pixels use
+// FULL_RES (tests/e2e/helpers.js); the perf probe measures at 1x.
+const DESKTOP = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 }, deviceScaleFactor: 0.25, storageState: FULL_VIEW };
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -36,9 +37,11 @@ export default defineConfig({
   },
   projects: [
     { name: 'desktop', testIgnore: /mobile\.spec|phone-landscape\.spec|perf\.spec|devices\.spec/, use: DESKTOP },
-    // Phone specs check layout and touch in CSS pixels, so they draw at 1x like the devices
-    // probe: the Pixel 7's 2.625 (2x after the resolution cap) made the project 6.6 min, 1x 5.1 (2026-10-27).
-    { name: 'phone', testMatch: /mobile\.spec|phone-landscape\.spec/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [PILOT] }] }, launchOptions: { args: GL_ARGS } } },
+    // Phone specs check layout and touch in CSS pixels (the HUD canvas is CSS-sized whatever the
+    // ratio), so the 3D view draws at half resolution: the Pixel 7's 2.625 (2x after the resolution
+    // cap) made the project 6.6 min, 1x 5.1 (2026-10-27); 1x → 0.5 took it 6.2 → 5.3 min here
+    // (2026-11-13). The device-class probe keeps 1x.
+    { name: 'phone', testMatch: /mobile\.spec|phone-landscape\.spec/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 0.5, storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [PILOT] }] }, launchOptions: { args: GL_ARGS } } },
     // The frame-time probe runs alone, after everything else: sharing SwiftShader's CPU
     // with a parallel flight test swung the same build from 207 to 314 ms a frame.
     { name: 'perf', testMatch: /perf\.spec/, dependencies: ['desktop', 'phone'], use: { ...DESKTOP, deviceScaleFactor: 1 } },
