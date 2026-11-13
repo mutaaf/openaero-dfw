@@ -6,7 +6,13 @@ import { stubTiles, stubMetar, collectErrors, BASE } from './helpers.js';
 
 const NM = 1852;
 
+// By day: the game keeps a live sky down to −6° of sun (sun.js defaultTimeMode), but traffic stays away once the
+// city lights are half on (runwayLights.js, ~−2°), so in ~20 min of each dawn and dusk at DFW the default final has
+// no jet (CI at 12:42Z on 2026-11-13 failed here). The cards are about a daylight final: pin noon, as sun.spec.js does.
+const NOON_CST = '2026-11-04T18:00:00Z';
+
 test.beforeEach(async ({ page }) => {
+  await page.clock.setSystemTime(new Date(NOON_CST));
   await stubTiles(page);
   await stubMetar(page);
 });
