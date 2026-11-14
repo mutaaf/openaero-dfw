@@ -117,6 +117,16 @@ describe('dragCoefficient', () => {
     const c172 = AIRCRAFT_DATABASE.c172;
     expect(dragCoefficient(c172, 0.3, false, 0, 1)).toBeCloseTo(dragCoefficient(c172, 0.3, true, 0, 1), 10);
   });
+  it('adds drag due to sideslip, cdBeta·|β| (0178: Roskam CDβ 0.17 on the C172; 0 where no value is cited)', () => {
+    const c172 = AIRCRAFT_DATABASE.c172;
+    expect(c172.cdBeta).toBe(0.17);
+    const straight = dragCoefficient(c172, 0.4, true, 0, 1);
+    expect(dragCoefficient(c172, 0.4, true, 0, 1, 0, 0.4) - straight).toBeCloseTo(0.17 * 0.4, 10);
+    expect(dragCoefficient(c172, 0.4, true, 0, 1, 0, -0.4) - straight).toBeCloseTo(0.17 * 0.4, 10); // either way
+    expect(dragCoefficient(c172, 0.4, true, 0, 1, 0)).toBe(straight); // no β argument, no slip drag
+    expect(dragCoefficient(b738, 0.4, true, 0, 1, 0, 0.4)).toBe(dragCoefficient(b738, 0.4, true, 0, 1));
+    expect(dragCoefficient(AIRCRAFT_DATABASE.f16, 0.4, false, 0, 1, 0, 0.4)).toBe(dragCoefficient(AIRCRAFT_DATABASE.f16, 0.4, false, 0, 1));
+  });
   it('includes induced drag k·CL²', () => {
     const k = inducedDragK(b738);
     expect(dragCoefficient(b738, 1, false, 0, 1)).toBeCloseTo(b738.cd0 + k, 10);

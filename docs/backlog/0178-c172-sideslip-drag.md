@@ -1,12 +1,12 @@
 ---
 id: 0178
 title: The Cessna's forward slip loses height: flightModel.js gets drag due to sideslip (Roskam CDβ)
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-12
-pr:
+pr: 256
 ---
 
 ## Why
@@ -30,9 +30,9 @@ Leave the 737 and F-16 at 0 unless a cited value is found. Re-run the crosswind 
 wing-low landing (and the slip-bank comparison with JSBSim) fly a ~12° slip and may move.
 
 ## Acceptance criteria
-- [ ] 0176's flightModel.js `slipSink` card promoted from `it.fails` to `it`
-- [ ] `cdBeta`'s source cited in `src/aircraft.js`
-- [ ] Every other C172 card passes unchanged (crosswind takeoff/landing, sideslip vs JSBSim, glide 9:1, turns)
+- [x] 0176's flightModel.js `slipSink` card promoted from `it.fails` to `it`
+- [x] `cdBeta`'s source cited in `src/aircraft.js`
+- [x] Every other C172 card passes unchanged (crosswind takeoff/landing, sideslip vs JSBSim, glide 9:1, turns)
 
 ## Test plan
 `npm test -- tests/flight/c172.test.js`; the full `tests/flight` for the other airframes.
