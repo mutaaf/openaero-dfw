@@ -8,6 +8,10 @@
 //    takeoffs use 10° of flaps, "lifting the airplane off the ground as soon as practical in a slightly tail-low
 //    attitude", then level off to accelerate to a higher climb speed. The 172S's Vy is 74 KIAS (POH Section 4).
 //  - The surface: SURFACE_MU, a game setting (see there), on the whole roll (gear.js body.surfaceMu).
+// What the sim models of the technique: every tyre rolls at the same μ, so the drag is μ times the weight still on the
+// wheels however the nose and mains share it. The Handbook roll is shorter because the nose-high wing lifts the weight
+// off the wheels earlier and flies off slower (it is shorter on pavement too: tests/flight/softField.test.js), not
+// because a light nose tyre ploughs less: a nose wheel bogging into soft ground is not modelled.
 //
 // The grade: how light the nose wheel was through the roll (its mean load over its static share, from ROLL_FROM_KTS
 // to the lift-off), the lift-off speed, and how high the wheels went before ACCEL_KTS (the ground-effect leg). Pure
@@ -26,6 +30,10 @@ export const SOFT_FIELD_KEY = 'kads_16_soft_field';
 export const SURFACE_MU = 0.07;
 // POH: 10° (the C172's first notch, aircraft.js flapDetentsDeg [0, 10, 20, 30]).
 export const FLAPS = 1;
+// The nose is "up" from here (below it the stick held back is still waiting for the air to lift it).
+export const NOSE_UP_DEG = 8;
+// The stick counts as fully back past this (elevInput, negative = nose up).
+export const FULL_BACK = -0.8;
 // The attitude the coach asks for once the nose is up: "slightly tail-low", under the tail (takeoffCoach.js
 // STATIC_TAIL_DEG 13.7°, less its 1° margin). 10-12° lifts the Cessna off at 51-54 KIAS (tests/flight/softField.test.js).
 export const PITCH_DEG = 11;
@@ -51,31 +59,35 @@ export const FAIL_CAP = 54;
 const WEIGHTS = { nose: 0.4, liftoff: 0.3, accel: 0.3 };
 
 export const SFO_TEXT = {
-  sfoPower: 'Soft field: stick fully back, then full power. Keep the weight off the nose wheel',
-  sfoBack: 'More back stick: keep the nose wheel light',
+  sfoPower: 'Soft field: hold S or ↑ (nose up), then hold Shift to full power',
+  sfoBack: 'Nose up: hold S or ↑ to keep the nose wheel light',
+  sfoWait: 'Keep holding S or ↑: the nose comes up as you speed up',
   sfoHold: `Hold the nose about ${PITCH_DEG}° up: it flies off by itself`,
-  sfoEase: 'Ease the stick forward a little: the tail is close',
-  sfoLow: 'Off! Nose down a little: stay just above the runway',
+  sfoEaseOff: `Ease off ↑ a little: hold about ${PITCH_DEG}°`,
+  sfoEase: 'Ease the nose down a little: the tail is close',
+  sfoLow: 'Flying! Nose down a little: stay just above the runway',
   sfoAccel: `Stay low and let it speed up to ${VY_KTS} knots`,
-  sfoClimb: `${VY_KTS} knots: now climb at ${VY_KTS}`,
-  sfoKidPower: 'Hold ↑ and push the power to the top',
+  sfoClimb: `Nearly ${VY_KTS} knots: now climb at ${VY_KTS}`,
+  sfoKidPower: 'Hold ↑ and hold Shift: power to 100%',
   sfoKidHold: 'Keep holding ↑: the nose wheel stays light',
   sfoKidEase: 'Not so high! Let the nose down a bit',
   sfoKidLow: 'Flying! Stay low and let it speed up',
   sfoKidClimb: 'Fast enough: now let it climb',
 };
 const SFO_TOUCH = {
-  sfoPower: 'Soft field: hold the stick up (nose up), then slide the throttle to the top',
-  sfoBack: 'Stick further up: keep the nose wheel light',
+  sfoPower: 'Soft field: slide the throttle to the top, then hold the stick up (nose up)',
+  sfoBack: 'Stick up: keep the nose wheel light',
+  sfoWait: 'Keep the stick up: the nose comes up as you speed up',
+  sfoEaseOff: `Let the stick down a little: hold about ${PITCH_DEG}°`,
   sfoEase: 'Let the stick down a little: the tail is close',
-  sfoLow: 'Off! Stick down a little: stay just above the runway',
-  sfoKidPower: 'Hold the stick up and push the throttle to the top',
+  sfoLow: 'Flying! Stick down a little: stay just above the runway',
+  sfoKidPower: 'Push the throttle to the top, then hold the stick up',
   sfoKidHold: 'Keep the stick up: the nose wheel stays light',
 };
 Object.assign(DRILL_TEXT, SFO_TEXT);
 Object.assign(TOUCH_WORDS, SFO_TOUCH);
 Object.assign(RANK, {
-  sfoPower: 1, sfoHold: 1, sfoAccel: 1, sfoClimb: 1, sfoKidPower: 1, sfoKidHold: 1, sfoKidLow: 1, sfoKidClimb: 1,
+  sfoPower: 1, sfoHold: 1, sfoWait: 1, sfoEaseOff: 2, sfoAccel: 1, sfoClimb: 1, sfoKidPower: 1, sfoKidHold: 1, sfoKidLow: 1, sfoKidClimb: 1,
   sfoBack: 2, sfoLow: 2, sfoEase: 4, sfoKidEase: 4,
 });
 
@@ -86,7 +98,7 @@ export const createSoftField = (end) => ({
 });
 export const softFieldDone = (st) => st.phase === 'done';
 
-// One step. s: { onGround, wheelFt, iasKts, gsKts, throttle, noseFrac (the nose wheel's load over its static share),
+// One step. s: { elev (the stick, negative = nose up), onGround, wheelFt, iasKts, gsKts, throttle, noseFrac (the nose wheel's load over its static share),
 // tailOn, alongM (along the runway from its threshold), leftM (runway ahead), crossM, halfWidthM, pitchDeg }.
 // Returns 'done' on the step the lesson ends (graded), else ''.
 export function softFieldStep(st, s, dt) {
@@ -123,7 +135,10 @@ export function softFieldTarget(st, s) {
     if (s.pitchDeg > PITCH_HIGH_DEG) return s.kid ? 'sfoKidEase' : 'sfoEase';
     if (!st.rolled && (s.throttle < 0.9 || s.iasKts < ROLL_FROM_KTS)) return s.kid ? 'sfoKidPower' : 'sfoPower';
     if (s.kid) return 'sfoKidHold';
-    return s.noseFrac > 0.5 && s.iasKts >= ROLL_FROM_KTS + 5 ? 'sfoBack' : 'sfoHold';
+    if (s.pitchDeg > PITCH_DEG + 0.7) return 'sfoEaseOff';
+    if (s.pitchDeg >= NOSE_UP_DEG) return 'sfoHold';
+    // Still waiting for the nose: "back" only to a stick that is not already fully back.
+    return s.noseFrac > 0.5 && s.iasKts >= ROLL_FROM_KTS + 5 && (s.elev ?? 0) > FULL_BACK ? 'sfoBack' : 'sfoWait';
   }
   if (s.iasKts >= ACCEL_KTS || st.accelFt !== null) return s.kid ? 'sfoKidClimb' : 'sfoClimb';
   if (s.kid) return 'sfoKidLow';
@@ -132,13 +147,13 @@ export function softFieldTarget(st, s) {
 
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const REASONS = {
-  overrun: 'Ran out of runway: on a soft field the nose wheel has to come up early, stick fully back from the start.',
+  overrun: 'Ran out of runway: nose up from the start of the roll, so the wing takes the weight off the wheels sooner.',
   off: 'Ran off the side of the runway: keep it on the centreline with the rudder.',
-  stopped: 'Never got airborne: full power and the stick fully back, all the way.',
+  stopped: 'Never got airborne: full power and the nose up, all the way to the lift-off.',
   slow: `Never got to ${VY_KTS} knots: stay just above the runway and let it speed up first.`,
   tail: `The tail touched the runway: hold the nose a little lower, about ${PITCH_DEG}° up.`,
-  settled: 'Settled back onto the runway after lifting off: hold it level just above, don\'t let it sink or pull too high too slow.',
-  nose: 'The nose wheel carried too much weight: on a soft field hold the stick back from the start of the roll.',
+  settled: 'Settled back onto the runway: once off, lower the nose just enough to stay a few feet up while it speeds up.',
+  nose: 'Too much weight on the nose wheel: nose up from the start of the roll, and keep it up.',
   liftoff: 'Lifted off late: hold the nose up and let it fly off at the lowest speed it will.',
   accel: `Climbed too soon: stay in ground effect, just above the runway, until ${VY_KTS} knots.`,
 };
@@ -148,28 +163,28 @@ export function gradeSoftField(st, kid = false) {
   const flew = st.liftKts !== null;
   const nose = st.noseN ? st.noseSum / st.noseN : 1;
   const factors = [
-    { key: 'nose', label: 'Nose wheel load on the roll', value: `${Math.round(nose * 100)}% of its weight`,
+    { key: 'nose', label: 'Weight on the nose wheel', value: `${Math.round(nose * 100)}% of normal`,
       score: curve(nose, [[0.25, 100], [0.5, 75], [0.8, 30], [1, 0]]) },
     { key: 'liftoff', label: 'Lift-off speed', value: flew ? `${Math.round(st.liftKts)} kt, after ${fmt(st.rollM * M_TO_FT)} ft` : 'never lifted off',
       score: flew ? curve(st.liftKts, [[54, 100], [57, 80], [62, 40], [66, 0]]) : 0 },
-    { key: 'accel', label: `Height before ${VY_KTS} kt`, value: kid && flew ? 'the plane climbed for you' : st.accelFt === null ? 'never got there' : `${Math.round(st.accelFt)} ft`,
+    { key: 'accel', label: `Height until ${ACCEL_KTS} kt`, value: kid && flew ? 'the plane climbed for you' : st.accelFt === null ? (flew ? `climbed before ${ACCEL_KTS} kt` : 'never flew') : `${Math.round(st.accelFt)} ft`,
       score: kid && flew ? 100 : st.accelFt === null ? 0 : curve(st.accelFt, [[20, 100], [36, 70], [60, 30], [100, 0]]) },
   ];
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
   let reason = st.why ? REASONS[st.why] : null;
   if (st.why && st.why !== 'slow') score = Math.min(score, FAIL_CAP);
-  else if (st.settled && !kid) { score = Math.min(score, CAP_C); reason ??= REASONS.settled; }
+  else if (st.settled && !kid) { score = Math.min(score, CAP_C); reason ??= REASONS.settled + (st.tail ? ` ${REASONS.tail}` : ''); }
   else if (st.tail) { score = Math.min(score, CAP_B); reason ??= REASONS.tail; }
   if (!reason && score < 85) reason = REASONS[factors.reduce((a, f) => (f.score < a.score ? f : a)).key];
   return {
     kind: 'softField', title: flew ? 'Soft-field takeoff' : 'Soft-field takeoff failed', grade: letterGrade(score), score, factors, reason,
-    note: kid ? 'Kid level: the plane flew the climb for you' : 'Soft field (a game surface: the drag of soft turf on Addison 16).',
+    note: `${kid ? 'Kid level: the plane flew the climb for you. ' : ''}The soft surface is a game setting: the drag of soft turf on Addison 16.`,
   };
 }
 
 // main.js's calls, the input built here from the sim (reused: the chunk pays, not boot).
-const _in = { onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, throttle: 0, noseFrac: 1, tailOn: false, alongM: 0, leftM: 0, crossM: 0, halfWidthM: 0, pitchDeg: 0, kid: false };
+const _in = { elev: 0, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, throttle: 0, noseFrac: 1, tailOn: false, alongM: 0, leftM: 0, crossM: 0, halfWidthM: 0, pitchDeg: 0, kid: false };
 function input(st, sim, pitchDeg) {
   const e = st.end, r = e.hdgT * Math.PI / 180, dx = Math.sin(r), dz = -Math.cos(r);
   const rx = sim.pos.x - e.thrX, rz = sim.pos.z - e.thrZ, g = sim.spec.gear;
@@ -184,7 +199,7 @@ function input(st, sim, pitchDeg) {
   _in.leftM = e.lengthM - e.displacedM - _in.alongM;
   _in.crossM = rx * -dz + rz * dx;
   _in.halfWidthM = e.widthM / 2;
-  _in.pitchDeg = pitchDeg; _in.kid = sim.assist === 'kid';
+  _in.pitchDeg = pitchDeg; _in.elev = sim.elevInput ?? 0; _in.kid = sim.assist === 'kid';
   return _in;
 }
 export const softFieldSimStep = (st, sim, pitchDeg, dt) => softFieldStep(st, input(st, sim, pitchDeg), dt);

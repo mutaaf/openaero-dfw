@@ -1772,7 +1772,7 @@ function step6DofPhysics(dt) {
 // Takeoff callouts (0035): on the takeoff mission's roll and climb-out only, spoken when
 // sound is on and shown on the HUD either way. Re-armed by loadScenario.
 function checkTakeoffCallouts() {
-  if (sim.loadedMission?.kind !== 'takeoff' || sim.takeoffCalloutIdx >= TAKEOFF_CALLOUTS.length - 1) return;
+  if (sim.loadedMission?.kind !== 'takeoff' || sim.softField || sim.takeoffCalloutIdx >= TAKEOFF_CALLOUTS.length - 1) return; // not the soft-field lesson's (0182): it lifts off below Vr and stays low
   // Wheel height, not sim.aglFt: that is the CG's, already ~11 ft with a 737's wheels down.
   const wheelFt = sim.onGround ? 0 : (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
   const i = takeoffCalloutIndex(sim.iasKts, sim.vsiFpm, wheelFt, vrFor(sim.spec, sim.flapsIndex), sim.takeoffCalloutIdx, !!sim.spec.twoCrew);

@@ -15,7 +15,7 @@ test('phone, Kid: the soft-field lesson by touch, stick up through the roll, the
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   const snap = () => page.evaluate(() => window.openaeroDebug());
   await expect.poll(async () => (await snap()).softField?.end, { timeout: 10_000 }).toBe('KADS_16');
-  await expect(page.locator('#txtCoach')).toHaveText('Hold the stick up and push the throttle to the top', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Push the throttle to the top, then hold the stick up', { timeout: 10_000 });
   const coach = await page.locator('#coach').boundingBox();
   expect(coach.x + coach.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('soft-field-390.png') });

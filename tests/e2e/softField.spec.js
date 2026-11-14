@@ -23,7 +23,7 @@ test('?mission=kads_16_soft_field: in Drills, flaps 10 on the soft surface, the 
   expect(spawn).toMatchObject({ mission: 'kads_16_soft_field', aircraft: 'c172', flapsIndex: 1, onGround: true, surfaceMu: 0.07 });
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText(/Soft field: stick fully back, then full power/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/Soft field: hold S or ↑ \(nose up\), then hold Shift to full power/, { timeout: 10_000 });
   await page.screenshot({ path: test.info().outputPath('soft-field-1280.png') });
   await page.click('#btnToga');
   // Nose up from the start (the arrow held while under 10°, let go over 11°), hands off once flying.
@@ -45,9 +45,9 @@ test('?mission=kads_16_soft_field: in Drills, flaps 10 on the soft surface, the 
   expect(lift.softField.liftKts).toBeLessThan(62);
   const card = page.locator('#resultsCard');
   await expect(card).toBeVisible({ timeout: 90_000 });
-  await expect(page.locator('#resultsFactors')).toContainText(/Nose wheel load on the roll\s*\d+% of its weight/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Weight on the nose wheel\s*\d+% of normal/);
   await expect(page.locator('#resultsFactors')).toContainText(/Lift-off speed\s*\d+ kt, after [\d,]+ ft/);
-  await expect(page.locator('#resultsFactors')).toContainText(/Height before 74 kt/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Height until 70 kt/);
   await page.screenshot({ path: test.info().outputPath('soft-field-card-1280.png') });
   expect(errors).toEqual([]);
 });

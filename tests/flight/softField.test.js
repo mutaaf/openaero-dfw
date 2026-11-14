@@ -34,7 +34,7 @@ export function flySoftField(tech, { mu = SURFACE_MU, flaps = FLAPS } = {}) {
     const { pitchDeg } = attitude(x);
     const wheelFt = x.onGround ? 0 : (x.pos.y - c172.gearHeight) * M_TO_FT;
     const s = {
-      onGround: x.onGround, wheelFt, iasKts: x.iasKts ?? 0, gsKts: Math.hypot(x.vel.x, x.vel.z) * 1.943844, throttle: x.throttle,
+      elev: x.elevInput, onGround: x.onGround, wheelFt, iasKts: x.iasKts ?? 0, gsKts: Math.hypot(x.vel.x, x.vel.z) * 1.943844, throttle: x.throttle,
       noseFrac: Math.max(0, x.wheelLoads?.[0] ?? 0) / staticNose, tailOn: (x.wheelLoads?.[3] ?? 0) > 0,
       alongM: -x.pos.z, leftM: 2000, crossM: x.pos.x, halfWidthM: 15, pitchDeg, kid: false,
     };
@@ -85,6 +85,9 @@ describe('Cessna 172S soft-field takeoff (flightModel, softField.js, ticket 0182
     expect(r.st.settled).toBe(false);
     expect(r.result.score).toBeGreaterThanOrEqual(85);
     expect(r.prompts[0]).toBe('sfoPower');
+    expect(r.prompts).not.toContain('sfoBack'); // the stick is already fully back: never told "more" (first-timer panel)
+    expect(r.prompts).toContain('sfoWait');
+    expect(r.prompts).toContain('sfoHold');
     expect(r.prompts).toContain('sfoAccel');
     expect(r.prompts.at(-1)).toBe('sfoClimb');
   });

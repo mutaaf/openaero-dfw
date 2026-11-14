@@ -36,14 +36,15 @@ describe('softField.js grade (0182)', () => {
     expect(r.grade).toBe('S');
     expect(r.reason).toBeNull();
     expect(r.factors.map((f) => f.key)).toEqual(['nose', 'liftoff', 'accel']);
-    expect(r.factors[0].value).toBe('20% of its weight');
+    expect(r.factors[0].value).toBe('20% of normal');
     expect(r.factors[1].value).toMatch(/^53 kt, after [\d,]+ ft$/);
-    expect(r.note).toMatch(/game surface/);
+    expect(r.note).toMatch(/game setting/);
   });
   it('a full-weight nose wheel and a late lift-off: below B, the nose named', () => {
     const { r } = lesson({ noseFrac: 1.2, liftKts: 63 });
     expect(r.score).toBeLessThan(70);
     expect(r.reason).toMatch(/nose wheel/);
+    expect(r.reason).not.toMatch(/stick|pull/); // the card is the same on touch and keyboard
   });
   it('climbing to 80 ft before 70 kt costs the ground-effect marks', () => {
     const { r } = lesson({ lowFt: 80 });
@@ -91,10 +92,13 @@ describe('softField.js grade (0182)', () => {
 
 describe('softField.js coach (0182)', () => {
   const st = createSoftField(E16);
-  it('the roll: power and stick back first, then more back stick on a heavy nose, the tail call, then hold', () => {
+  it('the roll: power and nose up first, "nose up" only to a stick not already back, wait, hold, ease off, the tail call', () => {
     expect(softFieldTarget(st, base({ throttle: 0 }))).toBe('sfoPower');
     softFieldStep(st, base({ iasKts: 20 }), 0.1);
-    expect(softFieldTarget(st, base({ iasKts: 30, noseFrac: 0.9 }))).toBe('sfoBack');
+    expect(softFieldTarget(st, base({ iasKts: 30, noseFrac: 0.9, elev: 0 }))).toBe('sfoBack');
+    expect(softFieldTarget(st, base({ iasKts: 30, noseFrac: 0.9, elev: -1 }))).toBe('sfoWait');
+    expect(softFieldTarget(st, base({ iasKts: 30, noseFrac: 0.1, pitchDeg: 5, elev: -1 }))).toBe('sfoWait');
+    expect(softFieldTarget(st, base({ iasKts: 30, noseFrac: 0, pitchDeg: 12 }))).toBe('sfoEaseOff');
     expect(softFieldTarget(st, base({ iasKts: 30, noseFrac: 0.1, pitchDeg: 10 }))).toBe('sfoHold');
     expect(softFieldTarget(st, base({ iasKts: 30, noseFrac: 0, pitchDeg: PITCH_HIGH_DEG + 0.5 }))).toBe('sfoEase');
     expect(softFieldTarget(st, base({ iasKts: 30, kid: true }))).toBe('sfoKidHold');
@@ -107,11 +111,12 @@ describe('softField.js coach (0182)', () => {
     expect(softFieldTarget(st, base({ onGround: false, wheelFt: 10, iasKts: 60, kid: true }))).toBe('sfoKidLow');
   });
   it('every prompt has words; touch words never say "pull" or "back stick"', () => {
-    for (const k of ['sfoPower', 'sfoBack', 'sfoHold', 'sfoEase', 'sfoLow', 'sfoAccel', 'sfoClimb', 'sfoKidPower', 'sfoKidHold', 'sfoKidEase', 'sfoKidLow', 'sfoKidClimb']) {
+    for (const k of ['sfoPower', 'sfoBack', 'sfoWait', 'sfoHold', 'sfoEaseOff', 'sfoEase', 'sfoLow', 'sfoAccel', 'sfoClimb', 'sfoKidPower', 'sfoKidHold', 'sfoKidEase', 'sfoKidLow', 'sfoKidClimb']) {
       expect(DRILL_TEXT[k]).toBeTruthy();
       expect(coachText(k, { touch: true })).not.toMatch(/pull|back stick|stick fully back/i);
     }
-    expect(TOUCH_WORDS.sfoPower).toMatch(/stick up/);
+    expect(TOUCH_WORDS.sfoPower).toMatch(/throttle to the top, then hold the stick up/);
+    for (const k of ['sfoPower', 'sfoBack', 'sfoWait', 'sfoKidPower']) expect(coachText(k)).toMatch(/S or ↑|↑|Shift/); // keyboard words name the keys
   });
 });
 
