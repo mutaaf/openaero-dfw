@@ -21,6 +21,11 @@ curve. Source: https://www.faa.gov/sites/faa.gov/files/regulations_policies/hand
 ("Ground effect"; confirm chapter and wording in the PDF) and McCormick, Aerodynamics,
 Aeronautics and Flight Mechanics.
 
+## Source used (Builder, 2026-11-14)
+The figures are in the Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25C) ch. 5, "Ground
+Effect" (https://www.faa.gov/sites/faa.gov/files/07_phak_ch5.pdf), not the Airplane Flying Handbook
+(that URL 404s): 1.4% at one span, 23.5% at a quarter, 47.6% at a tenth. The card cites PHAK.
+
 ## What
 A unit card (`tests/unit/` or `tests/flight/`) that tabulates `groundEffectFactor` at
 h/b = 1, 1/2, 1/4, 1/8, 1/10, 1/20 for the C172 (b ≈ 11 m), 737 and F-16 and compares the

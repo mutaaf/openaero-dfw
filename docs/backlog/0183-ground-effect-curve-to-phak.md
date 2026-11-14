@@ -21,7 +21,7 @@ auto-flare flies its own sink profile), and the model still takes 6% off at two 
 ## What
 Replace the curve with one that meets the cited three points within 3 percentage points.
 Wieselsberger's fit, σ = (1 - 1.32 h/b) / (1.05 + 7.4 h/b), lands within ~1 point at 1/4 and 1/10
-but goes negative above ~0.76 span (-3.8% at one span, against PHAK's +1.4%), so it needs a tail
+(a fit usually quoted for about 0.033 ≤ h/b ≤ 0.25) but goes negative above ~0.76 span (-3.8% at one span, against PHAK's +1.4%), so it needs a tail
 that meets 1.4% at one span and tends to 0 above it; or fit one curve through PHAK's three figures. Cite the curve in
 aero.js. Then re-measure every card that flies near the ground (flare, float, landing roll, bounce,
 takeoff, Kid final) on flightModel.js and say in the PR body which moved and by how much; a card that
@@ -29,8 +29,8 @@ now misses its POH figure gets its own gap ticket, not a widened bound.
 
 Also decide (and write down) what height to pass: flightModel.js passes the CG's height above the
 ground (`pos.y - groundY`), not the wing's (the Cessna's high wing sits above its CG, the 737's and
-F-16's low wings nearer or below it; measure from the specs before choosing). The 1 m clamp holds the factor at its 1 m value (C172 and F-16 below
-h/b ≈ 0.1); keep or justify it.
+F-16's low wings nearer or below it; measure from the specs before choosing). The 1 m clamp holds the factor at its 1 m value (C172 below h/b 0.091,
+F-16 below 0.100, 737 below 0.028); keep or justify it.
 
 ## Acceptance criteria
 - [ ] The KNOWN GAP (0183) card in tests/flight/groundEffect.test.js passes and becomes a plain `it`.
