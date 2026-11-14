@@ -1,7 +1,7 @@
 ---
 id: 0179
 title: Ground effect on induced drag matches the published curve (flight card, and a formula check)
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
