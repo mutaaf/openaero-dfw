@@ -38,7 +38,7 @@ export const FULL_BACK = -0.8;
 // STATIC_TAIL_DEG 13.7°, less its 1° margin). 10/11/12/13° lift the Cessna off at about 57.6/55.8/54.2/52.7 KIAS (physics
 // panel, with tests/flight/softField.test.js's pilot); the lift-off grade's full marks are at 56 and under.
 export const PITCH_DEG = 11;
-export const PITCH_HIGH_DEG = 12.7;
+export const PITCH_HIGH_DEG = 12; // a thumb's reaction short of the tail's ~13.7° (device panel)
 // The 172S's Vy (POH): the climb starts here. ACCEL_KTS: reaching it counts as "accelerated" (4 kt for the gusts).
 export const VY_KTS = 74;
 export const ACCEL_KTS = VY_KTS - 4;
@@ -99,40 +99,40 @@ export const createSoftField = (end) => ({
 });
 export const softFieldDone = (st) => st.phase === 'done';
 
+const finish = (st, why) => { st.why = why; st.phase = 'done'; return 'done'; };
 // One step. s: { elev (the stick, negative = nose up), onGround, wheelFt, iasKts, gsKts, throttle, noseFrac (the nose wheel's load over its static share),
 // tailOn, alongM (along the runway from its threshold), leftM (runway ahead), crossM, halfWidthM, pitchDeg }.
 // Returns 'done' on the step the lesson ends (graded), else ''.
 export function softFieldStep(st, s, dt) {
   if (st.phase === 'done') return '';
-  st.t += dt;
+  if (st.rolled || st.phase !== 'roll') st.t += dt; // the give-up clock runs from the roll: reading the coach is free
   st.startAlongM ??= s.alongM;
   if (s.tailOn) st.tail = true;
-  const end = (why) => { st.why = why; st.phase = 'done'; return 'done'; };
   if (st.phase === 'roll') {
     if (s.throttle >= 0.9 && s.iasKts > 15) st.rolled = true;
     // Time-weighted (a slow phone's long frames count for their length: physics panel).
     if (s.onGround && s.iasKts >= ROLL_FROM_KTS) { st.noseSum += Math.max(0, s.noseFrac) * dt; st.noseN += dt; }
     if (!s.onGround && s.wheelFt > LIFT_FT) {
       st.phase = 'air'; st.liftKts = s.iasKts; st.rollM = s.alongM - st.startAlongM;
-    } else if (s.leftM < 0) return end('overrun');
-    else if (Math.abs(s.crossM) > s.halfWidthM + 3) return end('off');
-    else if (st.rolled && s.throttle < 0.5 && s.gsKts < 3) return end('stopped');
-    else if (st.t > GIVE_UP_S) return end('stopped');
+    } else if (s.leftM < 0) return finish(st, 'overrun');
+    else if (Math.abs(s.crossM) > s.halfWidthM + 3) return finish(st, 'off');
+    else if (st.rolled && s.throttle < 0.5 && s.gsKts < 3) return finish(st, 'stopped');
+    else if (st.t > GIVE_UP_S) return finish(st, 'stopped');
     return '';
   }
   if (s.onGround) {
     st.settled = true; // back on the runway after the lift-off: the roll goes on, and so do the runway's checks
-    if (s.leftM < 0) return end('overrun');
-    if (Math.abs(s.crossM) > s.halfWidthM + 3) return end('off');
-    if (s.gsKts < 3) return end('stopped');
+    if (s.leftM < 0) return finish(st, 'overrun');
+    if (Math.abs(s.crossM) > s.halfWidthM + 3) return finish(st, 'off');
+    if (s.gsKts < 3) return finish(st, 'stopped');
   }
   if (st.accelFt === null) {
     st.maxLowFt = Math.max(st.maxLowFt, s.wheelFt);
     if (s.iasKts >= ACCEL_KTS) st.accelFt = st.maxLowFt;
   }
-  if (s.wheelFt >= DONE_FT) return end(null);
+  if (s.wheelFt >= DONE_FT) return finish(st, null);
   // Out of time in the air: never at 74, or never climbed to 200 ft at it (the lesson ends in the climb).
-  if (st.t > GIVE_UP_S) return end(st.accelFt === null ? 'slow' : 'noclimb');
+  if (st.t > GIVE_UP_S) return finish(st, st.accelFt === null ? 'slow' : 'noclimb');
   return '';
 }
 
@@ -188,7 +188,7 @@ export function gradeSoftField(st, kid = false) {
   if (st.why === 'slow' || st.why === 'noclimb') score = Math.min(score, CAP_C);
   else if (st.why) score = Math.min(score, FAIL_CAP);
   else if (st.settled && !kid) { score = Math.min(score, CAP_C); reason ??= REASONS.settled + (st.tail ? ` ${REASONS.tail}` : ''); }
-  else if (st.tail) { score = Math.min(score, CAP_B); reason ??= REASONS.tail; }
+  else if (st.tail && !kid) { score = Math.min(score, CAP_B); reason ??= REASONS.tail; }
   if (!reason && score < 85) reason = REASONS[factors.reduce((a, f) => (f.score < a.score ? f : a)).key];
   return {
     kind: 'softField', title: flew ? 'Soft-field takeoff' : 'Soft-field takeoff failed', grade: letterGrade(score), score, factors, reason,

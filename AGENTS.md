@@ -295,10 +295,10 @@ src/shortField.js   short-field landing lesson (0181, lazy chunk loaded with `ka
 src/softField.js    soft-field takeoff lesson (0182, lazy chunk loaded with `kads_16_soft_field`, `softField: true`, Drills group):
                     the C172 on all of Addison 16, flaps 10, with sim.surfaceMu = SURFACE_MU (0.07, Raymer's soft turf: a game
                     surface, said in the blurb; gear.js rolls every tyre at it). AFH ch. 5's technique: stick back from the start,
-                    the nose ~11° up (PITCH_DEG, the tail call above 12.7°), lift off slow, level in ground effect to 70 KIAS, climb
+                    the nose ~11° up (PITCH_DEG, the tail call above 12°), lift off slow, level in ground effect to 70 KIAS, climb
                     at Vy 74. Its prompts reach coach.js through s.ds / s.dsGround. Graded at 200 ft (checkSoftField: the landing
                     grade skips it until then): the nose wheel's mean load over its static share from 20 kt to the lift-off, the
-                    lift-off speed, the wheels' peak height before 70 kt (Kid: the plane's climb); the tail ≤ B, a settle-back ≤ C
+                    lift-off speed, the wheels' peak height before 70 kt (Kid: the plane's climb); the tail ≤ B (not Kid), a settle-back ≤ C
                     (not Kid), an overrun, run-off or no lift-off ≤ D. Every tyre rolls at the same μ, so the Handbook roll
                     wins by the wing's early lift and slower lift-off, not a lighter nose tyre: nose-wheel bogging is not
                     modelled. The takeoff callouts are off in it (it lifts off under Vr). Cards: tests/flight/softField.test.js

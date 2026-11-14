@@ -80,8 +80,11 @@ describe('softField.js grade (0182)', () => {
     softFieldStep(st, base({ iasKts: 30 }), 1);
     expect(softFieldStep(st, base({ throttle: 0, gsKts: 1, iasKts: 1 }), 1)).toBe('done');
     expect(gradeSoftField(st).reason).toMatch(/Never got airborne/);
+    // Sitting reading the coach is free (device panel); a roll that never gets airborne gives up.
     const idle = createSoftField(E16);
-    expect(softFieldStep(idle, base({ throttle: 0 }), GIVE_UP_S + 1)).toBe('done');
+    expect(softFieldStep(idle, base({ throttle: 0 }), GIVE_UP_S + 1)).toBe('');
+    softFieldStep(idle, base({ iasKts: 20 }), 1);
+    expect(softFieldStep(idle, base({ iasKts: 25 }), GIVE_UP_S + 1)).toBe('done');
   });
   it('the tail on the runway caps at B and says so', () => {
     const st = createSoftField(E16);
@@ -90,6 +93,7 @@ describe('softField.js grade (0182)', () => {
     const r = gradeSoftField(st);
     expect(r.score).toBeLessThanOrEqual(CAP_B);
     expect(r.reason).toMatch(/tail touched/);
+    expect(gradeSoftField(st, true).score).toBeGreaterThan(CAP_B); // Kid's assist holds the nose: not its fault (device panel)
   });
   it('holding ground effect past 70 kt until the time runs out: "never climbed", capped at C', () => {
     const st = createSoftField(E16);
