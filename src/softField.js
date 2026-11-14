@@ -35,7 +35,8 @@ export const NOSE_UP_DEG = 8;
 // The stick counts as fully back past this (elevInput, negative = nose up).
 export const FULL_BACK = -0.8;
 // The attitude the coach asks for once the nose is up: "slightly tail-low", under the tail (takeoffCoach.js
-// STATIC_TAIL_DEG 13.7°, less its 1° margin). 10-12° lifts the Cessna off at 51-54 KIAS (tests/flight/softField.test.js).
+// STATIC_TAIL_DEG 13.7°, less its 1° margin). 10/11/12/13° lift the Cessna off at about 57.6/55.8/54.2/52.7 KIAS (physics
+// panel, with tests/flight/softField.test.js's pilot); the lift-off grade's full marks are at 56 and under.
 export const PITCH_DEG = 11;
 export const PITCH_HIGH_DEG = 12.7;
 // The 172S's Vy (POH): the climb starts here. ACCEL_KTS: reaching it counts as "accelerated" (4 kt for the gusts).
@@ -71,7 +72,7 @@ export const SFO_TEXT = {
   sfoKidPower: 'Hold ↑ and hold Shift: power to 100%',
   sfoKidHold: 'Keep holding ↑: the nose wheel stays light',
   sfoKidEase: 'Not so high! Let the nose down a bit',
-  sfoKidLow: 'Flying! Stay low and let it speed up',
+  sfoKidLow: 'Flying! Let it climb',
   sfoKidClimb: 'Fast enough: now let it climb',
 };
 const SFO_TOUCH = {
@@ -109,7 +110,8 @@ export function softFieldStep(st, s, dt) {
   const end = (why) => { st.why = why; st.phase = 'done'; return 'done'; };
   if (st.phase === 'roll') {
     if (s.throttle >= 0.9 && s.iasKts > 15) st.rolled = true;
-    if (s.onGround && s.iasKts >= ROLL_FROM_KTS) { st.noseSum += Math.max(0, s.noseFrac); st.noseN++; }
+    // Time-weighted (a slow phone's long frames count for their length: physics panel).
+    if (s.onGround && s.iasKts >= ROLL_FROM_KTS) { st.noseSum += Math.max(0, s.noseFrac) * dt; st.noseN += dt; }
     if (!s.onGround && s.wheelFt > LIFT_FT) {
       st.phase = 'air'; st.liftKts = s.iasKts; st.rollM = s.alongM - st.startAlongM;
     } else if (s.leftM < 0) return end('overrun');
@@ -118,13 +120,19 @@ export function softFieldStep(st, s, dt) {
     else if (st.t > GIVE_UP_S) return end('stopped');
     return '';
   }
-  if (s.onGround) st.settled = true; // back on the runway after the lift-off: the roll goes on
+  if (s.onGround) {
+    st.settled = true; // back on the runway after the lift-off: the roll goes on, and so do the runway's checks
+    if (s.leftM < 0) return end('overrun');
+    if (Math.abs(s.crossM) > s.halfWidthM + 3) return end('off');
+    if (s.gsKts < 3) return end('stopped');
+  }
   if (st.accelFt === null) {
     st.maxLowFt = Math.max(st.maxLowFt, s.wheelFt);
     if (s.iasKts >= ACCEL_KTS) st.accelFt = st.maxLowFt;
   }
   if (s.wheelFt >= DONE_FT) return end(null);
-  if (st.t > GIVE_UP_S) return end(st.accelFt === null ? 'slow' : null);
+  // Out of time in the air: never at 74, or never climbed to 200 ft at it (the lesson ends in the climb).
+  if (st.t > GIVE_UP_S) return end(st.accelFt === null ? 'slow' : 'noclimb');
   return '';
 }
 
@@ -150,6 +158,7 @@ const REASONS = {
   overrun: 'Ran out of runway: nose up from the start of the roll, so the wing takes the weight off the wheels sooner.',
   off: 'Ran off the side of the runway: keep it on the centreline with the rudder.',
   stopped: 'Never got airborne: full power and the nose up, all the way to the lift-off.',
+  noclimb: `Never climbed: once you have ${VY_KTS} knots, climb at ${VY_KTS}.`,
   slow: `Never got to ${VY_KTS} knots: stay just above the runway and let it speed up first.`,
   tail: `The tail touched the runway: hold the nose a little lower, about ${PITCH_DEG}° up.`,
   settled: 'Settled back onto the runway: once off, lower the nose just enough to stay a few feet up while it speeds up.',
@@ -166,14 +175,15 @@ export function gradeSoftField(st, kid = false) {
     { key: 'nose', label: 'Weight on the nose wheel', value: `${Math.round(nose * 100)}% of normal`,
       score: curve(nose, [[0.25, 100], [0.5, 75], [0.8, 30], [1, 0]]) },
     { key: 'liftoff', label: 'Lift-off speed', value: flew ? `${Math.round(st.liftKts)} kt, after ${fmt(st.rollM * M_TO_FT)} ft` : 'never lifted off',
-      score: flew ? curve(st.liftKts, [[54, 100], [57, 80], [62, 40], [66, 0]]) : 0 },
-    { key: 'accel', label: `Height until ${ACCEL_KTS} kt`, value: kid && flew ? 'the plane climbed for you' : st.accelFt === null ? (flew ? `climbed before ${ACCEL_KTS} kt` : 'never flew') : `${Math.round(st.accelFt)} ft`,
-      score: kid && flew ? 100 : st.accelFt === null ? 0 : curve(st.accelFt, [[20, 100], [36, 70], [60, 30], [100, 0]]) },
+      score: flew ? curve(st.liftKts, [[56, 100], [59, 75], [63, 35], [66, 0]]) : 0 },
+    { key: 'accel', label: `Height until ${ACCEL_KTS} kt`, value: kid && st.accelFt !== null ? 'the plane climbed for you' : st.accelFt === null ? (flew ? `climbed before ${ACCEL_KTS} kt` : 'never flew') : `${Math.round(st.accelFt)} ft`,
+      score: kid && st.accelFt !== null ? 100 : st.accelFt === null ? 0 : curve(st.accelFt, [[20, 100], [36, 70], [60, 30], [100, 0]]) },
   ];
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
   let reason = st.why ? REASONS[st.why] : null;
-  if (st.why && st.why !== 'slow') score = Math.min(score, FAIL_CAP);
+  if (st.why === 'slow' || st.why === 'noclimb') score = Math.min(score, CAP_C);
+  else if (st.why) score = Math.min(score, FAIL_CAP);
   else if (st.settled && !kid) { score = Math.min(score, CAP_C); reason ??= REASONS.settled + (st.tail ? ` ${REASONS.tail}` : ''); }
   else if (st.tail) { score = Math.min(score, CAP_B); reason ??= REASONS.tail; }
   if (!reason && score < 85) reason = REASONS[factors.reduce((a, f) => (f.score < a.score ? f : a)).key];

@@ -1054,6 +1054,7 @@ function checkSoftField(dt) {
   if (!f || sfoLib.softFieldDone(f) || !cockpitEntered || modalOpen()) return;
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   if (sfoLib.softFieldSimStep(f, sim, _euler.x * RAD_TO_DEG, dt) !== 'done') return;
+  sim.surfaceMu = null; // the soft surface is the lesson's takeoff only: a landing after the card rolls on the runway
   drillCard(sfoLib.gradeSoftField(f, sim.assist === 'kid'), f.end);
 }
 function checkShortField(dt) {

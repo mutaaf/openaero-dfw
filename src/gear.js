@@ -104,8 +104,10 @@ export function gearForces(body, spec, force, moment) {
 // `force` and its moment about the CG (body axes) to `moment`: below the CG, braking pitches
 // the nose down. `fwd` is the horizontal unit vector along the nose, `vAlong` the
 // groundspeed along it (m/s). Needs body.wheelLoads from gearForces this sub-step.
-// body.surfaceMu: a softer surface's rolling μ in place of the runway's (0182's soft-field lesson);
-// the brakes still give what they give, never less than it.
+// body.surfaceMu: a softer surface's rolling μ in place of the runway's (0182's soft-field lesson). A game
+// choice for the brakes there: the larger of it and the paved brakes' μ (so a light pedal adds nothing over the
+// soft drag, and full brakes reach the paved muMax, above Raymer's soft-turf braked μ). The lesson only rolls on it
+// for its takeoff (main.js clears it at the card), so only an aborted roll brakes on it.
 export function gearFriction(body, spec, fwd, vAlong, force, moment) {
   const loads = body.wheelLoads;
   const rollMu = body.surfaceMu ?? ROLLING_MU;

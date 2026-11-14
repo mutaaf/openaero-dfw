@@ -21,7 +21,7 @@ function lesson({ noseFrac = 0.2, liftKts = 53, lowFt = 8, settle = false, kid =
   softFieldStep(st, base({ iasKts: 10, throttle: 1 }), 1);
   for (let k = 20; k < liftKts; k += 2) softFieldStep(st, base({ iasKts: k, noseFrac, alongM: k * 10 }), 1);
   softFieldStep(st, base({ onGround: false, wheelFt: 2, iasKts: liftKts, alongM: liftKts * 10 }), 1);
-  if (settle) softFieldStep(st, base({ iasKts: liftKts + 2 }), 1);
+  if (settle) softFieldStep(st, base({ iasKts: liftKts + 2, gsKts: liftKts + 2 }), 1);
   softFieldStep(st, base({ onGround: false, wheelFt: lowFt, iasKts: 65 }), 1);
   softFieldStep(st, base({ onGround: false, wheelFt: lowFt, iasKts: ACCEL_KTS }), 1);
   expect(softFieldStep(st, base({ onGround: false, wheelFt: DONE_FT, iasKts: VY_KTS }), 1)).toBe('done');
@@ -83,6 +83,33 @@ describe('softField.js grade (0182)', () => {
     expect(r.score).toBeLessThanOrEqual(CAP_B);
     expect(r.reason).toMatch(/tail touched/);
   });
+  it('holding ground effect past 70 kt until the time runs out: "never climbed", capped at C', () => {
+    const st = createSoftField(E16);
+    softFieldStep(st, base({ iasKts: 30, noseFrac: 0.2 }), 1);
+    softFieldStep(st, base({ onGround: false, wheelFt: 3, iasKts: 54 }), 1);
+    softFieldStep(st, base({ onGround: false, wheelFt: 6, iasKts: 72 }), 1);
+    expect(softFieldStep(st, base({ onGround: false, wheelFt: 6, iasKts: 90 }), GIVE_UP_S)).toBe('done');
+    const r = gradeSoftField(st);
+    expect(r.score).toBeLessThanOrEqual(CAP_C);
+    expect(r.reason).toMatch(/Never climbed/);
+  });
+  it('Kid: a hop and a stop is not the plane\'s climb, and is capped', () => {
+    const st = createSoftField(E16);
+    softFieldStep(st, base({ iasKts: 30, noseFrac: 0.2 }), 1);
+    softFieldStep(st, base({ onGround: false, wheelFt: 2, iasKts: 54 }), 1);
+    expect(softFieldStep(st, base({ throttle: 0, gsKts: 1 }), 1)).toBe('done');
+    const r = gradeSoftField(st, true);
+    expect(r.factors[2].value).not.toMatch(/the plane climbed/);
+    expect(r.score).toBeLessThanOrEqual(FAIL_CAP);
+  });
+  it('after a settle-back the runway is still checked: off the end is a D', () => {
+    const st = createSoftField(E16);
+    softFieldStep(st, base({ iasKts: 30 }), 1);
+    softFieldStep(st, base({ onGround: false, wheelFt: 2, iasKts: 54 }), 1);
+    expect(softFieldStep(st, base({ iasKts: 50, gsKts: 50, leftM: -1 }), 1)).toBe('done');
+    expect(gradeSoftField(st).score).toBeLessThanOrEqual(FAIL_CAP);
+    expect(gradeSoftField(st).reason).toMatch(/out of runway/);
+  });
   it('a 1 ft bump is not the lift-off', () => {
     const st = createSoftField(E16);
     softFieldStep(st, base({ onGround: false, wheelFt: 0.5, iasKts: 40 }), 1);
@@ -131,7 +158,7 @@ describe("softField.js on the game's sim (0182)", () => {
     expect(st.startAlongM).toBeCloseTo(30 - E16.displacedM, 3);
     sim.iasKts = 30;
     softFieldSimStep(st, sim, 2, 0.1);
-    expect(st.noseSum / st.noseN).toBeCloseTo(0.5, 3);
+    expect(st.noseSum / st.noseN).toBeCloseTo(0.5, 3); // time-weighted: one 0.1 s sample
     sim.wheelLoads[3] = 10;
     softFieldSimStep(st, sim, 2, 0.1);
     expect(st.tail).toBe(true);
