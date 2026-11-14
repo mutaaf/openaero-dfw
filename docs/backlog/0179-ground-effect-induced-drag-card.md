@@ -1,12 +1,12 @@
 ---
 id: 0179
 title: Ground effect on induced drag matches the published curve (flight card, and a formula check)
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-11-12
-pr:
+pr: 255
 ---
 
 ## Why
@@ -20,6 +20,11 @@ off, the flare float (0085, 0098) and every landing-distance card is tuned aroun
 curve. Source: https://www.faa.gov/sites/faa.gov/files/regulations_policies/handbooks_manuals/aviation/airplane_handbook/10_afh_ch5.pdf
 ("Ground effect"; confirm chapter and wording in the PDF) and McCormick, Aerodynamics,
 Aeronautics and Flight Mechanics.
+
+## Source used (Builder, 2026-11-14)
+The figures are in the Pilot's Handbook of Aeronautical Knowledge (FAA-H-8083-25C) ch. 5, "Ground
+Effect" (https://www.faa.gov/sites/faa.gov/files/07_phak_ch5.pdf), not the Airplane Flying Handbook
+(that URL 404s): 1.4% at one span, 23.5% at a quarter, 47.6% at a tenth. The card cites PHAK.
 
 ## What
 A unit card (`tests/unit/` or `tests/flight/`) that tabulates `groundEffectFactor` at
