@@ -104,15 +104,20 @@ export function gearForces(body, spec, force, moment) {
 // `force` and its moment about the CG (body axes) to `moment`: below the CG, braking pitches
 // the nose down. `fwd` is the horizontal unit vector along the nose, `vAlong` the
 // groundspeed along it (m/s). Needs body.wheelLoads from gearForces this sub-step.
+// body.surfaceMu: a softer surface's rolling μ in place of the runway's (0182's soft-field lesson). A game
+// choice for the brakes there: the larger of it and the paved brakes' μ (so a light pedal adds nothing over the
+// soft drag, and full brakes reach the paved muMax, above Raymer's soft-turf braked μ). The lesson only rolls on it
+// for its takeoff (main.js clears it at the card), so only an aborted roll brakes on it.
 export function gearFriction(body, spec, fwd, vAlong, force, moment) {
   const loads = body.wheelLoads;
-  const braked = brakeMu(spec, body.brakePress ?? 0, body.wetRunway, Math.abs(vAlong) * MPS_TO_KTS);
+  const rollMu = body.surfaceMu ?? ROLLING_MU;
+  const braked = Math.max(rollMu, brakeMu(spec, body.brakePress ?? 0, body.wetRunway, Math.abs(vAlong) * MPS_TO_KTS));
   if (Math.abs(vAlong) <= 0.3) {
     // Nearly stopped: static friction (no moment). The tyres hold whatever pushes along the
     // nose (the METAR wind on a parked airplane, idle thrust: 0106) up to their grip, the
     // brakes' on the mains and rolling resistance on the nose, and damp the speed left. A
     // damper alone let any steady push creep it (a 737 at idle on its brakes, ~7 cm/s).
-    const grip = ROLLING_MU * Math.max(0, loads[0]) + braked * (Math.max(0, loads[1]) + Math.max(0, loads[2]));
+    const grip = rollMu * Math.max(0, loads[0]) + braked * (Math.max(0, loads[1]) + Math.max(0, loads[2]));
     const push = force.x * fwd.x + force.z * fwd.z;
     const f = Math.max(-grip, Math.min(grip, -push - vAlong * spec.massKg * 2));
     force.x += fwd.x * f;
@@ -125,7 +130,7 @@ export function gearFriction(body, spec, fwd, vAlong, force, moment) {
   for (let i = 0; i < c.wheels.length; i++) {
     // The tail scrapes at JSBSim's structural μ 0.5.
     if (!(loads[i] > 0)) continue;
-    const f = s * (i ? i < 3 ? braked : 0.5 : ROLLING_MU) * loads[i];
+    const f = s * (i ? i < 3 ? braked : 0.5 : rollMu) * loads[i];
     _f.set(fwd.x * f, 0, fwd.z * f);
     force.x += _f.x;
     force.z += _f.z;

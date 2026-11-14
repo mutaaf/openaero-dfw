@@ -152,6 +152,8 @@ const sim = {
   // Dead-stick challenge (0036, deadStick.js): its state on that mission, and the dead engine
   deadStick: null,
   engineOut: null, // engine failure after takeoff (0104, engineOut.js)
+  softField: null, // the soft-field takeoff lesson (0182, softField.js): its roll, lift-off and ground-effect leg
+  surfaceMu: null, // that lesson's soft surface: the tyres' rolling μ in place of the runway's (gear.js)
   rto: null, // rejected takeoff drill (0107, rto.js)
   windshear: null, // microburst windshear drill (0112, windshear.js)
   engineFailed: false,
@@ -1045,6 +1047,16 @@ function checkWake(dt) {
 // Short-field landing (0181, shortField.js): the approach speed and flaps below 500 ft, the touchdown, the brakes and the stop.
 let sfdLib = null;
 const _sfIn = { alongM: 0, crossM: 0, aglFt: 0, vsFpm: 0, iasKts: 0, flapsFull: false, onGround: false, gsKts: 0, braking: false, wx: null };
+// Soft-field takeoff (0182, softField.js): the nose wheel on the roll, the lift-off, the ground-effect leg; graded at 200 ft.
+let sfoLib = null;
+function checkSoftField(dt) {
+  const f = sim.softField;
+  if (!f || sfoLib.softFieldDone(f) || !cockpitEntered || modalOpen()) return;
+  _euler.setFromQuaternion(sim.quat, 'YXZ');
+  if (sfoLib.softFieldSimStep(f, sim, _euler.x * RAD_TO_DEG, dt) !== 'done') return;
+  sim.surfaceMu = null; // the soft surface is the lesson's takeoff only: a landing after the card rolls on the runway
+  drillCard(sfoLib.gradeSoftField(f, sim.assist === 'kid'), f.end);
+}
 function checkShortField(dt) {
   const f = sim.shortField;
   if (!f || !cockpitEntered || modalOpen()) return;
@@ -1065,10 +1077,12 @@ function startDrills(mission) {
   sim.rto = null;
   sim.windshear = null;
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = null;
+  sim.softField = sim.surfaceMu = null;
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.shortField);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.shortField || mission.softField);
   if (mission.shortField) loadDrill(mission, sfdLib, () => import('./shortField.js'), (lib) => { sfdLib = lib; if (sim.aircraftKey === mission.aircraft) sim.shortField = lib.createShortField(runwayEnd(mission.airport, mission.rwy)); });
+  if (mission.softField) loadDrill(mission, sfoLib, () => import('./softField.js'), (lib) => { sfoLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.softField = lib.createSoftField(runwayEnd(mission.airport, mission.rwy)); sim.surfaceMu = lib.SURFACE_MU; } });
   if (mission.wake) loadDrill(mission, wakeLib, () => import('./wake.js'), (lib) => { wakeLib = lib; if (sim.aircraftKey === mission.aircraft) sim.wake = lib.createWake(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
   if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
@@ -1141,6 +1155,7 @@ function checkTouchdown(dt) {
   // The engine-failure takeoffs (0104) grade only a landing after the failure: no best without it.
   if (sim.loadedMission?.engineOutFt && !sim.engineOut?.failed) return;
   if (sim.loadedMission?.rto) return; // the rejected takeoff (0107) is graded at its stop
+  if (sim.softField && !sfoLib.softFieldDone(sim.softField)) return; // the soft-field takeoff (0182): a settle-back is part of its roll
   if (sim.windshear && sim.windshear.phase !== 'final') return; // the windshear escape (0112) is graded out of it
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   // The dead-stick challenge (0036) is graded on Addison wherever the wheels touch.
@@ -1359,7 +1374,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.wake || sim.shortField || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.wake || sim.shortField || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1393,9 +1408,10 @@ function updateCoach(dt) {
       : sim.slowFlight ? sfLib.slowCoach(sim.slowFlight, coachInput.kid)
       : sim.wake ? wakeLib.wakePrompt(sim.wake, coachInput, sim.approach.heightAbovePathM)
       : sim.shortField ? sfdLib.shortFieldPrompt(sim.shortField, coachInput, sim.approach)
+      : sim.softField ? sfoLib.softFieldPrompt(sim.softField, sim, _euler.x * RAD_TO_DEG)
       : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
       : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
-    coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach) ? coachInput.ds : null;
+    coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach || sim.softField) ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
     // Only while the wheels are up in a counted bounce (landing.js stepBounce): one prompt per hop.
@@ -1745,6 +1761,7 @@ function step6DofPhysics(dt) {
   checkUpset(dt);
   checkWake(dt);
   checkShortField(dt);
+  checkSoftField(dt);
   if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in
     if (ifrLib.dhStep(sim.dh, sim)) audio.callout('minimums');
     if (sim.activeEnd) scene.fog.density = ifrLib.cloudFog((camera.position.y - sim.activeEnd.thrY) * M_TO_FT);
@@ -1756,7 +1773,7 @@ function step6DofPhysics(dt) {
 // Takeoff callouts (0035): on the takeoff mission's roll and climb-out only, spoken when
 // sound is on and shown on the HUD either way. Re-armed by loadScenario.
 function checkTakeoffCallouts() {
-  if (sim.loadedMission?.kind !== 'takeoff' || sim.takeoffCalloutIdx >= TAKEOFF_CALLOUTS.length - 1) return;
+  if (sim.loadedMission?.kind !== 'takeoff' || sim.softField || sim.takeoffCalloutIdx >= TAKEOFF_CALLOUTS.length - 1) return; // not the soft-field lesson's (0182): it lifts off below Vr and stays low
   // Wheel height, not sim.aglFt: that is the CG's, already ~11 ft with a 737's wheels down.
   const wheelFt = sim.onGround ? 0 : (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
   const i = takeoffCalloutIndex(sim.iasKts, sim.vsiFpm, wheelFt, vrFor(sim.spec, sim.flapsIndex), sim.takeoffCalloutIdx, !!sim.spec.twoCrew);
@@ -3037,6 +3054,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.engineOut = null;
   sim.rto = null;
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = null;
+  sim.softField = sim.surfaceMu = null;
   sim.windshear = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
@@ -3612,6 +3630,8 @@ window.openaeroDebug = () => {
     slowFlight: sim.slowFlight ? { ...sim.slowFlight } : null,
     wake: sim.wake ? { ...sim.wake, path: undefined, end: sim.wake.end.id } : null,
     shortField: sim.shortField && { ...sim.shortField, end: sim.shortField.end.id },
+    softField: sim.softField && { ...sim.softField, end: sim.softField.end.id },
+    surfaceMu: sim.surfaceMu,
     takeoffCalls: [...sim.takeoffCalls],
     landmarks: debugScreen?.landmarkSeats(landmarks, ground) ?? null, // ?debug (debugScreen.js)
     terrain: terrainLod ? { ...terrainLod.stats, demLoaded: ground.hasDem() } : null,
