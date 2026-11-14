@@ -2,7 +2,7 @@
 id: 0185
 title: Kid's crosswind de-crab keeps its S after the Cessna's sideslip drag (0178)
 status: proposed
-priority: P2
+priority: P1
 size: S
 lens: player-feel
 created: 2026-11-14
