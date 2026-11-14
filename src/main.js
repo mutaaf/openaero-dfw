@@ -1044,14 +1044,15 @@ function checkWake(dt) {
 }
 // Short-field landing (0181, shortField.js): the approach speed and flaps below 500 ft, the touchdown, the brakes and the stop.
 let sfdLib = null;
-const _sfIn = { alongM: 0, crossM: 0, aglFt: 0, iasKts: 0, flapsFull: false, onGround: false, gsKts: 0, braking: false, wx: null };
+const _sfIn = { alongM: 0, crossM: 0, aglFt: 0, vsFpm: 0, iasKts: 0, flapsFull: false, onGround: false, gsKts: 0, braking: false, wx: null };
 function checkShortField(dt) {
   const f = sim.shortField;
   if (!f || !cockpitEntered || modalOpen()) return;
-  const g = approachGeometry(f.end, sim.pos);
-  Object.assign(_sfIn, { alongM: -g.distM, crossM: g.crossM, aglFt: sim.aglFt, iasKts: sim.iasKts, flapsFull: flapsLanding(sfdLib.FULL_FLAPS), onGround: sim.onGround,
-    gsKts: sim.gsKts, braking: sim.brakesOn || sim.autobrakeActive, wx: sim.wx });
-  sfdLib.shortFieldStep(f, _sfIn, dt);
+  const g = f.end === sim.activeEnd ? sim.approach : approachGeometry(f.end, sim.pos); // no per-step objects on the lesson's runway
+  const s = _sfIn;
+  s.alongM = -g.distM; s.crossM = g.crossM; s.aglFt = sim.aglFt; s.vsFpm = sim.vsiFpm; s.iasKts = sim.iasKts; s.flapsFull = flapsLanding(sfdLib.FULL_FLAPS);
+  s.onGround = sim.onGround; s.gsKts = sim.gsKts; s.braking = sim.brakesOn || sim.autobrakeActive; s.wx = sim.wx;
+  sfdLib.shortFieldStep(f, s, dt);
 }
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
@@ -1120,7 +1121,7 @@ function checkBounce(dt) {
     pendingLanding = null;
     let r = capBounced(p.result, bounce.bounces);
     const f = sim.shortField;
-    if (f?.end.id === p.end.id) r = sfdLib.shortFieldResult(r, f, sfdLib.pohRollFt(f.end.elevFt, sim.wx.altimInHg, sim.wx.tempC, sfdLib.headwindKts(sim.wx, f.end.hdgT)), sim.assist === 'kid');
+    if (f?.end.id === p.end.id) r = sfdLib.shortFieldResult(r, f, sfdLib.pohRollFt(f.end.elevFt, sim.wx.altimInHg, sim.wx.tempC ?? 15, sfdLib.headwindKts(sim.wx, f.end.hdgT)), sim.assist === 'kid');
     finishLanding(r, p.end, p.gate, p.bestKey);
   }
 }

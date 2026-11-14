@@ -16,7 +16,7 @@ test('?mission=kads_16_short_field: in Drills, the spawn flaps up at 70, the bri
   await page.goto(`${BASE}?mission=kads_16_short_field&debug`);
   await page.locator('#onboardingModal').waitFor({ state: 'visible' });
   await expect(page.locator('#missionList section', { hasText: 'Drills' }).locator('[data-scenario="kads_16_short_field"]')).toBeVisible();
-  await expect(page.locator('#onboardingModal')).toContainText(/first 1,000 ft/);
+  await expect(page.locator('#onboardingModal')).toContainText(/before the big white blocks \(1,000 ft\)/);
   await expect.poll(async () => (await snap(page)).shortField?.end, { timeout: 10_000 }).toBe('KADS_16');
   const spawn = await snap(page);
   expect(spawn).toMatchObject({ mission: 'kads_16_short_field', aircraft: 'c172', flapsIndex: 0, onGround: false, missionRunway: 'KADS_16' });
@@ -25,7 +25,7 @@ test('?mission=kads_16_short_field: in Drills, the spawn flaps up at 70, the bri
   expect(spawn.aglFt).toBeLessThan(1150);
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText(/Short field: full flaps, then 61 knots/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/Short field: full flaps, 61 knots on the PAPI/, { timeout: 10_000 });
   // Then the landing coach, with the lesson's flaps first (the spawn is flaps up).
   await expect(page.locator('#txtCoach')).toHaveText(/Landing flaps: press F until 30°/, { timeout: 20_000 });
   await page.screenshot({ path: test.info().outputPath('short-field-1280.png') });
@@ -54,8 +54,8 @@ test('Kid on a short final of the lesson, brakes on at the touchdown: the card c
   expect(done.shortField.stopped).toBe(true);
   expect(done.shortField.off).toBe(false);
   expect(done.shortField.brakeS).not.toBeNull();
-  await expect(page.locator('#resultsFactors')).toContainText(/Landing roll\s*\d+ ft \(POH \d+\)/);
-  await expect(page.locator('#resultsFactors')).toContainText(/Brakes\s*on \d+\.\d s after touchdown/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Landing roll\s*[\d,]+ ft \(handbook [\d,]+\)/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Brakes\s*on (\d+\.\d s after|before) touchdown/);
   await expect(page.locator('#resultsFactors')).toContainText(/Touchdown point/);
   await page.screenshot({ path: test.info().outputPath('short-field-card-1280.png') });
   expect(errors).toEqual([]);

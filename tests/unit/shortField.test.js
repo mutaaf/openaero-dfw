@@ -3,9 +3,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   createShortField, shortFieldStep, shortFieldPrompt, shortFieldResult, pohRollFt, headwindKts, kidKts, kidLiftM, KID_LIFT_M, KID_HEAD_M,
-  ROLL_FT, FLARE_FT, APPROACH_KTS, GATE_VREF, POH_AIR_FT, LONG_M, FENCE_M, CAP_B, CAP_C, DONE_NOTE, SAY_S, SHORT_FIELD_KEY, SF_TEXT,
+  ROLL_FT, FLARE_FT, STALL_KTS, tailFactor, longM, APPROACH_KTS, GATE_VREF, POH_AIR_FT, LONG_M, FENCE_M, CAP_B, CAP_C, DONE_NOTE, SAY_S, SHORT_FIELD_KEY, SF_TEXT,
 } from '../../src/shortField.js';
-import { gradeLanding } from '../../src/landing.js';
+import { gradeLanding, capBounced } from '../../src/landing.js';
+import { stallSpeedKts } from '../../src/aero.js';
+import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { coachText, RANK } from '../../src/coach.js';
 import { landingTip } from '../../src/landingTip.js';
 import { runwayEnd } from '../../src/airports.js';
@@ -19,8 +21,8 @@ const s0 = () => ({ alongM: -5000, crossM: 0, aglFt: 900, iasKts: 61, flapsFull:
 function flown({ fromFt = 900, kts = 61, flapsFull = true, tdM = 250, rollFt = 600, brakeS = 0.5, wx = null, off = false } = {}) {
   const sf = createShortField(END), s = s0(), dt = 1 / 30;
   Object.assign(s, { iasKts: kts, flapsFull, wx });
-  for (let ft = fromFt; ft > 0; ft -= 10 * dt) { s.aglFt = ft; shortFieldStep(sf, s, dt); }
-  Object.assign(s, { onGround: true, aglFt: 4, alongM: tdM, iasKts: 45, gsKts: 45 });
+  for (let ft = fromFt; ft > 0; ft -= 10 * dt) { s.aglFt = ft; s.braking = brakeS < 0; shortFieldStep(sf, s, dt); }
+  Object.assign(s, { onGround: true, aglFt: 4, alongM: tdM, iasKts: 50, gsKts: 45 });
   shortFieldStep(sf, s, dt);
   const rollM = rollFt * FT;
   for (let t = 0; t < 30 && !sf.stopped; t += dt) {
@@ -31,7 +33,7 @@ function flown({ fromFt = 900, kts = 61, flapsFull = true, tdM = 250, rollFt = 6
   }
   return sf;
 }
-const landing = (pastM, iasKts = 45) => gradeLanding({ vsFpm: -150, crossM: 0, pastThresholdM: pastM, runwayLengthM: END.lengthM - END.displacedM, runwayWidthM: END.widthM, pitchDeg: 6, bankDeg: 0, iasKts, vrefKts: 62 });
+const landing = (pastM, iasKts = 50) => gradeLanding({ vsFpm: -150, crossM: 0, pastThresholdM: pastM, runwayLengthM: END.lengthM - END.displacedM, runwayWidthM: END.widthM, pitchDeg: 6, bankDeg: 0, iasKts, vrefKts: 62 });
 const result = (sf, kid = false, poh = 600) => shortFieldResult(landing(sf.tdM, sf.tdKts), sf, poh, kid);
 
 describe('POH Fig. 5-11 ground roll (Cessna 172S, 2550 lb, flaps 30, power off, maximum braking)', () => {
@@ -120,12 +122,35 @@ describe('the touchdown, the brakes and the stop', () => {
   it('records the touchdown point and speed, the brakes\' delay and the stop', () => {
     const sf = flown({ tdM: 70, rollFt: 600, brakeS: 0.5 });
     expect(sf.tdM).toBe(70);
-    expect(sf.tdKts).toBe(45);
+    expect(sf.tdKts).toBe(50);
     expect(sf.brakeS).toBeGreaterThan(0.45);
     expect(sf.brakeS).toBeLessThan(0.6);
     expect(sf.stopped).toBe(true);
     expect(sf.off).toBe(false);
     expect((sf.stopM - sf.tdM) * M_TO_FT).toBeGreaterThan(560);
+  });
+  it('a slow exit onto a taxiway (under 15 kt) is a stop, not a run-off', () => {
+    const sf = createShortField(END), s = s0();
+    Object.assign(s, { onGround: true, aglFt: 4, alongM: 300, gsKts: 40 });
+    shortFieldStep(sf, s, 1 / 30);
+    Object.assign(s, { alongM: 500, crossM: 30, gsKts: 10 });
+    shortFieldStep(sf, s, 1 / 30);
+    expect(sf.stopped).toBe(true);
+    expect(sf.off).toBe(false);
+  });
+  it('a go-around before any touchdown, back past 600 ft, clears the approach\'s flags; a climb is not sampled', () => {
+    const sf = createShortField(END), s = s0();
+    Object.assign(s, { aglFt: 400, iasKts: 74, vsFpm: 600 }); // climbing away at Vy below 500 ft
+    for (let i = 0; i < 120; i++) shortFieldStep(sf, s, 1 / 30);
+    expect(sf.speedOut).toBe(false);
+    Object.assign(s, { iasKts: 75, vsFpm: -400 });
+    for (let i = 0; i < 120; i++) shortFieldStep(sf, s, 1 / 30);
+    expect(sf.speedOut).toBe(true);
+    Object.assign(s, { aglFt: 700, vsFpm: 500 });
+    shortFieldStep(sf, s, 1 / 30);
+    shortFieldStep(sf, s, 1 / 30);
+    expect(sf.speedOut).toBe(false);
+    expect(sf.below500).toBe(false);
   });
   it('off the runway\'s end is a stop, off', () => {
     const sf = flown({ off: true, tdM: END.lengthM - END.displacedM - 100 });
@@ -140,6 +165,25 @@ describe('the touchdown, the brakes and the stop', () => {
     Object.assign(s, { onGround: false, aglFt: 60 });
     shortFieldStep(sf, s, 1 / 30);
     expect(sf.tdM).toBeNull();
+  });
+  it('after a graded stop, taking off and landing again is a new landing, and past 500 ft a new approach (device panel)', () => {
+    const sf = flown({ tdM: 250, rollFt: 600 });
+    expect(sf.stopped).toBe(true);
+    const s = s0();
+    Object.assign(s, { onGround: false, aglFt: 60, iasKts: 70 });
+    shortFieldStep(sf, s, 1 / 30);
+    expect(sf.stopped).toBe(false);
+    expect(sf.tdM).toBeNull();
+    expect(sf.below500).toBe(true); // the first approach's, until it climbs past 500 ft
+    s.aglFt = 800;
+    shortFieldStep(sf, s, 1 / 30);
+    expect(sf.below500).toBe(false);
+    expect(sf.flapsAt500).toBeNull();
+    Object.assign(s, { onGround: true, aglFt: 4, alongM: 400, iasKts: 48, gsKts: 48 });
+    shortFieldStep(sf, s, 1 / 30);
+    expect(sf.tdM).toBe(400);
+    expect(sf.tdKts).toBe(48);
+    expect(sf.stopped).toBe(false);
   });
   it('graded anyway a minute after the touchdown (rolling on slowly)', () => {
     const sf = createShortField(END), s = s0();
@@ -167,10 +211,41 @@ describe('the grade', () => {
     expect(at(1500)).toBe(40);
     expect(landing(1500 * FT).factors.find((f) => f.key === 'zone').score).toBe(100); // the normal zone's full marks run to 600 m
   });
-  it('a near-stall touchdown is full marks (the normal grade calls 45 kt slow against a 62 Vref)', () => {
+  it('a near-stall touchdown is full marks (the normal grade calls 50 kt slow against a 62 Vref); the stall is the sim\'s calibrated 48', () => {
     const r = result(flown());
-    expect(landing(250, 45).factors.find((f) => f.key === 'speed').score).toBeLessThan(80);
+    expect(landing(250, 50).factors.find((f) => f.key === 'speed').score).toBeLessThan(90);
     expect(r.factors.find((f) => f.key === 'speed').score).toBe(100);
+    expect(r.factors.find((f) => f.key === 'speed').value).toBe('50 kt (stall 48)');
+    expect(STALL_KTS).toBeCloseTo(stallSpeedKts(AIRCRAFT_DATABASE.c172, 3), 0); // POH Fig. 5-3: 40 KIAS = 48 KCAS
+  });
+  it('one bounce keeps its C through the lesson\'s rescore, two or more a D (physics panel: it went B 73)', () => {
+    const sf = flown();
+    const one = shortFieldResult(capBounced(landing(sf.tdM, sf.tdKts), 1), sf, 600);
+    expect(one.score).toBeLessThanOrEqual(CAP_C);
+    expect(one.reason).toMatch(/Bounced once/);
+    expect(shortFieldResult(capBounced(landing(sf.tdM, sf.tdKts), 2), sf, 600).grade).toBe('D');
+  });
+  it('a tailwind stretches the float line by Fig. 5-11 note 2 (+10% per 2 kt, held at 10 kt); a headwind never tightens it', () => {
+    expect(tailFactor(-5)).toBeCloseTo(1.25, 9);
+    expect(tailFactor(-15)).toBeCloseTo(1.5, 9);
+    expect(tailFactor(8)).toBe(1);
+    const tail = (tdFt, kts) => { const sf = flown({ tdM: tdFt * FT, wx: { windDirDeg: 340, windKts: kts } }); return result(sf); };
+    expect(tail(1150, 5).reason).toBeNull(); // 1,250 ft line in 5 kt of tailwind
+    expect(tail(1150, 5).factors[0].value).toBe('1,150 ft: inside 1,250');
+    expect(tail(1300, 5).reason).toMatch(/first 1,250 ft \(1,000 stretched for the tailwind/);
+    expect(longM(10) * M_TO_FT).toBeCloseTo(1000, 6);
+  });
+  it('a variable wind (METAR VRB: no direction) is no wind along the runway, not a tailwind', () => {
+    expect(headwindKts({ windDirDeg: null, windKts: 5 }, 160)).toBe(0);
+    expect(kidLiftM({ windDirDeg: null, windKts: 5 }, 160)).toBe(KID_LIFT_M);
+  });
+  it('brakes set before the wheels touched read so, at half marks (full on Kid)', () => {
+    const sf = flown({ brakeS: -1 });
+    expect(sf.brakesEarly).toBe(true);
+    const b = result(sf).factors.find((f) => f.key === 'brakes');
+    expect(b.value).toBe('on before touchdown');
+    expect(b.score).toBe(50);
+    expect(result(sf, true).factors.find((f) => f.key === 'brakes').score).toBe(100);
   });
   it('a float past the first 1,000 ft caps C', () => {
     const r = result(flown({ tdM: LONG_M + 10 }));
@@ -180,7 +255,7 @@ describe('the grade', () => {
   it('a roll over 1.15x the POH\'s caps B; over 1.5x caps C; no brakes reads "not used"', () => {
     expect(result(flown({ rollFt: 750 })).score).toBeLessThanOrEqual(CAP_B);
     // Brakes on at once: the long roll is the touchdown speed's (the brakes are on/off: no "harder").
-    expect(result(flown({ rollFt: 750 })).reason).toMatch(/touch down slower \(45 kt/);
+    expect(result(flown({ rollFt: 750 })).reason).toMatch(/touch down slower \(50 kt/);
     expect(result(flown({ rollFt: 750, brakeS: 4 })).reason).toMatch(/brakes on right after touchdown/);
     expect(result(flown({ rollFt: 1000 })).score).toBeLessThanOrEqual(CAP_C);
     const none = result(flown({ rollFt: 1400, brakeS: 99 }));
@@ -217,7 +292,7 @@ describe('the card\'s "Next time" tip (landingTip.js hands this lesson\'s over) 
   });
   it('a long roll with the brakes on at once names the touchdown speed, never the stall as the approach speed', () => {
     const t = tip({ rollFt: 750 });
-    expect(t).toMatch(/Touched down at 45 kt: hold 61/);
+    expect(t).toMatch(/Touched down at 50 kt: hold 61/);
     expect(t).not.toMatch(/approach speed \(40\)/);
   });
   it('speed band and flaps are the approach\'s tips', () => {
