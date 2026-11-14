@@ -229,6 +229,85 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
   });
 });
 
+// Flaps steepen the glide (ticket 0180). FAA-H-8083-3C (Airplane Flying Handbook) ch. 9, p. 9-1,
+// "Use of Flaps": flap extension helps by "Producing greater drag and permitting a steeper descent
+// angle", and "Flap deflection of up to 15° primarily produces lift with minimal drag ... Deflection
+// beyond 15° produces a large increase in drag." Neither the Handbook nor the POH gives a number
+// (the POH's Fig. 3-1 glide is flaps up only). So every notch (0/10/20/30) glides at one speed, the
+// POH's 68 KIAS best glide (Section 3; inside its 60-70 KIAS flaps-30 approach speeds and the 85 KIAS
+// flaps 10-30 placard), idle, wings level, from 3,000 ft: 60 s to settle (20 s left the IAS at
+// 65-67.5 kt), then the ratio over 10 s (ground distance / height lost, ~2,100-1,800 ft, out of
+// ground effect). One speed means one CL, so what changes is the flap drag.
+// Measured 2026-11-14 (flaps 0 / 10 / 20 / 30), flightModel.js 9.19 / 8.21 / 7.42 / 6.76 (flaps 30
+// -26.4%), JSBSim 9.65 / 8.58 / 7.72 / 7.02 (-27.3%). The two do not confirm each other's flap
+// drag: c172.xml's CDflap is aero.js's 0.012 per notch (tagged OAERO), one unsourced coefficient.
+// Cards:
+//  - the Handbook's direction: flaps 10 no shallower than clean (up to 15° the drag is "minimal"),
+//    20 and 30 each at least 3% steeper than the notch before (they measure 9-10%);
+//  - the Handbook's shape, KNOWN GAP (0186): the 20 → 30 step costs more glide than 0 → 10. Linear
+//    drag gives the reverse (0.98 vs 0.66 of ratio). flapCd [0, .003, .012, .036] passes it;
+//  - flaps 30 loses at least 25% of the clean ratio: the ticket's guess, written before anything was
+//    measured, not a published figure; it sits ~1.4 points under today's (0.011 a notch fails it).
+// With the flap drag at 0 every notch glides 9.19:1 (the mutation card below).
+const FLAP_GLIDE_KIAS = 68;
+function flapGlide(spec, flaps) {
+  const g = makeBody(spec, { kts: FLAP_GLIDE_KIAS, altM: 3000 / M_TO_FT, flaps });
+  const hold = speedHoldPilot(() => FLAP_GLIDE_KIAS);
+  const pilot = (x, dt) => { hold(x, dt); x.throttle = 0; };
+  fly(g, spec, 60, pilot);
+  const h0 = g.pos.y, d0 = g.distM;
+  let ias = 0, power = 0, n = 0;
+  fly(g, spec, 10, (x, dt) => { pilot(x, dt); ias += x.iasKts; power = Math.max(power, x.engineN); n++; });
+  // Where the flaps are (flightModel.js moves flapPos to the lever; the JSBSim bridge sets them from it).
+  return { ratio: (g.distM - d0) / (h0 - g.pos.y), iasKts: ias / n, power, flaps: g.flapPos ?? g.flapsIndex, endFt: g.pos.y * M_TO_FT };
+}
+const NOTCHES = [0, 1, 2, 3];
+const FLAP_GLIDE_GAPS = new Map([['shape', '0186']]);
+
+for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S glide with flaps, FAA-H-8083-3C p. 9-1 (${model}, ticket 0180)`, () => {
+  let r;
+  beforeAll(async () => {
+    useFdm(model === 'jsbsim' ? await nodeJsbsim() : null);
+    r = NOTCHES.map((f) => flapGlide(c172, f));
+    console.log(`[c172 ${model}] glide at 68 KIAS, flaps 0/10/20/30: ${r.map((x) => x.ratio.toFixed(2)).join(' / ')} (flaps 30 ${((r[3].ratio / r[0].ratio - 1) * 100).toFixed(1)}%)`);
+  }, 30000);
+  afterAll(() => useFdm(null));
+
+  // The baseline is settled before the window (LESSONS 2026-11-12): on speed, idle, flaps out to the
+  // lever, and high enough to be out of ground effect.
+  it('every glide flies the same conditions: 68 KIAS within 0.5 kt, idle (under 2% power), flaps out to the lever, above 1,500 ft', () => {
+    for (const [i, x] of r.entries()) {
+      expect(Math.abs(x.iasKts - FLAP_GLIDE_KIAS)).toBeLessThanOrEqual(0.5);
+      expect(x.power).toBeLessThan(0.02);
+      expect(x.flaps).toBeCloseTo(NOTCHES[i], 2);
+      expect(x.endFt).toBeGreaterThan(1500);
+    }
+  });
+
+  it('more flap, steeper glide at the same speed: flaps 10 no shallower than clean, 20 and 30 each at least 3% steeper than the notch before (p. 9-1: "greater drag ... a steeper descent angle")', () => {
+    expect(r[1].ratio).toBeLessThanOrEqual(r[0].ratio);
+    expect(r[2].ratio).toBeLessThan(0.97 * r[1].ratio);
+    expect(r[3].ratio).toBeLessThan(0.97 * r[2].ratio);
+  });
+
+  gapCard(FLAP_GLIDE_GAPS, 'shape')('flaps 20 to 30 costs more glide ratio than flaps 0 to 10 (p. 9-1: up to 15° "minimal drag", beyond 15° "a large increase in drag")', () => {
+    expect(r[2].ratio - r[3].ratio).toBeGreaterThan(r[0].ratio - r[1].ratio);
+  });
+
+  it('flaps 30 loses at least 25% of the clean glide ratio at 68 KIAS (the ticket\'s floor, not a published figure; measured ~26-27%)', () => {
+    expect(r[3].ratio).toBeLessThanOrEqual(0.75 * r[0].ratio);
+  });
+
+  // The cards above have teeth: flightModel.js flown with no flap drag glides the same at every
+  // notch (JSBSim reads c172.xml, so the mutation is flown on flightModel.js only).
+  if (model === 'flightModel') it('with the flap drag at 0 the flaps no longer steepen the glide (within 1%), so the 3%-a-notch and 25% cards would fail', () => {
+    const noFlapDrag = { ...c172, flapCd: [0, 0, 0, 0] };
+    const clean = flapGlide(noFlapDrag, 0).ratio, full = flapGlide(noFlapDrag, 3).ratio;
+    expect(Math.abs(full / clean - 1)).toBeLessThan(0.01);
+    expect(full).toBeGreaterThan(0.75 * clean);
+  }, 30000);
+});
+
 // Best angle vs best rate of climb (ticket 0154). C172S POH Section 4, "Airspeeds for Normal
 // Operation" (a table, no figure number): best angle of climb (Vx) 62 KIAS and best rate of
 // climb (Vy) 74 KIAS at sea level, 2,550 lb, flaps up. FAA-H-8083-3C (Airplane Flying
