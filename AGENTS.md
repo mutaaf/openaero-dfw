@@ -292,6 +292,14 @@ src/shortField.js   short-field landing lesson (0181, lazy chunk loaded with `ka
                     the brakes' delay; out of the band or not at 30° by 500 ft ≤ B (not Kid); a bounce keeps its cap. Its own
                     "Next time" tip (landingTip.js defers) and strip zone. Leaving 500 ft or the runway again re-arms it.
                     Cards: tests/flight/shortField.test.js, kidFinal.test.js
+src/softField.js    soft-field takeoff lesson (0182, lazy chunk loaded with `kads_16_soft_field`, `softField: true`, Drills group):
+                    the C172 on all of Addison 16, flaps 10, with sim.surfaceMu = SURFACE_MU (0.07, Raymer's soft turf: a game
+                    surface, said in the blurb; gear.js rolls every tyre at it). AFH ch. 5's technique: stick back from the start,
+                    the nose ~11° up (PITCH_DEG, the tail call above 12.7°), lift off slow, level in ground effect to 70 KIAS, climb
+                    at Vy 74. Its prompts reach coach.js through s.ds / s.dsGround. Graded at 200 ft (checkSoftField: the landing
+                    grade skips it until then): the nose wheel's mean load over its static share from 20 kt to the lift-off, the
+                    lift-off speed, the wheels' peak height before 70 kt (Kid: the plane's climb); the tail ≤ B, a settle-back ≤ C
+                    (not Kid), an overrun, run-off or no lift-off ≤ D. Cards: tests/flight/softField.test.js
 src/noXr.js         a stand-in for three's WebXRManager (vite.config.js aliases WebGLRenderer's import to it): XR
                     off, ~3.7 kB gz off boot (0174). tests/unit/upset.test.js checks it has every `xr.` member
                     three's WebGL renderer reads outside a presenting session. Want WebXR: drop the alias.
@@ -514,7 +522,8 @@ src/systems.js      aircraft systems (pure, run first in every flightModel sub-s
 src/gear.js         landing gear on oleo struts (0074): nose + mains at their real positions,
                     per-wheel loads and moments through spec.inertia, harder rebound damping,
                     pedal nose-wheel steering, the tail against the mains' moment with q;
-                    tyre friction per wheel at its axle, brakes on the mains only (0082); the loaded
+                    tyre friction per wheel at its axle, brakes on the mains only (0082; body.surfaceMu, a
+                    softer surface's rolling μ, replaces the runway's 0.03 on every tyre: 0182); the loaded
                     nose tyre holds its steered yaw rate against the fin and lets go as the nose lifts
                     (noseWheelYawHold, 0110; cards in tests/flight/groundSteer.test.js); nearly
                     stopped and not breaking away, static friction holds a parked airplane against wind and
@@ -683,7 +692,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-14 (0181): 199.17 kB (the short-field lesson's mission entry and blurb, its lazy import, step, coach target, flaps and flare height,
+2026-11-14 (0182): 199.55 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
+the snapshot's softField and surfaceMu, gear.js's surface μ and deeplink.js skipping the lesson for ?airport, +0.38 kB; softField.js is a lazy chunk). 2026-11-14 (0181): 199.17 kB (the short-field lesson's mission entry and blurb, its lazy import, step, coach target, flaps and flare height,
 gate, Kid, speed bug and stop-hold hooks and the snapshot's shortField, +0.68 kB over main's 198.49; shortField.js is a lazy chunk). 2026-11-12 (0171): 198.49 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
 fetch, +0.15 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
 and assists.js kidFinalGuide's liftM, +0.46 kB; wake.js is a lazy chunk). 2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid

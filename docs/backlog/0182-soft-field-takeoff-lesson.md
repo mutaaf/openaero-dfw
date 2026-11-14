@@ -1,12 +1,12 @@
 ---
 id: 0182
 title: Soft-field takeoff lesson: hold the nose wheel light on a rough surface (Addison, grass-strip rolling drag)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-14
-pr:
+pr: 259
 ---
 
 ## Why
