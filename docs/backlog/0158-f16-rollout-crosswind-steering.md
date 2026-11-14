@@ -1,7 +1,7 @@
 ---
 id: 0158
 title: The F-16 at Kid and Learner holds the centreline on a rollout in 25 kt of crosswind
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: player-feel
@@ -39,3 +39,6 @@ The 737 and the Cessna; Pilot's ground handling.
 Searched for the F-16's nose-wheel steering authority: only study flashcards (±32°) and sim forums (engage under
 ~60 kt, weight-on-wheels); no flight-manual excerpt or report found, and no low/high gain mode for the F-16 (that is
 the F/A-18's). Not citable yet.
+
+## Scout note (2026-11-14)
+Demoted to proposed: three Builder runs found no citable source or decision for this; it waits for the operator to supply a source (commit the PDF or approve a fitted number) before it is ready again.

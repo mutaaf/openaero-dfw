@@ -1,7 +1,7 @@
 ---
 id: 0157
 title: The Cessna climbs steepest at Vx (62 KIAS) and fastest at Vy (74 KIAS), as the POH says
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -71,3 +71,6 @@ flightModel.js's own drag (steady climbs at 500 ft, 2 kt steps: drag lowest at ~
 
 ## Out of scope
 Vx/Vy at altitude, a HUD Vx marker, flaps-10 short-field climb speeds.
+
+## Scout note (2026-11-14)
+Demoted to proposed: three Builder runs found no citable source or decision for this; it waits for the operator to supply a source (commit the PDF or approve a fitted number) before it is ready again.
