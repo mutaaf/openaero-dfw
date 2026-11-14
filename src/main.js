@@ -849,7 +849,7 @@ function checkStabilizedGate() {
   const gate = sim.gate = stabilizedGate({
     iasKt: sim.iasKts, vref: sim.shortField ? sfdLib.GATE_VREF : vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: gearLocked(sim),
     // The two landing notches (737: 30°/40°, 172: 20°/30°), set and there (not in transit).
-    flapsOk: flapsLanding(),
+    flapsOk: flapsLanding(lessonFlaps()), // 0181: the short-field lesson's 30°
     // The wake lesson (0115): above the 3° path up to a path past the jet's touchdown point is on path (wake.js).
     glideDevDots: ilsDots(sim.wake?.end.id === end.id ? wakeLib.gateHeightAbovePathM(sim.wake, ap.heightAbovePathM) : ap.heightAbovePathM, ap.distM + AIM_POINT_M, GS_DOT_DEG), locDevDots: locDots,
     vmc: gs.armFt === GATE_VMC_FT,
@@ -1373,6 +1373,7 @@ function updateCoach(dt) {
     coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + locPastThresholdM(sim.activeEnd), LOC_DOT_DEG) : 0;
     coachInput.gearLocked = gearLocked(sim);
     coachInput.flapsLanding = flapsLanding(lessonFlaps()); // 0181: the POH's full 30° on the short-field lesson
+    coachInput.flareFt = sim.shortField ? sfdLib.FLARE_FT : undefined; // 0181: the nose holds 61 past the fence
     coachInput.wet = sim.wetRunway;
     // The drill's missed approach (0047): coached from the gate's call to 2,000 ft. Here the
     // gear prompt means "still down" and the flaps prompt "still at landing flaps" (lever).
@@ -1438,7 +1439,8 @@ function updateCoach(dt) {
   const detents = sim.spec.flapDetentsDeg ?? sim.flapAngles;
   coachVals.flapsDeg = prompt === 'gaFlaps' ? detents[Math.max(0, sim.goAround.callFlaps - 1)] : detents[lessonFlaps()];
   coachVals.touch = touchOnly;
-  const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you' : coachText(prompt, coachVals);
+  const text = prompt === 'done' && sim.autobrakeActive ? 'Touchdown! The autobrake is stopping you'
+    : prompt === 'done' && sim.shortField ? coachText(touchOnly ? 'sfDoneTouch' : 'sfDone') : coachText(prompt, coachVals);
   byId('txtCoach').textContent = text;
   placeCoach();
   // Spoken too when sound is on; the GPWS callouts own the last 100 ft (not a takeoff's first 100, 0093).

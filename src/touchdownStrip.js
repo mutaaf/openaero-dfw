@@ -31,7 +31,8 @@ export function stripLayout(td, w, h) {
     w, h, r, padX, thrX, endX, pxPerM, cy, pyPerM,
     edgeTop: cy - (td.widthM / 2) * pyPerM, edgeBottom: cy + (td.widthM / 2) * pyPerM,
     aimX: thrX + AIM_POINT_M * pxPerM, aimLenPx: AIM_LEN_M * pxPerM,
-    zoneX0: thrX + ZONE_FULL_M[0] * pxPerM, zoneX1: thrX + ZONE_FULL_M[1] * pxPerM,
+    // A lesson with its own zone (td.zoneM: 0181's short field) shades that one.
+    zoneX0: thrX + (td.zoneM ?? ZONE_FULL_M)[0] * pxPerM, zoneX1: thrX + (td.zoneM ?? ZONE_FULL_M)[1] * pxPerM,
     dotX, dotY, clamped: dotX !== x || dotY !== y,
   };
 }

@@ -3,10 +3,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   createShortField, shortFieldStep, shortFieldPrompt, shortFieldResult, pohRollFt, headwindKts, kidKts, kidLiftM, KID_LIFT_M, KID_HEAD_M,
-  ROLL_FT, APPROACH_KTS, GATE_VREF, POH_AIR_FT, LONG_M, FENCE_M, CAP_B, CAP_C, DONE_NOTE, SAY_S, SHORT_FIELD_KEY, SF_TEXT,
+  ROLL_FT, FLARE_FT, APPROACH_KTS, GATE_VREF, POH_AIR_FT, LONG_M, FENCE_M, CAP_B, CAP_C, DONE_NOTE, SAY_S, SHORT_FIELD_KEY, SF_TEXT,
 } from '../../src/shortField.js';
 import { gradeLanding } from '../../src/landing.js';
 import { coachText, RANK } from '../../src/coach.js';
+import { landingTip } from '../../src/landingTip.js';
 import { runwayEnd } from '../../src/airports.js';
 import { MISSIONS, missionByKey, groupMissions } from '../../src/missions.js';
 import { M_TO_FT } from '../../src/constants.js';
@@ -155,7 +156,7 @@ describe('the grade', () => {
     expect(r.reason).toBeNull();
     expect(r.note).toBe(DONE_NOTE);
     expect(r.factors.find((f) => f.key === 'zone').score).toBe(100);
-    expect(r.factors.find((f) => f.key === 'roll').value).toMatch(/^5\d\d ft \(POH 600\)$/); // stopped under 3 kt, a little short of 600
+    expect(r.factors.find((f) => f.key === 'roll').value).toMatch(/^5\d\d ft \(handbook 600\)$/); // stopped under 3 kt, a little short of 600
     expect(r.factors.find((f) => f.key === 'brakes').score).toBe(100);
   });
   it('the zone: full marks from 400 ft short of the POH\'s ~760 ft touchdown to the 1,000 ft line, not the normal zone\'s 150-600 m', () => {
@@ -178,7 +179,9 @@ describe('the grade', () => {
   });
   it('a roll over 1.15x the POH\'s caps B; over 1.5x caps C; no brakes reads "not used"', () => {
     expect(result(flown({ rollFt: 750 })).score).toBeLessThanOrEqual(CAP_B);
-    expect(result(flown({ rollFt: 750 })).reason).toMatch(/brake harder/);
+    // Brakes on at once: the long roll is the touchdown speed's (the brakes are on/off: no "harder").
+    expect(result(flown({ rollFt: 750 })).reason).toMatch(/touch down slower \(45 kt/);
+    expect(result(flown({ rollFt: 750, brakeS: 4 })).reason).toMatch(/brakes on right after touchdown/);
     expect(result(flown({ rollFt: 1000 })).score).toBeLessThanOrEqual(CAP_C);
     const none = result(flown({ rollFt: 1400, brakeS: 99 }));
     expect(none.factors.find((f) => f.key === 'brakes').value).toBe('not used');
@@ -197,6 +200,34 @@ describe('the grade', () => {
     expect(r.reason).toMatch(/Ran off/);
     const crash = { ...landing(250), grade: 'CRASH', score: 0 };
     expect(shortFieldResult(crash, flown(), 600)).toBe(crash);
+  });
+});
+
+describe('the card\'s "Next time" tip (landingTip.js hands this lesson\'s over) and strip', () => {
+  // landingTip shows none on an S (a greaser): the lesson's own tip is checked directly where the grade may be one.
+  const tip = (o, kid = false) => result(flown(o), kid).tip;
+  it('a float: idle at the edge, land before the blocks (never "aim further in")', () => {
+    const r = result(flown({ tdM: 1250 * FT }));
+    expect(landingTip(r, {})).toMatch(/^Touched down 1,250 ft in: idle at the runway's edge/);
+  });
+  it('late or no brakes names the brakes; Kid gets the BRAKES tap, not "let go of the stick"', () => {
+    expect(tip({ rollFt: 1300, brakeS: 99 })).toMatch(/Brakes never came on/);
+    expect(tip({ rollFt: 700, brakeS: 4 })).toMatch(/Brakes came on 4\.\d s after touchdown/);
+    expect(tip({ rollFt: 1300, brakeS: 99 }, true)).toBe('Tap BRAKES the moment the wheels touch.');
+  });
+  it('a long roll with the brakes on at once names the touchdown speed, never the stall as the approach speed', () => {
+    const t = tip({ rollFt: 750 });
+    expect(t).toMatch(/Touched down at 45 kt: hold 61/);
+    expect(t).not.toMatch(/approach speed \(40\)/);
+  });
+  it('speed band and flaps are the approach\'s tips', () => {
+    expect(tip({ kts: 72 })).toMatch(/Hold 61 knots/);
+    expect(tip({ flapsFull: false })).toMatch(/Full flaps \(30°\)/);
+  });
+  it('the runway strip shades the lesson\'s full marks, 360 ft to the 1,000 ft line', () => {
+    const z = result(flown()).zoneM;
+    expect(z[0] * M_TO_FT).toBeCloseTo(360, 6);
+    expect(z[1] * M_TO_FT).toBeCloseTo(1000, 6);
   });
 });
 
@@ -220,6 +251,18 @@ describe('the coach', () => {
   it('under 30 ft and after the touchdown: the landing coach\'s idle, flare and brakes', () => {
     expect(shortFieldPrompt(ready(), input({ aglFt: 25, throttle: 0.2 }), ap(-50))).toBeNull();
     expect(shortFieldPrompt(flown(), input(), ap())).toBeNull();
+  });
+  it('a tailwind on the runway is said after the briefing (Fig. 5-11 note 2: +10% per 2 kt)', () => {
+    const sf = createShortField(END), s = s0();
+    s.wx = { windDirDeg: 340, windKts: 8 };
+    shortFieldStep(sf, s, SAY_S + 1);
+    expect(shortFieldPrompt(sf, input(), ap())).toBe('sfTail');
+    shortFieldStep(sf, s, SAY_S);
+    expect(shortFieldPrompt(sf, input(), ap())).toBeNull();
+    expect(shortFieldPrompt(ready(), input(), ap())).toBeNull(); // calm: no tailwind words
+  });
+  it('the flare is called at 20 ft on the lesson (FLARE_FT), not right after "nose down a touch" at the fence', () => {
+    expect(FLARE_FT).toBe(20);
   });
   it('every key has words; idle interrupts', () => {
     for (const k of Object.keys(SF_TEXT)) expect(coachText(k)).toBe(SF_TEXT[k]);

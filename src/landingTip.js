@@ -45,6 +45,7 @@ function worstOf(result, keys) {
 export function landingTip(result, ctx = {}) {
   // Drills with their own cards and a greaser get none.
   if (result.kind || result.grade === 'S') return null;
+  if (result.shortField) return result.tip ?? null; // 0181: the lesson's own (zone, roll, brakes in its terms)
   const by = (key) => result.factors.find((f) => f.key === key);
   const reason = result.reason || '';
   const settle = ctx.noEngine ? 'hold the landing attitude and let it settle' : 'hold the landing attitude, add a little power or go around';

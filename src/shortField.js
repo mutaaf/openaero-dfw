@@ -83,18 +83,27 @@ export function pohRollFt(elevFt, altimInHg = 29.92, tempC = 15, headKts = 0) {
 export const headwindKts = (wx, hdgT) => (wx?.windKts ? wx.windKts * Math.cos((wx.windDirDeg - hdgT) * Math.PI / 180) : 0);
 
 export const SF_TEXT = {
-  sfBrief: 'Short field: full flaps, then 61 knots on the PAPI. Idle at the runway\'s edge',
-  sfKid: 'Short field: your plane flies it. Brakes on the moment you land!',
+  sfBrief: 'Short field: full flaps, 61 knots on the PAPI, idle at the edge. Land before the big white blocks',
+  sfTail: 'Tailwind today: you will float and roll further. Hold 61, idle at the edge, brake at once',
+  sfKid: 'Short field: your plane lands it. Tap BRAKES the moment you touch down!',
+  sfDone: 'Touchdown! Brakes on now (B)',
+  sfDoneTouch: 'Touchdown! Tap BRAKES now',
   sfIdle: 'Over the fence: power to idle, nose down a touch to hold 61',
 };
 Object.assign(DRILL_TEXT, SF_TEXT);
 // The idle call interrupts at once (the landing coach's idle is rank 4). The flaps prompt is the landing coach's: main.js
-// gives it FULL_FLAPS (its words say 30°).
+// gives it FULL_FLAPS (its words say 30°) and FLARE_FT (its "Flare now" at 50 ft came ~1.5 s after "Over the fence: nose
+// down a touch", the fence being ~47 ft up here; the POH holds 61 with the nose until the flare). sfDone/sfDoneTouch
+// replace the landing coach's "Touchdown! Hold the brakes" (the BRAKES button is a toggle, and here it is the lesson).
 Object.assign(RANK, { sfIdle: 4 });
+
+export const FLARE_FT = 20;
+// A tailwind over this (kt, steady, along the runway) is said after the briefing: Fig. 5-11 note 2 adds 10% per 2 kt.
+export const TAIL_SAY_KTS = 2;
 
 // end: the lesson's runway end (airports.js runwayEnd). Allocates (a mission load, not a frame).
 export const createShortField = (end) => ({
-  end, t: 0, readyT: null,
+  end, t: 0, readyT: null, headKts: 0,
   below500: false, flapsAt500: null, outS: 0, speedOut: false, minKts: Infinity, maxKts: 0,
   tdM: null, tdT: null, tdKts: null, brakeS: null, stopped: false, off: false, stopM: null,
 });
@@ -103,7 +112,7 @@ export const createShortField = (end) => ({
 // along the centreline, - before it), crossM, aglFt, iasKts, flapsFull (30° set and there), onGround, gsKts, braking
 // (pedals or the BRAKES button), wx (weather.js: the gust for the band) }. Mutates sf, allocates nothing.
 export function shortFieldStep(sf, s, dt) {
-  if (sf.readyT === null) sf.readyT = sf.t;
+  if (sf.readyT === null) { sf.readyT = sf.t; sf.headKts = headwindKts(s.wx, sf.end.hdgT); }
   sf.t += dt;
   if (sf.stopped) return sf;
   if (sf.tdM !== null && !s.onGround && s.aglFt > 50) { // a go-around (main.js drops the landing): fly it again
@@ -143,7 +152,8 @@ export function shortFieldPrompt(sf, s, ap) {
   if (s.kid) return sf.t - sf.readyT < SAY_S ? 'sfKid' : null;
   if (s.aglFt < 30) return null; // the landing coach's idle and flare
   if (ap.distM < FENCE_M && s.aglFt < 120 && s.throttle > 0.05) return 'sfIdle';
-  return sf.t - sf.readyT < SAY_S ? 'sfBrief' : null;
+  if (sf.t - sf.readyT < SAY_S) return 'sfBrief';
+  return sf.headKts < -TAIL_SAY_KTS && sf.t - sf.readyT < 2 * SAY_S ? 'sfTail' : null;
 }
 
 // Kid's autothrottle on the lesson: the POH's 61 KIAS once the flaps are full (0: Kid's own target until then).
@@ -161,10 +171,10 @@ const ft = (m) => Math.round(Math.abs(m) * M_TO_FT);
 const ZONE_PTS = [[0, 70], [(POH_AIR_FT - 400) * FT_TO_M, 100], [LONG_M, 100], [1500 * FT_TO_M, 40], [3000 * FT_TO_M, 15]];
 // Touchdown speed: the short field lands at "the minimum controllable airspeed" (AFH), ~ the flaps-30 stall
 // (POH Fig. 5-3: 40 KIAS) to ~1.3 of it; a fast touchdown floated or flew it on.
-const TD_PTS = [[35, 70], [40, 100], [52, 100], [61, 70], [70, 40]];
+const TD_PTS = [[33, 40], [38, 90], [40, 100], [52, 100], [61, 70], [70, 40]];
 // The roll against the POH's: full marks inside x 1.15 (the flight cards' band).
 const ROLL_PTS = [[0, 100], [1.15, 100], [1.5, 60], [2.5, 20]];
-export const DONE_NOTE = 'Short field: down in the first 1,000 ft, stopped inside the POH\'s roll.';
+export const DONE_NOTE = 'Short field: down in the first 1,000 ft, stopped inside the handbook\'s roll.';
 
 // The landing's grade (landing.js gradeLanding, after any bounce cap) with the lesson's rules, once the airplane has
 // stopped (sf.stopped). pohFt: pohRollFt for the field and today's air. The touchdown-zone factor is scored against
@@ -181,7 +191,7 @@ export function shortFieldResult(result, sf, pohFt, kid = false) {
     score: Math.round(sf.tdM < 0 ? 0 : curve(sf.tdM, ZONE_PTS)),
   };
   const speed = { key: 'speed', label: 'Touchdown speed', value: `${Math.round(sf.tdKts)} kt (stall 40)`, score: Math.round(curve(sf.tdKts, TD_PTS)) };
-  const roll = { key: 'roll', label: 'Landing roll', value: `${Math.round(rollFt)} ft (POH ${Math.round(pohFt)})`, score: Math.round(curve(rollFt / pohFt, ROLL_PTS)) };
+  const roll = { key: 'roll', label: 'Landing roll', value: `${Math.round(rollFt).toLocaleString('en-US')} ft (handbook ${Math.round(pohFt).toLocaleString('en-US')})`, score: Math.round(curve(rollFt / pohFt, ROLL_PTS)) };
   const brakes = { key: 'brakes', label: 'Brakes', value: sf.brakeS === null ? 'not used' : `on ${sf.brakeS.toFixed(1)} s after touchdown`,
     score: sf.brakeS === null ? 0 : Math.round(curve(sf.brakeS, [[0, 100], [2, 100], [5, 50], [10, 20]])) };
   const old = (k) => result.factors.find((f) => f.key === k)?.score ?? 0;
@@ -191,20 +201,44 @@ export function shortFieldResult(result, sf, pohFt, kid = false) {
   let d = null;
   if (sf.off && !keepD) d = 'Ran off the runway before stopping.';
   if (sf.tdM > LONG_M) caps.push(['Floated past the first 1,000 ft: best grade C.', CAP_C]);
-  if (rollFt > pohFt * 1.5) caps.push([`Rolled ${(rollFt / pohFt).toFixed(1)}x the POH's ${Math.round(pohFt)} ft: brakes on right after touchdown. Best grade C.`, CAP_C]);
-  else if (rollFt > pohFt * 1.15) caps.push([`Rolled ${(rollFt / pohFt).toFixed(1)}x the POH's ${Math.round(pohFt)} ft: brake harder, sooner. Best grade B.`, CAP_B]);
-  if (!kid && sf.speedOut) caps.push([`Approach speed left ${APPROACH_KTS - BAND_LOW_KTS}-${APPROACH_KTS + BAND_HIGH_KTS} kt below 500 ft (61, the pilot test's +10/-5): best grade B.`, CAP_B]);
+  // The roll's cause: brakes late or never, else a fast touchdown (the brakes are on/off: none "harder").
+  const lateBrakes = sf.brakeS === null || sf.brakeS > 2;
+  const rollWhy = lateBrakes ? 'brakes on right after touchdown' : `touch down slower (${Math.round(sf.tdKts)} kt; near 45 is short)`;
+  const x = (rollFt / pohFt).toFixed(1), hb = Math.round(pohFt).toLocaleString('en-US');
+  if (rollFt > pohFt * 1.5) caps.push([`Rolled ${x}x the handbook's ${hb} ft: ${rollWhy}. Best grade C.`, CAP_C]);
+  else if (rollFt > pohFt * 1.15) caps.push([`Rolled ${x}x the handbook's ${hb} ft: ${rollWhy}. Best grade B.`, CAP_B]);
+  if (!kid && sf.speedOut) caps.push([`Approach speed left ${APPROACH_KTS - BAND_LOW_KTS}-${APPROACH_KTS + BAND_HIGH_KTS} kt below 500 ft (61, the pilot test's +10/-5; more in gusts): best grade B.`, CAP_B]);
   if (!kid && sf.flapsAt500 === false) caps.push(['Flaps not at 30° by 500 ft: best grade B.', CAP_B]);
   for (const [, cap] of caps) score = Math.min(score, cap);
   const reasons = [d, ...caps.map(([t]) => t), result.reason].filter(Boolean);
+  const factors = [...result.factors.map((f) => (f.key === 'zone' ? zone : f.key === 'speed' ? speed : f)), roll, brakes];
   return {
     ...result,
-    factors: [...result.factors.map((f) => (f.key === 'zone' ? zone : f.key === 'speed' ? speed : f)), roll, brakes],
+    factors,
     score,
     grade: keepD || d ? 'D' : letterGrade(score),
     reason: reasons.join(' ') || null,
     shortField: true, // results.js: the note shows beside the gate's verdict
     note: reasons.length ? result.note ?? null : DONE_NOTE,
     rollFt, pohFt,
+    zoneM: [ZONE_PTS[1][0], LONG_M], // the card's runway strip shades these full marks (touchdownStrip.js)
+    tip: shortFieldTip(sf, factors, rollFt, pohFt, kid, keepD || d),
   };
+}
+
+// The card's "Next time" line (landingTip.js hands this lesson's over): the lesson's own fix, in its order: off the
+// runway, a float, the brakes, a long roll from a fast touchdown, the approach (speed band, flaps), the touchdown rate.
+const RATE_OK = 240;
+export function shortFieldTip(sf, factors, rollFt, pohFt, kid, isD) {
+  const fpm = factors.find((f) => f.key === 'rate');
+  if (sf.off) return 'Brakes on the moment you touch down, and steer with the pedals: stop on the runway.';
+  if (isD) return null; // short of or beside the runway: the reason says it
+  if (sf.tdM > LONG_M) return `Touched down ${ft(sf.tdM).toLocaleString('en-US')} ft in: idle at the runway's edge, hold 61 and don't hold it off; land before the big white blocks.`;
+  if (sf.brakeS === null || sf.brakeS > 2) return kid ? 'Tap BRAKES the moment the wheels touch.' : `Brakes ${sf.brakeS === null ? 'never came on' : `came on ${sf.brakeS.toFixed(1)} s after touchdown`}: B (or BRAKES) the moment the wheels touch.`;
+  if (rollFt > pohFt * 1.15) return `Touched down at ${Math.round(sf.tdKts)} kt: hold 61 to the flare and let it settle near 45 for a short roll.`;
+  if (kid) return null;
+  if (sf.speedOut) return 'Hold 61 knots from 500 ft to the fence: power for the path, nose for the speed.';
+  if (sf.flapsAt500 === false) return 'Full flaps (30°) before 500 ft: three presses of F, or tap FLAPS.';
+  if (fpm && fpm.score < 100) return `Touched down at ${fpm.value}: flare a touch earlier (under ${RATE_OK} fpm is smooth).`;
+  return null;
 }
