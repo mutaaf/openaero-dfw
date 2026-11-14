@@ -699,10 +699,11 @@ describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim
 // 759 → 1,332 (+75%; 8.3° left, β 27°, aileron mean 0.86, never at full throw). JSBSim's drag due to sideslip
 // is Roskam's CDβ 0.17·|β| (public/jsbsim/aircraft/c172/c172.xml), and its whole margin is that line: with
 // CDβ 0 the slip sinks 637 fpm, less than the glide, and fails (a) and (b). So JSBSim checks the
-// coefficient, not separate slip physics. flightModel.js has no drag due to sideslip at all (its only slip
-// drag is the side force's ~sin β share along the wind): KNOWN GAP (0178). Roskam's 0.17·|β| added to
-// flightModel.js's CD (not shipped here) gave 1,427 fpm (+79%) at 67.9 KIAS. Both models hold the track
-// with only 6-8° of bank at full rudder, so the sink cannot come from tilting the lift: it is the drag.
+// coefficient, not separate slip physics. flightModel.js had no drag due to sideslip (its only slip drag
+// was the side force's ~sin β share along the wind) until 0178 gave it the same Roskam CDβ 0.17·|β|
+// (aircraft.js cdBeta, aero.js dragCoefficient): 798 → 1,427 fpm (+79%) at 67.9 KIAS, 7.0° of bank, β 23°.
+// Both models hold the track with only 7-8° of bank at full rudder, so the sink cannot come from tilting
+// the lift: it is the drag.
 // Self-checks: the glide has settled (IAS within 0.5 kt of 70); flightModel.js flown with no rudder
 // repeats its baseline (797 vs 798 fpm). JSBSim with no rudder wanders (its ailerons alone, uncoordinated:
 // 9° off track, +14%), so that check is flightModel.js's only. The slip must not ride the aileron stops
@@ -711,7 +712,7 @@ describe('Cessna 172S sideslip: flightModel.js vs the Roskam derivatives (JSBSim
 // Not carded: full LEFT rudder in JSBSim runs out of aileron (mean 0.88, at the stop 15% of the window)
 // and turns ~47° off the track; flightModel.js is symmetric. The handbook allows either wing; a fuel-
 // starvation slip limit (C172S POH Section 2) is out of scope.
-const SLIP_GAPS = { flightModel: new Map([['slipSink', '0178']]), jsbsim: new Map() };
+const SLIP_GAPS = { flightModel: new Map(), jsbsim: new Map() };
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S forward slip, FAA-H-8083-3C ch. 9 (${model}, ticket 0176)`, () => {
   const card = (id) => gapCard(SLIP_GAPS[model], id);
   let r;

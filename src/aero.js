@@ -106,11 +106,13 @@ export function inducedDragK(spec) {
 export const GEAR_CD = 0.018;
 export const GEAR_DOORS_CD = 0.006;
 // `mach` adds the airframe's compressibility drag rise (waveDragCd; 0 by default and below Mcrit).
-export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect, mach = 0) {
+// `betaRad` adds drag due to sideslip, spec.cdBeta·|β| (0178; 0 on an airframe with no cited value).
+export function dragCoefficient(spec, cl, gearDown, flapsIndex, groundEffect, mach = 0, betaRad = 0) {
   const flapCd = spec.flapCd ? notchValue(spec.flapCd, flapsIndex, 0) : flapsIndex * 0.012;
   const g = spec.fixedGear ? 1 : Number(gearDown);
   const gearCd = GEAR_CD * g + (g > 0 && g < 1 ? GEAR_DOORS_CD : 0);
-  return spec.cd0 + gearCd + flapCd + inducedDragK(spec) * cl * cl * groundEffect + waveDragCd(spec, cl, mach);
+  return spec.cd0 + gearCd + flapCd + inducedDragK(spec) * cl * cl * groundEffect + waveDragCd(spec, cl, mach)
+    + (spec.cdBeta ?? 0) * Math.abs(betaRad);
 }
 
 // Compressibility drag rise (0120), for an airframe with spec.transonic { kappaA, tOverC,

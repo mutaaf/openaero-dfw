@@ -68,7 +68,7 @@ export function stepFlightModel(body, spec, dt) {
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
   const groundEffect = groundEffectFactor(body.pos.y - body.groundY, spec.wingSpanM);
-  let cd = dragCoefficient(spec, cl, body.gearPos, body.flapPos, groundEffect, body.mach);
+  let cd = dragCoefficient(spec, cl, body.gearPos, body.flapPos, groundEffect, body.mach, betaRad);
 
   // Auto ground spoilers: out over ~1 s on the ground with the thrust levers at idle, in
   // again as soon as they are advanced (reverse thrust keeps them out). Lift dumped onto

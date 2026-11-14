@@ -251,6 +251,10 @@ export const AIRCRAFT_DATABASE = {
     // Sideslip (flightModel.js, 0081), per radian, Roskam's Cessna 172 as in our JSBSim C172
     // (public/jsbsim/): side force CYβ −0.31 and rudder CYδr 0.187 (at the TCDS throw above),
     // dihedral effect Clβ −0.089 against Clδa 0.178 at the 17.5° mean aileron throw.
+    // Drag due to sideslip (0178): Roskam's CDβ 0.17 per radian of |β|, the same source and
+    // value as public/jsbsim/aircraft/c172/c172.xml aero/coefficient/CDbeta. It is what makes a
+    // forward slip lose height (FAA-H-8083-3C ch. 9); the 737 and F-16 have no cited value (0).
+    cdBeta: 0.17,
     cyBeta: -0.31,
     cyRudder: 0.187,
     clBeta: -0.089,
