@@ -1,7 +1,7 @@
 ---
 id: 0157
 title: The Cessna climbs steepest at Vx (62 KIAS) and fastest at Vy (74 KIAS), as the POH says
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -71,3 +71,10 @@ flightModel.js's own drag (steady climbs at 500 ft, 2 kt steps: drag lowest at ~
 
 ## Out of scope
 Vx/Vy at altitude, a HUD Vx marker, flaps-10 short-field climb speeds.
+
+## Back to proposed (Builder, 2026-11-14)
+Promoted again on 2026-11-12, but still blocked on a decision, not code: the Vx thrust hump in the 2026-11-06 findings
+is ready to ship except that it moves the 15 kt crosswind takeoff's mean-pedal check (< −0.1, reading −0.1006 today)
+to about −0.098. Loosening that check is the operator's call (or the Scout's, with a reason), not the Builder's.
+Promote once the decision is written here: either the check reads the steady pedal (harness.js reports it), or the
+hump's shape needs a cited prop curve first.
