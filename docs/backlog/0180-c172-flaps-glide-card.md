@@ -1,12 +1,12 @@
 ---
 id: 0180
 title: Cessna glide with full flaps is steeper than clean (flight card)
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-12
-pr:
+pr: 257
 ---
 
 ## Why
@@ -25,9 +25,9 @@ speed. Measure first, bounds from the measurement, widen only with a reason; a m
 `it.fails` with a ticket. Settle the baseline before the window (LESSONS 2026-11-12).
 
 ## Acceptance criteria
-- [ ] Monotonic glide-ratio card exists and passes, or is a named KNOWN GAP.
-- [ ] A mutation (flap drag per notch to 0) fails it.
-- [ ] check-gaps passes.
+- [x] Monotonic glide-ratio card exists and passes, or is a named KNOWN GAP.
+- [x] A mutation (flap drag per notch to 0) fails it.
+- [x] check-gaps passes.
 
 ## Test plan
 `npm test -- tests/flight/c172.test.js`; record measured ratios in the PR body.
