@@ -17,6 +17,7 @@ import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src
 import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
 import { missionByKey } from '../../src/missions.js';
 import { kidLiftM, wakeResult, createWake, DONE_NOTE } from '../../src/wake.js';
+import { SHORT_FIELD_KEY, kidKts as sfKidKts, kidLiftM as sfKidLiftM, LONG_M as SF_LONG_M, FULL_FLAPS as SF_FULL_FLAPS } from '../../src/shortField.js';
 import { AIM_POINT_M } from '../../src/airports.js';
 import { makeBody, fly, attitude } from './harness.js';
 
@@ -28,13 +29,18 @@ const _e = new Euler(0, 0, 0, 'YXZ');
 // learnerBelowM: the player switches to Learner that low (no de-crab: a crabbed touchdown; the rollout is Learner's).
 // every: the assist runs every that many 1/120 s sub-steps, as main.js runs it once a frame (4: 30 fps).
 // lift(ap): the wake lesson's lift of the path (0115, wake.js kidLiftM) for approachGeometry's ap, else 0.
-function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1, lift = null) {
+// A mission with its own spawn speed and flaps (`kias`, `flaps`: the short-field lesson, 0181) spawns at them, as main.js
+// loadScenario does; drillKts(flapsFull) is its autothrottle target (main.js applyAssists drillKts; 0: Kid's own) and
+// fullFlaps the notch Kid's auto-flaps go to past the landing flaps (main.js applyAssists: the lesson's 30°).
+function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1, lift = null, drillKts = null, fullFlaps = null) {
   const spec = AIRCRAFT_DATABASE[acKey];
   const m = missionByKey(missionKey);
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
-  const vApp = (spec.vrefKts + 5) * KTS_TO_MPS;
+  const spawnKts = m.kind === 'final' && m.kias ? m.kias : spec.vrefKts + 5;
+  const spawnFlaps = m.flaps ?? landingFlaps(spec);
+  const vApp = spawnKts * KTS_TO_MPS;
   const sp = approachSpawn(end, m.distNm, tasFromIas(vApp, airAt(0).sigma));
-  const b = makeBody(spec, { kts: spec.vrefKts + 5, altM: sp.pos.y, flaps: landingFlaps(spec) });
+  const b = makeBody(spec, { kts: spawnKts, altM: sp.pos.y, flaps: spawnFlaps });
   b.pos.set(sp.pos.x, sp.pos.y, sp.pos.z);
   b.vel.set(sp.vel.x, sp.vel.y, sp.vel.z);
   let gamma = -3;
@@ -45,8 +51,8 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     b.vel.set(d.x * v, 0, d.z * v);
     gamma = 0;
   }
-  b.quat.setFromEuler(_e.set((trimAoaDeg(spec, vApp, landingFlaps(spec)) + gamma) * DEG_TO_RAD, sp.yawRad, 0));
-  b.throttle = b.engineN = trimThrottle(spec, vApp, landingFlaps(spec), gamma, true, airAt(b.pos.y));
+  b.quat.setFromEuler(_e.set((trimAoaDeg(spec, vApp, spawnFlaps) + gamma) * DEG_TO_RAD, sp.yawRad, 0));
+  b.throttle = b.engineN = trimThrottle(spec, vApp, spawnFlaps, gamma, true, airAt(b.pos.y));
   b.apMaster = false;
   b.autoTrim = true; // Kid's assist trims (main.js: sim.autoTrim with an assist)
   const w = fromDeg * Math.PI / 180;
@@ -54,7 +60,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   b.vel.add(b.windVec);
   let cfg = assistConfig('kid');
   const ast = createAssistState();
-  const s = {}, out = {}, conf = { gearDown: true, flapsIndex: landingFlaps(spec) }, at = { trim: 0 };
+  const s = {}, out = {}, conf = { gearDown: true, flapsIndex: spawnFlaps }, at = { trim: 0 };
   let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
   const roll = { maxNoseOff3sDeg: 0, maxCrossM: 0, yawSq: 0, n: 0, rudFlips: 0 };
   const bank = { maxDeg: 0, flips: 0, lastP: 0 };
@@ -107,12 +113,14 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     // Kid's gear, flaps and power (main.js applyAssists).
     conf.flapsIndex = x.flapsIndex; conf.gearDown = x.gearDown;
     autoConfigure(spec, { onGround: false, vsiFpm: x.vel.y * M_TO_FT * 60, aglFt: wheelM * M_TO_FT, iasKts: x.iasKts }, conf);
+    if (fullFlaps !== null && conf.flapsIndex >= landingFlaps(spec)) conf.flapsIndex = fullFlaps;
     x.flapsIndex = conf.flapsIndex; x.gearDown = conf.gearDown;
     if (prevIas !== null) iasRate += ((x.iasKts - prevIas) / dt - iasRate) * Math.min(1, dt / 0.5);
     prevIas = x.iasKts;
     if (wheelM > 8) {
       const gamma = Math.atan2(x.vel.y, Math.max(20, Math.hypot(x.vel.x, x.vel.z))) * 180 / Math.PI;
-      const tgt = kidTargetKts(spec, x.flapsIndex);
+      const full = fullFlaps ?? landingFlaps(spec);
+      const tgt = drillKts?.(x.flapsIndex >= full && x.flapPos >= full - 0.001) || kidTargetKts(spec, x.flapsIndex);
       const ff = trimThrottle(spec, tgt * KTS_TO_MPS, x.flapsIndex, gamma, x.gearDown, airAt(x.pos.y));
       x.throttle = autothrottleCommand(ff, at, x.iasKts, tgt, iasRate, dt);
     } else x.throttle = Math.max(0, x.throttle - dt * 0.5);
@@ -408,6 +416,24 @@ describe('Kid hands off on the wake lesson lands the Cessna beyond the jet (tick
       const res = wakeResult(g, w, r.td.pastThrM);
       expect(res.note).toBe(DONE_NOTE);
       expect(res.reason).toBeNull();
+    });
+  }
+});
+
+// The short-field lesson (0181, shortField.js): Kid's guide flies the PAPI's path as on any final, its auto-flaps go to
+// 30 at once (main.js: the lesson's FULL_FLAPS past the game's 20° landing flaps) (the spawn is flaps up at 70, POH Section 4) and its autothrottle holds the POH's 61 KIAS (shortField.js
+// kidKts); its path aims lower than the PAPI's (shortField.js kidLiftM: on the PAPI's own, its flare floated ~390 m in).
+// Kid lands the Cessna in the lesson's first 1,000 ft, gently, clear over the threshold, from a 10 kt headwind to a 5 kt
+// tailwind on Addison 16 (hdg 160). The brakes are the kid's (the coach says so); the roll is not flown here.
+describe('Kid hands off on the short-field lesson touches down in the first 1,000 ft (ticket 0181)', () => {
+  for (const [name, wind] of [['calm', {}], ['10 kt headwind', { fromDeg: 160, kts: 10 }], ['5 kt tailwind', { fromDeg: 340, kts: 5 }]]) {
+    it(`kads_16_short_field, ${name}`, () => {
+      const r = flyKidFinal('c172', SHORT_FIELD_KEY, wind, null, null, 0, 0, 1, () => sfKidLiftM({ windDirDeg: wind.fromDeg ?? 0, windKts: wind.kts ?? 0 }, 160), sfKidKts, SF_FULL_FLAPS);
+      log('c172', SHORT_FIELD_KEY, name, r);
+      expectLanded(r);
+      expect(r.td.pastThrM).toBeLessThanOrEqual(SF_LONG_M - 30); // 100 ft of margin to the line
+      expect(r.thrFt).toBeGreaterThan(20);
+      expect(r.td.iasKts).toBeLessThan(61);
     });
   }
 });

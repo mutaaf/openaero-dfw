@@ -20,7 +20,9 @@ describe('groupMissions (0029)', () => {
     for (const g of groups.slice(1, -3)) {
       for (const m of g.missions) expect(m.airport).toBe(g.id);
     }
-    expect(groups.at(-2).missions.every((m) => m.kind === 'drill')).toBe(true);
+    // A drill away from an airport, or a lesson at one filed under Drills (`group: 'drills'`, 0181's short field).
+    expect(groups.at(-2).missions.every((m) => m.kind === 'drill' || m.group === 'drills')).toBe(true);
+    expect(groups.at(-2).missions.some((m) => m.group === 'drills')).toBe(true);
     expect(groups.at(-1).missions.every((m) => m.kind === 'tour')).toBe(true);
   });
 

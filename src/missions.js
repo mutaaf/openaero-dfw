@@ -47,6 +47,8 @@ export const MISSIONS = [
   { key: 'pattern_kads_16', label: 'KADS Traffic Pattern (Cessna)', blurb: 'Fly around the airport like a pilot: downwind 1,000 ft above the field, base, final, land.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_DOWNWIND.x, ADS_DOWNWIND.z], aglFt: 1000, kias: 85, hdg: 340, pattern: true },
   // Engine failure after takeoff (0104, engineOut.js): the Cessna's engine quits in the climb out of 16.
   // POH normal takeoff (flaps 0°) from the start of the pavement (16's displaced 979 ft is usable for it).
+  // Short-field landing (0181, shortField.js): the POH's technique to Addison 16's numbers, graded against Fig. 5-11's roll.
+  { key: 'kads_16_short_field', label: 'KADS Short-Field Landing (Cessna)', blurb: 'Addison 16 the Cessna handbook\'s way: 3 NM out at 70 knots, flaps up. Full flaps, 61 knots on the PAPI, idle at the runway\'s edge, touch down in the first 1,000 ft and brake hard. Your roll is graded against the handbook\'s.', kind: 'final', airport: 'KADS', rwy: '16', distNm: 3, aircraft: 'c172', kias: 70, flaps: 0, shortField: true, group: 'drills' },
   { key: 'efato_kads_16_300', label: 'KADS Engine Failure at 300 ft (Cessna)', blurb: 'Take off from Addison 16 (full power, pull back at 55 knots): the engine quits at 300 ft. Too low to turn back: pitch for 68 knots and land ahead.', kind: 'takeoff', airport: 'KADS', rwy: '16', aircraft: 'c172', flaps: 0, fullLength: true, engineOutFt: 300 },
   { key: 'efato_kads_16_700', label: 'KADS Engine Failure at 700 ft (Cessna)', blurb: 'Take off from Addison 16 (full power, pull back at 55 knots): the engine quits at 700 ft. Climb at 74 knots and a quick 45° turn back can make it; the coach says if today\'s wind and your climb allow it.', kind: 'takeoff', airport: 'KADS', rwy: '16', aircraft: 'c172', flaps: 0, fullLength: true, engineOutFt: 700 },
   { key: 'kafw_34l_final', label: 'KAFW Alliance 34L', blurb: 'Alliance, north of Fort Worth: long, wide and busy with cargo jets.', kind: 'final', airport: 'KAFW', rwy: '34L', distNm: 5 },
@@ -84,7 +86,7 @@ export const CROSSWIND_KEY = 'crosswind_today';
 // The start screen's mission picker (ticket 0029) is generated from MISSIONS: the recommended
 // first flight on top, then one group per airport in this order (an airport not listed here
 // gets its own group after them), then the weather missions (`group: 'weather'`, 0092), then the drills flown away from an
-// airport, then the tours. Every key appears once; empty groups drop.
+// airport (and `group: 'drills'`, 0181's short-field lesson), then the tours. Every key appears once; empty groups drop.
 export const RECOMMENDED_KEY = 'kdfw_35c_final';
 const AIRPORT_ORDER = ['KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY'];
 
@@ -97,7 +99,7 @@ export function groupMissions(missions) {
   for (const m of missions) {
     if (m.key === RECOMMENDED_KEY) { byId.get('recommended').missions.push(m); continue; }
     if (m.group === 'weather') { weather.missions.push(m); continue; }
-    if (m.kind === 'drill' && !m.airport) { drills.missions.push(m); continue; }
+    if (m.group === 'drills' || (m.kind === 'drill' && !m.airport)) { drills.missions.push(m); continue; }
     if (m.kind === 'tour' || !m.airport) { tours.missions.push(m); continue; }
     let g = byId.get(m.airport);
     if (!g) { g = { id: m.airport, missions: [] }; byId.set(m.airport, g); groups.push(g); }
