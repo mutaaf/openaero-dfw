@@ -13,14 +13,16 @@ pr:
 0179's card (`tests/flight/groundEffect.test.js`) found `aero.js groundEffectFactor` takes too much
 induced drag away: ~11.4% at one span, ~36% at a quarter span, ~62% at a tenth, against the FAA's
 1.4%, 23.5% and 47.6% (Pilot's Handbook of Aeronautical Knowledge, FAA-H-8083-25C, ch. 5, "Ground
-Effect": https://www.faa.gov/sites/faa.gov/files/07_phak_ch5.pdf). Every airplane floats longer in
-the flare than it should, and still feels ground effect 6% at two spans up. The flare float (0085,
+Effect": https://www.faa.gov/sites/faa.gov/files/07_phak_ch5.pdf). The airplanes likely float longer
+in the flare than they should (unmeasured: ground effect on lift is not modelled, and Kid's
+auto-flare flies its own sink profile), and the model still takes 6% off at two spans up. The flare float (0085,
 0098) and landing-distance cards are tuned on that curve.
 
 ## What
-Replace the curve with one that meets the cited three points within 3 points (Wieselsberger's fit,
-σ = (1 - 1.32 h/b) / (1.05 + 7.4 h/b), lands within ~1 point at 1/4 and 1/10; it goes negative above
-~0.76 span, so blend it to 0 by one span, e.g. a fit through PHAK's three figures). Cite the curve in
+Replace the curve with one that meets the cited three points within 3 percentage points.
+Wieselsberger's fit, σ = (1 - 1.32 h/b) / (1.05 + 7.4 h/b), lands within ~1 point at 1/4 and 1/10
+but goes negative above ~0.76 span (-3.8% at one span, against PHAK's +1.4%), so it needs a tail
+that meets 1.4% at one span and tends to 0 above it; or fit one curve through PHAK's three figures. Cite the curve in
 aero.js. Then re-measure every card that flies near the ground (flare, float, landing roll, bounce,
 takeoff, Kid final) on flightModel.js and say in the PR body which moved and by how much; a card that
 now misses its POH figure gets its own gap ticket, not a widened bound.

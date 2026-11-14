@@ -10,11 +10,11 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 // wing is at a height equal to its span, the reduction in induced drag is only 1.4 percent. However,
 // when the wing is at a height equal to one-fourth its span, the reduction in induced drag is 23.5
 // percent and, when the wing is at a height equal to one-tenth its span, the reduction in induced
-// drag is 47.6 percent." (The same figures follow Wieselsberger's fit; the ticket's "1.4% at a
-// quarter span" was misremembered: 1.4% is at one full span.)
+// drag is 47.6 percent." (Wieselsberger's fit gives about the same figures at 1/4 and 1/10; the
+// ticket's "1.4% at a quarter span" was misremembered: 1.4% is at one full span.)
 //
 // Tolerance: ±3 percentage points of the cited reduction (the handbook quotes one decimal; a
-// curve fit that lands within 3 points at all three heights is the same shape).
+// curve fit that lands within 3 percentage points at all three heights is the same shape).
 //
 // The 1 m clamp (Math.max(1.0, heightM)) holds the factor at its 1 m value below 1 m: for the C172
 // (b 11.0 m) h/b 1/20 = 0.55 m reads as 1 m (h/b 0.091); for the F-16 (b 10.0 m) h/b 1/20 = 0.50 m
@@ -75,7 +75,7 @@ describe('ground effect on induced drag (0179, PHAK ch. 5)', () => {
   // Model (r = 16h/b, factor (r/(1+r))²): ~11.4% at one span, ~36% at a quarter, ~62% at a tenth,
   // against 1.4 / 23.5 / 47.6. The curve is the same for every airframe (it is a function of h/b);
   // the clamp does not touch the cited heights. Fixing it moves the flare float and landing cards.
-  it.fails('KNOWN GAP (0183): the induced-drag reduction at h/b 1, 1/4 and 1/10 is within 3 points of PHAK\'s 1.4 / 23.5 / 47.6% (model: ~11.4 / 36 / 62%)', () => {
+  it.fails('KNOWN GAP (0183): the induced-drag reduction at h/b 1, 1/4 and 1/10 is within 3 percentage points of PHAK\'s 1.4 / 23.5 / 47.6% (model: ~11.4 / 36 / 62%)', () => {
     for (const id of AIRCRAFT) {
       const b = AIRCRAFT_DATABASE[id].wingSpanM;
       for (const { hOverB, reductionPct: cited } of PHAK) {
