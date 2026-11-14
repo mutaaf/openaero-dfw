@@ -57,6 +57,14 @@ describe('softField.js grade (0182)', () => {
     const kid = lesson({ settle: true, lowFt: 90, kid: true }).r;
     expect(kid.score).toBeGreaterThan(CAP_C);
     expect(kid.factors[2].value).toBe('the plane climbed for you');
+    // Kid's climb from the lift-off reaches 200 ft before 70 kt (CI, phone e2e): still the plane's.
+    const st = createSoftField(E16);
+    softFieldStep(st, base({ iasKts: 30, noseFrac: 0.4 }), 1);
+    softFieldStep(st, base({ onGround: false, wheelFt: 2, iasKts: 55 }), 1);
+    expect(softFieldStep(st, base({ onGround: false, wheelFt: DONE_FT, iasKts: 60 }), 1)).toBe('done');
+    expect(st.accelFt).toBeNull();
+    const k = gradeSoftField(st, true);
+    expect(k.factors[2]).toMatchObject({ value: 'the plane climbed for you', score: 100 });
   });
   it('an overrun, a run-off and an abandoned roll end it at D or worse, with the reason', () => {
     for (const [s, why] of [[{ iasKts: 40, leftM: -1 }, /out of runway/], [{ iasKts: 40, crossM: 20 }, /side of the runway/]]) {

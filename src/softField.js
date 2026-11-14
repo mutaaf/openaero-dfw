@@ -171,13 +171,16 @@ const REASONS = {
 export function gradeSoftField(st, kid = false) {
   const flew = st.liftKts !== null;
   const nose = st.noseN ? st.noseSum / st.noseN : 1;
+  // Kid's assist climbs from the lift-off (assists.js): the climb is the plane's when the lesson ended in it, at 200 ft
+  // (not a hop and a stop: physics panel), whether or not 70 kt came first.
+  const kidClimbed = kid && flew && !st.why;
   const factors = [
     { key: 'nose', label: 'Weight on the nose wheel', value: `${Math.round(nose * 100)}% of normal`,
       score: curve(nose, [[0.25, 100], [0.5, 75], [0.8, 30], [1, 0]]) },
     { key: 'liftoff', label: 'Lift-off speed', value: flew ? `${Math.round(st.liftKts)} kt, after ${fmt(st.rollM * M_TO_FT)} ft` : 'never lifted off',
       score: flew ? curve(st.liftKts, [[56, 100], [59, 75], [63, 35], [66, 0]]) : 0 },
-    { key: 'accel', label: `Height until ${ACCEL_KTS} kt`, value: kid && st.accelFt !== null ? 'the plane climbed for you' : st.accelFt === null ? (flew ? `climbed before ${ACCEL_KTS} kt` : 'never flew') : `${Math.round(st.accelFt)} ft`,
-      score: kid && st.accelFt !== null ? 100 : st.accelFt === null ? 0 : curve(st.accelFt, [[20, 100], [36, 70], [60, 30], [100, 0]]) },
+    { key: 'accel', label: `Height until ${ACCEL_KTS} kt`, value: kidClimbed ? 'the plane climbed for you' : st.accelFt === null ? (flew ? `climbed before ${ACCEL_KTS} kt` : 'never flew') : `${Math.round(st.accelFt)} ft`,
+      score: kidClimbed ? 100 : st.accelFt === null ? 0 : curve(st.accelFt, [[20, 100], [36, 70], [60, 30], [100, 0]]) },
   ];
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
