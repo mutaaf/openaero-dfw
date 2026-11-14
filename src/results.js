@@ -40,7 +40,7 @@ export function showResults(sim, result, best, end, gate) {
       : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ')}`;
     // The drill flown back to stable: landing was the right call (0047).
     if (gate.stable && sim.goAround) gateEl.textContent += ' You fixed it: landing was right';
-    if (result.wake && result.note) gateEl.textContent += ` · ${result.note}`; // the wake lesson's verdict (0115) beside the gate's
+    if ((result.wake || result.shortField) && result.note) gateEl.textContent += ` · ${result.note}`; // the wake (0115) and short-field (0181) lessons' verdicts beside the gate's
     gateEl.classList.toggle('text-emerald-300', gate.stable); // over the amber default (later in the CSS)
   } else if (result.note) {
     gateEl.textContent = `${result.note} ✓`;
@@ -60,7 +60,7 @@ export function showResults(sim, result, best, end, gate) {
   // The runway strip (0088): a landing on the runway's own picture; none for a drill's card or a
   // glide that missed the runway (the miss is its own line, the strip would only pin it to an edge).
   const strip = byId('touchdownStrip');
-  const td = result.madeRunway === false || !result.touchdown ? null : { ...result.touchdown, displacedM: end.displacedM || 0 };
+  const td = result.madeRunway === false || !result.touchdown ? null : { ...result.touchdown, displacedM: end.displacedM || 0, zoneM: result.zoneM };
   strip.classList.toggle('hidden', !td);
   strip.setAttribute('aria-label', td ? touchdownLabel(td) : '');
   shownStrip = td ? { td, grade: result.grade } : null;

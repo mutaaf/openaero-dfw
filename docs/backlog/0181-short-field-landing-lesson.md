@@ -1,12 +1,12 @@
 ---
 id: 0181
 title: Short-field landing lesson at Addison (aim for the first 1,000 ft)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-12
-pr:
+pr: 258
 ---
 
 ## Why

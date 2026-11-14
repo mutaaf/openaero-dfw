@@ -278,6 +278,20 @@ src/upset.js        unusual-attitude recovery (0174, lazy chunk loaded with its 
                     itself). "Hands off" and a pull in the bank (named) read the player's own stick (main.js
                     sim.pitchIn / rollIn), never the assists' output. Its ua* words reach coach.js through s.ds.
                     Cards: tests/flight/upset.test.js
+src/shortField.js   short-field landing lesson (0181, lazy chunk loaded with `kads_16_short_field`, `shortField: true`, in the Drills group
+                    though it flies at Addison): the C172 on a 3 NM final to KADS 16, flaps up at 70 KIAS (POH Section 4's checklist:
+                    65-75 flaps up, FULL DOWN 30°, 61 KIAS until the flare, idle after the obstacle, heavy braking). Flown on the PAPI's
+                    3° path, which crosses the threshold at ~47 ft of wheels: Fig. 5-11's 50 ft obstacle. main.js gives the landing
+                    coach 61 as its target (its slow/fast are then the ACS band, 61 +10/-5) and FULL_FLAPS (30°: the game's C172
+                    landing flaps are 20°), the gate GATE_VREF 56 (61 is under the 62 Vref), Kid 30° flaps, 61 KIAS and a path
+                    kidLiftM lower (its flare floated past 1,000 ft on the PAPI's; Kid crosses the threshold ~27 ft up), the coach's
+                    flare at 20 ft (FLARE_FT). The landing waits for the stop (checkBounce): graded at < 3 kt, a taxiway exit under
+                    15 kt or 60 s (off faster: D); the zone from the first 1,000 ft (full marks 360-1,000 ft, past it ≤ C; both
+                    stretched by note 2 in a tailwind), the touchdown speed against the sim's calibrated 48 kt stall (POH 40 KIAS),
+                    the roll against pohRollFt (Fig. 5-11 by pressure altitude and °C, note 2's wind; > 1.15x ≤ B, > 1.5x ≤ C),
+                    the brakes' delay; out of the band or not at 30° by 500 ft ≤ B (not Kid); a bounce keeps its cap. Its own
+                    "Next time" tip (landingTip.js defers) and strip zone. Leaving 500 ft or the runway again re-arms it.
+                    Cards: tests/flight/shortField.test.js, kidFinal.test.js
 src/noXr.js         a stand-in for three's WebXRManager (vite.config.js aliases WebGLRenderer's import to it): XR
                     off, ~3.7 kB gz off boot (0174). tests/unit/upset.test.js checks it has every `xr.` member
                     three's WebGL renderer reads outside a presenting session. Want WebXR: drop the alias.
@@ -669,7 +683,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-12 (0171): 198.49 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
+2026-11-14 (0181): 199.17 kB (the short-field lesson's mission entry and blurb, its lazy import, step, coach target, flaps and flare height,
+gate, Kid, speed bug and stop-hold hooks and the snapshot's shortField, +0.68 kB over main's 198.49; shortField.js is a lazy chunk). 2026-11-12 (0171): 198.49 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
 fetch, +0.15 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
 and assists.js kidFinalGuide's liftM, +0.46 kB; wake.js is a lazy chunk). 2026-11-12 (0174): 197.56 kB (the two unusual-attitude missions' entries and their wiring, +0.31 kB over main's 200.97, paid
 for by aliasing three's WebXRManager to src/noXr.js, −3.7 kB: WebGLRenderer built the whole WebXR stack, its controllers and
