@@ -1,7 +1,7 @@
 ---
 id: 0186
 title: Cessna flap drag grows past 15°, not by the same amount every notch (AFH p. 9-1)
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: authenticity
