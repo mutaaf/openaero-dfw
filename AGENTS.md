@@ -311,6 +311,21 @@ src/softField.js    soft-field takeoff lesson (0182, lazy chunk loaded with `kad
                     (not Kid), an overrun, run-off or no lift-off ≤ D. Every tyre rolls at the same μ, so the Handbook roll
                     wins by the wing's early lift and slower lift-off, not a lighter nose tyre: nose-wheel bogging is not
                     modelled. The takeoff callouts are off in it (it lifts off under Vr). Cards: tests/flight/softField.test.js
+src/wingLow.js      wing-low crosswind landing lesson (0188, lazy chunk loaded with `kads_crosswind_wing_low`, `wingLow: true`, Drills
+                    group): the C172 on a 2 NM final to KADS 16 at 70 KIAS, flaps 10 (POH p. 4-34: the minimum flaps for the field;
+                    the landing coach asks for FLAPS). Its wind is currentWeather()'s while it flies (lessonWx): the live METAR when
+                    it is 5-15 kt across with gusts within the POH's demonstrated 15 and ≤ 2 kt of tailwind, else a scenario 12 kt
+                    from 90° right of the runway (labelled SCENARIO); chosen per report object, frozen once the player flies. AFH
+                    ch. 9 (pp. 9-15 to 9-17): the coach names the wing and the pedal from that wind (keys Q/E, or the RUD buttons on
+                    touch), calls a nose > 5° off the runway under 300 ft and "upwind wheel first" from 50 ft, then hands the flare
+                    to the landing coach. checkWingLow records the first touchdown's bank into the wind, the nose against the
+                    runway and the first main (gear.js wheelLoads; on JSBSim, which reports none, the bank). wingLowResult (at the
+                    touchdown, before the bounce cap): the flare factor drops its bank penalty inside 2-8°, the three rows take
+                    30% of the score, a nose > 3° off caps B; both mains, the downwind wheel first and a bank outside 2-8° are
+                    named, uncapped (the ticket's band; the AFH gives no number). Kid: the rows shown, unscored (its de-crab has the
+                    rudder). Its own "Next time" tip. The touch pedals (#touchRudder over the stick, stacked on a phone held
+                    sideways under 620 px) show on this lesson only, Pilot and Learner: held, sim.touchYaw ramps 1.5/s to full,
+                    released it centres at 4/s. Cards: tests/flight/wingLow.test.js (both models, harness.js crosswindLanding)
 src/noXr.js         a stand-in for three's WebXRManager (vite.config.js aliases WebGLRenderer's import to it): XR
                     off, ~3.7 kB gz off boot (0174). tests/unit/upset.test.js checks it has every `xr.` member
                     three's WebGL renderer reads outside a presenting session. Want WebXR: drop the alias.
@@ -703,7 +718,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-15 (0187): 199.81 kB (the pattern-entry mission's entry and blurb, its entryStep and entryResult hooks, +0.19 kB over main's 199.62; the entry is pattern.js's lazy chunk). 2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
+2026-11-15 (0188): 200.53 kB (the wing-low lesson's mission entry and blurb, its lazy import, checkWingLow, the weather, coach, flaps and landing hooks, the touch pedals' ramp and toggle and the snapshot's wingLow, +0.72 kB over main's 199.81; wingLow.js is a lazy chunk). 2026-11-15 (0187): 199.81 kB (the pattern-entry mission's entry and blurb, its entryStep and entryResult hooks, +0.19 kB over main's 199.62; the entry is pattern.js's lazy chunk). 2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
 the snapshot's softField and surfaceMu, gear.js's surface μ and deeplink.js skipping the lesson for ?airport and the callouts off in it, +0.42 kB; softField.js is a lazy chunk). 2026-11-14 (0181): 199.17 kB (the short-field lesson's mission entry and blurb, its lazy import, step, coach target, flaps and flare height,
 gate, Kid, speed bug and stop-hold hooks and the snapshot's shortField, +0.68 kB over main's 198.49; shortField.js is a lazy chunk). 2026-11-12 (0171): 198.49 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
 fetch, +0.15 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks

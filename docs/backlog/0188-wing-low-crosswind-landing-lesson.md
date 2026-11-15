@@ -1,7 +1,7 @@
 ---
 id: 0188
 title: Crosswind lesson: land the Cessna wing-low, upwind wheel first, at Addison
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
