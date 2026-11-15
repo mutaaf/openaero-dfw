@@ -69,6 +69,7 @@ describe('the lesson\'s wind: the live METAR when it blows across, else the scen
     const wx = scenarioWx(END);
     expect(wx).toMatchObject({ windDirDeg: 250, windKts: SCENARIO_KTS, gustKts: SCENARIO_KTS, live: false, icao: 'KADS' });
     expect(wx.raw).toMatch(/^SCENARIO KADS 25012KT/);
+    expect(wx.scripted).toBe(true); // the ATIS card: "this mission's", not "offline"
     expect(scenarioWx(runwayEnd('KADS', '34')).windDirDeg).toBe(70);
   });
 
@@ -92,19 +93,26 @@ describe('the coach names the wing and the pedal from the wind', () => {
   it('words', () => {
     expect(coachText('wlBriefR')).toBe('Wind from the right: lower the right wing, left rudder (Q) to hold the line');
     expect(coachText('wlBriefL')).toBe('Wind from the left: lower the left wing, right rudder (E) to hold the line');
-    expect(coachText('wlBriefR', { touch: true })).toBe('Wind from the right: lower the right wing, left rudder (◀ RUD) to hold the line');
-    expect(coachText('wlHoldR')).toBe('Hold it: right wing still down, right wheel first');
-    expect(coachText('wlHoldR', { touch: true })).toBe('Hold it: right wing still down, right wheel first');
+    expect(coachText('wlBriefR', { touch: true })).toBe('Wind from the right: right wing down, tap ◀ RUD');
+    expect(coachText('wlHoldR')).toBe('Hold it: keep the right wing down, right wheel first');
+    expect(coachText('wlHoldR', { touch: true })).toBe('Hold it: keep the right wing down, right wheel first');
+    expect(coachText('wlFlareR')).toBe('Flare: ease back, keep the right wing down');
+    // Off the centreline the wing steers (wind from the right: right of the line, less right wing; left of it, more).
+    expect(coachText('wlOffRR')).toBe('Right of the centreline: a little less right wing');
+    expect(coachText('wlOffLR')).toBe('Left of the centreline: a little more right wing');
+    expect(coachText('wlOffRL')).toBe('Right of the centreline: a little more left wing');
+    expect(coachText('wlOffLL')).toBe('Left of the centreline: a little less left wing');
+    expect(RANK.wlFlareR).toBe(RANK.flare);
     expect(coachText('wlNoseRR')).toBe('Nose right of the runway: left rudder (Q) to line it up, right wing down');
-    expect(coachText('wlNoseLL', { touch: true })).toBe('Nose left of the runway: right rudder (RUD ▶) to line it up, left wing down');
+    expect(coachText('wlNoseLL', { touch: true })).toBe('Nose left: tap RUD ▶, left wing down');
     expect(RANK.wlHoldR).toBe(RANK.flare);
     for (const k of Object.keys(WL_TEXT)) expect(coachText(k)).toBe(WL_TEXT[k]);
   });
 
-  it('the briefing, then the landing coach; the nose under 300 ft; the wheel at 50 ft; the flare its own under 30', () => {
+  it('the briefing, then the landing coach; the nose under 300 ft; the centreline in wing; the wheel at 50 ft; idle, then the flare with the wing down', () => {
     const wl = createWingLow(END);
     lessonWx(wl, live(70, 10)); // from the left
-    const c = (aglFt, noseOffDeg = 0, kid = false) => wingLowPrompt(wl, { aglFt, noseOffDeg, kid });
+    const c = (aglFt, noseOffDeg = 0, kid = false, locDots = 0, throttle = 0) => wingLowPrompt(wl, { aglFt, noseOffDeg, kid, locDots, throttle });
     expect(c(600)).toBe(null); // not flying yet
     wingLowStep(wl, { ...air, aglFt: 600 }, 0.1);
     expect(c(600)).toBe('wlBriefL');
@@ -116,8 +124,12 @@ describe('the coach names the wing and the pedal from the wind', () => {
     expect(c(250, 8)).toBe('wlNoseRL'); // under 300 ft the nose 8° right of the runway: left rudder, left wing down
     expect(c(250, -6)).toBe('wlNoseLL');
     expect(c(250, 3)).toBe(null);
+    expect(c(600, 0, false, 0.8)).toBe('wlOffRL'); // right of the line in a left wind: more left wing
+    expect(c(600, 0, false, -0.8)).toBe('wlOffLL');
+    expect(c(600, 0, false, 0.4)).toBe(null);
     expect(c(45)).toBe('wlHoldL');
-    expect(c(25)).toBe(null); // the landing coach's idle and flare
+    expect(c(25, 0, false, 0, 0.3)).toBe(null); // the landing coach's idle first
+    expect(c(25)).toBe('wlFlareL'); // then the lesson's flare: the wing stays down
   });
 });
 
@@ -206,14 +218,10 @@ describe('the grade', () => {
     expect(r.reason).toBe(null);
   });
 
-  it('Kid: the rows shown, the landing\'s own grade and tip', () => {
+  it('Kid: the landing\'s own card (its de-crab flew the wing and the nose)', () => {
     const wl = touchdown(scenarioWx(END), { bankRightDeg: 0, noseHdgT: 169, loads: [0, 1500, 1500] });
     const base = landing({ bankDeg: 0 });
-    const r = wingLowResult(base, wl, true);
-    expect(r.score).toBe(base.score);
-    expect(r.grade).toBe(base.grade);
-    expect(r.factors.slice(0, 4).map((f) => f.key)).toEqual(['wing', 'drift', 'align', 'wheel']);
-    expect(r.wingLow).toBeUndefined();
+    expect(wingLowResult(base, wl, true)).toBe(base);
   });
 
   it('a crash and a runway D stay; a bounce still caps after it', () => {

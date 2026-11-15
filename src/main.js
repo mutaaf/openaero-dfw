@@ -1835,12 +1835,13 @@ function integrateSubStep(dt) {
   sim.inputSource = targets.source;
   let targetPitch = targets.pitch, targetRoll = targets.roll;
   let targetYaw = targets.yaw;
-  // The touch pedals (0188): held, a pedal moves 1.5/s towards full (a short press is a little rudder); let go, it centres at 4/s.
-  const pedalDir = (pedalHeld.r ? 1 : 0) - (pedalHeld.l ? 1 : 0);
-  if (pedalDir || sim.touchYaw) {
-    const d = pedalDir - sim.touchYaw;
-    sim.touchYaw += Math.sign(d) * Math.min(Math.abs(d), dt * (pedalDir ? 1.5 : 4));
-  }
+  // The touch pedals (0188): a tap stepped the rudder (pedalTap); held, it keeps moving 0.6/s; let go, it stays (a slip
+  // holds steady pedal; on Learner a released pedal would hand the rudder back to the coordination, which undoes the
+  // slip). Centred on the runway after the lesson's touchdown (AFH: the rudder relaxes as the nose wheel comes down).
+  const now = performance.now(); // a tap is its step only; held past PEDAL_HOLD_MS, the pedal moves on
+  const pedalDir = (pedalHeld.r && now - pedalHeld.r > PEDAL_HOLD_MS ? 1 : 0) - (pedalHeld.l && now - pedalHeld.l > PEDAL_HOLD_MS ? 1 : 0);
+  if (pedalDir) sim.touchYaw = THREE.MathUtils.clamp(sim.touchYaw + pedalDir * 0.6 * dt, -1, 1);
+  else if (sim.touchYaw && sim.onGround && sim.wingLow?.td) sim.touchYaw = 0;
   if (!targetYaw && sim.touchYaw) targetYaw = sim.touchYaw;
   // Pilot taxiing with the touch/drag stick and no rudder keys: its sideways push is a nose-wheel
   // tiller, not ailerons (0110; one axis can't do both: aileron into the wind steered the nose into
@@ -2256,7 +2257,7 @@ function renderHud() {
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
   if (sim.stallKts && !sim.onGround) gateVerdict?.drawStallBand(hudCtx, cx - 131, cy, sim.stallKts, sim.iasKts); // lazy (0156)
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
-  const showTrim = trimControl();
+  const showTrim = trimControl() && !(sim.wingLow && sim.assist !== 'kid'); // 0188: the pedals take the rocker's slot
   if (showTrim !== trimShown) { // the rocker follows (no layout work on other frames)
     trimShown = showTrim;
     byId('touchTrim').classList.toggle('hidden', !showTrim);
@@ -2266,10 +2267,15 @@ function renderHud() {
   if (showPedals !== pedalsShown) {
     pedalsShown = showPedals;
     byId('touchRudder').classList.toggle('hidden', !showPedals);
-    if (!showPedals) pedalHeld.l = pedalHeld.r = false;
+    if (!showPedals) { pedalHeld.l = pedalHeld.r = 0; sim.touchYaw = 0; }
+  }
+  const rudPct = showPedals ? Math.round(sim.touchYaw * 100) : 0;
+  if (rudPct !== rudShown) { // the pedal's position, under the left thumb (it stays where it was left)
+    rudShown = rudPct;
+    byId('txtTouchRud').textContent = rudPct ? `${Math.abs(rudPct)}% ${rudPct < 0 ? 'L' : 'R'}` : '0';
   }
   // Pilot's trim bug (0094): drawn by the lazy gateVerdict.js (off the boot budget, 0156).
-  if (showTrim && sim.trimAlphaDeg != null) gateVerdict?.drawTrimBug(hudCtx, cx - 131, cy, trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex), sim.iasKts);
+  if (trimControl() && sim.trimAlphaDeg != null) gateVerdict?.drawTrimBug(hudCtx, cx - 131, cy, trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex), sim.iasKts);
   if (sim.activeEnd && !sim.onGround && sim.raFt < 60) drawFlareCue(cx, cy);
 
   // Heading
@@ -3410,14 +3416,18 @@ for (const [id, key] of [['touchTrimDn', 'dn'], ['touchTrimUp', 'up']]) {
 }
 
 // Touch rudder pedals (0188, the wing-low lesson): held like the trim rocker; the frame moves sim.touchYaw.
-const pedalHeld = { l: false, r: false };
+const pedalHeld = { l: 0, r: 0 }; // when each was pressed (performance.now), 0 = up
+const PEDAL_HOLD_MS = 400;
 for (const [id, key] of [['touchRudL', 'l'], ['touchRudR', 'r']]) {
   const el = byId(id);
   let pointerId = null;
-  el.addEventListener('pointerdown', (e) => { pointerId = e.pointerId; el.setPointerCapture(e.pointerId); pedalHeld[key] = true; e.preventDefault(); });
-  onPtrEnd((e) => { if (e.pointerId == null || e.pointerId === pointerId) { pointerId = null; pedalHeld[key] = false; } });
+  el.addEventListener('pointerdown', (e) => {
+    pointerId = e.pointerId; el.setPointerCapture(e.pointerId); pedalHeld[key] = performance.now(); e.preventDefault();
+    sim.touchYaw = Math.round(THREE.MathUtils.clamp(sim.touchYaw + (key === 'r' ? 0.2 : -0.2), -1, 1) * 10) / 10; // a tap: 20%
+  });
+  onPtrEnd((e) => { if (e.pointerId == null || e.pointerId === pointerId) { pointerId = null; pedalHeld[key] = 0; } });
 }
-let pedalsShown = false;
+let pedalsShown = false, rudShown = 0;
 
 // Phone system buttons reuse the desktop handlers.
 byId('touchGear').addEventListener('click', () => byId('btnGear').click());

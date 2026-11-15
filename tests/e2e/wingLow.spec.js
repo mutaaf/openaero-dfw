@@ -5,7 +5,7 @@ test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 // Wing-low crosswind lesson (ticket 0188): the deep link opens it in the picker's Drills, the Cessna spawns on Addison 16's
 // 2 NM final at 70 KIAS with flaps 10 (POH p. 4-34), the wind is the scenario's 12 kt from 250° (the test has no live METAR)
 // and the coach names the right wing and the left rudder. Then Kid flies a short final of it (?debug openaeroDebugFinal
-// with the lesson's flag) to the card, which shows the lesson's rows. The grade itself is flown headless
+// with the lesson's flag) to the card (the landing's own: Kid's de-crab flew the wing). The grade itself is flown headless
 // (tests/flight/wingLow.test.js); the touch pedals are tests/e2e/wingLow.mobile.spec.js.
 test.beforeEach(async ({ page }) => { await stubTiles(page); });
 const snap = (page) => page.evaluate(() => window.openaeroDebug());
@@ -36,7 +36,7 @@ test('?mission=kads_crosswind_wing_low: in Drills, flaps 10 at 70, the scenario 
   expect(errors).toEqual([]);
 });
 
-test('Kid on a short final of the lesson: lands itself, the card shows the wing, the nose and the first wheel', async ({ page }) => {
+test('Kid on a short final of the lesson: lands itself, the touchdown is recorded, the card is the landing\'s own', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = collectErrors(page);
   await page.addInitScript(() => localStorage.setItem('openaero_assist_v1', '{"v":1,"level":"kid","at":0}'));
@@ -51,9 +51,8 @@ test('Kid on a short final of the lesson: lands itself, the card shows the wing,
   await expect(card).toBeVisible({ timeout: 120_000 });
   const done = await snap(page);
   expect(done.wingLow.td).not.toBeNull();
-  await expect(page.locator('#resultsFactors')).toContainText(/Wing into the wind\s*\d+\.\d°/);
-  await expect(page.locator('#resultsFactors')).toContainText(/Nose on the runway/);
-  await expect(page.locator('#resultsFactors')).toContainText(/First wheel down\s*(right \(upwind\) main|left \(downwind\) main|both mains together|the nose wheel)/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Touchdown rate/);
+  await expect(page.locator('#resultsFactors')).not.toContainText(/Wing into the wind/); // its de-crab flew it
   await page.screenshot({ path: test.info().outputPath('wing-low-card-1280.png') });
   expect(errors).toEqual([]);
 });

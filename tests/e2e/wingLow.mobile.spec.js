@@ -2,9 +2,10 @@ import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
 test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
-// Ticket 0188 on a phone (390x844, touch): the wing-low lesson on Pilot shows the rudder pedals over the stick (the
-// ticket: "rudder reachable"), inside the screen and clear of the other controls; holding ◀ RUD pushes left rudder and
-// letting go centres it. Kid's de-crab has the rudder: no pedals. Other flights have none.
+// Ticket 0188 on a phone (390x844, touch): the wing-low lesson on Pilot shows the rudder pedals in the trim rocker's slot
+// under the left thumb (the ticket: "rudder reachable"; the right thumb flies the stick), inside the screen and clear of
+// the other controls. A tap steps the rudder 20% and it stays (a slip holds steady pedal; first-timer panel); the other
+// pedal brings it back. Kid's de-crab has the rudder: no pedals. Other flights have none.
 const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 const snap = (page) => page.evaluate(() => window.openaeroDebug());
 
@@ -17,32 +18,45 @@ async function fly(page, level, mission = 'kads_crosswind_wing_low') {
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
 }
 
-test('phone, Pilot: the pedals over the stick, on screen and clear of the controls; held, they push the rudder', async ({ page }) => {
+test('phone, Pilot: the pedals under the left thumb, on screen and clear of the controls; a tap steps the rudder and it stays', async ({ page }) => {
   test.setTimeout(90_000);
   const errors = collectErrors(page);
   await fly(page, 'pilot');
   await expect.poll(async () => (await snap(page)).wingLow?.end, { timeout: 10_000 }).toBe('KADS_16');
-  await expect(page.locator('#txtCoach')).toHaveText('Wind from the right: lower the right wing, left rudder (◀ RUD) to hold the line', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Wind from the right: right wing down, tap ◀ RUD', { timeout: 10_000 });
   await expect(page.locator('#touchRudder')).toBeVisible();
+  await expect(page.locator('#touchTrim')).toBeHidden(); // the pedals take its slot
   const vp = page.viewportSize();
   const boxes = {};
-  for (const id of ['#touchRudL', '#touchRudR', '#touchStick', '#touchButtons', '#touchThrottle', '#touchTrim', '#coach']) boxes[id] = await page.locator(id).boundingBox();
+  for (const id of ['#touchRudL', '#touchRudR', '#touchStick', '#touchButtons', '#touchThrottle', '#coach']) boxes[id] = await page.locator(id).boundingBox();
   for (const id of ['#touchRudL', '#touchRudR']) {
     const b = boxes[id];
     expect(b.width, `${id} width`).toBeGreaterThanOrEqual(44);
     expect(b.height, `${id} height`).toBeGreaterThanOrEqual(44);
     expect(b.x).toBeGreaterThanOrEqual(0);
-    expect(b.x + b.width).toBeLessThanOrEqual(vp.width);
-    for (const other of ['#touchStick', '#touchButtons', '#touchThrottle', '#touchTrim', '#coach']) expect(overlaps(b, boxes[other]), `${id} vs ${other}`).toBe(false);
+    expect(b.x + b.width).toBeLessThanOrEqual(vp.width / 2); // the left thumb's half
+    for (const other of ['#touchStick', '#touchButtons', '#touchThrottle', '#coach']) expect(overlaps(b, boxes[other]), `${id} vs ${other}`).toBe(false);
   }
   expect(overlaps(boxes['#touchRudL'], boxes['#touchRudR'])).toBe(false);
   await page.screenshot({ path: test.info().outputPath('wing-low-pedals-390.png') });
   const cdp = await page.context().newCDPSession(page);
-  const l = boxes['#touchRudL'];
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: l.x + l.width / 2, y: l.y + l.height / 2, id: 1 }] });
-  await expect.poll(async () => (await snap(page)).rudderInput, { timeout: 5_000 }).toBeLessThan(-0.3);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await expect.poll(async () => Math.abs((await snap(page)).touchYaw), { timeout: 5_000 }).toBe(0);
+  const tap = async (id) => {
+    const b = boxes[id];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 1 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  await tap('#touchRudL');
+  await tap('#touchRudL');
+  // Two taps: 40% left, and it stays there after the thumb lifts.
+  await expect.poll(async () => (await snap(page)).touchYaw, { timeout: 5_000 }).toBeCloseTo(-0.4, 1);
+  await expect(page.locator('#txtTouchRud')).toHaveText('40% L');
+  await page.waitForTimeout(1000);
+  expect((await snap(page)).touchYaw).toBeCloseTo(-0.4, 1);
+  expect((await snap(page)).rudderInput).toBeLessThan(-0.3);
+  await tap('#touchRudR');
+  await tap('#touchRudR');
+  await expect.poll(async () => Math.abs((await snap(page)).touchYaw), { timeout: 5_000 }).toBeLessThan(0.01);
+  await expect(page.locator('#txtTouchRud')).toHaveText('0');
   expect(errors).toEqual([]);
 });
 

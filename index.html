@@ -476,6 +476,16 @@
             <button id="touchTrimUp" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Trim nose up">NOSE<br>UP</button>
           </div>
         </div>
+        <!-- Rudder pedals (0188): the wing-low crosswind lesson only, Pilot and Learner (main.js; the trim rocker's slot, which
+             the lesson hides: the left thumb works the pedals while the right flies the stick). A tap steps the rudder 20%
+             that way and it stays (hold to keep moving it); the other pedal brings it back. Centred at the touchdown. -->
+        <div id="touchRudder" class="hidden pointer-events-auto flex flex-col items-center gap-1">
+          <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1">RUD <b id="txtTouchRud" class="text-emerald-400">0</b></span>
+          <div class="flex flex-col-reverse gap-1.5 text-[11px] font-bold leading-tight" role="group" aria-label="Rudder pedals">
+            <button id="touchRudL" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Left rudder">◀<br>RUD</button>
+            <button id="touchRudR" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Right rudder">RUD<br>▶</button>
+          </div>
+        </div>
       </div>
       <div id="touchButtons" class="pointer-events-auto flex flex-col gap-1.5 text-[11px] font-bold">
         <button id="touchGear" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">GEAR <span id="txtTouchGear" class="text-emerald-400">DN</span></button>
@@ -484,18 +494,10 @@
         <!-- ILS AUTO in the air; on the ground, REV for airframes with thrust reversers (0074) -->
         <button id="touchIls" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px] text-amber-300"><span id="txtTouchIls">ILS AUTO</span></button>
       </div>
-      <div class="flex flex-col items-center gap-2.5">
-        <!-- Rudder pedals (0188): the wing-low crosswind lesson only (main.js shows them on Pilot and Learner); hold
-             to push the pedal, let go and it centres. Over the stick, in the height the button column already takes. -->
-        <div id="touchRudder" class="hidden pointer-events-auto flex gap-1 text-[11px] font-bold leading-tight" role="group" aria-label="Rudder pedals">
-          <button id="touchRudL" class="touch-control hud-btn rounded-xl px-1 min-w-[44px] min-h-[44px]" aria-label="Left rudder">◀ RUD</button>
-          <button id="touchRudR" class="touch-control hud-btn rounded-xl px-1 min-w-[44px] min-h-[44px]" aria-label="Right rudder">RUD ▶</button>
-        </div>
-        <div id="touchStick" class="touch-control hud-glass pointer-events-auto relative w-36 h-36 rounded-full flex items-center justify-center" aria-label="Flight stick">
-          <div class="absolute inset-x-4 top-1/2 h-px bg-slate-600/60 pointer-events-none"></div>
-          <div class="absolute inset-y-4 left-1/2 w-px bg-slate-600/60 pointer-events-none"></div>
-          <div id="touchStickKnob" class="w-14 h-14 rounded-full bg-sky-400/90 border-2 border-white shadow-lg pointer-events-none"></div>
-        </div>
+      <div id="touchStick" class="touch-control hud-glass pointer-events-auto relative w-36 h-36 rounded-full flex items-center justify-center" aria-label="Flight stick">
+        <div class="absolute inset-x-4 top-1/2 h-px bg-slate-600/60 pointer-events-none"></div>
+        <div class="absolute inset-y-4 left-1/2 w-px bg-slate-600/60 pointer-events-none"></div>
+        <div id="touchStickKnob" class="w-14 h-14 rounded-full bg-sky-400/90 border-2 border-white shadow-lg pointer-events-none"></div>
       </div>
     </div>
   </div>

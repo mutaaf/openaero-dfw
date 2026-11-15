@@ -223,12 +223,6 @@ body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
   #masterAlertBanner:not(.hidden) ~ #coach, #stallAlertBanner:not(.hidden) ~ #coach { visibility: hidden; }
 }
 
-/* The rudder pedals (0188) over a stick narrower than the two of them side by side (a 568 px phone held sideways: the
-   stick is ~82 px, right of the altitude tape): stacked, so they stay inside the stick's column. */
-@media (orientation: landscape) and (max-height: 480px) and (max-width: 619.98px) {
-  #touchRudder { flex-direction: column; }
-}
-
 /* Accessibility floor (ticket 0007). Keyboard focus is always visible: amber reads against
    the sky, emerald and slate states the buttons take. */
 .hud-btn:focus-visible, select:focus-visible, input:focus-visible {

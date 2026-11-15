@@ -20,8 +20,8 @@
 // ~0.2° a knot here, 1° at 5 kt, 3° at 15, tests/flight/wingLow.test.js). The game's tolerances: drift across the wheels
 // within DRIFT_OK_KTS, the nose within 3° of the runway. A crabbed touchdown caps B (the side load both methods avoid);
 // drifting, both mains together, the downwind wheel first and a level or wrong wing are named but cap nothing (the
-// testing standards allow either method, and a crab taken out at the last moment lands on both). Kid keeps its de-crab assist (assists.js): its card
-// shows the rows, unscored. A lazy chunk, loaded with the mission (main.js startDrills). Pure (no THREE, no DOM):
+// testing standards allow either method, and a crab taken out at the last moment lands on both). Kid keeps its de-crab assist (assists.js): its card is the
+// landing's own. A lazy chunk, loaded with the mission (main.js startDrills). Pure (no THREE, no DOM):
 // tests/unit/wingLow.test.js, tests/flight/wingLow.test.js.
 import { curve, letterGrade } from './landing.js';
 import { DRILL_TEXT, RANK, TOUCH_WORDS } from './coach.js';
@@ -60,7 +60,8 @@ const FLARE_W = 0.15; // landing.js WEIGHTS.flare, inlined: the lesson rescores 
 
 const SIDES = { R: 'right', L: 'left' };
 const OTHER = { R: 'L', L: 'R' };
-// The pedals' keys (keyMap.js Q/E) and the touch deck's buttons (index.html #touchRudder), named with the rudder.
+// The pedals' keys (keyMap.js Q/E) and the touch deck's buttons (index.html #touchRudder), named with the rudder. The
+// touch words are short: a phone held sideways moves a three-line card over the wind box (device panel).
 const KEY = { R: 'E', L: 'Q' };
 const BTN = { R: 'RUD ▶', L: '◀ RUD' };
 export const WL_TEXT = {};
@@ -68,19 +69,24 @@ export const WL_TOUCH = {};
 for (const s of ['R', 'L']) {
   const w = SIDES[s], o = SIDES[OTHER[s]];
   WL_TEXT[`wlBrief${s}`] = `Wind from the ${w}: lower the ${w} wing, ${o} rudder (${KEY[OTHER[s]]}) to hold the line`;
-  WL_TOUCH[`wlBrief${s}`] = `Wind from the ${w}: lower the ${w} wing, ${o} rudder (${BTN[OTHER[s]]}) to hold the line`;
-  WL_TEXT[`wlHold${s}`] = `Hold it: ${w} wing still down, ${w} wheel first`;
+  WL_TOUCH[`wlBrief${s}`] = `Wind from the ${w}: ${w} wing down, tap ${BTN[OTHER[s]]}`;
+  WL_TEXT[`wlHold${s}`] = `Hold it: keep the ${w} wing down, ${w} wheel first`;
+  // AFH: "Keep the upwind wing down throughout the round out" (the landing coach's flare call would level it).
+  WL_TEXT[`wlFlare${s}`] = `Flare: ease back, keep the ${w} wing down`;
   WL_TEXT[`wlKid${s}`] = `Wind from the ${w}: let go, your plane lines itself up`;
+  // Off the centreline: the wing does the steering in a slip (the landing coach's "bank gently left" would raise it).
+  WL_TEXT[`wlOffR${s}`] = `Right of the centreline: a little ${s === 'R' ? 'less' : 'more'} ${w} wing`;
+  WL_TEXT[`wlOffL${s}`] = `Left of the centreline: a little ${s === 'L' ? 'less' : 'more'} ${w} wing`;
   // The nose off the runway (n: which way it points): the pedal that lines it up, and the wing that holds the line.
   for (const n of ['R', 'L']) {
     const p = OTHER[n];
     WL_TEXT[`wlNose${n}${s}`] = `Nose ${SIDES[n]} of the runway: ${SIDES[p]} rudder (${KEY[p]}) to line it up, ${w} wing down`;
-    WL_TOUCH[`wlNose${n}${s}`] = `Nose ${SIDES[n]} of the runway: ${SIDES[p]} rudder (${BTN[p]}) to line it up, ${w} wing down`;
+    WL_TOUCH[`wlNose${n}${s}`] = `Nose ${SIDES[n]}: tap ${BTN[p]}, ${w} wing down`;
   }
 }
 Object.assign(DRILL_TEXT, WL_TEXT);
 Object.assign(TOUCH_WORDS, WL_TOUCH);
-for (const k of Object.keys(WL_TEXT)) RANK[k] = k.startsWith('wlHold') ? 3 : k.startsWith('wlNose') ? 2 : 1;
+for (const k of Object.keys(WL_TEXT)) RANK[k] = k.startsWith('wlHold') || k.startsWith('wlFlare') ? 3 : k.startsWith('wlNose') ? 2 : 1;
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
 // The wind across and along a runway (kt): xw + = from the right, hw + = a headwind. wx: weather.js's windDirDeg (true), windKts.
@@ -101,7 +107,7 @@ export function liveSuits(wx, hdgT, airport) {
 export function scenarioWx(end) {
   const dir = (Math.round((end.hdgT + 90) / 10) * 10) % 360 || 360;
   const wx = scenarioWeather();
-  return { ...wx, icao: end.airport, windDirDeg: dir, windKts: SCENARIO_KTS, gustKts: SCENARIO_KTS,
+  return { ...wx, icao: end.airport, windDirDeg: dir, windKts: SCENARIO_KTS, gustKts: SCENARIO_KTS, scripted: true, // atis.js: "this mission's", not "offline"
     raw: `SCENARIO ${end.airport} ${String(dir).padStart(3, '0')}${SCENARIO_KTS}KT 10SM FEW050 18/08 A3000` };
 }
 
@@ -111,7 +117,7 @@ export const createWingLow = (end) => ({
 });
 // The coach's keys per wind side, built once (the prompt runs every frame: no strings made there).
 const KEYS = {};
-for (const s of ['R', 'L']) KEYS[s] = { brief: `wlBrief${s}`, hold: `wlHold${s}`, kid: `wlKid${s}`, noseR: `wlNoseR${s}`, noseL: `wlNoseL${s}` };
+for (const s of ['R', 'L']) KEYS[s] = { brief: `wlBrief${s}`, hold: `wlHold${s}`, flare: `wlFlare${s}`, kid: `wlKid${s}`, noseR: `wlNoseR${s}`, noseL: `wlNoseL${s}`, offR: `wlOffR${s}`, offL: `wlOffL${s}` };
 
 // The lesson's weather (main.js currentWeather while the lesson flies): the live report when it suits, else the scenario.
 // Chosen again only when the report object changes, and never once the player is flying (a METAR refresh mid-final must
@@ -157,17 +163,19 @@ export function wingLowStep(wl, s, dt) {
 }
 
 // The coach's key (through coach.js s.ds, before the landing coach's own), or null for the landing coach's (flaps,
-// speed, centreline, PAPI, idle, flare, rollout). s: main.js coachInput (aglFt, kid) plus noseOffDeg (the nose against
-// the runway, + = right). The briefing names the wing; under ALIGN_CALL_FT a nose off the runway is called; at HOLD_FT
-// the upwind wheel; under 30 ft the landing coach's idle and flare (its de-crab call is the same advice).
+// speed, PAPI, idle, rollout). s: main.js coachInput (aglFt, kid, throttle, locDots: + = right of the centreline) plus
+// noseOffDeg (the nose against the runway, + = right). The briefing names the wing; under ALIGN_CALL_FT a nose off the
+// runway is called; off the centreline, more or less wing (not "bank gently", which would level the upwind wing); at
+// HOLD_FT the upwind wheel; under 30 ft the landing coach's idle, then the lesson's flare (the wing stays down).
 export function wingLowPrompt(wl, s) {
   if (wl.readyT === null || wl.td) return null;
   const k = wl.keys;
   if (s.kid) return wl.t - wl.readyT < SAY_S ? k.kid : null;
-  if (s.aglFt < 30) return null;
+  if (s.aglFt < 30) return s.throttle > 0.05 ? null : k.flare; // the landing coach's idle, then the lesson's flare
   if (s.aglFt < HOLD_FT) return k.hold;
   if (wl.t - wl.readyT < SAY_S) return k.brief;
   if (s.aglFt < ALIGN_CALL_FT && Math.abs(s.noseOffDeg) > ALIGN_CALL_DEG) return s.noseOffDeg > 0 ? k.noseR : k.noseL;
+  if (Math.abs(s.locDots ?? 0) > 0.6) return s.locDots > 0 ? k.offR : k.offL; // the landing coach's centreline threshold
   return null;
 }
 
@@ -181,8 +189,8 @@ export const DONE_NOTE = 'Wing-low: upwind wheel first, the nose straight down t
 
 // The landing's grade (landing.js gradeLanding) with the lesson's rows, at the touchdown (main.js checkTouchdown; a bounce
 // caps it after, landing.js capBounced). Pilot and Learner: the flare factor loses its bank penalty up to BANK_FREE_DEG (the
-// lesson asks for the bank), the four rows take LESSON_W of the score, a crabbed touchdown caps B. Kid: the rows are
-// shown, unscored. A crash or a D for the runway itself stays. Pure.
+// lesson asks for the bank), the four rows take LESSON_W of the score, a crabbed touchdown caps B. Kid: the landing's own card
+// (its assist flew the wing and the nose). A crash or a D for the runway itself stays. Pure.
 export function wingLowResult(result, wl, kid = false) {
   if (result.grade === 'CRASH' || !wl.td) return result;
   const t = wl.td, w = SIDES[wl.side], o = SIDES[OTHER[wl.side]];
@@ -197,7 +205,7 @@ export function wingLowResult(result, wl, kid = false) {
   const wheel = { key: 'wheel', label: 'First wheel down', value: wheelWords[t.first], score: WHEEL_PTS[t.first] };
   const rows = [wing, drift, align, wheel];
   const rest = result.factors;
-  if (kid) return { ...result, factors: [...rows, ...rest] }; // the landing's own tip (landingTip.js) and grade
+  if (kid) return result; // Kid's de-crab flew the wing and the nose: no rows it didn't fly (first-timer panel)
   const oldFlare = rest.find((f) => f.key === 'flare');
   const flare = oldFlare && { ...oldFlare, score: Math.round(flareScore(t.pitchDeg, bank)) };
   const base = result.score + (flare ? (flare.score - oldFlare.score) * FLARE_W : 0);

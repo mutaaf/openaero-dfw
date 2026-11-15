@@ -325,10 +325,14 @@ src/wingLow.js      wing-low crosswind landing lesson (0188, lazy chunk loaded w
                     to 6°, the four rows (wing, drift, nose, wheel) take 30% of the score, a nose > 3° off caps B. The AFH's "just
                     enough bank to cancel the drift" is graded as the wing's side (≥ 0.5° into the wind) and the drift (full marks
                     ≤ 1 kt), not a fixed band: a correct landing banks ~0.2° a knot (1° at 5 kt). Drift > 2 kt, a level or wrong
-                    wing, both mains and the downwind wheel first are named, uncapped. Kid: the rows shown, unscored (its de-crab has the
-                    rudder). Its own "Next time" tip. The touch pedals (#touchRudder over the stick, stacked on a phone held
-                    sideways under 620 px) show on this lesson only, Pilot and Learner: held, sim.touchYaw ramps 1.5/s to full,
-                    released it centres at 4/s. Cards: tests/flight/wingLow.test.js (both models, harness.js crosswindLanding)
+                    wing, both mains and the downwind wheel first are named, uncapped. Kid: the landing's own card (its de-crab
+                    flew the wing and the nose). Its own "Next time" tip. The coach's centreline calls are the lesson's (more or
+                    less wing, not "bank gently", which would level the upwind wing) and so is the flare call under 30 ft (the
+                    wing stays down); the wind strip says R/L WING DOWN (gateVerdict.js, not "aim into it", a crab). The touch
+                    pedals (#touchRudder, the trim rocker's slot under the left thumb, which the lesson hides; Pilot and
+                    Learner): a tap steps sim.touchYaw 20% and it stays (held, 0.6/s more), the other pedal brings it back,
+                    centred on the runway after the touchdown; a released pedal must not hand Learner's rudder back to the
+                    coordination, which undoes the slip. Cards: tests/flight/wingLow.test.js (both models, harness.js crosswindLanding)
 src/noXr.js         a stand-in for three's WebXRManager (vite.config.js aliases WebGLRenderer's import to it): XR
                     off, ~3.7 kB gz off boot (0174). tests/unit/upset.test.js checks it has every `xr.` member
                     three's WebGL renderer reads outside a presenting session. Want WebXR: drop the alias.
