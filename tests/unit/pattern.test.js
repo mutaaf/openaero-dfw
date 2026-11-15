@@ -296,6 +296,8 @@ describe('the pattern entry mission (ticket 0187)', () => {
         expect(entryLeg(end, { ...p(-1200, C), trackDeg: (end.hdgT - 90 * t + 360) % 360, aglFt: 800 }, traffic).phase).toBe('base');
         // Over the runway's side of the downwind, not joined: inside.
         expect(entryLeg(end, { ...p(mid(end), 200), trackDeg: eh, aglFt: 1000 }, traffic).phase).toBe('inside');
+        // A late turn, 600 m past the downwind line (still 1/4 NM out): still told to turn.
+        expect(entryLeg(end, { ...p(mid(end), C - 600), trackDeg: eh, aglFt: 1000, gsMps: 46 }, traffic).turn).toBe(true);
         // Off the line to its right (right of the course): a positive offset.
         const right = (h) => ({ x: Math.cos(h * Math.PI / 180) * 500, z: Math.sin(h * Math.PI / 180) * 500 });
         const b1 = back(1852), o = right(eh);
@@ -316,18 +318,27 @@ describe('the pattern entry mission (ticket 0187)', () => {
     expect(entryTarget(E16, pilot(back(1852), 295, 1000, { kid: true }))).toBe('ptKid');
     expect(entryTarget(E16, pilot(back(150 / Math.SQRT1_2), 295, 1000))).toBe('pteJoinR');
     expect(PT_TEXT.pteJoinR).toBe('Join: turn right onto downwind, the runway on your left');
+    // Overshot inside the downwind line still on the 45°: turn onto it; tracking it already: the circuit's words.
+    expect(entryTarget(E16, pilot(at(E16, mid(E16), -300), 295, 1000))).toBe('pteMissR');
+    expect(entryTarget(E16, pilot(at(E16, mid(E16), -300), 340, 1000))).toBeNull();
+    // Heading away from the field (back along the 45°): wrong way, and which way to turn back.
+    const away = entryTarget(E16, pilot(back(3 * 1852), 115, 1000));
+    expect(['pteBackL', 'pteBackR']).toContain(away);
+    // On the line 3 NM out flying south (160°): the join point (295°) is to the right.
+    expect(entryTarget(E16, pilot(back(3 * 1852), 160, 1000))).toBe('pteBackR');
+    expect(entryTarget(E16, pilot(back(3 * 1852), 70, 1000))).toBe('pteBackL');
     // 600 m right of the 45° line (north-east of it), 1 NM out: turn left toward the line.
     const b = back(1852), r = 295 * Math.PI / 180; // right of the 295° course: (cos h, sin h) in sim x, z
     expect(entryTarget(E16, pilot({ x: b.x + Math.cos(r) * 600, z: b.z + Math.sin(r) * 600 }, 295, 1000))).toBe('pteOffL');
     // Joined: the circuit's coach (null here).
     expect(entryTarget(E16, pilot(at(E16, mid(E16), -C), 340, 1000))).toBeNull();
-    for (const k of ['pteIn', 'pte45', 'pteJoinL', 'pteJoinR', 'pteOffL', 'pteOffR']) {
+    for (const k of ['pteIn', 'pte45', 'pteJoinL', 'pteJoinR', 'pteOffL', 'pteOffR', 'pteBackL', 'pteBackR', 'pteMissL', 'pteMissR']) {
       expect(PT_TEXT[k]).toBeTruthy();
       expect(coachText(k)).toBe(PT_TEXT[k]);
     }
   });
 
-  const flown = (o) => ({ ent: { ...createEntry(), done: 'downwind', joinFt: 1000, joinKts: 90, angleDeg: 45, minFt: 980, maxFt: 1020, ...o } });
+  const flown = (o) => ({ end: E16, ent: { ...createEntry(), done: 'downwind', joinFt: 1000, joinKts: 90, joinOutM: 0, joinAlongM: 0, angleDeg: 45, minFt: 980, maxFt: 1020, ...o } });
   const card = { grade: 'A', score: 92, reason: null, note: null, factors: [] };
   it('entryResult: a clean join keeps the grade and says so; each miss caps B and is named', () => {
     expect(entryResult(card, flown())).toMatchObject({ grade: 'A', score: 92, reason: null, note: 'Joined on the 45° at 1,000 ft', entry: true });
@@ -339,7 +350,14 @@ describe('the pattern entry mission (ticket 0187)', () => {
       expect(r.note).toBeNull();
     };
     miss({ angleDeg: 80 }, /^Joined the downwind at 80°, not 45° \(±20°\)/);
-    miss({ angleDeg: null }, /from the runway side/);
+    miss({ angleDeg: null, joinOutM: -200 }, /from the runway side/);
+    miss({ angleDeg: null, joinOutM: 600 }, /^Turned onto the downwind early, too far out/);
+    miss({ joinAlongM: 2080 }, /^Joined the downwind abeam past the far end of the runway/);
+    miss({ joinAlongM: -1420 }, /^Joined the downwind abeam before the runway/);
+    miss({ minFt: 500 }, /^Came up through the 45° entry from 500 ft/);
+    miss({ inside: true }, /^Crossed inside the downwind before joining/);
+    // Inside the coach's grace (1,140 ft, stepped down): no cap.
+    expect(entryResult(card, flown({ maxFt: 1140 })).grade).toBe('A');
     miss({ joinFt: 1180, maxFt: 1180 }, /^Joined the downwind 180 ft high/);
     miss({ joinFt: 850 }, /^Joined the downwind 150 ft low/);
     miss({ maxFt: 1600 }, /^Came down through the 45° entry from 1,600 ft/);
@@ -350,7 +368,7 @@ describe('the pattern entry mission (ticket 0187)', () => {
     const base = entryResult(card, flown({ done: 'base' }));
     expect(base).toMatchObject({ grade: 'C', score: PTE_CAP_C });
     expect(base.reason).toMatch(/^Joined straight in on base/);
-    expect(entryResult(card, flown({ done: 'inside' })).reason).toMatch(/^Never joined the downwind/);
+    expect(entryResult(card, flown({ done: null })).reason).toMatch(/^Never joined the downwind/);
     const d = { grade: 'D', score: 40, reason: 'Landed beside the runway.', factors: [] };
     expect(entryResult(d, flown({ done: 'base' }))).toMatchObject({ grade: 'D', score: 40 });
     const crash = { grade: 'CRASH', score: 0, reason: 'x', factors: [] };
@@ -370,13 +388,17 @@ describe('the pattern entry mission (ticket 0187)', () => {
     };
     const er = (295 - 160) * Math.PI / 180;
     const back = (d) => at(E16, mid(E16) - Math.cos(er) * d, -(C - Math.sin(er) * -1 * d));
-    entryStep(st, sim(back(1852), 295, 1040));
-    entryStep(st, sim(back(300 / Math.SQRT1_2), 295, 1010)); // 300 m outside the downwind line: the angle is read here
+    entryStep(st, { ...sim(back(1852), 295, 1040), simTime: 10 });
+    entryStep(st, { ...sim(back(300 / Math.SQRT1_2), 295, 1010), simTime: 30 }); // straight on the 45°, outside the line: the angle is read
+    expect(st.ent.angleDeg).toBeCloseTo(45, 0);
+    entryStep(st, { ...sim(back(100 / Math.SQRT1_2), 315, 1010), simTime: 31 }); // turning 20°/s: not read
+    expect(st.ent.angleDeg).toBeCloseTo(45, 0);
     expect(st.ent.angleDeg).toBeCloseTo(45, 0);
     expect(st.ent.maxFt).toBe(1040);
     expect(patternPrompt(st, sim(back(1852), 295, 1000))).toBe('pte45');
     entryStep(st, sim(at(E16, mid(E16) - 100, -C), 340, 1005, 88));
-    expect(st.ent).toMatchObject({ done: 'downwind', joinFt: 1005, joinKts: 88 });
+    expect(st.ent).toMatchObject({ done: 'downwind', joinFt: 1005, joinKts: 88, inside: false });
+    expect(st.ent.joinAlongM).toBeCloseTo(-100, 0);
     entryStep(st, sim(at(E16, -1200, -C), 250, 700)); // later legs do not rewrite it
     expect(st.ent.done).toBe('downwind');
     // Joined: the circuit's words and guide.

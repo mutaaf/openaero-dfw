@@ -48,7 +48,7 @@ test('join the pattern: in the picker under Addison, spawned on the 45° at 1,00
   expect(spawn.iasKts).toBeGreaterThan(80);
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText('Level at 1,000 ft: fly toward the middle of the runway, 45° to the downwind', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Hold 1,000 ft above the field: fly the 45° to meet the downwind abeam mid-runway', { timeout: 10_000 });
   expect(await lowContrastLabels(page, '#coach')).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('pattern-entry-1280.png') });
   expect(errors).toEqual([]);

@@ -53,7 +53,7 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}, { rollS = 0, key = PATTERN_KE
   let td = null;
   const roll = { maxCrossM: 0 };
   fly(b, c172, key === PATTERN_KEY ? 400 : 700, (x, dt) => {
-    sim.aglFt = (x.pos.y - c172.gearHeight) * M_TO_FT; sim.iasKts = x.iasKts; sim.flapsIndex = x.flapsIndex;
+    sim.aglFt = (x.pos.y - c172.gearHeight) * M_TO_FT; sim.iasKts = x.iasKts; sim.flapsIndex = x.flapsIndex; sim.simTime = x.t;
     // main.js picks the runway you're lined up on twice a second.
     if ((selT -= dt) <= 0) {
       selT = 0.5;
