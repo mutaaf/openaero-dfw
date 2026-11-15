@@ -169,10 +169,158 @@ export function patternTarget(end, s) {
   return g.leg === 'base' ? 'ptBase' : 'ptAbeam';
 }
 
+// --- Joining the pattern (ticket 0187): the 45° entry to the downwind. AC 90-66C (6/6/23) §11.3,
+// p. 15: "Arriving aircraft should be at traffic pattern altitude ... Entries into traffic patterns
+// while descending may create collision hazards and should be avoided. Entry to the downwind leg
+// should be at a 45-degree angle abeam the midpoint of the runway"; Appendix A, key item 1: "Enter
+// pattern in level flight, abeam the midpoint of the runway, at pattern altitude." The entry leg
+// converges on the downwind from outside it, so the turn onto downwind is the other way from the
+// pattern's turns (a right turn into a left pattern: FAA Chief Counsel, Gossman interpretation,
+// 2011, on AIM 4-3-3). Only the 45° entry is taught (the midfield crossing is out of scope).
+export const ENTRY_KEY = 'pattern_entry_kads';
+export const PTE_ANGLE_DEG = 45;
+export const PTE_ANGLE_TOL_DEG = 20; // the card's band on the entry angle
+export const PTE_ALT_TOL_FT = 100; // the card's band on the height at the join
+// The game's speed band at the join (no source gives a Cessna pattern-entry speed: this is the
+// cruise-descent range a 172 enters at, well clear of its 48 kt clean stall).
+export const PTE_MIN_KTS = 70;
+export const PTE_MAX_KTS = 100;
+export const PTE_CAP_B = 84;
+export const PTE_CAP_C = 69;
+const ENTRY_NEAR_M = 2778; // 1.5 NM from the join point: on the 45°, not still arriving
+const ANGLE_SAMPLE_M = 400; // the entry angle is read this far outside the downwind line, before the turn
+const COS45 = Math.cos(Math.PI / 4);
+const TURNS_E = {
+  pteJoin: 'Join: turn {side} onto downwind, the runway on your {other}',
+  pteOff: 'Off the 45°: turn {side}, toward the middle of the runway',
+};
+Object.assign(PT_TEXT, {
+  pteIn: 'Level at 1,000 ft: fly toward the middle of the runway, 45° to the downwind',
+  pte45: 'On the 45°: hold 1,000 ft, level. The turn onto downwind is next',
+});
+const KEYS_EL = {}, KEYS_ER = {};
+for (const [k, w] of Object.entries(TURNS_E)) {
+  PT_TEXT[KEYS_EL[k] = `${k}L`] = w.replace('{side}', 'left').replace('{other}', 'right');
+  PT_TEXT[KEYS_ER[k] = `${k}R`] = w.replace('{side}', 'right').replace('{other}', 'left');
+}
+Object.assign(DRILL_TEXT, PT_TEXT);
+
+// Where the entry is: the join point (the downwind line abeam the runway's midpoint) and the
+// 45° line to it. s: patternLeg's input. Into a reused object: { phase: 'inbound' | 'entry45' |
+// 'downwind' | 'base' | 'final' | 'inside', turn (cue the turn onto downwind now), entryHdgT,
+// downwindHdgT, distM (to the join point), outsideM (beyond the downwind line, away from the
+// runway; < 0 inside it), offLineM (right of the 45° line), angleDeg (track off the downwind) }.
+// 'downwind': established on it (tracking within 20°, 1/4 to 1 1/8 NM out). 'base' / 'final':
+// joined straight in instead. 'inside': across the downwind line toward the runway, not joined.
+const _eg = { phase: 'inbound', turn: false, entryHdgT: 0, downwindHdgT: 0, distM: 0, outsideM: 0, offLineM: 0, angleDeg: 0 };
+export function entryLeg(end, s, traffic = 'left', out = _eg) {
+  const r = end.hdgT * Math.PI / 180, dx = Math.sin(r), dz = -Math.cos(r);
+  const along = (s.x - end.thrX) * dx + (s.z - end.thrZ) * dz;
+  const cross = (s.x - end.thrX) * -dz + (s.z - end.thrZ) * dx;
+  const turn = traffic === 'right' ? 1 : -1;
+  const side = cross * turn;
+  const dw = wrap360(end.hdgT + 180), eh = wrap360(dw + PTE_ANGLE_DEG * turn);
+  const jAlong = end.lengthM / 2 - end.displacedM; // the runway's midpoint (along is from the landing threshold)
+  const dA = along - jAlong, dS = side - C_M;
+  out.entryHdgT = eh; out.downwindHdgT = dw; out.turn = false;
+  out.distM = Math.hypot(dA, dS); out.outsideM = dS;
+  // Right of the 45° line through the join point (course eh): that line in runway axes.
+  // In runway axes (along, right) the course is (cos θ, sin θ), its right (−sin θ, cos θ); right = side·turn.
+  const er = (eh - end.hdgT) * Math.PI / 180;
+  out.offLineM = dS * turn * Math.cos(er) - dA * Math.sin(er);
+  const rel = headingError(s.trackDeg, dw);
+  out.angleDeg = Math.abs(rel);
+  const gs = s.gsMps ?? 46;
+  if (Math.abs(rel) <= 20 && side >= SIDE_MIN_M && side <= 1.5 * C_M) out.phase = 'downwind';
+  else {
+    const g = patternLeg(end, s, traffic);
+    if (g.leg === 'base' && along <= 0 && side <= 2 * C_M && !g.offSide) out.phase = 'base';
+    else if (g.leg === 'final' && along > -3 * 1852) out.phase = 'final';
+    else if (side < C_M / 2 && along > -1852 && along < end.lengthM) out.phase = 'inside';
+    else {
+      const onLine = Math.abs(out.offLineM) <= Math.max(150, out.distM * Math.tan(30 * Math.PI / 180))
+        && Math.abs(headingError(s.trackDeg, eh)) <= 30 && dS > -150;
+      out.phase = onLine && out.distM <= ENTRY_NEAR_M ? 'entry45' : 'inbound';
+      // The turn onto downwind: a 20° bank's 45° of turn needs r(1 - cos 45°) to come round.
+      const lead = leadM(gs) * (1 - COS45) + gs * (s.leadS ?? 0) * Math.sin(Math.PI / 4);
+      out.turn = dS > -150 && dS <= lead && Math.abs(dA) < 1852 && Math.abs(rel) < 90;
+    }
+  }
+  return out;
+}
+
+// The coach's key while joining (null once joined: patternTarget has it). s: patternTarget's input.
+export function entryTarget(end, s) {
+  const g = entryLeg(end, s, s.traffic);
+  if (g.phase === 'downwind' || g.phase === 'base' || g.phase === 'final' || g.phase === 'inside') return null;
+  if (s.kid) return 'ptKid';
+  if (s.iasKts < s.slowKts) return 'ptSlow';
+  const k = s.traffic === 'right' ? KEYS_EL : KEYS_ER; // the join turns against the pattern's turns
+  if (g.turn) return k.pteJoin;
+  // The card's ±100 ft (tighter than the circuit's 150): told before it costs the grade.
+  if (s.aglFt < PT_TPA_FT - PTE_ALT_TOL_FT) return 'ptClimb';
+  if (s.aglFt > PT_TPA_FT + PTE_ALT_TOL_FT) return 'ptDescend';
+  // Close in and off the 45° line (300 m, inside the ±30° the phase allows), say which way it is.
+  if (g.distM <= ENTRY_NEAR_M && Math.abs(g.offLineM) > 300) return (g.offLineM > 0 ? KEYS_EL : KEYS_ER).pteOff; // right of it: turn left
+  return g.phase === 'entry45' ? 'pte45' : 'pteIn';
+}
+
+// main.js runs this every frame on the entry mission (sim.pattern.ent): how the join was flown.
+export function entryStep(st, sim) {
+  const e = st.ent;
+  if (!e || e.done || !ours(st, sim)) return;
+  const s = input(st, sim);
+  s.leadS = 0;
+  const g = entryLeg(st.end, s, st.traffic);
+  if (g.phase === 'downwind' || g.phase === 'base' || g.phase === 'final' || g.phase === 'inside') {
+    e.done = g.phase; e.joinFt = s.aglFt; e.joinKts = s.iasKts;
+    return;
+  }
+  if (g.distM <= ENTRY_NEAR_M) { e.minFt = Math.min(e.minFt, s.aglFt); e.maxFt = Math.max(e.maxFt, s.aglFt); }
+  if (e.angleDeg === null && g.outsideM <= ANGLE_SAMPLE_M && g.outsideM > -150 && g.distM <= ENTRY_NEAR_M) e.angleDeg = g.angleDeg;
+}
+export const createEntry = () => ({ done: null, joinFt: null, joinKts: null, angleDeg: null, minFt: Infinity, maxFt: -Infinity });
+
+// The landing card with the join on it (main.js after gradeLanding): the misses capped and named.
+export function entryResult(result, st) {
+  const e = st.ent;
+  if (!e || result.grade === 'CRASH') return result;
+  const caps = [];
+  let cap = 100;
+  const ft = (v) => Math.round(v).toLocaleString('en-US');
+  if (e.done !== 'downwind') {
+    cap = PTE_CAP_C;
+    caps.push(e.done === 'base' || e.done === 'final'
+      ? `Joined straight in on ${e.done}, not on the downwind: fly the 45° entry to the downwind's middle. Best grade C.`
+      : 'Never joined the downwind: fly the 45° entry to its middle at 1,000 ft. Best grade C.');
+  } else {
+    if (e.angleDeg === null) caps.push('Joined the downwind from the runway side, not on the 45° from outside: best grade B.');
+    else if (Math.abs(e.angleDeg - PTE_ANGLE_DEG) > PTE_ANGLE_TOL_DEG) caps.push(`Joined the downwind at ${Math.round(e.angleDeg)}°, not 45° (±${PTE_ANGLE_TOL_DEG}°): best grade B.`);
+    const off = e.joinFt - PT_TPA_FT;
+    if (Math.abs(off) > PTE_ALT_TOL_FT) caps.push(`Joined the downwind ${ft(Math.abs(off))} ft ${off > 0 ? 'high' : 'low'}: be at 1,000 ft before the 45°. Best grade B.`);
+    else if (e.maxFt > PT_TPA_FT + PTE_ALT_TOL_FT + 50) caps.push(`Came down through the 45° entry from ${ft(e.maxFt)} ft: be level at 1,000 ft before it (descending entries risk a collision). Best grade B.`);
+    if (e.joinKts < PTE_MIN_KTS || e.joinKts > PTE_MAX_KTS) caps.push(`Joined at ${Math.round(e.joinKts)} knots: the pattern's band here is ${PTE_MIN_KTS}-${PTE_MAX_KTS}. Best grade B.`);
+    if (caps.length) cap = PTE_CAP_B;
+  }
+  const keepD = result.grade === 'D' && result.reason;
+  const score = Math.min(result.score, cap);
+  return {
+    ...result,
+    score,
+    grade: keepD ? 'D' : letterGradeOf(score),
+    reason: [...caps, result.reason].filter(Boolean).join(' ') || null,
+    entry: true, // results.js: the note shows beside the gate's verdict
+    note: caps.length || keepD ? result.note ?? null : 'Joined on the 45° at 1,000 ft',
+  };
+}
+// landing.js letterGrade (its bands), inlined: importing landing.js into this lazy chunk would grow the boot chunk's exports.
+const letterGradeOf = (score) => (score >= 95 ? 'S' : score >= 85 ? 'A' : score >= 70 ? 'B' : score >= 55 ? 'C' : 'D');
+
 // main.js's state for the mission: the runway end and the traffic direction.
 // Its words and guide are the mission airframe's (flaps 10/20, 70 knots, a 0.75 NM circuit):
 // another one picked mid-mission (the aircraft selector) gets neither.
-export const createPattern = (mission) => ({ end: runwayEnd(mission.airport, mission.rwy), traffic: mission.traffic ?? 'left', aircraft: mission.aircraft });
+// The entry mission (0187) also carries `ent` (createEntry): until it is done, the join's coach and guide fly.
+export const createPattern = (mission) => ({ end: runwayEnd(mission.airport, mission.rwy), traffic: mission.traffic ?? 'left', aircraft: mission.aircraft, ent: mission.entry ? createEntry() : null });
 const ours = (st, sim) => !st.aircraft || !sim.aircraftKey || sim.aircraftKey === st.aircraft;
 
 // The input from the sim (reused: no allocation per frame).
@@ -191,7 +339,7 @@ export function patternPrompt(st, sim) {
   if (!ours(st, sim)) return null;
   const s = input(st, sim);
   s.leadS = PT_COACH_HOLD_S;
-  return patternTarget(st.end, s);
+  return st.ent && !st.ent.done ? entryTarget(st.end, s) : patternTarget(st.end, s);
 }
 
 // Kid's hands-off guide (main.js applyAssists, out.guideBankDeg/guideGammaDeg): each leg's line
@@ -203,6 +351,7 @@ export function kidGuide(st, sim, out) {
   if (!ours(st, sim)) return out;
   const s = input(st, sim);
   s.leadS = 0;
+  if (st.ent && !st.ent.done) return kidEntryGuide(st, s, out);
   const g = patternLeg(st.end, s, st.traffic), e = st.end;
   if (g.leg === 'final' && !g.turn) {
     if (sim.activeEnd && g.along < 0) return out;
@@ -226,5 +375,19 @@ export function kidGuide(st, sim, out) {
   const descending = g.targetAglFt < PT_TPA_FT || g.leg === 'final';
   out.guideGammaDeg = descending ? Math.max(-7, Math.min(1, -PT_DESCENT_DEG + errFt * 0.02))
     : Math.max(-3, Math.min(CLIMB_GAMMA_DEG, errFt * 0.02));
+  return out;
+}
+
+// Kid's guide on the join (0187): along the 45° line at 1,000 ft, then onto the downwind line where
+// the coach calls the turn.
+function kidEntryGuide(st, s, out) {
+  const g = entryLeg(st.end, s, st.traffic);
+  if (g.turn || g.phase !== 'inbound' && g.phase !== 'entry45') {
+    const sideM = (st.traffic === 'right' ? 1 : -1) * C_M;
+    const r = st.end.hdgT * Math.PI / 180;
+    const cross = (s.x - st.end.thrX) * Math.cos(r) + (s.z - st.end.thrZ) * Math.sin(r);
+    out.guideBankDeg = kidLocalizerBankDeg(g.downwindHdgT, s.trackDeg, sideM - cross);
+  } else out.guideBankDeg = kidLocalizerBankDeg(g.entryHdgT, s.trackDeg, g.offLineM);
+  out.guideGammaDeg = Math.max(-3, Math.min(CLIMB_GAMMA_DEG, (PT_TPA_FT - s.aglFt) * 0.02));
   return out;
 }

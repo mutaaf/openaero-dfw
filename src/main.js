@@ -1181,6 +1181,7 @@ function checkTouchdown(dt) {
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
   if (sim.wake?.end.id === end.id) result = wakeLib.wakeResult(result, sim.wake, -g.distM); // 0115: past the jet's point, above its path
+  if (sim.pattern?.ent) result = patLib.entryResult(result, sim.pattern); // 0187: the join on the card
   if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos);
   else if (glideLib) result = eoLib.engineOutResult(result, sim.engineOut, end, sim.pos);
   if (kidSoftLanding(result)) return;
@@ -1760,6 +1761,7 @@ function step6DofPhysics(dt) {
   checkSlowFlight(dt);
   checkUpset(dt);
   checkWake(dt);
+  if (sim.pattern?.ent && cockpitEntered && !modalOpen()) patLib.entryStep(sim.pattern, sim); // 0187: how the join was flown
   checkShortField(dt);
   checkSoftField(dt);
   if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in

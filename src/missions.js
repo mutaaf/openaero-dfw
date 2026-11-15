@@ -16,6 +16,9 @@ const ADS_ABEAM = latLonToSimMeters(32.97991, -96.79924);
 // of the centreline, 0.5 NM before abeam the (displaced) threshold, heading the reciprocal
 // (tests/unit/pattern.test.js checks it against the runway's surveyed ends).
 const ADS_DOWNWIND = latLonToSimMeters(32.97173, -96.82205);
+// Joining the pattern (0187, pattern.js entryLeg): 4 NM out on the 45° line to the downwind's middle
+// (abeam the runway's midpoint, 0.75 NM east), heading it (295°: a right turn onto the 340° downwind).
+const ADS_ENTRY = latLonToSimMeters(32.94468, -96.75069);
 
 export const MISSIONS = [
   { key: 'kdfw_35c_final', label: 'KDFW RWY 35C (4 NM ILS Final)', blurb: '4 NM out, lined up on 35C. Follow the green velocity vector and the 4-light PAPI down.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4 },
@@ -45,6 +48,8 @@ export const MISSIONS = [
   { key: 'deadstick_kads_16', label: 'KADS Dead-Stick Challenge (Cessna)', blurb: 'Your engine stops over North Dallas, 2 NM from Addison: glide at 68 knots, turn back to the runway when the coach says, and land it.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_ABEAM.x, ADS_ABEAM.z], aglFt: 3500, kias: 75, hdg: 340, deadStick: true },
   // Traffic pattern (0048, pattern.js): downwind, base and final, coached; the landing graded as usual.
   { key: 'pattern_kads_16', label: 'KADS Traffic Pattern (Cessna)', blurb: 'Fly around the airport like a pilot: downwind 1,000 ft above the field, base, final, land.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_DOWNWIND.x, ADS_DOWNWIND.z], aglFt: 1000, kias: 85, hdg: 340, pattern: true },
+  // Joining the pattern (0187, pattern.js entryLeg): the 45° entry to that downwind, then the circuit; the join is graded on the card.
+  { key: 'pattern_entry_kads', label: 'KADS Join the Pattern (Cessna)', blurb: 'Arrive the way pilots do: 4 NM out, level at 1,000 ft above the field. Fly the 45° toward the middle of Addison\'s runway, turn onto the downwind, then fly the pattern and land. The card checks you joined level, at 1,000 ft, on the 45°.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_ENTRY.x, ADS_ENTRY.z], aglFt: 1000, kias: 90, hdg: 295, pattern: true, entry: true },
   // Engine failure after takeoff (0104, engineOut.js): the Cessna's engine quits in the climb out of 16.
   // POH normal takeoff (flaps 0°) from the start of the pavement (16's displaced 979 ft is usable for it).
   // Short-field landing (0181, shortField.js): the POH's technique to Addison 16's numbers, graded against Fig. 5-11's roll.
