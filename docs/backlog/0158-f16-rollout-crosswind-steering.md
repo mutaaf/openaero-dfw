@@ -70,5 +70,5 @@ differential braking, neither of which the game has.
 
 ## Update 2026-11-15 (0183)
 Ground effect to PHAK's curve moved Learner's 20 kt crabbed touchdown card to 6.1 m (15.2 m the run before), so it is a
-plain `it` now. It is a cliff, not a fix: Learner from 3 m in 22 kt still runs ~515 m off, 24 kt ~894 m. The 25 kt Kid
+plain `it` now. It is a cliff, not a fix: Learner from 3 m in 21 kt is already 22.4 m off, 22 kt still runs ~515 m off, 24 kt ~894 m. The 25 kt Kid
 card stays the gap.

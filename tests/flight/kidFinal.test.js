@@ -358,13 +358,14 @@ describe('Kid keeps the de-crab until the nose wheel is down (flightModel, ticke
     expect(flyKidFinal('f16', 'kdfw_35c_final', { fromDeg: 90, kts: 25 }, null, null, 40).roll.maxCrossM).toBeLessThan(8);
   });
   // 0183 (ground effect to PHAK's curve) brought Learner's 20 kt rollout to 6.1 m (it was 15.2 m on this card), but it sits on a
-  // cliff: 22 kt runs off by ~515 m (was ~697), 24 kt by ~894. The 25 kt card above stays the gap.
+  // cliff: 21 kt is already 22.4 m, 22 kt runs off by ~515 m (was ~697), 24 kt by ~894. The 25 kt card above stays the gap.
   it('f16 kdfw_35c_final, 20 kt from 270°, Learner from 3 m: on the centreline for 40 s of rollout (0183)', () => {
     expect(flyKidFinal('f16', 'kdfw_35c_final', { fromDeg: 270, kts: 20 }, null, null, 40, 3).roll.maxCrossM).toBeLessThan(8);
   });
 });
 
-// First-timer panel: the hands-off Cessna lands calm at ~186 fpm, an S (95) on landing.js's line, and the
+// First-timer panel: the hands-off Cessna lands calm at ~191 fpm and 56 KIAS, an A (94) since 0183 (it was ~186 fpm,
+// 57 KIAS, an S 95 on landing.js's line, before ground effect went to PHAK's curve), and the
 // de-crab's slip first cost every crosswind landing that S (204-226 fpm, A 92-94). Started at 2.5 m it keeps it
 // through 15 kt; at 20 kt it is an A 94, as it was before the de-crab (its crab cost the same points).
 describe('Kid hands off in a crosswind grades as well as in calm air (flightModel, ticket 0100)', () => {

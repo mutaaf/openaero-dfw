@@ -16,8 +16,10 @@ lift-off moved 7 m). engineOut.js turnbackHeightFt there rose from 664 to 678 ft
 the coach wants 703 ft, so `efato_kads_16_700` in still air hears "land ahead". The turn back flown
 by tests/flight/engineOut.test.js still makes runway 34 (the airplane makes it from 450 to 800 ft;
 the coach allows 500 to 650 ft, four heights where the card asked for five). The mission's blurb
-says "a quick 45° turn back can make it; the coach says if today's wind and your climb allow it", so
-nothing is false, but the mission meant to show a coached turn back no longer does in calm air.
+says "a quick 45° turn back can make it; the coach says if today's wind and your climb allow it". In
+still air a player who turns back anyway reaches 34 and is graded D 54 ("Turned back from 692 ft, below
+the 703 ft it needs": the reason printed 678, without the margin, until 0183's PR fixed it), so the
+mission meant to show a coached turn back now punishes it in calm air.
 
 ## What
 A decision, then a small change. Options:

@@ -96,8 +96,10 @@ export const overspeedStep = (warned, iasKts, limitKts) =>
 // (0.27% at 1.5 spans, 0.06% at 2), where Wieselsberger's goes negative. Before 0183 this was
 // (r/(1+r))² with r = 16 h/b: ~11.4 / 36 / 62% at the three heights, ~6% still at two spans.
 // h is the CG's height above the ground (flightModel.js pos.y - groundY): the specs carry no wing
-// height, so the high-wing Cessna reads its wing a little low and the low-wing jets a little high.
-// The 1 m floor keeps a wheel-height CG off the curve's steep end (R ≈ 50% for the C172 there).
+// height. That is worth several points on the wheels: the C172's CG at 1.65 m reads R 37% where its
+// high wing (~2.0-2.2 m) would read 29-32%; the 737's CG at 3.4 m reads 49% where its low wing (~2 m)
+// would read ~60%. The 1 m floor (R ≈ 50% for the C172) never acts on the wheels (every gearHeight is
+// over 1 m), only gear-up; below it the fit would tend to R 89.6%, not 100%.
 const GE_A = 0.896;
 const GE_K = 4.16;
 const GE_P = 0.818;

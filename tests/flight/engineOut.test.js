@@ -146,6 +146,10 @@ describe('Cessna 172S engine failure after takeoff at Addison (flightModel, tick
     expect(r.td.result.grade).not.toBe('CRASH');
     expect(r.st.stalled).toBe(false);
     expect(r.prompts[0]).toBe('eoRoll');
+    // Whatever the grade, its reason never says "below the N ft it needs" with N under the height it turned from
+    // (0183's panel: the coach's call counts EO_MARGIN_FT, the reason printed the need without it).
+    const m = /from (\d+) ft, below the (\d+) ft/.exec(r.td.result.reason ?? '');
+    if (m) expect(+m[1]).toBeLessThan(+m[2]);
   });
   // KNOWN GAP (0189): 0183 (ground effect to PHAK's curve) takes less induced drag off just after the
   // lift-off, so the Vy climb reaches 700 ft ~36 m further down 16 (the lift-off moved 7 m): the
