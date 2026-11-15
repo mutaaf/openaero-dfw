@@ -279,7 +279,8 @@
 
     <axis name="DRAG">
       <!-- OAERO: CD0 0.018 airframe + 0.018 fixed gear; flaps 0 / .004 / .022 / .040 at 0/10/20/30°
-           (src/aircraft.js c172.flapCd, ticket 0186: minimal to 10°, Raymer's (δ − 10°) slope past it).
+           (src/aircraft.js c172.flapCd, ticket 0186: the AFH p. 9-1 / Raymer eq. 12.61 shape, small to 10° then
+           linear; the values are fitted, see the comment there).
            The idle propeller's windmill drag comes from prop76's negative thrust, not a CD. -->
       <function name="aero/coefficient/CD0">
         <description>Parasite drag, airframe and fixed gear</description>

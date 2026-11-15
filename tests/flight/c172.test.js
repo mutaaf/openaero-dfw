@@ -240,8 +240,9 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 // ground effect). One speed means one CL, so what changes is the flap drag.
 // Measured 2026-11-14 with linear flap drag (0.012 a notch): flightModel.js 9.19 / 8.21 / 7.42 / 6.76,
 // JSBSim 9.65 / 8.58 / 7.72 / 7.02, the reverse of the Handbook's shape (0 → 10 cost 0.98 of ratio,
-// 20 → 30 only 0.66). Since 0186 the C172's flapCd is 0 / .004 / .022 / .040 (src/aircraft.js:
-// minimal to 10°, then Raymer eq. 12.61's (δ − 10°) slope, .018 per 10°), mirrored as a table in
+// 20 → 30 only 0.66). Since 0186 the C172's flapCd is 0 / .004 / .022 / .040 (src/aircraft.js: the
+// Handbook's shape in Raymer eq. 12.61's form, small to 10° then linear; the .004, the slope and the
+// total are fitted, not calculated from Raymer: see the comment there), mirrored as a table in
 // c172.xml's CDflap. Measured 2026-11-15 (flaps 0 / 10 / 20 / 30): flightModel.js 9.19 / 8.84 / 7.54 /
 // 6.57 (flaps 30 -28.5%), JSBSim 9.65 / 9.26 / 7.85 / 6.81 (-29.4%). The two still share one flap
 // table (tagged OAERO), so JSBSim is not an independent check of it.
@@ -410,9 +411,9 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, P
 // Full throttle, 2550 lb, ISA, spawned at 500 ft: settled for 60 s (rate and speed steady within a
 // few fpm), then measured over 10 s: flaps 30 at ~840-930 ft, flaps 20 at ~910-1,020 ft (σ ≥ 0.97;
 // aero.js groundEffectFactor ≥ 0.995 there, i.e. out of ground effect; the flaps 20 window's thinner
-// air works against it). Measured 2026-11-11: flaps 30 ~5.6% (flightModel.js) / ~5.1% (JSBSim),
-// flaps 20 ~6.6% / ~6.2%. The floor is one-sided, and it bites: the throttle lever at 0.85 takes flaps
-// 30 to 2.7% / 2.9%, and flightModel.js's C172 thrust table x0.85 to 3.0%.
+// air works against it). Measured 2026-11-15 (since 0186's flap drag table): flaps 30 5.23% (flightModel.js)
+// / 4.78% (JSBSim), flaps 20 6.83% / 6.38% (2026-11-11, linear flap drag: 5.6 / 5.1, 6.6 / 6.2). The floor
+// is one-sided, and it bites: the throttle lever at 0.85 takes flaps 30 to 2.37% / 2.55%.
 const BALKED_KCAS = 63;
 function balkedClimb(lever, fdm) {
   const b = makeBody(c172, { kts: BALKED_KCAS, altM: 500 / M_TO_FT, throttle: 1, flaps: 3 });

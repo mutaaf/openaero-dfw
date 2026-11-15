@@ -114,7 +114,7 @@ describe('dragCoefficient', () => {
     expect(dragCoefficient(f16, 0.5, false, 3, 1) - dragCoefficient(f16, 0.5, false, 0, 1)).toBeCloseTo(0.036, 10);
   });
   // Ticket 0186: FAA-H-8083-3C p. 9-1, flaps up to 15° add "minimal drag", beyond 15° "a large
-  // increase in drag" (Raymer eq. 12.61: ΔCD0 grows as (δ − 10°) past 10°).
+  // increase in drag" (Raymer eq. 12.61's form: ΔCD0 grows as (δ − 10°) past 10°; the values are fitted).
   it('the C172 flap drag is small to 10° and grows past it: 0 → 10 adds far less than 20 → 30, and 30° is near the old 0.036', () => {
     const c172 = AIRCRAFT_DATABASE.c172;
     const cd = (f) => dragCoefficient(c172, 0.5, true, f, 1);
