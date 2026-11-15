@@ -186,6 +186,14 @@ export const AIRCRAFT_DATABASE = {
     controlThrowsDeg: { aileronUp: 20, aileronDown: 15, elevatorUp: 28, elevatorDown: 23, rudder: 16.2 },
     flapCl: [0, 0.19, 0.30, 0.40],
     alphaStallDegByFlap: [14.1, 14.1, 13.7, 13.3],
+    // Flaps 0/10/20/30 drag (0186). FAA-H-8083-3C p. 9-1: up to 15° flaps add "minimal drag", beyond
+    // 15° "a large increase in drag". Raymer (Aircraft Design, eq. 12.61) puts the flap's ΔCD0 at
+    // F·(cf/c)·(Sflapped/S)·(δ − 10°): nothing to 10°, then linear. So .004 at 10° (minimal, not
+    // zero: flaps 10 still steepens the glide a little) and Raymer's slope past it, .018 per 10°,
+    // with the flaps 30 total (.040) near the old linear 0.012 a notch (.036); no cited 172 flap
+    // polar gives the total. c172.xml's CDflap carries the same table. Glide at 68 KIAS
+    // 9.19 / 8.84 / 7.54 / 6.57 (tests/flight/c172.test.js).
+    flapCd: [0, 0.004, 0.022, 0.040],
     // Electric flaps, 0 → 30° in ~10 s (an estimate); toe brakes on the mains, no autobrake or
     // reverse. The small disc brakes are torque-limited below the tyres' grip: μ 0.39 at full
     // pedal is fitted to POH Fig. 5-11 (575 ft roll from a near-stall touchdown, 1335 ft from

@@ -113,6 +113,17 @@ describe('dragCoefficient', () => {
     const f16 = { ...b738, flapCd: undefined }; // no table: 0.012 per notch
     expect(dragCoefficient(f16, 0.5, false, 3, 1) - dragCoefficient(f16, 0.5, false, 0, 1)).toBeCloseTo(0.036, 10);
   });
+  // Ticket 0186: FAA-H-8083-3C p. 9-1, flaps up to 15° add "minimal drag", beyond 15° "a large
+  // increase in drag" (Raymer eq. 12.61: ΔCD0 grows as (δ − 10°) past 10°).
+  it('the C172 flap drag is small to 10° and grows past it: 0 → 10 adds far less than 20 → 30, and 30° is near the old 0.036', () => {
+    const c172 = AIRCRAFT_DATABASE.c172;
+    const cd = (f) => dragCoefficient(c172, 0.5, true, f, 1);
+    expect(cd(1) - cd(0)).toBeLessThan(0.25 * (cd(3) - cd(2)));
+    expect(cd(3) - cd(2)).toBeCloseTo(cd(2) - cd(1), 10); // linear past 10° (Raymer's slope)
+    expect(cd(3) - cd(0)).toBeGreaterThan(0.032);
+    expect(cd(3) - cd(0)).toBeLessThan(0.044);
+    expect(cd(1.5) - cd(0)).toBeCloseTo((c172.flapCd[1] + c172.flapCd[2]) / 2, 10); // flaps in transit interpolate
+  });
   it('fixed gear is always down: the C172 cannot shed its gear drag', () => {
     const c172 = AIRCRAFT_DATABASE.c172;
     expect(dragCoefficient(c172, 0.3, false, 0, 1)).toBeCloseTo(dragCoefficient(c172, 0.3, true, 0, 1), 10);

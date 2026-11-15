@@ -238,16 +238,20 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 // flaps 10-30 placard), idle, wings level, from 3,000 ft: 60 s to settle (20 s left the IAS at
 // 65-67.5 kt), then the ratio over 10 s (ground distance / height lost, ~2,100-1,800 ft, out of
 // ground effect). One speed means one CL, so what changes is the flap drag.
-// Measured 2026-11-14 (flaps 0 / 10 / 20 / 30), flightModel.js 9.19 / 8.21 / 7.42 / 6.76 (flaps 30
-// -26.4%), JSBSim 9.65 / 8.58 / 7.72 / 7.02 (-27.3%). The two do not confirm each other's flap
-// drag: c172.xml's CDflap is aero.js's 0.012 per notch (tagged OAERO), one unsourced coefficient.
+// Measured 2026-11-14 with linear flap drag (0.012 a notch): flightModel.js 9.19 / 8.21 / 7.42 / 6.76,
+// JSBSim 9.65 / 8.58 / 7.72 / 7.02, the reverse of the Handbook's shape (0 → 10 cost 0.98 of ratio,
+// 20 → 30 only 0.66). Since 0186 the C172's flapCd is 0 / .004 / .022 / .040 (src/aircraft.js:
+// minimal to 10°, then Raymer eq. 12.61's (δ − 10°) slope, .018 per 10°), mirrored as a table in
+// c172.xml's CDflap. Measured 2026-11-15 (flaps 0 / 10 / 20 / 30): flightModel.js 9.19 / 8.84 / 7.54 /
+// 6.57 (flaps 30 -28.5%), JSBSim 9.65 / 9.26 / 7.85 / 6.81 (-29.4%). The two still share one flap
+// table (tagged OAERO), so JSBSim is not an independent check of it.
 // Cards:
 //  - the Handbook's direction: flaps 10 no shallower than clean (up to 15° the drag is "minimal"),
-//    20 and 30 each at least 3% steeper than the notch before (they measure 9-10%);
-//  - the Handbook's shape, KNOWN GAP (0186): the 20 → 30 step costs more glide than 0 → 10. Linear
-//    drag gives the reverse (0.98 vs 0.66 of ratio). flapCd [0, .003, .012, .036] passes it;
+//    20 and 30 each at least 3% steeper than the notch before (they measure 13-15%);
+//  - the Handbook's shape (0186): the 20 → 30 step costs more glide than 0 → 10 (0.97 vs 0.35 of
+//    ratio in flightModel.js, 1.04 vs 0.39 in JSBSim);
 //  - flaps 30 loses at least 25% of the clean ratio: the ticket's guess, written before anything was
-//    measured, not a published figure; it sits ~1.4 points under today's (0.011 a notch fails it).
+//    measured, not a published figure.
 // With the flap drag at 0 every notch glides 9.19:1 (the mutation card below).
 const FLAP_GLIDE_KIAS = 68;
 function flapGlide(spec, flaps) {
@@ -262,7 +266,6 @@ function flapGlide(spec, flaps) {
   return { ratio: (g.distM - d0) / (h0 - g.pos.y), iasKts: ias / n, power, flaps: g.flapPos ?? g.flapsIndex, endFt: g.pos.y * M_TO_FT };
 }
 const NOTCHES = [0, 1, 2, 3];
-const FLAP_GLIDE_GAPS = new Map([['shape', '0186']]);
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S glide with flaps, FAA-H-8083-3C p. 9-1 (${model}, ticket 0180)`, () => {
   let r;
@@ -290,7 +293,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S glide with 
     expect(r[3].ratio).toBeLessThan(0.97 * r[2].ratio);
   });
 
-  gapCard(FLAP_GLIDE_GAPS, 'shape')('flaps 20 to 30 costs more glide ratio than flaps 0 to 10 (p. 9-1: up to 15° "minimal drag", beyond 15° "a large increase in drag")', () => {
+  it('flaps 20 to 30 costs more glide ratio than flaps 0 to 10 (p. 9-1: up to 15° "minimal drag", beyond 15° "a large increase in drag")', () => {
     expect(r[2].ratio - r[3].ratio).toBeGreaterThan(r[0].ratio - r[1].ratio);
   });
 
