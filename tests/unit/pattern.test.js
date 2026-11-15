@@ -6,6 +6,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import {
   PATTERN_KEY, PT_TPA_FT, PT_DOWNWIND_NM, PT_DESCENT_DEG, PT_COACH_HOLD_S, PT_TEXT,
   patternLeg, patternTarget, patternPrompt, createPattern, kidGuide,
+  ENTRY_KEY, PTE_CAP_B, PTE_CAP_C, entryLeg, entryTarget, entryStep, entryResult, createEntry,
 } from '../../src/pattern.js';
 
 const E16 = runwayEnd('KADS', '16');
@@ -242,5 +243,187 @@ describe("main.js's calls (from the sim, no allocation)", () => {
     kidGuide(st, sim(-900, 30, 160, (900 + 305) * Math.tan(3 * Math.PI / 180) * 3.28084), out);
     expect(out.guideBankDeg).toBeLessThan(0); // right of it: bank left
     expect(out.guideGammaDeg).toBeCloseTo(-3, 1);
+  });
+});
+
+// Joining the pattern (ticket 0187): the 45° entry to the downwind, abeam the runway's midpoint, at
+// pattern altitude (AC 90-66C §11.3; Appendix A item 1). Left traffic for 16 joins with a right turn.
+describe('the pattern entry mission (ticket 0187)', () => {
+  const m = missionByKey(ENTRY_KEY);
+  const mid = (end) => end.lengthM / 2 - end.displacedM; // the runway's midpoint, past the landing threshold
+
+  it('is in the catalogue under Addison, the Cessna at 1,000 ft, with a blurb and its own best key', () => {
+    expect(m).toMatchObject({ kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', aglFt: PT_TPA_FT, pattern: true, entry: true });
+    expect(m.key).not.toBe(PATTERN_KEY);
+    expect(m.blurb).toMatch(/45°/);
+    const kads = groupMissions(MISSIONS).find((g) => g.id === 'KADS');
+    expect(kads.missions.map((x) => x.key)).toContain(ENTRY_KEY);
+  });
+
+  it('spawns 4 NM out on the 45° line to the downwind abeam the midpoint, heading along it (295°, 45° off the 340° downwind)', () => {
+    const g = entryLeg(E16, { x: m.pos[0], z: m.pos[1], trackDeg: m.hdg, aglFt: m.aglFt });
+    expect(g.phase).toBe('inbound');
+    expect(g.distM / 1852).toBeCloseTo(4, 2);
+    expect(Math.abs(g.offLineM)).toBeLessThan(5);
+    expect(g.entryHdgT).toBe(295);
+    expect(g.downwindHdgT).toBe(340);
+    expect(m.hdg).toBe(295);
+    expect(g.outsideM).toBeGreaterThan(0); // outside the downwind (east of it)
+  });
+
+  for (const end of [E16, E34]) {
+    for (const traffic of ['left', 'right']) {
+      const t = traffic === 'right' ? 1 : -1; // the pattern's side: right of the landing direction for right traffic
+      const dw = (end.hdgT + 180) % 360;
+      const eh = (dw + 45 * t + 360) % 360;
+      const p = (along, side) => ({ ...at(end, along, side * t) });
+      it(`${end.ident}, ${traffic} traffic: inbound far out, on the 45° near it, the turn onto downwind, joined, or straight in`, () => {
+        // 1 NM out on the 45° line, heading along it: entry45. The line runs back from the join point.
+        const er = (eh - end.hdgT) * Math.PI / 180;
+        const back = (d) => p(mid(end) - Math.cos(er) * d, C - Math.sin(er) * t * d);
+        const on = entryLeg(end, { ...back(1852), trackDeg: eh, aglFt: 1000 }, traffic);
+        expect(on).toMatchObject({ phase: 'entry45', turn: false, entryHdgT: eh, downwindHdgT: dw });
+        expect(Math.abs(on.offLineM)).toBeLessThan(1);
+        expect(on.outsideM).toBeGreaterThan(1000);
+        // 3 NM out: still arriving.
+        expect(entryLeg(end, { ...back(3 * 1852), trackDeg: eh, aglFt: 1000 }, traffic).phase).toBe('inbound');
+        // 150 m short of the downwind line on the 45°: turn now (the other way from the pattern's turns).
+        const near = entryLeg(end, { ...back(150 / Math.SQRT1_2), trackDeg: eh, aglFt: 1000, gsMps: 46 }, traffic);
+        expect(near.turn).toBe(true);
+        // On the downwind line abeam the midpoint, tracking it: joined.
+        expect(entryLeg(end, { ...p(mid(end), C), trackDeg: dw, aglFt: 1000 }, traffic).phase).toBe('downwind');
+        // On a base from the pattern's side, before the threshold: joined straight in on base.
+        expect(entryLeg(end, { ...p(-1200, C), trackDeg: (end.hdgT - 90 * t + 360) % 360, aglFt: 800 }, traffic).phase).toBe('base');
+        // Over the runway's side of the downwind, not joined: inside.
+        expect(entryLeg(end, { ...p(mid(end), 200), trackDeg: eh, aglFt: 1000 }, traffic).phase).toBe('inside');
+        // A late turn, 600 m past the downwind line (still 1/4 NM out): still told to turn.
+        expect(entryLeg(end, { ...p(mid(end), C - 600), trackDeg: eh, aglFt: 1000, gsMps: 46 }, traffic).turn).toBe(true);
+        // Off the line to its right (right of the course): a positive offset.
+        const right = (h) => ({ x: Math.cos(h * Math.PI / 180) * 500, z: Math.sin(h * Math.PI / 180) * 500 });
+        const b1 = back(1852), o = right(eh);
+        expect(entryLeg(end, { x: b1.x + o.x, z: b1.z + o.z, trackDeg: eh, aglFt: 1000 }, traffic).offLineM).toBeCloseTo(500, 0);
+      });
+    }
+  }
+
+  it('entryTarget: the words through the join, height first, the turn (right for left traffic), then the circuit takes over', () => {
+    const er = (295 - 160) * Math.PI / 180;
+    const back = (d) => at(E16, mid(E16) - Math.cos(er) * d, -(C - Math.sin(er) * -1 * d));
+    const pilot = (pt, trackDeg, aglFt, extra = {}) => ({ ...pt, trackDeg, aglFt, gsMps: 46, leadS: 0, iasKts: 90, slowKts: 58, kid: false, traffic: 'left', ...extra });
+    expect(entryTarget(E16, pilot(back(3 * 1852), 295, 1000))).toBe('pteIn');
+    expect(entryTarget(E16, pilot(back(1852), 295, 1000))).toBe('pte45');
+    expect(entryTarget(E16, pilot(back(1852), 295, 1200))).toBe('ptDescend');
+    expect(entryTarget(E16, pilot(back(1852), 295, 850))).toBe('ptClimb');
+    expect(entryTarget(E16, pilot(back(1852), 295, 1000, { iasKts: 55 }))).toBe('ptSlow');
+    expect(entryTarget(E16, pilot(back(1852), 295, 1000, { kid: true }))).toBe('ptKid');
+    expect(entryTarget(E16, pilot(back(150 / Math.SQRT1_2), 295, 1000))).toBe('pteJoinR');
+    expect(PT_TEXT.pteJoinR).toBe('Join: turn right onto downwind, the runway on your left');
+    // Overshot inside the downwind line still on the 45°: turn onto it; tracking it already: the circuit's words.
+    expect(entryTarget(E16, pilot(at(E16, mid(E16), -300), 295, 1000))).toBe('pteMissR');
+    expect(entryTarget(E16, pilot(at(E16, mid(E16), -300), 340, 1000))).toBeNull();
+    // Heading away from the field (back along the 45°): wrong way, and which way to turn back.
+    const away = entryTarget(E16, pilot(back(3 * 1852), 115, 1000));
+    expect(['pteBackL', 'pteBackR']).toContain(away);
+    // On the line 3 NM out flying south (160°): the join point (295°) is to the right.
+    expect(entryTarget(E16, pilot(back(3 * 1852), 160, 1000))).toBe('pteBackR');
+    expect(entryTarget(E16, pilot(back(3 * 1852), 70, 1000))).toBe('pteBackL');
+    // 600 m right of the 45° line (north-east of it), 1 NM out: turn left toward the line.
+    const b = back(1852), r = 295 * Math.PI / 180; // right of the 295° course: (cos h, sin h) in sim x, z
+    expect(entryTarget(E16, pilot({ x: b.x + Math.cos(r) * 600, z: b.z + Math.sin(r) * 600 }, 295, 1000))).toBe('pteOffL');
+    // Joined: the circuit's coach (null here).
+    expect(entryTarget(E16, pilot(at(E16, mid(E16), -C), 340, 1000))).toBeNull();
+    for (const k of ['pteIn', 'pte45', 'pteJoinL', 'pteJoinR', 'pteOffL', 'pteOffR', 'pteBackL', 'pteBackR', 'pteMissL', 'pteMissR']) {
+      expect(PT_TEXT[k]).toBeTruthy();
+      expect(coachText(k)).toBe(PT_TEXT[k]);
+    }
+  });
+
+  const flown = (o) => ({ end: E16, ent: { ...createEntry(), done: 'downwind', joinFt: 1000, joinKts: 90, joinOutM: 0, joinAlongM: 0, angleDeg: 45, minFt: 980, maxFt: 1020, ...o } });
+  const card = { grade: 'A', score: 92, reason: null, note: null, factors: [] };
+  it('entryResult: a clean join keeps the grade and says so; each miss caps B and is named', () => {
+    expect(entryResult(card, flown())).toMatchObject({ grade: 'A', score: 92, reason: null, note: 'Joined on the 45° at 1,000 ft', entry: true });
+    const miss = (o, re) => {
+      const r = entryResult(card, flown(o));
+      expect(r.score).toBe(PTE_CAP_B);
+      expect(r.grade).toBe('B');
+      expect(r.reason).toMatch(re);
+      expect(r.note).toBeNull();
+    };
+    miss({ angleDeg: 80 }, /^Joined the downwind at 80°, not 45° \(±20°\)/);
+    miss({ angleDeg: null, joinOutM: -200 }, /from the runway side/);
+    miss({ angleDeg: null, joinOutM: 600 }, /^Turned onto the downwind early, too far out/);
+    miss({ joinAlongM: 2080 }, /^Joined the downwind abeam past the far end of the runway/);
+    miss({ joinAlongM: -1420 }, /^Joined the downwind abeam before the runway/);
+    miss({ minFt: 500 }, /^Came up through the 45° entry from 500 ft/);
+    miss({ inside: true }, /^Crossed inside the downwind before joining/);
+    // Inside the coach's grace (1,140 ft, stepped down): no cap.
+    expect(entryResult(card, flown({ maxFt: 1140 })).grade).toBe('A');
+    miss({ joinFt: 1180, maxFt: 1180 }, /^Joined the downwind 180 ft high/);
+    miss({ joinFt: 850 }, /^Joined the downwind 150 ft low/);
+    miss({ maxFt: 1600 }, /^Came down through the 45° entry from 1,600 ft/);
+    miss({ joinKts: 112 }, /^Joined at 112 knots/);
+  });
+
+  it('entryResult: straight in on base or never joined caps C; a D keeps its reason and a crash is untouched', () => {
+    const base = entryResult(card, flown({ done: 'base' }));
+    expect(base).toMatchObject({ grade: 'C', score: PTE_CAP_C });
+    expect(base.reason).toMatch(/^Joined straight in on base/);
+    expect(entryResult(card, flown({ done: null })).reason).toMatch(/^Never joined the downwind/);
+    const d = { grade: 'D', score: 40, reason: 'Landed beside the runway.', factors: [] };
+    expect(entryResult(d, flown({ done: 'base' }))).toMatchObject({ grade: 'D', score: 40 });
+    const crash = { grade: 'CRASH', score: 0, reason: 'x', factors: [] };
+    expect(entryResult(crash, flown({ done: 'base' }))).toBe(crash);
+    // No entry (the plain pattern): unchanged.
+    expect(entryResult(card, { ent: null })).toBe(card);
+  });
+
+  it('entryStep records the join once, from the sim; the plain pattern has no entry', () => {
+    expect(createPattern(missionByKey(PATTERN_KEY)).ent).toBeNull();
+    const st = createPattern(m);
+    expect(st.ent).toEqual(createEntry());
+    const c172 = AIRCRAFT_DATABASE.c172;
+    const sim = (pt, hdg, aglFt, iasKts = 90) => {
+      const r = hdg * Math.PI / 180;
+      return { pos: { x: pt.x, y: 0, z: pt.z }, vel: { x: Math.sin(r) * 46, y: 0, z: -Math.cos(r) * 46 }, aglFt, iasKts, spec: c172, assist: 'pilot', aircraftKey: 'c172' };
+    };
+    const er = (295 - 160) * Math.PI / 180;
+    const back = (d) => at(E16, mid(E16) - Math.cos(er) * d, -(C - Math.sin(er) * -1 * d));
+    entryStep(st, { ...sim(back(1852), 295, 1040), simTime: 10 });
+    entryStep(st, { ...sim(back(300 / Math.SQRT1_2), 295, 1010), simTime: 30 }); // straight on the 45°, outside the line: the angle is read
+    expect(st.ent.angleDeg).toBeCloseTo(45, 0);
+    entryStep(st, { ...sim(back(100 / Math.SQRT1_2), 315, 1010), simTime: 31 }); // turning 20°/s: not read
+    expect(st.ent.angleDeg).toBeCloseTo(45, 0);
+    expect(st.ent.angleDeg).toBeCloseTo(45, 0);
+    expect(st.ent.maxFt).toBe(1040);
+    expect(patternPrompt(st, sim(back(1852), 295, 1000))).toBe('pte45');
+    entryStep(st, sim(at(E16, mid(E16) - 100, -C), 340, 1005, 88));
+    expect(st.ent).toMatchObject({ done: 'downwind', joinFt: 1005, joinKts: 88, inside: false });
+    expect(st.ent.joinAlongM).toBeCloseTo(-100, 0);
+    entryStep(st, sim(at(E16, -1200, -C), 250, 700)); // later legs do not rewrite it
+    expect(st.ent.done).toBe('downwind');
+    // Joined: the circuit's words and guide.
+    expect(patternPrompt(st, sim(at(E16, 800, -C), 340, 1000))).toBe('ptDownwind');
+    // Another airframe picked mid-mission records nothing.
+    const st2 = createPattern(m);
+    entryStep(st2, { ...sim(at(E16, mid(E16), -C), 340, 1000), aircraftKey: 'b738' });
+    expect(st2.ent.done).toBeNull();
+  });
+
+  it("kidGuide on the join: holds the 45° line and 1,000 ft, then turns onto the downwind line", () => {
+    const st = createPattern(m);
+    const er = (295 - 160) * Math.PI / 180;
+    const back = (d) => at(E16, mid(E16) - Math.cos(er) * d, -(C - Math.sin(er) * -1 * d));
+    const sim = (pt, hdg, aglFt) => {
+      const r = hdg * Math.PI / 180;
+      return { pos: { x: pt.x, y: 0, z: pt.z }, vel: { x: Math.sin(r) * 46, y: 0, z: -Math.cos(r) * 46 }, aglFt, iasKts: 90, spec: AIRCRAFT_DATABASE.c172, assist: 'kid', aircraftKey: 'c172' };
+    };
+    const out = { guideBankDeg: 0, guideGammaDeg: 0 };
+    kidGuide(st, sim(back(1852), 295, 1000), out);
+    expect(Math.abs(out.guideBankDeg)).toBeLessThan(1);
+    expect(Math.abs(out.guideGammaDeg)).toBeLessThan(0.5);
+    kidGuide(st, sim(back(1852), 295, 900), out);
+    expect(out.guideGammaDeg).toBeGreaterThan(1);
+    kidGuide(st, sim(back(100 / Math.SQRT1_2), 295, 1000), out); // the turn: right, onto the 340° downwind
+    expect(out.guideBankDeg).toBeGreaterThan(10);
   });
 });

@@ -221,6 +221,15 @@ src/pattern.js      traffic pattern (0048, lazy chunk): the C172 on a left downw
                     out) and the height (1,000 ft, then ~4.2° down from abeam the numbers). Its
                     pt* words reach coach.js through s.ds (the landing coach takes the final);
                     Kid's guide flies the legs, and past the threshold the 3° path to the aim point
+                    Joining (0187, pattern_entry_kads, mission.entry): entryLeg names inbound /
+                    entry45 / downwind (joined) / base / final / inside (passing) around the join
+                    point (the downwind line abeam the runway's midpoint, AC 90-66C §11.3);
+                    entryTarget's pte* words, kidGuide's 45° line, then the circuit's. main.js runs
+                    entryStep every frame, menu open or not (sim.pattern.ent; the angle is the last
+                    straight track outside the line) and entryResult on the landing (the mission's
+                    airframe only): straight in or never joined caps C; angle off 45° ±20°, joined
+                    abeam beyond the pavement, height off 1,000 ±100 ft, through the entry above or
+                    below it, crossed inside first, or outside 70-100 KIAS caps B, each named
 src/engineOut.js    engine failure after takeoff (0104, lazy chunk): the C172 on all of Addison 16,
                     the engine quits at the mission's engineOutFt (300 or 700 ft). turnbackHeightFt
                     (reaction, a turn of 180° + twice the cut back from 2R beside, sink 1 + k(n²−1),
@@ -694,7 +703,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
+2026-11-15 (0187): 199.81 kB (the pattern-entry mission's entry and blurb, its entryStep and entryResult hooks, +0.19 kB over main's 199.62; the entry is pattern.js's lazy chunk). 2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
 the snapshot's softField and surfaceMu, gear.js's surface μ and deeplink.js skipping the lesson for ?airport and the callouts off in it, +0.42 kB; softField.js is a lazy chunk). 2026-11-14 (0181): 199.17 kB (the short-field lesson's mission entry and blurb, its lazy import, step, coach target, flaps and flare height,
 gate, Kid, speed bug and stop-hold hooks and the snapshot's shortField, +0.68 kB over main's 198.49; shortField.js is a lazy chunk). 2026-11-12 (0171): 198.49 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
 fetch, +0.15 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks

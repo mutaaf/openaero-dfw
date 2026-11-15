@@ -27,3 +27,25 @@ test('phone, Kid: the traffic pattern tells a kid to let go, and the coach card 
   await page.screenshot({ path: test.info().outputPath('pattern-390-kid.png') });
   expect(errors).toEqual([]);
 });
+
+// Ticket 0187 on a phone, Kid: the join is flown for you too; hands off it holds 1,000 ft on the 45°.
+test('phone, Kid: joining the pattern tells a kid to let go, and holds the 45° at 1,000 ft', async ({ page }) => {
+  const errors = collectErrors(page);
+  await stubTiles(page);
+  await page.addInitScript(() => localStorage.setItem('openaero_assist_v1', '{"v":1,"level":"kid","at":0}'));
+  await page.goto(`${BASE}?mission=pattern_entry_kads`);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  await page.locator('#btnStartFlight').tap();
+  await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
+  await expect(page.locator('#txtCoach')).toHaveText('Let go: the plane flies the pattern for you', { timeout: 10_000 });
+  const box = await page.locator('#coach').boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
+  expect(box.y + box.height).toBeLessThanOrEqual(844);
+  await page.waitForTimeout(4000);
+  const d = await page.evaluate(() => window.openaeroDebug());
+  expect(Math.abs(d.aglFt - 1000)).toBeLessThan(100);
+  expect(Math.abs(d.headingDeg - 295)).toBeLessThan(10);
+  await page.screenshot({ path: test.info().outputPath('pattern-entry-390-kid.png') });
+  expect(errors).toEqual([]);
+});

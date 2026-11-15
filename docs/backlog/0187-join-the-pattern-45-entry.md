@@ -1,12 +1,12 @@
 ---
 id: 0187
 title: Join the pattern: fly the 45° entry to Addison's downwind, coached
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-15
-pr:
+pr: 264
 ---
 
 ## Why
