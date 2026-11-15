@@ -107,8 +107,11 @@ export function scenarioWx(end) {
 
 // end: the lesson's runway end (airports.js runwayEnd). Allocates (a mission load, not a frame).
 export const createWingLow = (end) => ({
-  end, t: 0, readyT: null, wx: null, src: null, side: 'R', xwKts: 0, td: null,
+  end, t: 0, readyT: null, wx: null, src: null, side: 'R', xwKts: 0, td: null, keys: KEYS.R,
 });
+// The coach's keys per wind side, built once (the prompt runs every frame: no strings made there).
+const KEYS = {};
+for (const s of ['R', 'L']) KEYS[s] = { brief: `wlBrief${s}`, hold: `wlHold${s}`, kid: `wlKid${s}`, noseR: `wlNoseR${s}`, noseL: `wlNoseL${s}` };
 
 // The lesson's weather (main.js currentWeather while the lesson flies): the live report when it suits, else the scenario.
 // Chosen again only when the report object changes, and never once the player is flying (a METAR refresh mid-final must
@@ -119,6 +122,7 @@ export function lessonWx(wl, live) {
   wl.wx = liveSuits(live, wl.end.hdgT, wl.end.airport) ? live : scenarioWx(wl.end);
   const { xw } = windAcross(wl.wx, wl.end.hdgT);
   wl.side = xw >= 0 ? 'R' : 'L';
+  wl.keys = KEYS[wl.side];
   wl.xwKts = Math.abs(xw);
   return wl.wx;
 }
@@ -158,11 +162,12 @@ export function wingLowStep(wl, s, dt) {
 // the upwind wheel; under 30 ft the landing coach's idle and flare (its de-crab call is the same advice).
 export function wingLowPrompt(wl, s) {
   if (wl.readyT === null || wl.td) return null;
-  if (s.kid) return wl.t - wl.readyT < SAY_S ? `wlKid${wl.side}` : null;
+  const k = wl.keys;
+  if (s.kid) return wl.t - wl.readyT < SAY_S ? k.kid : null;
   if (s.aglFt < 30) return null;
-  if (s.aglFt < HOLD_FT) return `wlHold${wl.side}`;
-  if (wl.t - wl.readyT < SAY_S) return `wlBrief${wl.side}`;
-  if (s.aglFt < ALIGN_CALL_FT && Math.abs(s.noseOffDeg) > ALIGN_CALL_DEG) return `wlNose${s.noseOffDeg > 0 ? 'R' : 'L'}${wl.side}`;
+  if (s.aglFt < HOLD_FT) return k.hold;
+  if (wl.t - wl.readyT < SAY_S) return k.brief;
+  if (s.aglFt < ALIGN_CALL_FT && Math.abs(s.noseOffDeg) > ALIGN_CALL_DEG) return s.noseOffDeg > 0 ? k.noseR : k.noseL;
   return null;
 }
 
