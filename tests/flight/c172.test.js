@@ -238,16 +238,21 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
 // flaps 10-30 placard), idle, wings level, from 3,000 ft: 60 s to settle (20 s left the IAS at
 // 65-67.5 kt), then the ratio over 10 s (ground distance / height lost, ~2,100-1,800 ft, out of
 // ground effect). One speed means one CL, so what changes is the flap drag.
-// Measured 2026-11-14 (flaps 0 / 10 / 20 / 30), flightModel.js 9.19 / 8.21 / 7.42 / 6.76 (flaps 30
-// -26.4%), JSBSim 9.65 / 8.58 / 7.72 / 7.02 (-27.3%). The two do not confirm each other's flap
-// drag: c172.xml's CDflap is aero.js's 0.012 per notch (tagged OAERO), one unsourced coefficient.
+// Measured 2026-11-14 with linear flap drag (0.012 a notch): flightModel.js 9.19 / 8.21 / 7.42 / 6.76,
+// JSBSim 9.65 / 8.58 / 7.72 / 7.02, the reverse of the Handbook's shape (0 → 10 cost 0.98 of ratio,
+// 20 → 30 only 0.66). Since 0186 the C172's flapCd is 0 / .004 / .022 / .040 (src/aircraft.js: the
+// Handbook's shape in Raymer eq. 12.61's form, small to 10° then linear; the .004, the slope and the
+// total are fitted, not calculated from Raymer: see the comment there), mirrored as a table in
+// c172.xml's CDflap. Measured 2026-11-15 (flaps 0 / 10 / 20 / 30): flightModel.js 9.19 / 8.84 / 7.54 /
+// 6.57 (flaps 30 -28.5%), JSBSim 9.65 / 9.26 / 7.85 / 6.81 (-29.4%). The two still share one flap
+// table (tagged OAERO), so JSBSim is not an independent check of it.
 // Cards:
 //  - the Handbook's direction: flaps 10 no shallower than clean (up to 15° the drag is "minimal"),
-//    20 and 30 each at least 3% steeper than the notch before (they measure 9-10%);
-//  - the Handbook's shape, KNOWN GAP (0186): the 20 → 30 step costs more glide than 0 → 10. Linear
-//    drag gives the reverse (0.98 vs 0.66 of ratio). flapCd [0, .003, .012, .036] passes it;
+//    20 and 30 each at least 3% steeper than the notch before (they measure 13-15%);
+//  - the Handbook's shape (0186): the 20 → 30 step costs more glide than 0 → 10 (0.97 vs 0.35 of
+//    ratio in flightModel.js, 1.04 vs 0.39 in JSBSim);
 //  - flaps 30 loses at least 25% of the clean ratio: the ticket's guess, written before anything was
-//    measured, not a published figure; it sits ~1.4 points under today's (0.011 a notch fails it).
+//    measured, not a published figure.
 // With the flap drag at 0 every notch glides 9.19:1 (the mutation card below).
 const FLAP_GLIDE_KIAS = 68;
 function flapGlide(spec, flaps) {
@@ -262,7 +267,6 @@ function flapGlide(spec, flaps) {
   return { ratio: (g.distM - d0) / (h0 - g.pos.y), iasKts: ias / n, power, flaps: g.flapPos ?? g.flapsIndex, endFt: g.pos.y * M_TO_FT };
 }
 const NOTCHES = [0, 1, 2, 3];
-const FLAP_GLIDE_GAPS = new Map([['shape', '0186']]);
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S glide with flaps, FAA-H-8083-3C p. 9-1 (${model}, ticket 0180)`, () => {
   let r;
@@ -290,7 +294,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S glide with 
     expect(r[3].ratio).toBeLessThan(0.97 * r[2].ratio);
   });
 
-  gapCard(FLAP_GLIDE_GAPS, 'shape')('flaps 20 to 30 costs more glide ratio than flaps 0 to 10 (p. 9-1: up to 15° "minimal drag", beyond 15° "a large increase in drag")', () => {
+  it('flaps 20 to 30 costs more glide ratio than flaps 0 to 10 (p. 9-1: up to 15° "minimal drag", beyond 15° "a large increase in drag")', () => {
     expect(r[2].ratio - r[3].ratio).toBeGreaterThan(r[0].ratio - r[1].ratio);
   });
 
@@ -407,9 +411,9 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S Vx vs Vy, P
 // Full throttle, 2550 lb, ISA, spawned at 500 ft: settled for 60 s (rate and speed steady within a
 // few fpm), then measured over 10 s: flaps 30 at ~840-930 ft, flaps 20 at ~910-1,020 ft (σ ≥ 0.97;
 // aero.js groundEffectFactor ≥ 0.995 there, i.e. out of ground effect; the flaps 20 window's thinner
-// air works against it). Measured 2026-11-11: flaps 30 ~5.6% (flightModel.js) / ~5.1% (JSBSim),
-// flaps 20 ~6.6% / ~6.2%. The floor is one-sided, and it bites: the throttle lever at 0.85 takes flaps
-// 30 to 2.7% / 2.9%, and flightModel.js's C172 thrust table x0.85 to 3.0%.
+// air works against it). Measured 2026-11-15 (since 0186's flap drag table): flaps 30 5.23% (flightModel.js)
+// / 4.78% (JSBSim), flaps 20 6.83% / 6.38% (2026-11-11, linear flap drag: 5.6 / 5.1, 6.6 / 6.2). The floor
+// is one-sided, and it bites: the throttle lever at 0.85 takes flaps 30 to 2.37% / 2.55%.
 const BALKED_KCAS = 63;
 function balkedClimb(lever, fdm) {
   const b = makeBody(c172, { kts: BALKED_KCAS, altM: 500 / M_TO_FT, throttle: 1, flaps: 3 });

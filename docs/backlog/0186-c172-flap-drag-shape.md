@@ -1,12 +1,12 @@
 ---
 id: 0186
 title: Cessna flap drag grows past 15°, not by the same amount every notch (AFH p. 9-1)
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-14
-pr:
+pr: 263
 ---
 
 ## Why
@@ -29,8 +29,8 @@ reads flap drag: 0180's glide cards, the short-field takeoff (flaps 10) and land
 balked landing (0175), the stall speeds, Kid's final (kidFinal.test.js).
 
 ## Acceptance criteria
-- [ ] 0180's KNOWN GAP (0186) card passes on both models and is promoted to `it`.
-- [ ] No other card regresses; any moved number is recorded in the PR.
+- [x] 0180's KNOWN GAP (0186) card passes on both models and is promoted to `it`.
+- [x] No other card regresses; any moved number is recorded in the PR.
 
 ## Test plan
 `npm test -- tests/flight`; record the new glide ratios per notch.
