@@ -26,13 +26,14 @@ test('?mission=kads_16_soft_field: in Drills, flaps 10 on the soft surface, the 
   await expect(page.locator('#txtCoach')).toHaveText(/Soft field: hold S or ↑ \(nose up\), then hold Shift to full power/, { timeout: 10_000 });
   await page.screenshot({ path: test.info().outputPath('soft-field-1280.png') });
   await page.click('#btnToga');
-  // Nose up from the start (the arrow held while under 10°, let go over 11°), hands off once flying.
+  // Nose up from the start (the arrow held while under 8°: the nose carries on ~3-5° after the key comes up, frame-timing
+  // dependent; holding to 10° overshot to 11-13° in 2 of 5 runs, the tail struck, the lesson ended before lift-off), hands off once flying.
   await page.evaluate(() => {
     let held = false;
     const key = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: 'ArrowUp', key: 'ArrowUp' }));
     const step = () => {
       const d = window.openaeroDebug();
-      const want = d.onGround && d.pitchDeg < 10;
+      const want = d.onGround && d.pitchDeg < 8;
       if (want !== held) { key(want ? 'keydown' : 'keyup'); held = want; }
       if (d.onGround || d.aglFt < 30) requestAnimationFrame(step);
       else if (held) key('keyup');
