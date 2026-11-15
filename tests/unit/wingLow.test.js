@@ -17,11 +17,11 @@ const END = runwayEnd('KADS', '16'); // hdgT 160
 const live = (dir, kts, gust = kts) => ({ live: true, icao: 'KADS', windDirDeg: dir, windKts: kts, gustKts: gust, altimInHg: 29.92, tempC: 15 });
 const air = { onGround: false, aglFt: 200, bankRightDeg: 0, noseHdgT: 160, pitchDeg: 2, loads: [0, 0, 0] };
 // A lesson in this wind, flown to a touchdown with this bank (+ right), nose (true) and wheel loads.
-function touchdown(wx, { bankRightDeg = 4, noseHdgT = 160, pitchDeg = 5, loads = [0, 0, 3000] } = {}) {
+function touchdown(wx, { bankRightDeg = 4, noseHdgT = 160, pitchDeg = 5, loads = [0, 0, 3000], driftKts = 0 } = {}) {
   const wl = createWingLow(END);
   lessonWx(wl, wx);
   wingLowStep(wl, { ...air }, 0.1);
-  wingLowStep(wl, { ...air, aglFt: 0.5, onGround: true, bankRightDeg, noseHdgT, pitchDeg, loads }, 0.1);
+  wingLowStep(wl, { ...air, aglFt: 0.5, onGround: true, bankRightDeg, noseHdgT, pitchDeg, loads, driftKts }, 0.1);
   return wl;
 }
 const landing = ({ bankDeg = -4, pitchDeg = 5, vsFpm = -150 } = {}) => gradeLanding({ vsFpm, crossM: 0.5, pastThresholdM: 300, runwayLengthM: END.lengthM - END.displacedM,
@@ -60,6 +60,9 @@ describe('the lesson\'s wind: the live METAR when it blows across, else the scen
     expect(liveSuits(live(320, 10), 160)).toBe(false); // a tailwind on 16
     expect(liveSuits({ ...live(250, 12), live: false }, 160)).toBe(false); // the game's own scenario day is no METAR
     expect(liveSuits(live(250, 0), 160)).toBe(false);
+    // Addison's own report only: main.js falls back to KDFW's when KADS has none, and the card would call it Addison's.
+    expect(liveSuits(live(250, 12), 160, 'KADS')).toBe(true);
+    expect(liveSuits({ ...live(250, 12), icao: 'KDFW' }, 160, 'KADS')).toBe(false);
   });
 
   it('the scenario: 12 kt from 90° right of the runway, in a METAR\'s tens, labelled scenario', () => {
@@ -129,18 +132,20 @@ describe('the first main down', () => {
   it('from the bank where the flight model reports none (JSBSim)', () => {
     expect(firstMain(null, 'R', 3)).toBe('upwind');
     expect(firstMain(null, 'R', -3)).toBe('downwind');
-    expect(firstMain(null, 'R', 0.5)).toBe('both');
+    expect(firstMain(null, 'R', 0.9)).toBe('upwind'); // a correct 5 kt landing's ~1° (physics panel)
+    expect(firstMain(null, 'R', 0.3)).toBe('both');
   });
 });
 
 describe('the grade', () => {
-  it('a wing-low touchdown: the right wing down 4°, the nose straight, the right wheel first: S or A, the lesson\'s note, no cap', () => {
+  it('a wing-low touchdown: the right wing down 4°, no drift, the nose straight, the right wheel first: S or A, the lesson\'s note, no cap', () => {
     const wl = touchdown(scenarioWx(END));
     expect(wl.td).toMatchObject({ first: 'upwind' });
     expect(wl.td.bankIntoDeg).toBeCloseTo(4, 6);
     const base = landing();
     const r = wingLowResult(base, wl);
-    expect(r.factors.slice(0, 3).map((f) => [f.key, f.score])).toEqual([['wing', 100], ['align', 100], ['wheel', 100]]);
+    expect(r.factors.slice(0, 4).map((f) => [f.key, f.score])).toEqual([['wing', 100], ['drift', 100], ['align', 100], ['wheel', 100]]);
+    expect(r.factors.find((f) => f.key === 'drift').value).toBe('none');
     expect(r.factors.find((f) => f.key === 'wing').value).toBe('4.0° right wing down');
     expect(r.factors.find((f) => f.key === 'wheel').value).toBe('right (upwind) main');
     // The bank the lesson asks for costs the flare nothing (gradeLanding takes 16 points off it past 2°).
@@ -161,7 +166,7 @@ describe('the grade', () => {
     expect(['B', 'C']).toContain(r.grade);
     expect(r.reason).toMatch(/^Touched down crabbed, the nose 9° off the runway: .*Best grade B\./);
     expect(r.reason).toMatch(/Both mains together: keep the right wing down through the flare\./);
-    expect(r.reason).toMatch(/0\.0° of bank at touchdown \(2-8° into it holds the line\)\./);
+    expect(r.reason).toMatch(/Wings level at touchdown: the right wing holds the line\./);
     expect(r.factors.find((f) => f.key === 'align').value).toBe('9.0° right');
     expect(r.tip).toMatch(/^Left rudder to point the nose down the runway/);
     expect(landingTip(r)).toBe(r.tip);
@@ -172,12 +177,22 @@ describe('the grade', () => {
     const both = wingLowResult(landing(), touchdown(scenarioWx(END), { loads: [0, 1500, 1500] }));
     expect(both.reason).toBe('Both mains together: keep the right wing down through the flare.');
     expect(both.score).toBeGreaterThan(CAP_B);
-    const big = wingLowResult(landing({ bankDeg: -9 }), touchdown(scenarioWx(END), { bankRightDeg: 9 }));
-    expect(big.reason).toMatch(/^9\.0° of bank at touchdown: more than the wind needed/);
-    expect(big.tip).toMatch(/^Only as much right wing/);
+    // Too much wing drifts into the wind; too little, with it: named with the fix, uncapped.
+    const big = wingLowResult(landing({ bankDeg: -7 }), touchdown(scenarioWx(END), { bankRightDeg: 7, driftKts: 3.4 }));
+    expect(big.reason).toBe('Drifting 3.4 kt right, into the wind: a little less right wing.');
+    expect(big.factors.find((f) => f.key === 'drift').value).toBe('3.4 kt right (into the wind)');
+    expect(big.tip).toMatch(/^Drifting right at touchdown: a little less right wing/);
+    expect(big.score).toBeGreaterThan(CAP_B);
+    const little = wingLowResult(landing({ bankDeg: -1 }), touchdown(scenarioWx(END), { bankRightDeg: 1, driftKts: -2.5 }));
+    expect(little.reason).toBe('Drifting 2.5 kt left, with the wind: a little more right wing.');
+    expect(little.tip).toMatch(/^Drifting left at touchdown: a little more right wing/);
+    // 1° of wing in a light wind is a correct landing (the bank that cancels the drift is ~0.2° a knot).
+    const light = wingLowResult(landing({ bankDeg: -1 }), touchdown(live(250, 5), { bankRightDeg: 1, driftKts: -0.2 }));
+    expect(light.reason).toBe(null);
+    expect(light.note).toBe(DONE_NOTE);
     const away = wingLowResult(landing({ bankDeg: 3 }), touchdown(scenarioWx(END), { bankRightDeg: -3, loads: [0, 2000, 0] }));
     expect(away.reason).toMatch(/The left \(downwind\) wheel touched first\./);
-    expect(away.reason).toMatch(/3\.0° of bank away from the wind/);
+    expect(away.reason).toMatch(/The left wing was down, away from the wind\./);
     expect(away.factors.find((f) => f.key === 'wing').value).toBe('3.0° left wing down (away from the wind)');
     expect(away.tip).toMatch(/^Keep the right wing down all the way/);
   });
@@ -197,7 +212,7 @@ describe('the grade', () => {
     const r = wingLowResult(base, wl, true);
     expect(r.score).toBe(base.score);
     expect(r.grade).toBe(base.grade);
-    expect(r.factors.slice(0, 3).map((f) => f.key)).toEqual(['wing', 'align', 'wheel']);
+    expect(r.factors.slice(0, 4).map((f) => f.key)).toEqual(['wing', 'drift', 'align', 'wheel']);
     expect(r.wingLow).toBeUndefined();
   });
 
@@ -221,9 +236,10 @@ describe('the grade', () => {
   });
 
   it('tip order: the crab, then the wing, then the wheel', () => {
-    expect(wingLowTip({ noseOffDeg: -5, bankIntoDeg: 0, first: 'both' }, 'R')).toMatch(/^Right rudder/);
-    expect(wingLowTip({ noseOffDeg: 1, bankIntoDeg: 1, first: 'both' }, 'L')).toMatch(/^Keep the left wing down/);
-    expect(wingLowTip({ noseOffDeg: 1, bankIntoDeg: 3, first: 'both' }, 'R')).toMatch(/^A little more right wing/);
-    expect(wingLowTip({ noseOffDeg: 1, bankIntoDeg: 3, first: 'upwind' }, 'R')).toBe(null);
+    expect(wingLowTip({ noseOffDeg: -5, bankIntoDeg: 0, first: 'both', driftUpKts: 0 }, 'R')).toMatch(/^Right rudder/);
+    expect(wingLowTip({ noseOffDeg: 1, bankIntoDeg: 0.2, first: 'both', driftUpKts: -3 }, 'L')).toMatch(/^Keep the left wing down/);
+    expect(wingLowTip({ noseOffDeg: 1, bankIntoDeg: 1, first: 'upwind', driftUpKts: -3 }, 'L')).toMatch(/^Drifting right at touchdown: a little more left wing/);
+    expect(wingLowTip({ noseOffDeg: 1, bankIntoDeg: 3, first: 'both', driftUpKts: 0 }, 'R')).toMatch(/^A little more right wing/);
+    expect(wingLowTip({ noseOffDeg: 1, bankIntoDeg: 3, first: 'upwind', driftUpKts: 0.5 }, 'R')).toBe(null);
   });
 });

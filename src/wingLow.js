@@ -5,17 +5,22 @@
 //    testing standards allow for either method, pilots should learn to do both." "To use the wing-low method, the pilot
 //    first uses rudder to align and maintain the airplane's heading with the runway direction ... oppose it using
 //    ailerons resulting in just enough bank to cancel the drift." Round out: "Keep the upwind wing down throughout the
-//    round out." Touchdown: "the crosswind correction is maintained throughout the round out, and the initial touchdown
-//    occurs on the upwind main wheel"; the crab "needs to be removed the instant before touchdown ... to avoid sideward
-//    contact of the wheels with the runway".
+//    round out. If the wings are leveled, the airplane begins drifting and the touchdown occurs while drifting.
+//    Remember, the primary objective is to land the airplane without subjecting it to any side loads that result from
+//    touching down while drifting." Touchdown: "the crosswind correction is maintained throughout the round out, and the
+//    initial touchdown occurs on the upwind main wheel". The crab (p. 9-15): the rudder aligns the nose "just prior to
+//    touchdown ... to avoid sideward contact of the wheels with the runway".
 //  - Cessna 172S POH (July 1998) p. 4-34, CROSSWIND LANDING: "use the minimum flap setting required for the field
 //    length ... Although the crab or combination method of drift correction may be used, the wing low method gives the
-//    best control ... Operation in direct crosswinds of 15 knots has been demonstrated." (Addison's 7,203 ft: flaps 10,
-//    FLAPS below; the scenario wind and the live METAR's are kept within the 15 kt, which tests/flight/c172.test.js flies.)
-// The game's tolerances (the ticket's, not the handbook's: it gives no numbers): bank at touchdown 2-8° into the wind,
-// the nose within 3° of the runway. A crabbed touchdown caps B (the side load both methods avoid); both mains together,
-// the downwind wheel first and a bank outside the band are named but cap nothing (the testing standards allow either
-// method, and a crab taken out at the last moment lands on both). Kid keeps its de-crab assist (assists.js): its card
+//    best control ... Operation in direct crosswinds of 15 knots has been demonstrated." Flaps 10 (FLAPS) is the game's
+//    choice in that spirit: Addison's 7,203 ft needs none, and 10° keeps the slip under the POH's 20° caution. The scenario
+//    wind and the live METAR's are kept within the 15 kt, which tests/flight/c172.test.js flies.
+// The handbook gives the aim, not numbers: "just enough bank to cancel the drift", so the card grades the bank's sign (a
+// wing down into the wind) and the drift it leaves, not a fixed band (the bank that cancels it grows with the wind:
+// ~0.2° a knot here, 1° at 5 kt, 3° at 15, tests/flight/wingLow.test.js). The game's tolerances: drift across the wheels
+// within DRIFT_OK_KTS, the nose within 3° of the runway. A crabbed touchdown caps B (the side load both methods avoid);
+// drifting, both mains together, the downwind wheel first and a level or wrong wing are named but cap nothing (the
+// testing standards allow either method, and a crab taken out at the last moment lands on both). Kid keeps its de-crab assist (assists.js): its card
 // shows the rows, unscored. A lazy chunk, loaded with the mission (main.js startDrills). Pure (no THREE, no DOM):
 // tests/unit/wingLow.test.js, tests/flight/wingLow.test.js.
 import { curve, letterGrade } from './landing.js';
@@ -34,10 +39,14 @@ export const SCENARIO_KTS = 12;
 export const MIN_XW_KTS = 5;
 export const MAX_XW_KTS = 15;
 export const TAIL_OK_KTS = 2;
-// The ticket's band: the bank at touchdown into the wind, and the nose within ALIGN_DEG of the runway.
-export const BANK_LOW_DEG = 2;
-export const BANK_HIGH_DEG = 8;
+// A wing down into the wind is at least WING_MIN_DEG of bank (a correct 5 kt landing holds ~1°); the drift across the
+// wheels at touchdown is full marks within DRIFT_OK_KTS and named past DRIFT_SAY_KTS; the nose within ALIGN_DEG of the runway.
+export const WING_MIN_DEG = 0.5;
+export const DRIFT_OK_KTS = 1;
+export const DRIFT_SAY_KTS = 2;
 export const ALIGN_DEG = 3;
+// gradeLanding's flare factor takes 8 points a degree of bank past 2°; the lesson's bank is not a fault up to this.
+export const BANK_FREE_DEG = 6;
 // The coach: the briefing held this long; the crab call below ALIGN_CALL_FT when the nose is this far off the runway.
 export const SAY_S = 8;
 export const ALIGN_CALL_FT = 300;
@@ -45,7 +54,7 @@ export const ALIGN_CALL_DEG = 5;
 // "Hold it, upwind wheel first" from HOLD_FT down to the landing coach's idle and flare (30 ft).
 export const HOLD_FT = 50;
 export const CAP_B = 84;
-// The lesson's three rows share this much of the score (Pilot and Learner): the landing's own factors keep the rest.
+// The lesson's four rows share this much of the score (Pilot and Learner): the landing's own factors keep the rest.
 export const LESSON_W = 0.3;
 const FLARE_W = 0.15; // landing.js WEIGHTS.flare, inlined: the lesson rescores that factor without its bank penalty
 
@@ -80,9 +89,10 @@ export function windAcross(wx, hdgT) {
   const a = (wx.windDirDeg - hdgT) * DEG_TO_RAD;
   return { xw: wx.windKts * Math.sin(a), hw: wx.windKts * Math.cos(a) };
 }
-// Whether a live METAR makes the lesson (see MIN_XW_KTS). Pure.
-export function liveSuits(wx, hdgT) {
-  if (!wx?.live) return false;
+// Whether a live METAR makes the lesson (see MIN_XW_KTS): the field's own (main.js falls back to KDFW's when Addison has
+// none; the card would call that Addison's wind). Pure.
+export function liveSuits(wx, hdgT, airport) {
+  if (!wx?.live || (airport && wx.icao !== airport)) return false;
   const { xw, hw } = windAcross(wx, hdgT);
   const gustXw = Math.max(wx.windKts, wx.gustKts ?? 0) * Math.abs(xw) / wx.windKts;
   return Math.abs(xw) >= MIN_XW_KTS && gustXw <= MAX_XW_KTS && hw >= -TAIL_OK_KTS;
@@ -106,7 +116,7 @@ export const createWingLow = (end) => ({
 export function lessonWx(wl, live) {
   if (wl.wx && (wl.readyT !== null || live === wl.src)) return wl.wx;
   wl.src = live;
-  wl.wx = liveSuits(live, wl.end.hdgT) ? live : scenarioWx(wl.end);
+  wl.wx = liveSuits(live, wl.end.hdgT, wl.end.airport) ? live : scenarioWx(wl.end);
   const { xw } = windAcross(wl.wx, wl.end.hdgT);
   wl.side = xw >= 0 ? 'R' : 'L';
   wl.xwKts = Math.abs(xw);
@@ -116,7 +126,7 @@ export function lessonWx(wl, live) {
 // Which main touched first. loads: [nose, left, right] (N, gear.js body.wheelLoads) or null (JSBSim reports none: the
 // bank decides, the lower wing's wheel being the lower one). Returns 'upwind' | 'downwind' | 'both' | 'nose'.
 export function firstMain(loads, side, bankIntoDeg) {
-  if (!loads) return bankIntoDeg > 1 ? 'upwind' : bankIntoDeg < -1 ? 'downwind' : 'both';
+  if (!loads) return bankIntoDeg > WING_MIN_DEG ? 'upwind' : bankIntoDeg < -WING_MIN_DEG ? 'downwind' : 'both';
   const l = loads[1] > 0, r = loads[2] > 0;
   if (l && r) return 'both';
   if (!l && !r) return 'nose';
@@ -124,7 +134,8 @@ export function firstMain(loads, side, bankIntoDeg) {
 }
 
 // One frame, once the player is flying (main.js: cockpitEntered, no modal). s: { aglFt (the wheels' height), onGround,
-// bankRightDeg, noseHdgT (true), pitchDeg, loads (gear.js wheelLoads or null) }. Records the first touchdown's bank into the
+// bankRightDeg, noseHdgT (true), pitchDeg, loads (gear.js wheelLoads or null), driftKts (the groundspeed across the nose,
+// + = moving right) }. Records the first touchdown's bank into the
 // wind, the nose against the runway and the first main; a climb back past HOLD_FT after it (a go-around, a big bounce
 // flown away) clears it: the next touchdown is the one graded. Mutates wl, allocates only at the touchdown.
 export function wingLowStep(wl, s, dt) {
@@ -135,7 +146,9 @@ export function wingLowStep(wl, s, dt) {
   const touched = s.onGround || (s.loads && (s.loads[1] > 0 || s.loads[2] > 0));
   if (!touched) return wl;
   const bankInto = wl.side === 'R' ? s.bankRightDeg : -s.bankRightDeg;
-  wl.td = { bankIntoDeg: bankInto, noseOffDeg: wrap180(s.noseHdgT - wl.end.hdgT), pitchDeg: s.pitchDeg, first: firstMain(s.loads, wl.side, bankInto) };
+  // Drift towards the wind (+) or away from it (-): too much wing, or too little.
+  const driftUpKts = wl.side === 'R' ? s.driftKts ?? 0 : -(s.driftKts ?? 0);
+  wl.td = { bankIntoDeg: bankInto, noseOffDeg: wrap180(s.noseHdgT - wl.end.hdgT), pitchDeg: s.pitchDeg, first: firstMain(s.loads, wl.side, bankInto), driftUpKts };
   return wl;
 }
 
@@ -153,40 +166,44 @@ export function wingLowPrompt(wl, s) {
   return null;
 }
 
-const BANK_PTS = [[-2, 20], [0, 50], [BANK_LOW_DEG, 100], [BANK_HIGH_DEG, 100], [10, 60]];
+const WING_PTS = [[-2, 20], [0, 50], [WING_MIN_DEG, 100]];
+const DRIFT_PTS = [[0, 100], [DRIFT_OK_KTS, 100], [3, 60], [6, 20]];
 const ALIGN_PTS = [[0, 100], [ALIGN_DEG, 100], [6, 60], [10, 20]];
 const WHEEL_PTS = { upwind: 100, both: 70, downwind: 30, nose: 0 };
-// landing.js gradeLanding's flare curve on the pitch alone; the bank's penalty only past the lesson's band.
-const flareScore = (pitch, bank) => Math.max(0, (pitch < 0 ? 40 : curve(pitch, [[0, 70], [1, 100], [7, 100], [10, 60]])) - Math.max(0, bank - BANK_HIGH_DEG) * 8);
+// landing.js gradeLanding's flare curve on the pitch alone; the bank's penalty only past BANK_FREE_DEG.
+const flareScore = (pitch, bank) => Math.max(0, (pitch < 0 ? 40 : curve(pitch, [[0, 70], [1, 100], [7, 100], [10, 60]])) - Math.max(0, bank - BANK_FREE_DEG) * 8);
 export const DONE_NOTE = 'Wing-low: upwind wheel first, the nose straight down the runway.';
 
 // The landing's grade (landing.js gradeLanding) with the lesson's rows, at the touchdown (main.js checkTouchdown; a bounce
-// caps it after, landing.js capBounced). Pilot and Learner: the flare factor loses its bank penalty inside the band (the
-// lesson asks for the bank), the three rows take LESSON_W of the score, a crabbed touchdown caps B. Kid: the rows are
+// caps it after, landing.js capBounced). Pilot and Learner: the flare factor loses its bank penalty up to BANK_FREE_DEG (the
+// lesson asks for the bank), the four rows take LESSON_W of the score, a crabbed touchdown caps B. Kid: the rows are
 // shown, unscored. A crash or a D for the runway itself stays. Pure.
 export function wingLowResult(result, wl, kid = false) {
   if (result.grade === 'CRASH' || !wl.td) return result;
   const t = wl.td, w = SIDES[wl.side], o = SIDES[OTHER[wl.side]];
   const bank = Math.abs(t.bankIntoDeg), off = Math.abs(t.noseOffDeg);
   const wing = { key: 'wing', label: 'Wing into the wind', value: `${bank.toFixed(1)}° ${t.bankIntoDeg >= 0 ? `${w} wing down` : `${o} wing down (away from the wind)`}`,
-    score: Math.round(curve(t.bankIntoDeg, BANK_PTS)) };
+    score: Math.round(curve(t.bankIntoDeg, WING_PTS)) };
+  const dk = Math.abs(t.driftUpKts);
+  const drift = { key: 'drift', label: 'Sideways drift', value: dk < 0.5 ? 'none' : `${dk.toFixed(1)} kt ${t.driftUpKts > 0 ? `${w} (into the wind)` : `${o} (with the wind)`}`,
+    score: Math.round(curve(dk, DRIFT_PTS)) };
   const align = { key: 'align', label: 'Nose on the runway', value: off < 0.5 ? 'straight' : `${off.toFixed(1)}° ${t.noseOffDeg > 0 ? 'right' : 'left'}`, score: Math.round(curve(off, ALIGN_PTS)) };
   const wheelWords = { upwind: `${w} (upwind) main`, downwind: `${o} (downwind) main`, both: 'both mains together', nose: 'the nose wheel' };
   const wheel = { key: 'wheel', label: 'First wheel down', value: wheelWords[t.first], score: WHEEL_PTS[t.first] };
-  const rows = [wing, align, wheel];
+  const rows = [wing, drift, align, wheel];
   const rest = result.factors;
   if (kid) return { ...result, factors: [...rows, ...rest] }; // the landing's own tip (landingTip.js) and grade
   const oldFlare = rest.find((f) => f.key === 'flare');
   const flare = oldFlare && { ...oldFlare, score: Math.round(flareScore(t.pitchDeg, bank)) };
   const base = result.score + (flare ? (flare.score - oldFlare.score) * FLARE_W : 0);
-  let score = Math.round(base * (1 - LESSON_W) + (wing.score + align.score + wheel.score) / 3 * LESSON_W);
+  let score = Math.round(base * (1 - LESSON_W) + (wing.score + drift.score + align.score + wheel.score) / 4 * LESSON_W);
   const keepD = result.grade === 'D' && result.reason;
   const reasons = [];
   if (off > ALIGN_DEG) { reasons.push(`Touched down crabbed, the nose ${off.toFixed(0)}° off the runway: the wheels landed sideways. Best grade B.`); score = Math.min(score, CAP_B); }
   if (t.first === 'both') reasons.push(`Both mains together: keep the ${w} wing down through the flare.`);
   else if (t.first === 'downwind') reasons.push(`The ${o} (downwind) wheel touched first.`);
-  if (t.bankIntoDeg < BANK_LOW_DEG) reasons.push(`${bank.toFixed(1)}° of bank${t.bankIntoDeg < 0 ? ' away from the wind' : ''} at touchdown (${BANK_LOW_DEG}-${BANK_HIGH_DEG}° into it holds the line).`);
-  else if (t.bankIntoDeg > BANK_HIGH_DEG) reasons.push(`${bank.toFixed(1)}° of bank at touchdown: more than the wind needed (${BANK_LOW_DEG}-${BANK_HIGH_DEG}°).`);
+  if (t.bankIntoDeg < WING_MIN_DEG) reasons.push(t.bankIntoDeg < -WING_MIN_DEG ? `The ${o} wing was down, away from the wind.` : `Wings level at touchdown: the ${w} wing holds the line.`);
+  if (dk > DRIFT_SAY_KTS && off <= ALIGN_DEG) reasons.push(`Drifting ${dk.toFixed(1)} kt ${t.driftUpKts > 0 ? `${w}, into the wind: a little less ${w} wing` : `${o}, with the wind: a little more ${w} wing`}.`);
   if (result.reason) reasons.push(result.reason);
   return {
     ...result,
@@ -204,8 +221,9 @@ export function wingLowResult(result, wl, kid = false) {
 export function wingLowTip(t, side) {
   const w = SIDES[side], o = SIDES[OTHER[side]];
   if (Math.abs(t.noseOffDeg) > ALIGN_DEG) return `${t.noseOffDeg > 0 ? 'Left' : 'Right'} rudder to point the nose down the runway before the wheels touch, and lower the ${w} wing to stop the drift.`;
-  if (t.bankIntoDeg < BANK_LOW_DEG) return `Keep the ${w} wing down all the way to touchdown, with ${o} rudder holding the nose straight.`;
+  if (t.bankIntoDeg < WING_MIN_DEG) return `Keep the ${w} wing down all the way to touchdown, with ${o} rudder holding the nose straight.`;
+  if (t.driftUpKts < -DRIFT_SAY_KTS) return `Drifting ${o} at touchdown: a little more ${w} wing in the flare, just enough to stop the drift.`;
+  if (t.driftUpKts > DRIFT_SAY_KTS) return `Drifting ${w} at touchdown: a little less ${w} wing, just enough to stop the drift.`;
   if (t.first !== 'upwind') return `A little more ${w} wing in the flare: the ${w} wheel touches first.`;
-  if (t.bankIntoDeg > BANK_HIGH_DEG) return `Only as much ${w} wing as stops the drift: about ${BANK_LOW_DEG}-${BANK_HIGH_DEG}° in today's wind.`;
   return null;
 }

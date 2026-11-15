@@ -1070,7 +1070,7 @@ function checkShortField(dt) {
 }
 // Wing-low crosswind landing (0188, wingLow.js): the touchdown's bank into the wind, the nose against the runway, the first main.
 let wlLib = null;
-const _wlIn = { aglFt: 0, onGround: false, bankRightDeg: 0, noseHdgT: 0, pitchDeg: 0, loads: null };
+const _wlIn = { aglFt: 0, onGround: false, bankRightDeg: 0, noseHdgT: 0, pitchDeg: 0, loads: null, driftKts: 0 };
 function checkWingLow(dt) {
   const w = sim.wingLow;
   if (!w || !cockpitEntered || modalOpen()) return;
@@ -1079,6 +1079,8 @@ function checkWingLow(dt) {
   s.aglFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT; s.onGround = sim.onGround;
   s.bankRightDeg = -_euler.z * RAD_TO_DEG; s.noseHdgT = (-_euler.y * RAD_TO_DEG + 360) % 360; s.pitchDeg = _euler.x * RAD_TO_DEG;
   s.loads = jsbsim?.flies(sim.aircraftKey) ? null : sim.wheelLoads ?? null; // JSBSim reports none: wingLow.js reads the bank
+  const h = s.noseHdgT * DEG_TO_RAD; // the groundspeed across the nose (+ = right): the side load the wing-low avoids
+  s.driftKts = (sim.vel.x * Math.cos(h) + sim.vel.z * Math.sin(h)) / KTS_TO_MPS;
   wlLib.wingLowStep(w, s, dt);
 }
 
@@ -1640,7 +1642,15 @@ function currentWeather() {
 }
 
 function refreshWeather() {
+  const was = sim.wx;
   sim.wx = currentWeather();
+  // The wing-low lesson's wind (0188) arrives with its lazy chunk or a METAR, after the spawn: before the flight starts, the
+  // spawn keeps its airspeed (its velocity moves with the air) instead of a gust of the difference.
+  if (sim.wingLow && sim.wingLow.readyT === null && was && was !== sim.wx && !sim.onGround) {
+    const f = KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY);
+    const a = windVector(was.windDirDeg, was.windKts * f), b = windVector(sim.wx.windDirDeg, sim.wx.windKts * f);
+    sim.vel.x += b.x - a.x; sim.vel.z += b.z - a.z;
+  }
   sim.isaDevC = isaDeviationC(sim.wx.tempC, REF_ELEV_M);
   sim.altimInHg = sim.wx.altimInHg || 29.92;
   sim.wetRunway = !!sim.wx.wetRunway; // the METAR's rain: wet braking (systems.js, 0108)

@@ -312,17 +312,20 @@ src/softField.js    soft-field takeoff lesson (0182, lazy chunk loaded with `kad
                     wins by the wing's early lift and slower lift-off, not a lighter nose tyre: nose-wheel bogging is not
                     modelled. The takeoff callouts are off in it (it lifts off under Vr). Cards: tests/flight/softField.test.js
 src/wingLow.js      wing-low crosswind landing lesson (0188, lazy chunk loaded with `kads_crosswind_wing_low`, `wingLow: true`, Drills
-                    group): the C172 on a 2 NM final to KADS 16 at 70 KIAS, flaps 10 (POH p. 4-34: the minimum flaps for the field;
-                    the landing coach asks for FLAPS). Its wind is currentWeather()'s while it flies (lessonWx): the live METAR when
-                    it is 5-15 kt across with gusts within the POH's demonstrated 15 and ≤ 2 kt of tailwind, else a scenario 12 kt
-                    from 90° right of the runway (labelled SCENARIO); chosen per report object, frozen once the player flies. AFH
+                    group): the C172 on a 2 NM final to KADS 16 at 70 KIAS, flaps 10 (a game choice after POH p. 4-34's "minimum
+                    flap setting" in a strong crosswind; the landing coach asks for FLAPS). Its wind is currentWeather()'s while it
+                    flies (lessonWx): Addison's own live METAR when it is 5-15 kt across with gusts within the POH's demonstrated 15
+                    and ≤ 2 kt of tailwind, else a scenario 12 kt from 90° right of the runway (labelled SCENARIO); chosen per
+                    report object, frozen once the player flies; before then refreshWeather moves the spawn's velocity with the air. AFH
                     ch. 9 (pp. 9-15 to 9-17): the coach names the wing and the pedal from that wind (keys Q/E, or the RUD buttons on
                     touch), calls a nose > 5° off the runway under 300 ft and "upwind wheel first" from 50 ft, then hands the flare
-                    to the landing coach. checkWingLow records the first touchdown's bank into the wind, the nose against the
-                    runway and the first main (gear.js wheelLoads; on JSBSim, which reports none, the bank). wingLowResult (at the
-                    touchdown, before the bounce cap): the flare factor drops its bank penalty inside 2-8°, the three rows take
-                    30% of the score, a nose > 3° off caps B; both mains, the downwind wheel first and a bank outside 2-8° are
-                    named, uncapped (the ticket's band; the AFH gives no number). Kid: the rows shown, unscored (its de-crab has the
+                    to the landing coach. checkWingLow records the first touchdown's bank into the wind, the groundspeed across
+                    the nose, the nose against the runway and the first main (gear.js wheelLoads; on JSBSim, which reports none,
+                    the bank). wingLowResult (at the touchdown, before the bounce cap): the flare factor drops its bank penalty up
+                    to 6°, the four rows (wing, drift, nose, wheel) take 30% of the score, a nose > 3° off caps B. The AFH's "just
+                    enough bank to cancel the drift" is graded as the wing's side (≥ 0.5° into the wind) and the drift (full marks
+                    ≤ 1 kt), not a fixed band: a correct landing banks ~0.2° a knot (1° at 5 kt). Drift > 2 kt, a level or wrong
+                    wing, both mains and the downwind wheel first are named, uncapped. Kid: the rows shown, unscored (its de-crab has the
                     rudder). Its own "Next time" tip. The touch pedals (#touchRudder over the stick, stacked on a phone held
                     sideways under 620 px) show on this lesson only, Pilot and Learner: held, sim.touchYaw ramps 1.5/s to full,
                     released it centres at 4/s. Cards: tests/flight/wingLow.test.js (both models, harness.js crosswindLanding)
