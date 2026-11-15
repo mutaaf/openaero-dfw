@@ -28,6 +28,11 @@ describe('windPlainWords (0142)', () => {
   it('Kid reads the side and HANDS OFF: its guide holds the line only while the stick is let go', () => {
     expect(windPlainWords(12, 2, true)).toEqual(['RIGHT WIND', 'HANDS OFF']);
     expect(windPlainWords(-12, 2, true)).toEqual(['LEFT WIND', 'HANDS OFF']);
+    // The wing-low lesson (0188): the wing into the wind, not "aim into it" (a crab); Kid keeps its words.
+    expect(windPlainWords(12, 2, false, true)).toEqual(['RIGHT WIND', 'R WING DOWN']);
+    expect(windPlainWords(-12, 2, false, true)).toEqual(['LEFT WIND', 'L WING DOWN']);
+    expect(windPlainWords(12, 2, true, true)).toEqual(['RIGHT WIND', 'HANDS OFF']);
+    expect(windPlainWords(1, -8, false, true)).toEqual(['TAILWIND', 'FLOATS LONG']);
     expect(windPlainWords(0, -8, true)).toEqual(['TAILWIND', 'FLOATS LONG']);
     expect(windPlainWords(0, 8, true)).toEqual(['HEADWIND', 'SHORT ROLL']);
   });

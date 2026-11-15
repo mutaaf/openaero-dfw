@@ -476,6 +476,16 @@
             <button id="touchTrimUp" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Trim nose up">NOSE<br>UP</button>
           </div>
         </div>
+        <!-- Rudder pedals (0188): the wing-low crosswind lesson only, Pilot and Learner (main.js; the trim rocker's slot, which
+             the lesson hides: the left thumb works the pedals while the right flies the stick). A tap steps the rudder 20%
+             that way and it stays (hold to keep moving it); the other pedal brings it back. Centred at the touchdown. -->
+        <div id="touchRudder" class="hidden pointer-events-auto flex flex-col items-center gap-1">
+          <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1">RUD <b id="txtTouchRud" class="text-emerald-400">0</b></span>
+          <div class="flex flex-col-reverse gap-1.5 text-[11px] font-bold leading-tight" role="group" aria-label="Rudder pedals">
+            <button id="touchRudL" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Left rudder">◀<br>RUD</button>
+            <button id="touchRudR" class="touch-control hud-btn rounded-xl px-1 min-w-[52px] min-h-[44px]" aria-label="Right rudder">RUD<br>▶</button>
+          </div>
+        </div>
       </div>
       <div id="touchButtons" class="pointer-events-auto flex flex-col gap-1.5 text-[11px] font-bold">
         <button id="touchGear" class="hud-btn rounded-xl px-2 min-w-[76px] min-h-[44px]">GEAR <span id="txtTouchGear" class="text-emerald-400">DN</span></button>

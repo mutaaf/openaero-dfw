@@ -89,11 +89,14 @@ export function drawAltCaption(ctx, r, level, screenW, s, windBox) {
 const WIND_WORDS = {
   right: ['RIGHT WIND', 'AIM INTO IT'], left: ['LEFT WIND', 'AIM INTO IT'],
   kidRight: ['RIGHT WIND', 'HANDS OFF'], kidLeft: ['LEFT WIND', 'HANDS OFF'],
+  // The wing-low lesson (0188): the nose stays on the runway, the wing goes into the wind (not "aim into it", a crab).
+  wlRight: ['RIGHT WIND', 'R WING DOWN'], wlLeft: ['LEFT WIND', 'L WING DOWN'],
   tail: ['TAILWIND', 'FLOATS LONG'], head: ['HEADWIND', 'SHORT ROLL'],
 };
-export function windPlainWords(xwKts, hwKts, kid = false) {
+export function windPlainWords(xwKts, hwKts, kid = false, wingLow = false) {
   if (xwKts === null || hwKts === null) return null;
   const x = Math.abs(xwKts);
+  if (wingLow && !kid && x >= 3) return xwKts > 0 ? WIND_WORDS.wlRight : WIND_WORDS.wlLeft;
   if (x >= 3 && x >= -hwKts) return WIND_WORDS[(kid ? 'kid' : '') + (xwKts > 0 ? (kid ? 'Right' : 'right') : (kid ? 'Left' : 'left'))];
   if (hwKts <= -3) return WIND_WORDS.tail;
   return hwKts >= 3 ? WIND_WORDS.head : null;
@@ -125,7 +128,7 @@ export function drawWind(ctx, box, s, level) {
   const hw = s.hudWind;
   coachEl ||= globalThis.document?.getElementById('coach');
   const coachTop = coachEl && coachEl.classList.contains('coach-top') && !coachEl.classList.contains('hidden');
-  const words = level === 'pilot' || s.onGround || s.raFt < 30 || coachTop ? null : windPlainWords(hw.xwKts, hw.hwKts, level === 'kid');
+  const words = level === 'pilot' || s.onGround || s.raFt < 30 || coachTop ? null : windPlainWords(hw.xwKts, hw.hwKts, level === 'kid', !!s.wingLow);
   hw.plain = words;
   hw.plainBox = words && windPlainRect(box, _plain);
   if (!words) return;

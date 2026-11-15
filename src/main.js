@@ -149,6 +149,8 @@ const sim = {
   stallDrill: null,
   wake: null, // the wake-turbulence lesson (0115, wake.js): its state on that mission, the jet ahead's path (traffic.js)
   shortField: null, // the short-field landing lesson (0181, shortField.js): its approach, touchdown and roll
+  wingLow: null, // the wing-low crosswind lesson (0188, wingLow.js): its wind, its touchdown
+  touchYaw: 0, // the touch pedals (0188): shown on the wing-low lesson, -1..1 (+ = right)
   // Dead-stick challenge (0036, deadStick.js): its state on that mission, and the dead engine
   deadStick: null,
   engineOut: null, // engine failure after takeoff (0104, engineOut.js)
@@ -1066,6 +1068,21 @@ function checkShortField(dt) {
   s.onGround = sim.onGround; s.gsKts = sim.gsKts; s.braking = sim.brakesOn || sim.autobrakeActive; s.wx = sim.wx;
   sfdLib.shortFieldStep(f, s, dt);
 }
+// Wing-low crosswind landing (0188, wingLow.js): the touchdown's bank into the wind, the nose against the runway, the first main.
+let wlLib = null;
+const _wlIn = { aglFt: 0, onGround: false, bankRightDeg: 0, noseHdgT: 0, pitchDeg: 0, loads: null, driftKts: 0 };
+function checkWingLow(dt) {
+  const w = sim.wingLow;
+  if (!w || !cockpitEntered || modalOpen()) return;
+  _euler.setFromQuaternion(sim.quat, 'YXZ');
+  const s = _wlIn;
+  s.aglFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT; s.onGround = sim.onGround;
+  s.bankRightDeg = -_euler.z * RAD_TO_DEG; s.noseHdgT = (-_euler.y * RAD_TO_DEG + 360) % 360; s.pitchDeg = _euler.x * RAD_TO_DEG;
+  s.loads = jsbsim?.flies(sim.aircraftKey) ? null : sim.wheelLoads ?? null; // JSBSim reports none: wingLow.js reads the bank
+  const h = s.noseHdgT * DEG_TO_RAD; // the groundspeed across the nose (+ = right): the side load the wing-low avoids
+  s.driftKts = (sim.vel.x * Math.cos(h) + sim.vel.z * Math.sin(h)) / KTS_TO_MPS;
+  wlLib.wingLowStep(w, s, dt);
+}
 
 // The stall drill, the dead-stick challenge and the traffic pattern: each always coached (its
 // only instructions) until Skip; their state is null on every other mission.
@@ -1078,10 +1095,13 @@ function startDrills(mission) {
   sim.windshear = null;
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = null;
   sim.softField = sim.surfaceMu = null;
+  sim.wingLow = null; sim.touchYaw = 0;
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.shortField || mission.softField);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.shortField || mission.softField || mission.wingLow);
   if (mission.shortField) loadDrill(mission, sfdLib, () => import('./shortField.js'), (lib) => { sfdLib = lib; if (sim.aircraftKey === mission.aircraft) sim.shortField = lib.createShortField(runwayEnd(mission.airport, mission.rwy)); });
+  // The wing-low lesson (0188): its wind is currentWeather()'s while it flies (the live METAR's when it suits, else its scenario's).
+  if (mission.wingLow) loadDrill(mission, wlLib, () => import('./wingLow.js'), (lib) => { wlLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.wingLow = lib.createWingLow(runwayEnd(mission.airport, mission.rwy)); refreshWeather(); } });
   if (mission.softField) loadDrill(mission, sfoLib, () => import('./softField.js'), (lib) => { sfoLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.softField = lib.createSoftField(runwayEnd(mission.airport, mission.rwy)); sim.surfaceMu = lib.SURFACE_MU; } });
   if (mission.wake) loadDrill(mission, wakeLib, () => import('./wake.js'), (lib) => { wakeLib = lib; if (sim.aircraftKey === mission.aircraft) sim.wake = lib.createWake(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
@@ -1180,6 +1200,7 @@ function checkTouchdown(dt) {
   });
   // The go-around drill: landing after the gate called a go-around is capped (0047).
   if (sim.goAround?.phase === 'landed') result = goAroundLib.capUnstableLanding(result);
+  if (sim.wingLow?.end.id === end.id) result = wlLib.wingLowResult(result, sim.wingLow, sim.assist === 'kid'); // 0188: the wing, the nose, the first wheel
   if (sim.wake?.end.id === end.id) result = wakeLib.wakeResult(result, sim.wake, -g.distM); // 0115: past the jet's point, above its path
   if (sim.pattern?.ent && sim.aircraftKey === sim.pattern.aircraft) result = patLib.entryResult(result, sim.pattern); // 0187: the join on the card (not another airframe's)
   if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos);
@@ -1366,8 +1387,13 @@ function updateTutor(dt) {
   return tutor.caption;
 }
 
+// The wing-low lesson's coach (0188): coachInput plus the nose against the runway (+ = right).
+const wingLowCoachIn = () => {
+  coachInput.noseOffDeg = ((-_euler.y * RAD_TO_DEG - sim.wingLow.end.hdgT) % 360 + 540) % 360 - 180;
+  return coachInput;
+};
 const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5);
-const lessonFlaps = () => (sim.shortField ? sfdLib.FULL_FLAPS : landingFlaps(sim.spec));
+const lessonFlaps = () => (sim.shortField ? sfdLib.FULL_FLAPS : sim.wingLow ? wlLib.FLAPS : landingFlaps(sim.spec)); // 0188: POH p. 4-34, the minimum flaps
 function updateCoach(dt) {
   let prompt = null;
   // Every final is coached (0073), and any approach the player takes over from the autopilot.
@@ -1375,7 +1401,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.wake || sim.shortField || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.wake || sim.shortField || sim.wingLow || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1409,6 +1435,7 @@ function updateCoach(dt) {
       : sim.slowFlight ? sfLib.slowCoach(sim.slowFlight, coachInput.kid)
       : sim.wake ? wakeLib.wakePrompt(sim.wake, coachInput, sim.approach.heightAbovePathM)
       : sim.shortField ? sfdLib.shortFieldPrompt(sim.shortField, coachInput, sim.approach)
+      : sim.wingLow ? wlLib.wingLowPrompt(sim.wingLow, wingLowCoachIn())
       : sim.softField ? sfoLib.softFieldPrompt(sim.softField, sim, _euler.x * RAD_TO_DEG)
       : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
       : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
@@ -1609,11 +1636,21 @@ function refreshCrosswindMission() {
 // The weather for where you are flying: the active runway's field, else DFW, else scenario.
 function currentWeather() {
   const field = sim.activeEnd ? sim.activeEnd.airport : 'KDFW';
-  return sim.dh ? ifrLib.WX : sim.wxByIcao[field] || sim.wxByIcao.KDFW || scenarioWeather();
+  if (sim.dh) return ifrLib.WX;
+  const wx = sim.wxByIcao[field] || sim.wxByIcao.KDFW || scenarioWeather();
+  return sim.wingLow ? wlLib.lessonWx(sim.wingLow, wx) : wx; // 0188: the lesson's crosswind
 }
 
 function refreshWeather() {
+  const was = sim.wx;
   sim.wx = currentWeather();
+  // The wing-low lesson's wind (0188) arrives with its lazy chunk or a METAR, after the spawn: before the flight starts, the
+  // spawn keeps its airspeed (its velocity moves with the air) instead of a gust of the difference.
+  if (sim.wingLow && sim.wingLow.readyT === null && was && was !== sim.wx && !sim.onGround) {
+    const f = KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY);
+    const a = windVector(was.windDirDeg, was.windKts * f), b = windVector(sim.wx.windDirDeg, sim.wx.windKts * f);
+    sim.vel.x += b.x - a.x; sim.vel.z += b.z - a.z;
+  }
   sim.isaDevC = isaDeviationC(sim.wx.tempC, REF_ELEV_M);
   sim.altimInHg = sim.wx.altimInHg || 29.92;
   sim.wetRunway = !!sim.wx.wetRunway; // the METAR's rain: wet braking (systems.js, 0108)
@@ -1763,6 +1800,7 @@ function step6DofPhysics(dt) {
   checkWake(dt);
   if (sim.pattern?.ent && cockpitEntered) patLib.entryStep(sim.pattern, sim); // 0187: how the join was flown (the sim flies on behind the menu: so does this)
   checkShortField(dt);
+  checkWingLow(dt);
   checkSoftField(dt);
   if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in
     if (ifrLib.dhStep(sim.dh, sim)) audio.callout('minimums');
@@ -1797,6 +1835,14 @@ function integrateSubStep(dt) {
   sim.inputSource = targets.source;
   let targetPitch = targets.pitch, targetRoll = targets.roll;
   let targetYaw = targets.yaw;
+  // The touch pedals (0188): a tap stepped the rudder (pedalTap); held, it keeps moving 0.6/s; let go, it stays (a slip
+  // holds steady pedal; on Learner a released pedal would hand the rudder back to the coordination, which undoes the
+  // slip). Centred on the runway after the lesson's touchdown (AFH: the rudder relaxes as the nose wheel comes down).
+  const now = performance.now(); // a tap is its step only; held past PEDAL_HOLD_MS, the pedal moves on
+  const pedalDir = (pedalHeld.r && now - pedalHeld.r > PEDAL_HOLD_MS ? 1 : 0) - (pedalHeld.l && now - pedalHeld.l > PEDAL_HOLD_MS ? 1 : 0);
+  if (pedalDir) sim.touchYaw = THREE.MathUtils.clamp(sim.touchYaw + pedalDir * 0.6 * dt, -1, 1);
+  else if (sim.touchYaw && sim.onGround && sim.wingLow?.td) sim.touchYaw = 0;
+  if (!targetYaw && sim.touchYaw) targetYaw = sim.touchYaw;
   // Pilot taxiing with the touch/drag stick and no rudder keys: its sideways push is a nose-wheel
   // tiller, not ailerons (0110; one axis can't do both: aileron into the wind steered the nose into
   // it). Handed back to the ailerons from 20 to 40 kt, so the roll, a touchdown and a bounce keep
@@ -2211,14 +2257,25 @@ function renderHud() {
   if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
   if (sim.stallKts && !sim.onGround) gateVerdict?.drawStallBand(hudCtx, cx - 131, cy, sim.stallKts, sim.iasKts); // lazy (0156)
   if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
-  const showTrim = trimControl();
+  const showTrim = trimControl() && !(sim.wingLow && sim.assist !== 'kid'); // 0188: the pedals take the rocker's slot
   if (showTrim !== trimShown) { // the rocker follows (no layout work on other frames)
     trimShown = showTrim;
     byId('touchTrim').classList.toggle('hidden', !showTrim);
     if (!showTrim) { trimHeld.up = trimHeld.dn = false; sim.touchTrim = 0; }
   }
+  const showPedals = !!sim.wingLow && sim.assist !== 'kid'; // 0188: Kid's de-crab has the rudder
+  if (showPedals !== pedalsShown) {
+    pedalsShown = showPedals;
+    byId('touchRudder').classList.toggle('hidden', !showPedals);
+    if (!showPedals) { pedalHeld.l = pedalHeld.r = 0; sim.touchYaw = 0; }
+  }
+  const rudPct = showPedals ? Math.round(sim.touchYaw * 100) : 0;
+  if (rudPct !== rudShown) { // the pedal's position, under the left thumb (it stays where it was left)
+    rudShown = rudPct;
+    byId('txtTouchRud').textContent = rudPct ? `${Math.abs(rudPct)}% ${rudPct < 0 ? 'L' : 'R'}` : '0';
+  }
   // Pilot's trim bug (0094): drawn by the lazy gateVerdict.js (off the boot budget, 0156).
-  if (showTrim && sim.trimAlphaDeg != null) gateVerdict?.drawTrimBug(hudCtx, cx - 131, cy, trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex), sim.iasKts);
+  if (trimControl() && sim.trimAlphaDeg != null) gateVerdict?.drawTrimBug(hudCtx, cx - 131, cy, trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex), sim.iasKts);
   if (sim.activeEnd && !sim.onGround && sim.raFt < 60) drawFlareCue(cx, cy);
 
   // Heading
@@ -3057,6 +3114,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.rto = null;
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = null;
   sim.softField = sim.surfaceMu = null;
+  if (sim.wingLow) { sim.wingLow = null; sim.touchYaw = 0; refreshWeather(); } // 0188: the lesson's wind goes with it
   sim.windshear = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
@@ -3357,6 +3415,20 @@ for (const [id, key] of [['touchTrimDn', 'dn'], ['touchTrimUp', 'up']]) {
   onPtrEnd(release);
 }
 
+// Touch rudder pedals (0188, the wing-low lesson): held like the trim rocker; the frame moves sim.touchYaw.
+const pedalHeld = { l: 0, r: 0 }; // when each was pressed (performance.now), 0 = up
+const PEDAL_HOLD_MS = 400;
+for (const [id, key] of [['touchRudL', 'l'], ['touchRudR', 'r']]) {
+  const el = byId(id);
+  let pointerId = null;
+  el.addEventListener('pointerdown', (e) => {
+    pointerId = e.pointerId; el.setPointerCapture(e.pointerId); pedalHeld[key] = performance.now(); e.preventDefault();
+    sim.touchYaw = Math.round(THREE.MathUtils.clamp(sim.touchYaw + (key === 'r' ? 0.2 : -0.2), -1, 1) * 10) / 10; // a tap: 20%
+  });
+  onPtrEnd((e) => { if (e.pointerId == null || e.pointerId === pointerId) { pointerId = null; pedalHeld[key] = 0; } });
+}
+let pedalsShown = false, rudShown = 0;
+
 // Phone system buttons reuse the desktop handlers.
 byId('touchGear').addEventListener('click', () => byId('btnGear').click());
 byId('touchFlaps').addEventListener('click', () => byId('btnFlaps').click());
@@ -3584,6 +3656,7 @@ window.openaeroDebug = () => {
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,
     aileronInput: sim.aileronInput,
+    rudderInput: sim.rudderInput, // 0188: the pedals (touch, Q/E)
     crossM: sim.approach.crossM,
     distM: sim.approach.distM,
     heightAbovePathM: sim.approach.heightAbovePathM,
@@ -3632,6 +3705,8 @@ window.openaeroDebug = () => {
     slowFlight: sim.slowFlight ? { ...sim.slowFlight } : null,
     wake: sim.wake ? { ...sim.wake, path: undefined, end: sim.wake.end.id } : null,
     shortField: sim.shortField && { ...sim.shortField, end: sim.shortField.end.id },
+    wingLow: sim.wingLow && { ...sim.wingLow, end: sim.wingLow.end.id, wx: undefined, src: undefined, windDirDeg: sim.wingLow.wx?.windDirDeg, windKts: sim.wingLow.wx?.windKts, live: !!sim.wingLow.wx?.live },
+    touchYaw: sim.touchYaw,
     softField: sim.softField && { ...sim.softField, end: sim.softField.end.id },
     surfaceMu: sim.surfaceMu,
     takeoffCalls: [...sim.takeoffCalls],
