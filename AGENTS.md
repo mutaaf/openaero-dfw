@@ -566,7 +566,7 @@ src/engine.js       thrust by engine type: fixed-pitch prop (thrust table + powe
                     fitted to CFM's FL350 max climb thrust, 0116); full throttle is the take-off/go-around
                     rating. maxClimbThrustN (0135): the 737's CLB rating (Bartel & Young 2008, anchored to CFM's
                     FL350 figure, spec.engine.climb), what the APD climb cards fly; the game does not use it
-src/aero.js         pure aero/avionics: CL with stall, CD + ground effect + the 737's Mach drag rise
+src/aero.js         pure aero/avionics: CL with stall, CD + ground effect (0183: on PHAK ch. 5's 1.4/23.5/47.6%, CG height) + the 737's Mach drag rise
                     (waveDragCd, 0120: Mason's Korn + Lock, spec.transonic), PAPI, stabilized-
                     approach gate (500/1,000 ft, ILS dots),
                     GPWS callouts, takeoff callouts (80 kt, V1, rotate, positive rate; 0035),

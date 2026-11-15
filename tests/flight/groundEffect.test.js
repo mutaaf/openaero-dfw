@@ -72,10 +72,9 @@ describe('ground effect on induced drag (0179, PHAK ch. 5)', () => {
     });
   }
 
-  // Model (r = 16h/b, factor (r/(1+r))²): ~11.4% at one span, ~36% at a quarter, ~62% at a tenth,
-  // against 1.4 / 23.5 / 47.6. The curve is the same for every airframe (it is a function of h/b);
-  // the clamp does not touch the cited heights. Fixing it moves the flare float and landing cards.
-  it.fails('KNOWN GAP (0183): the induced-drag reduction at h/b 1, 1/4 and 1/10 is within 3 percentage points of PHAK\'s 1.4 / 23.5 / 47.6% (model: ~11.4 / 36 / 62%)', () => {
+  // Before 0183 the model (r = 16h/b, factor (r/(1+r))²) took ~11.4% at one span, ~36% at a quarter and
+  // ~62% at a tenth. aero.js now fits a curve through PHAK's three figures (see groundEffectFactor).
+  it('the induced-drag reduction at h/b 1, 1/4 and 1/10 is within 3 percentage points of PHAK\'s 1.4 / 23.5 / 47.6% (0183)', () => {
     for (const id of AIRCRAFT) {
       const b = AIRCRAFT_DATABASE[id].wingSpanM;
       for (const { hOverB, reductionPct: cited } of PHAK) {
