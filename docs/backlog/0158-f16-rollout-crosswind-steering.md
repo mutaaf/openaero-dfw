@@ -22,10 +22,10 @@ pedal or failed the 0110 skip card (the 0150 PR's sweep).
 Give the F-16's nose-wheel steering its own authority schedule (the real one has a low-gain mode above taxi speed;
 find a cited source for its authority, e.g. the F-16 flight manual's NWS description), in gear.js
 noseSteerYawRate / spec.gear, so the pedal at landing speed is the rudder's and the nose wheel's steering is gentle.
-Then flip the two `it.fails` KNOWN GAP (0158) cards in tests/flight/kidFinal.test.js.
+Then flip the `it.fails` KNOWN GAP (0158) card in tests/flight/kidFinal.test.js (the Learner 20 kt one passes since 0183, see below).
 
 ## Acceptance criteria
-- [ ] The two KNOWN GAP (0158) cards pass (flip to `it`)
+- [ ] The KNOWN GAP (0158) card passes (flip to `it`), and Learner from 3 m holds at 22-25 kt too
 - [ ] The 0110 groundSteer cards, the 0100/0150 rollout cards and the 30 fps card still pass
 - [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
 
@@ -67,3 +67,8 @@ differential braking, neither of which the game has.
 2. Then the F-16: steerDeg 32 (cited) with NWS engaged only below taxi speed (a number still needs a source; the
    AFMAN 11-2F-16 v3 is the likely one, 403 here), and the Kid/Learner hold on the rudder (and, if modelled,
    per-main differential braking) above it.
+
+## Update 2026-11-15 (0183)
+Ground effect to PHAK's curve moved Learner's 20 kt crabbed touchdown card to 6.1 m (15.2 m the run before), so it is a
+plain `it` now. It is a cliff, not a fix: Learner from 3 m in 21 kt is already 22.4 m off, 22 kt still runs ~515 m off, 24 kt ~894 m. The 25 kt Kid
+card stays the gap.

@@ -86,11 +86,26 @@ export const OVERSPEED_REARM_KTS = 3;
 export const overspeedStep = (warned, iasKts, limitKts) =>
   limitKts !== null && iasKts > (warned ? limitKts - OVERSPEED_REARM_KTS : limitKts);
 
-// Ground-effect factor on drag (McCormick-style, 1 = out of ground effect).
+// Ground-effect factor on induced drag (1 = out of ground effect; dragCoefficient scales only the
+// induced term by it). 0183: the induced-drag reduction R = 1 - factor is a curve fitted through the
+// FAA's three figures (Pilot's Handbook of Aeronautical Knowledge, FAA-H-8083-25C, ch. 5 "Ground
+// Effect": 1.4% at a height of one span, 23.5% at a quarter span, 47.6% at a tenth):
+//   R(h/b) = GE_A · exp(-GE_K · (h/b)^GE_P)
+// It meets all three within 0.05 point, stays within ~3 points of Wieselsberger's fit
+// σ = (1 - 1.32 h/b)/(1.05 + 7.4 h/b) from 0.05 to 0.5 span, and tends to 0 above one span
+// (0.27% at 1.5 spans, 0.06% at 2), where Wieselsberger's goes negative. Before 0183 this was
+// (r/(1+r))² with r = 16 h/b: ~11.4 / 36 / 62% at the three heights, ~6% still at two spans.
+// h is the CG's height above the ground (flightModel.js pos.y - groundY): the specs carry no wing
+// height. That is worth several points on the wheels: the C172's CG at 1.65 m reads R 37% where its
+// high wing (~2.0-2.2 m) would read 29-32%; the 737's CG at 3.4 m reads 49% where its low wing (~2 m)
+// would read ~60%. The 1 m floor (R ≈ 50% for the C172) never acts on the wheels (every gearHeight is
+// over 1 m), only gear-up; below it the fit would tend to R 89.6%, not 100%.
+const GE_A = 0.896;
+const GE_K = 4.16;
+const GE_P = 0.818;
 export function groundEffectFactor(heightM, wingSpanM) {
-  const h = Math.max(1.0, heightM);
-  const r = 16 * h / wingSpanM;
-  return Math.min(1.0, Math.pow(r / (1 + r), 2));
+  const hOverB = Math.max(1.0, heightM) / wingSpanM;
+  return 1 - GE_A * Math.exp(-GE_K * Math.pow(hOverB, GE_P));
 }
 
 export function inducedDragK(spec) {

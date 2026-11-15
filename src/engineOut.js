@@ -130,7 +130,9 @@ export function stepEngineOut(st, s) {
   // coach said turn now); later, from here (a whole turn from straight ahead, no margin).
   if (st.turnOk === null && off > EO_TURN_FROM_DEG / 2) {
     const early = s.t - st.t0 < DS_FAIL_S;
-    st.turnNeedFt = early ? st.turnbackFt : g.needFt;
+    // The early call's need is the one the coach judged by: the turnback height plus EO_MARGIN_FT (0183: the card
+    // printed "below the 678 ft it needs" to a turn from 692 ft that the 703 ft call had ruled out).
+    st.turnNeedFt = early ? st.turnbackFt + EO_MARGIN_FT : g.needFt;
     st.turnOk = early ? st.canTurn : s.aglFt >= g.needFt;
   }
   if (st.startFt === null && off > EO_TURN_FROM_DEG) st.startFt = s.aglFt;
