@@ -100,6 +100,8 @@ describe('power-off 180 coach (power180.js power180Target)', () => {
     expect(st.turned).toBe(true);
     sim.aglFt = 900; // higher again (an updraft): the coach keeps guiding the turn it called
     expect(deadStickPrompt(st, sim)).toBe('p1TurnL');
+    sim.simTime = 36; // still turning 6 s later: "keep turning"
+    expect(deadStickPrompt(st, sim)).toBe('p1KeepL');
   });
 
   it('on final: flaps 20 when they still reach, flaps 30 after; low says flaps up; over the runway, touch on the blocks', () => {
@@ -107,7 +109,9 @@ describe('power-off 180 coach (power180.js power180Target)', () => {
     expect(power180Target(fin(-700, 600))).toBe('p1Flaps');
     expect(power180Target(fin(-700, 600, 2))).toBe('p1High');
     expect(power180Target(fin(-700, 260))).toBe('p1Final'); // 600 m to the aim: 9:1 makes it (219 ft), 7.6:1 just (259)
-    expect(power180Target(fin(-700, 120))).toBe('p1Low');
+    expect(power180Target(fin(-700, 210))).toBe('p1Final'); // a little under the glide: not yet "low"
+    expect(power180Target(fin(-700, 120))).toBe('p1LowF');
+    expect(P180_TEXT.p1LowF).not.toMatch(/flaps up/);
     expect(power180Target(fin(-150, 80, 2))).toBe('p1High'); // still high over the pavement: flaps 30
     expect(power180Target(fin(-150, 80, 3))).toBe('p1Runway');
     expect(FLAPS_FT).toBeGreaterThan(0);
@@ -177,6 +181,13 @@ describe('power-off 180 grade (power180.js deadStickResult)', () => {
       expect(r.title).toBe('Power-off 180');
     }
     expect(['A', 'B']).toContain(grade(100, { vsFpm: -250 }).grade);
+  });
+
+  it('on Kid (the plane flew it) the card says how far, with no advice', () => {
+    const st = createDeadStick(0);
+    p180Step(st, { assist: 'kid', aglFt: 300, aoaDeg: 0, spec: AIRCRAFT_DATABASE.c172, flapsIndex: 0 });
+    expect(grade(400, {}, st).reason).toBe('400 ft past the spot.');
+    expect(grade(-50, {}, st).reason).toMatch(/^Short of the spot by 5\d ft\.$/);
   });
 
   it('50 ft short: a C at best, and it says short of the spot', () => {

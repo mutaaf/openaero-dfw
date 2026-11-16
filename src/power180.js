@@ -14,7 +14,7 @@ import { bankCommandForHeading } from './autopilot.js';
 import { stallAoaDeg } from './aero.js';
 import { letterGrade, curve } from './landing.js';
 import { M_TO_FT } from './constants.js';
-import { DRILL_TEXT } from './coach.js';
+import { DRILL_TEXT, TOUCH_WORDS } from './coach.js';
 import {
   DS_GLIDE_KTS, DS_RATIO_BY_FLAPS, DS_SLOW_KTS, DS_SLOW_FLAPS_KTS, DS_FAST_KTS, DS_FAIL_S, DS_FLARE_FT,
   kidGlideGammaDeg, landingEnd, deadStickResult as dsResult, debugFinal,
@@ -49,6 +49,8 @@ export const KID_TURN_FT = 90;
 // Lined up: when a glide with the next notch out still reaches the aim with this much to spare,
 // the coach asks for it (flaps 20, then 30); Kid's guide sets them.
 export const FLAPS_FT = 10;
+const LOW_FT = 20;
+const KEEP_S = 5;
 
 export const P180_TEXT = {
   p1Fail: `Engine out! Pitch for ${DS_GLIDE_KTS} knots: the spot is the big white blocks`,
@@ -60,14 +62,18 @@ export const P180_TEXT = {
   p1WaitR: 'Spot off your right: too high to turn yet, glide on',
   p1TurnL: 'Turn left now: glide round toward the spot',
   p1TurnR: 'Turn right now: glide round toward the spot',
-  p1Base: 'Roll out on the runway line, then turn onto it',
-  p1Low: 'Low: flaps up, cut the corner to the runway, hold 68',
-  p1Flaps: "High enough: flaps 20 now",
-  p1High: 'Still high: flaps 30 now',
+  p1KeepL: 'Keep turning left, toward the runway line',
+  p1KeepR: 'Keep turning right, toward the runway line',
+  p1Base: 'Fly to the runway line, then turn onto it',
+  p1Low: 'Low: cut the corner to the runway, hold 68',
+  p1LowF: 'Low: hold 68 knots, no more flaps',
+  p1Flaps: 'High enough: flaps 20 now (press F until 20°)',
+  p1High: 'Still high: flaps 30 now (press F to 30°)',
   p1Final: 'On final: hold 68, aim just before the blocks',
   p1Runway: 'Over the runway: ease the nose up, touch on the blocks',
 };
 Object.assign(DRILL_TEXT, P180_TEXT);
+Object.assign(TOUCH_WORDS, { p1Flaps: 'High enough: tap FLAPS until 20°', p1High: 'Still high: tap FLAPS to 30°' });
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
 const deg = (rad) => rad * 180 / Math.PI;
@@ -123,13 +129,14 @@ export function power180Target(s) {
   if (s.iasKts < (s.flaps ? DS_SLOW_FLAPS_KTS : DS_SLOW_KTS)) return 'p1Slow';
   if (s.iasKts > DS_FAST_KTS) return 'p1Fast';
   if (g.lined || g.overRunway) {
-    if (g.toSpotFt < 0 && g.pastSpotM < 0) return 'p1Low';
+    // Low on final (a little margin, so a gust after the flaps doesn't flip it): no more flaps.
+    if (g.toSpotFt < -LOW_FT && g.pastSpotM < 0) return 'p1LowF';
     if (s.flaps < 3 && g.nextFlapsFt > FLAPS_FT && g.pastSpotM < 0) return s.flaps < 2 ? 'p1Flaps' : 'p1High';
     return g.overRunway ? 'p1Runway' : 'p1Final';
   }
   if (g.toSpotFt < 0) return 'p1Low';
   if (!s.turned && g.viaFinalFt > TURN_FT) return g.spotRelDeg < 0 ? 'p1WaitL' : 'p1WaitR';
-  if (Math.abs(g.aimRelDeg) > 30) return g.aimRelDeg < 0 ? 'p1TurnL' : 'p1TurnR';
+  if (Math.abs(g.aimRelDeg) > 30) return s.turned ? (g.aimRelDeg < 0 ? 'p1KeepL' : 'p1KeepR') : g.aimRelDeg < 0 ? 'p1TurnL' : 'p1TurnR';
   if (s.flaps < 3 && g.nextFlapsFt > FLAPS_FT) return s.flaps < 2 ? 'p1Flaps' : 'p1High';
   return 'p1Base';
 }
@@ -147,6 +154,9 @@ function input(st, sim) {
 export function deadStickPrompt(st, sim) {
   const p = power180Target(input(st, sim));
   if (p === 'p1TurnL' || p === 'p1TurnR' || p === 'p1Base') st.turned = true;
+  if (st.turned) st.turnT ??= _in.t;
+  // "Turn left now" stays up a few seconds before it becomes "keep turning".
+  if (_in.t - (st.turnT ?? _in.t) < KEEP_S) return p === 'p1KeepL' ? 'p1TurnL' : p === 'p1KeepR' ? 'p1TurnR' : p;
   return p;
 }
 
@@ -172,6 +182,7 @@ export function kidGuide(st, sim, out) {
 // glide it off the abeam point, and the engine quits (the coach's clock starts) as flying starts.
 // Then a stall above the flare height is remembered for the card.
 export function p180Step(st, sim, live = true) {
+  st.kid = sim.assist === 'kid';
   if (!st.live) {
     if (live) { st.live = true; st.t0 = sim.simTime; return; }
     const h = st.hold ??= { p: [sim.pos.x, sim.pos.y, sim.pos.z], v: [sim.vel.x, sim.vel.y, sim.vel.z], q: [sim.quat.x, sim.quat.y, sim.quat.z, sim.quat.w] };
@@ -211,9 +222,9 @@ export function deadStickResult(landing, end, pos, st = null) {
   let reason = null;
   if (pastFt < 0) {
     score = Math.min(score, SHORT_CAP);
-    reason = `Short of the spot by ${ftText(-pastFt)}: the test fails that. Turn sooner, or hold the flaps.`;
+    reason = st?.kid ? `Short of the spot by ${ftText(-pastFt)}.` : `Short of the spot by ${ftText(-pastFt)}: the test fails that. Turn sooner, or flaps later.`;
   } else if (pastFt > BEYOND_FT) {
-    reason = `${ftText(pastFt)} past the spot (the test allows 200): turn later, or flaps sooner.`;
+    reason = st?.kid ? `${ftText(pastFt)} past the spot.` : `${ftText(pastFt)} past the spot (the test allows 200): turn later, or flaps sooner.`;
   }
   if (st?.stalled) {
     score = Math.min(score, STALL_CAP);
