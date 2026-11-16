@@ -404,6 +404,14 @@ src/landingLight.js the landing light (0076, in runwayLights.js's chunk): a grid
                     aircraft.js. On at every new flight; off climbing through 10,000 ft MSL, on descending (AIM 4-3-23 encourages
                     them below 10,000 ft); L (not in a form field) or the menu's #btnLandLight (💡; "Landing light" from lg); not stored.
                     ?debug: window.openaeroLandingLight (as runwayLights.js/windsock.js set their own ?debug handles)
+src/shadow.js       the aircraft's ground shadow (0190, in runwayLights.js's chunk, made by its createLandingLight wrapper on the group's
+                    'added'; a dynamic import of its own would add a preload-map entry to boot): the drawn airframe's top-down silhouette
+                    (rasterised once per airframe, idle time, from the root's visible lit meshes into a 128 px canvas Texture, no readback), a 4-vertex quad
+                    in the body's x-z plane through the main wheels (spec.gearHeight under the CG) projected along main.js's sun light onto terrain.js heights where the shadow falls (lifted
+                    0.15 m + 0.4% of the camera distance, ≤ 1.5 m, polygon offset like the landing light). shadowOffset (h / tan el, away from the
+                    sun), shadowOpacity (0.55 by day, fades in from a 3° to a 10° sun, out from 400 to 600 ft AGL, × (1 - the METAR's
+                    largest layer coverage²)), cloudCover: pure, tested. scene.onBeforeRender chained; follows the root, so the replay
+                    too; every view and level. ?debug: window.openaeroShadow (state: visible, opacity, sunElevationDeg, aglFt, offsetM)
 src/touchdownFeel.js touchdown you can feel (0147, in runwayLights.js's chunk like landingLight.js): at each contact main.js touchdownBuzz
                     counts (first touchdown and re-contacts) touch() plays a synthesized tyre chirp (band-passed noise) and, from
                     240 fpm, a thump (95 → 40 Hz + an overtone a phone speaker plays) on audio.js's ctx (only while it runs, not behind a menu), louder with the sink (touchdownFeel: pure, capped at the 600 fpm
