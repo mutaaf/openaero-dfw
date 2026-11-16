@@ -1,7 +1,7 @@
 ---
 id: 0177
 title: "Too high" drill: slip the Cessna down to the numbers
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: content
@@ -38,3 +38,25 @@ tests/flight pilot scripts both ways; e2e picks the mission and asserts the star
 
 ## Out of scope
 Slips with full flaps, side-slip crosswind landing (0069 covers the crosswind card).
+
+## Back to proposed (Builder, 2026-11-16)
+Measured on main (6bbd8e6) with `tests/flight/harness.js forwardSlip` (idle, speed held, flightModel.js):
+| config | glide | full-rudder slip |
+|---|---|---|
+| flaps up, 70 KIAS | 786 fpm, ~6.3° | 929 fpm (+18%) |
+| flaps 30, 65 KIAS | 983 fpm, ~8.5° | — |
+| flaps 30, 61 KIAS | 902 fpm, ~8.3° | — |
+
+Two blockers, neither code the Builder can write without a decision:
+1. **The spawn is not too high.** 900 ft AGL at 1.5 NM is a 5.6° path; the Cessna's idle flaps-up glide is already
+   steeper (6.3°), and flaps 30 idle (~8.5°) gets down with room to spare. The acceptance criterion "a no-slip
+   (flaps 30, idle) pilot lands long" cannot pass. A start that needs the slip has to sit above the flaps-30 idle
+   path (> ~8.5°: e.g. ~1,350+ ft AGL at 1.5 NM), or start with flaps 30 already out (which the POH caution argues
+   against slipping with).
+2. **The slip barely works yet.** flightModel.js has no drag due to sideslip, so a flaps-up slip (+18%, 7.5°) is
+   *less* effective than just lowering flaps 30 (8.5°): a drill grading "slip, flaps up" as the answer would teach
+   the wrong lesson in this sim. That is 0178 (CDβ, PR #256), held for the operator's call on touch-Pilot turns and
+   Kid's crosswind grade. 0176's slip card is still a KNOWN GAP for the same reason.
+
+Route: ship 0178 first, then the Scout re-specifies the spawn (height/distance and flap setting) against the measured
+flaps-30 idle path, and promotes again.
