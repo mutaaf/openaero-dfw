@@ -95,6 +95,24 @@ describe('drawSilhouette', () => {
     expect(Math.max(...ys)).toBeCloseTo(64 + (4 / size) * 128, 3);
     expect(ops.filter((o) => o[0] === 'fill').length).toBe(2);
   });
+  it('keeps the nose at the top and the right wing on the right (not mirrored)', () => {
+    const root = new THREE.Group();
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))); // at the origin
+    const marker = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    marker.position.set(2, 0, -3); // right and forward (nose is -Z)
+    root.add(marker);
+    const fills = [];
+    let cur = [];
+    const ctx = {
+      clearRect() {}, beginPath() { cur = []; }, closePath() {}, fill() { fills.push(cur); },
+      moveTo(x, y) { cur.push([x, y]); }, lineTo(x, y) { cur.push([x, y]); }, set fillStyle(v) {},
+    };
+    drawSilhouette(root, ctx, 128);
+    const mean = (pts) => pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0]);
+    const [mx, my] = mean(fills[1]);
+    expect(mx).toBeGreaterThan(64); // right of centre
+    expect(my).toBeLessThan(64);    // above centre: the canvas's top row is the nose (the DataTexture's v 0)
+  });
   it('leaves out see-through meshes (a flame) and hidden ones', () => {
     const root = new THREE.Group();
     root.add(new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2)));

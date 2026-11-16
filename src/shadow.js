@@ -4,8 +4,11 @@
 // the wheels at touchdown. Not a shadow map (frame budget, invariant 4): one quad, four vertices.
 //
 // The silhouette is rasterised once per airframe from the meshes under the aircraft root (the
-// built-in model or the detailed glTF, whichever is drawn) into a 128 px alpha canvas, in the body's
-// x-z plane through the CG. Each frame the quad's four corners, in that plane, are projected along
+// built-in model or the detailed glTF, whichever is drawn) into a 128 px alpha canvas, seen from
+// above in the body's frame. Each frame it is laid in the body's x-z plane through the main wheels
+// (spec.gearHeight below the CG, so the shadow meets the wheels at touchdown; a high wing's own
+// shadow then falls a little short of where it really would), and the quad's four corners in that
+// plane are projected along
 // the sun onto the ground plane at the shadow's centre, so bank, pitch and heading shape it the way
 // the sun would (a flat-silhouette approximation of the 3D airframe; the ground under it is taken
 // flat, which the runways are). Faded in with the sun (none below 3°, the Dawn/Dusk presets'
@@ -160,9 +163,10 @@ export function createShadow(scene, sim, root, heightAt) {
 
   const sunLight = () => scene.children.find((o) => o.isDirectionalLight);
   let light = null;
-  const state = { visible: false, opacity: 0, sunElevationDeg: 0, aglFt: 0, offsetM: 0, groundY: 0, x: 0, z: 0, sizeM: 0, built: 0 };
+  const state = { visible: false, opacity: 0, sunElevationDeg: 0, aglFt: 0, offsetM: 0, awayX: 0, awayZ: 0, groundY: 0, x: 0, z: 0, sizeM: 0, built: 0 };
   let sizeM = 0, builtFor = null, builtCount = -1, checkIn = 0, pending = false;
   const _s = new THREE.Vector3(), _r = new THREE.Vector3(), _f = new THREE.Vector3(), _c = new THREE.Vector3();
+  const _u = new THREE.Vector3(), _w = new THREE.Vector3();
   const _list = [];
   const CORNERS = [-1, -1, 1, -1, -1, 1, 1, 1]; // (x, z) in half-sizes, the uv order above
 
@@ -192,6 +196,7 @@ export function createShadow(scene, sim, root, heightAt) {
     mesh.visible = false;
     state.visible = false;
     state.opacity = 0;
+    state.offsetM = 0;
   }
 
   function update() {
@@ -202,7 +207,9 @@ export function createShadow(scene, sim, root, heightAt) {
     if (!(sizeM > 0)) return hide();
     _s.copy(light.position).normalize(); // towards the sun
     const el = Math.asin(Math.max(-1, Math.min(1, _s.y))) / DEG;
-    const p = r.position;
+    // The main wheels' plane: the CG (the root's origin) down the body's up axis by the gear's height.
+    _u.set(0, 1, 0).applyQuaternion(r.quaternion);
+    const p = _w.copy(r.position).addScaledVector(_u, -(sim.spec?.gearHeight ?? 0));
     const g0 = heightAt(p.x, p.z);
     const aglFt = (p.y - g0) / FT;
     state.sunElevationDeg = el;
@@ -220,7 +227,9 @@ export function createShadow(scene, sim, root, heightAt) {
     _r.set(1, 0, 0).applyQuaternion(r.quaternion);
     _f.set(0, 0, 1).applyQuaternion(r.quaternion);
     const camD = Math.hypot(cx - camPos.x, g - camPos.y, cz - camPos.z);
-    const lift = 0.15 + 0.004 * camD; // over the drawn tiles, coarser than terrain.js between vertices
+    // Over the drawn tiles, coarser than terrain.js between vertices; capped, or from a grazing view far
+    // off the lifted quad would slide tens of metres.
+    const lift = Math.min(1.5, 0.15 + 0.004 * camD);
     const half = sizeM / 2;
     for (let i = 0; i < 4; i++) {
       _c.copy(p).addScaledVector(_r, CORNERS[i * 2] * half).addScaledVector(_f, CORNERS[i * 2 + 1] * half);
@@ -236,7 +245,8 @@ export function createShadow(scene, sim, root, heightAt) {
     state.opacity = op;
     state.groundY = g;
     state.x = cx; state.z = cz;
-    state.offsetM = Math.hypot(cx - p.x, cz - p.z);
+    state.awayX = cx - p.x; state.awayZ = cz - p.z; // from under the wheels to the shadow's centre
+    state.offsetM = Math.hypot(state.awayX, state.awayZ);
   }
 
   const camPos = new THREE.Vector3();

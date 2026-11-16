@@ -56,15 +56,23 @@ test('the shadow lies where the sun throws it under 300 ft by day, darkens the g
   expect(s.sunElevationDeg).toBeGreaterThan(10);
   expect(s.opacity).toBeGreaterThan(0.3);
   expect(s.sizeM).toBeGreaterThan(30); // the 737's 35.8 m span
-  // h / tan(el) from under the airplane (its origin's height over the ground where the shadow falls; the runway is flat).
+  // h / tan(el) from under the main wheels (their height over the ground where the shadow falls; the runway is flat),
+  // away from the sun, and the nose corners (0, 1) on the nose's side of the centre.
   const hM = s.aglFt * 0.3048;
   expect(s.offsetM, JSON.stringify(s)).toBeCloseTo(hM / Math.tan((s.sunElevationDeg * Math.PI) / 180), 0);
+  const geo = await page.evaluate(() => {
+    const r = window.openaeroShadow.mesh.parent.children.find((o) => o.isDirectionalLight).position.clone().normalize();
+    return { sun: { x: r.x, z: r.z } };
+  });
+  expect(s.awayX * geo.sun.x + s.awayZ * geo.sun.z, JSON.stringify({ s, geo })).toBeLessThan(0);
   // On the ground there (terrain.js), lifted under 1 m.
   const mesh = await page.evaluate(() => Array.from(window.openaeroShadow.mesh.geometry.attributes.position.array));
   for (let i = 0; i < 4; i++) {
     expect(mesh[i * 3 + 1] - s.groundY).toBeGreaterThan(0);
     expect(mesh[i * 3 + 1] - s.groundY).toBeLessThan(1);
   }
+  // On 35C (heading ~359° true, nose north, -Z): the nose corners lie north of the tail corners.
+  expect((mesh[2] + mesh[5]) / 2).toBeLessThan((mesh[8] + mesh[11]) / 2);
   expect(d.mission).toBe('debug_KDFW_35C_0.15');
 
   // It darkens what it covers: the bare canvas with and without it.
