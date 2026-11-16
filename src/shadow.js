@@ -68,14 +68,16 @@ export function cloudCover(wx) {
   return c;
 }
 
-// The visible meshes under the root that make the silhouette (not the landing light's beam or any
-// see-through glow, such as the F-16's flame).
+// The visible meshes under the root that make the silhouette: lit ones (Standard and the like). Unlit
+// MeshBasicMaterial parts are left out: the F-16's afterburner flame (shown above 60% throttle, and
+// scaled with it, main.js) would swell the shadow and redraw it at every crossing; the 737's fan discs
+// sit inside their nacelles. And nothing see-through.
 function silhouetteMeshes(root, out) {
   out.length = 0;
   root.traverseVisible((o) => {
     if (!o.isMesh || !o.geometry?.attributes?.position) return;
     const m = o.material;
-    if (m && !Array.isArray(m) && m.transparent && m.opacity < 0.6) return;
+    if (m && !Array.isArray(m) && (m.isMeshBasicMaterial || (m.transparent && m.opacity < 0.6))) return;
     out.push(o);
   });
   return out;
@@ -137,10 +139,11 @@ export function createShadow(scene, sim, root, heightAt) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = px;
   const ctx = canvas.getContext('2d');
-  // A DataTexture (touchdownFeel.js's class, already in this chunk; a CanvasTexture costs boot a preload entry).
-  // Its first row is the canvas's top, the nose, at v 0.
-  const texData = new Uint8Array(px * px * 4);
-  const tex = new THREE.DataTexture(texData, px, px);
+  // The canvas itself (uploaded by texImage2D: no getImageData, which anti-fingerprinting turns white or
+  // noisy, an opaque square). Texture, the base of touchdownFeel.js's DataTexture, is already in this chunk;
+  // a CanvasTexture costs boot a preload entry. Not flipped: the canvas's top, the nose, is at v 0.
+  const tex = new THREE.Texture(canvas);
+  tex.flipY = false;
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
@@ -174,9 +177,9 @@ export function createShadow(scene, sim, root, heightAt) {
 
   function rebuild(r) {
     pending = false;
-    if (r !== root()) return; // replaced while we waited
+    // Replaced while we waited (a quick aircraft change): watch() draws the new one next frame.
+    if (r !== root()) { builtFor = null; return; }
     sizeM = drawSilhouette(r, ctx, px);
-    texData.set(ctx.getImageData(0, 0, px, px).data);
     tex.needsUpdate = true;
     state.sizeM = sizeM;
     state.built++;

@@ -5,6 +5,7 @@ import { shadowOffset, shadowOpacity, cloudCover, drawSilhouette, SHADOW } from 
 
 const FT = 0.3048;
 const DEG = Math.PI / 180;
+const lit = new THREE.MeshStandardMaterial(); // the silhouette takes lit meshes (MeshBasic is Mesh's default)
 
 describe('shadowOffset: h / tan(el), away from the sun', () => {
   for (const el of [10, 45, 80]) {
@@ -71,8 +72,8 @@ describe('shadowOpacity', () => {
 describe('drawSilhouette', () => {
   it('draws the meshes seen from above, nose at the top, in a square sized to the airframe', () => {
     const root = new THREE.Group();
-    const fus = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 8)); // 8 m long
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(11, 0.2, 1.5));
+    const fus = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 8), lit); // 8 m long
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(11, 0.2, 1.5), lit);
     wing.position.set(0, 0.5, -1);
     root.add(fus, wing);
     root.position.set(500, 200, -300);
@@ -97,8 +98,8 @@ describe('drawSilhouette', () => {
   });
   it('keeps the nose at the top and the right wing on the right (not mirrored)', () => {
     const root = new THREE.Group();
-    root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))); // at the origin
-    const marker = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), lit)); // at the origin
+    const marker = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), lit);
     marker.position.set(2, 0, -3); // right and forward (nose is -Z)
     root.add(marker);
     const fills = [];
@@ -113,13 +114,14 @@ describe('drawSilhouette', () => {
     expect(mx).toBeGreaterThan(64); // right of centre
     expect(my).toBeLessThan(64);    // above centre: the canvas's top row is the nose (the DataTexture's v 0)
   });
-  it('leaves out see-through meshes (a flame) and hidden ones', () => {
+  it('leaves out see-through and unlit meshes (a flame, an afterburner) and hidden ones', () => {
     const root = new THREE.Group();
-    root.add(new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2)));
+    root.add(new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2), new THREE.MeshStandardMaterial()));
     const flame = new THREE.Mesh(new THREE.BoxGeometry(40, 1, 1), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.4 }));
     const hidden = new THREE.Mesh(new THREE.BoxGeometry(60, 1, 1));
     hidden.visible = false;
-    root.add(flame, hidden);
+    const afterburner = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 50), new THREE.MeshBasicMaterial({ color: 0xf97316 })); // opaque, unlit
+    root.add(flame, hidden, afterburner);
     const ctx = { clearRect() {}, beginPath() {}, closePath() {}, fill() {}, moveTo() {}, lineTo() {}, set fillStyle(v) {} };
     expect(drawSilhouette(root, ctx, 128)).toBeCloseTo(1 * 2 * 1.04, 6); // ext ≥ 1 m
   });
