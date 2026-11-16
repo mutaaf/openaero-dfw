@@ -3,7 +3,7 @@
 // 1,000 ft above the field, abeam the spot (the 1,000 ft aiming-point marking, power180.js
 // SPOT_M), 85 KIAS, the engine dead. The glide is the POH's: 68 KIAS best glide, Fig. 3-1's
 // 1.5 NM per 1,000 ft (~9:1) flaps up, measured on this model at 8 to 11:1 (c172.test.js), and
-// ~7.6:1 with flaps 20 (deadStick.js DS_RATIO_BY_FLAPS). The ACS window is the spot to 200 ft past
+// 7.5:1 with flaps 20 (power180.js RATIO_BY_FLAPS, measured on this model since 0186). The ACS window is the spot to 200 ft past
 // it (FAA-S-ACS-7A, Area IV Task M). Flat ground at the field's height (y = 0).
 import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion } from 'three';
@@ -12,7 +12,7 @@ import { M_TO_FT } from '../../src/constants.js';
 import { aileronForBank, elevatorForPitch } from '../../src/autopilot.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { missionByKey } from '../../src/missions.js';
-import { P180_KEY, SPOT_X, SPOT_Z, createDeadStick, deadStickPrompt, kidGuide, p180Step } from '../../src/power180.js';
+import { P180_KEY, RATIO_BY_FLAPS, SPOT_X, SPOT_Z, createDeadStick, deadStickPrompt, kidGuide, p180Step } from '../../src/power180.js';
 import { runwayEnd } from '../../src/airports.js';
 import { makeBody, fly, speedHoldPilot, attitude } from './harness.js';
 
@@ -76,11 +76,24 @@ function power180(mode, { lateS = 8, windKts = 0, windFromDeg = 160 } = {}) {
 const log = (name, r) => console.log(`[c172 flightModel] power-off 180 ${name}: ${r.td.pastSpotFt.toFixed(0)} ft past the spot, ${r.td.crossM.toFixed(1)} m off, ${r.td.kts.toFixed(0)} KIAS, ${r.td.sinkFpm.toFixed(0)} fpm, flaps ${r.td.flaps}, ${r.td.t.toFixed(0)} s; coach ${r.prompts.join(' > ')}`);
 
 describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', () => {
-  it('flown as the coach says: on the spot to 400 ft past it, on the centreline, no stall', () => {
+  it("the coach's glide ratios are this model's: idle at 68 KIAS, each flap notch within 3%", () => {
+    for (const flaps of [0, 1, 2, 3]) {
+      const b = Object.assign(makeBody(c172, { kts: 68, altM: 600, flaps }), { engineFailed: true });
+      const hold = speedHoldPilot(() => 68);
+      fly(b, c172, 40, hold);
+      const h0 = b.pos.y, d0 = b.distM;
+      fly(b, c172, 30, hold);
+      const ratio = (b.distM - d0) / (h0 - b.pos.y);
+      console.log(`[c172 flightModel] power-off 180 glide, flaps notch ${flaps}: ${ratio.toFixed(2)}:1 (coach ${RATIO_BY_FLAPS[flaps]})`);
+      expect(Math.abs(ratio / RATIO_BY_FLAPS[flaps] - 1)).toBeLessThan(0.03);
+    }
+  });
+
+  it('flown as the coach says: inside the ACS window (the spot to 200 ft past it), on the centreline, no stall', () => {
     const r = power180('coach');
     log('as coached', r);
     expect(r.td.pastSpotFt).toBeGreaterThanOrEqual(0);
-    expect(r.td.pastSpotFt).toBeLessThanOrEqual(400);
+    expect(r.td.pastSpotFt).toBeLessThanOrEqual(200);
     expect(Math.abs(r.td.crossM)).toBeLessThan(8);
     expect(r.stalled).toBe(false);
     expect(r.prompts[0]).toBe('p1Fail');
@@ -96,15 +109,17 @@ describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', (
   });
 
   // The coach reads the wind on each leg (power180.js legWind): down the runway, up it and across, at
-  // 5 and 10 kt (Addison's METAR blows ~10 kt on a typical day). Measured 2026-11-16: 160°: +156 / −7 ft,
-  // 340°: +74 / −68, 250°: +115 / +98, 070°: +122 / +126. At 15 kt it is −250 to +161 (logged, not carded).
-  it('in a 5 or 10 kt wind from any side, as coached: 150 ft short to 300 ft past the spot', () => {
+  // 5 and 10 kt. Measured 2026-11-16 (5 / 10 kt): 160°: +139 / +170 ft, 340°: +76 / +68, 250°: +77 / +36,
+  // 070°: +86 / +82; still air +83. It aims long because the test fails short. 15 kt is logged, not carded.
+  // How touchy it is: the turn height (TURN_FT) 5 ft either side moved still air to −96 / +112 ft (a flaps
+  // 30 call made or missed): a real pilot's judgement is no finer, but the coach's call is not a guarantee.
+  it('in a 5 or 10 kt wind from any side, as coached: on the spot to 250 ft past it, never short', () => {
     for (const windKts of [5, 10, 15]) for (const windFromDeg of [160, 340, 250, 70]) {
       const r = power180('coach', { windKts, windFromDeg });
       log(`wind ${String(windFromDeg).padStart(3, '0')}/${windKts}`, r);
       if (windKts > 10) continue;
-      expect(r.td.pastSpotFt).toBeGreaterThan(-150);
-      expect(r.td.pastSpotFt).toBeLessThan(300);
+      expect(r.td.pastSpotFt).toBeGreaterThanOrEqual(0);
+      expect(r.td.pastSpotFt).toBeLessThan(250);
       expect(Math.abs(r.td.crossM)).toBeLessThan(8);
     }
   });

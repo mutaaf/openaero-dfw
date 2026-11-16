@@ -1,9 +1,9 @@
 // Power-off 180° accuracy approach and landing (ticket 0189): the Cessna on a left downwind for
 // Addison 16 at 1,000 ft above the field, abeam the spot, when the engine quits. Glide at best
 // glide (68 KIAS, POH Section 3), choose when to turn, and land on the spot or up to 200 ft past
-// it, never short (FAA-S-ACS-7A, Commercial Pilot Airplane ACS, Area IV Task M, Power-Off 180°
-// Accuracy Approach and Landing: "Touch down within -0/+200 feet from the specified touchdown
-// point"). The spot is the aiming-point marking 1,000 ft (AIM_POINT_M) past 16's landing threshold
+// it, never short (FAA-S-ACS-7B, Commercial Pilot Airplane ACS, Area IV Task M, Power-Off 180°
+// Accuracy Approach and Landing: touch down on the specified point or up to 200 ft beyond it, never
+// short; FAA-S-ACS-7A said the same). The spot is the aiming-point marking 1,000 ft (AIM_POINT_M) past 16's landing threshold
 // (AIM 2-3-3), which the 3D runway paints and the card's strip draws.
 // The dead-stick challenge's machinery is reused (deadStick.js: the dead engine, best glide, Kid's
 // glide path, the touchdown on or off the pavement): main.js loads this chunk in its place and
@@ -15,14 +15,16 @@ import { stallAoaDeg } from './aero.js';
 import { letterGrade, curve } from './landing.js';
 import { M_TO_FT } from './constants.js';
 import { DRILL_TEXT, TOUCH_WORDS } from './coach.js';
+import { missionByKey } from './missions.js';
 import {
-  DS_GLIDE_KTS, DS_RATIO_BY_FLAPS, DS_SLOW_KTS, DS_SLOW_FLAPS_KTS, DS_FAST_KTS, DS_FAIL_S, DS_FLARE_FT,
+  DS_GLIDE_KTS, DS_SLOW_KTS, DS_SLOW_FLAPS_KTS, DS_FAST_KTS, DS_FAIL_S, DS_FLARE_FT,
   kidGlideGammaDeg, landingEnd, deadStickResult as dsResult, debugFinal,
 } from './deadStick.js';
 
 export { landingEnd, debugFinal };
 export const P180_KEY = 'pad_180_kads_16';
 const END = runwayEnd('KADS', '16');
+const SPAWN = missionByKey(P180_KEY);
 const D = { x: Math.sin(END.hdgT * Math.PI / 180), z: -Math.cos(END.hdgT * Math.PI / 180) };
 // The spot, along 16's centreline from its landing threshold, and the ACS's window past it.
 export const SPOT_M = AIM_POINT_M;
@@ -31,21 +33,25 @@ export const SPOT_X = END.thrX + D.x * SPOT_M, SPOT_Z = END.thrZ + D.z * SPOT_M;
 // The downwind: half a mile out (the FAA Airplane Flying Handbook, ch. 8, puts the downwind
 // "approximately 1/2 to 1 mile" from the runway), checked by tests/unit/power180.test.js.
 export const DOWNWIND_NM = 0.5;
+// The idle glide ratio by flap notch (0/10/20/30) at 68 KIAS, measured on flightModel.js since 0186's
+// flap drag (CHANGELOG 2026-11-15: 9.2 / 8.8 / 7.5 / 6.6; deadStick.js's older table reads 9 / 8.3 /
+// 7.6 / 7). The flaps-up figure is the POH's 9:1 (Fig. 3-1) within 2%.
+export const RATIO_BY_FLAPS = [9.2, 8.8, 7.5, 6.6];
 // The glide is aimed this far before the spot: the round-out and hold-off float the rest.
-export const FLOAT_M = 100;
+export const FLOAT_M = 95;
 const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 
-// The coach's plan: a short final (FINAL_M before the spot) flown with flaps 20 (DS_RATIO_BY_FLAPS:
-// ~7.6:1), reached from where you are flaps up (9:1). Turn when the height above that glide falls to
+// The coach's plan: a short final (FINAL_M before the spot) flown with flaps 20 (RATIO_BY_FLAPS:
+// 7.5:1), reached from where you are flaps up (9.2:1). Turn when the height above that glide falls to
 // TURN_FT: until then the extra height is used up by gliding on down the downwind. The base leg cuts
 // the corner and the flare floats, which TURN_FT and FINAL_M absorb: flown headless from the spawn
 // (tests/flight/power180.test.js), the coached pilot touches down inside the ACS window.
 export const FINAL_M = 600;
 const CLOSE_DEG_PER_M = 0.2;
-export const TURN_FT = 150;
-// Kid's guide turns this much later (lower): its auto-flare floats ~90 m further than the
-// test pilot's round-out (flown in tests/e2e/power180.spec.js: the coach's turn put Kid ~300 ft past).
-export const KID_TURN_FT = 90;
+export const TURN_FT = 170;
+// Kid's guide turns this much later (lower): its auto-flare floats further than the test pilot's
+// round-out (tests/e2e/power180.spec.js: the coach's turn put Kid ~266 ft past, this one 134 ft).
+export const KID_TURN_FT = TURN_FT - 75;
 // Lined up: when a glide with the next notch out still reaches the aim with this much to spare,
 // the coach asks for it (flaps 20, then 30); Kid's guide sets them.
 export const FLAPS_FT = 10;
@@ -99,7 +105,7 @@ export function spotGeometry(s) {
   // The wind on each leg (groundspeed over airspeed): the base across to the centreline, the final down it.
   const side = g.crossM < 0 ? 1 : -1;
   const wBase = legWind(s, -D.z * side, D.x * side), wFinal = legWind(s, D.x, D.z);
-  const r0 = DS_RATIO_BY_FLAPS[0] * wBase, r20 = DS_RATIO_BY_FLAPS[2] * wFinal, rNow = DS_RATIO_BY_FLAPS[s.flaps ?? 0] * wFinal;
+  const r0 = RATIO_BY_FLAPS[0] * wBase, r20 = RATIO_BY_FLAPS[2] * wFinal, rNow = RATIO_BY_FLAPS[s.flaps ?? 0] * wFinal;
   const along = g.pastSpotM + SPOT_M; // past the landing threshold
   g.overRunway = along > -END.displacedM - 30 && along < END.lengthM - END.displacedM && Math.abs(g.crossM) < END.widthM / 2 + 30;
   g.lined = Math.abs(wrap180(s.trackDeg - END.hdgT)) <= 30 && g.pastSpotM < 0 && Math.abs(g.crossM) < Math.max(60, -g.pastSpotM * 0.2);
@@ -108,9 +114,9 @@ export function spotGeometry(s) {
   // The way round: a base leg across to the centreline and the final down it (the corners cut).
   const pastAimM = g.pastSpotM + FLOAT_M;
   const flapsM = Math.min(FINAL_M, Math.max(0, -pastAimM));
-  g.viaFinalFt = s.aglFt - (Math.abs(g.crossM) * M_TO_FT / r0) - (Math.abs(pastAimM) - flapsM) * M_TO_FT / (DS_RATIO_BY_FLAPS[0] * wFinal) - flapsM * M_TO_FT / r20;
+  g.viaFinalFt = s.aglFt - (Math.abs(g.crossM) * M_TO_FT / r0) - (Math.abs(pastAimM) - flapsM) * M_TO_FT / (RATIO_BY_FLAPS[0] * wFinal) - flapsM * M_TO_FT / r20;
   // With the next notch out from here on (lined up: straight to the aim; else the way round).
-  const rNext = DS_RATIO_BY_FLAPS[(s.flaps ?? 0) < 2 ? 2 : 3];
+  const rNext = RATIO_BY_FLAPS[(s.flaps ?? 0) < 2 ? 2 : 3];
   g.nextFlapsFt = s.aglFt - (g.lined ? distM / (rNext * wFinal) : Math.abs(g.crossM) / (rNext * wBase) + Math.abs(pastAimM) / (rNext * wFinal)) * M_TO_FT;
   g.spotRelDeg = wrap180(deg(Math.atan2(SPOT_X - s.x, -(SPOT_Z - s.z))) - s.trackDeg);
   // The track that flies it: 90° across the centreline far out, closing on it as the gap shrinks.
@@ -185,25 +191,41 @@ export function p180Step(st, sim, live = true) {
   st.kid = sim.assist === 'kid';
   if (!st.live) {
     if (live) { st.live = true; st.t0 = sim.simTime; return; }
-    const h = st.hold ??= { p: [sim.pos.x, sim.pos.y, sim.pos.z], v: [sim.vel.x, sim.vel.y, sim.vel.z], q: [sim.quat.x, sim.quat.y, sim.quat.z, sim.quat.w] };
+    // The mission's spawn point and height (this chunk can arrive a second or two after the spawn,
+    // on a slow link: the Cessna has glided on meanwhile), with the velocity and attitude it has.
+    const h = st.hold ??= { p: [SPAWN.pos[0], sim.pos.y + (SPAWN.aglFt - sim.aglFt) / M_TO_FT, SPAWN.pos[1]], v: [sim.vel.x, sim.vel.y, sim.vel.z], q: [sim.quat.x, sim.quat.y, sim.quat.z, sim.quat.w] };
     sim.pos.set(...h.p); sim.vel.set(...h.v); sim.quat.set(...h.q); sim.angVel.set(0, 0, 0);
     st.t0 = sim.simTime;
     return;
   }
-  if (sim.aglFt > DS_FLARE_FT && sim.aoaDeg > stallAoaDeg(sim.spec, sim.flapsIndex)) st.stalled = true;
+  const dt = sim.simTime - (st.lastT ?? sim.simTime);
+  st.lastT = sim.simTime;
+  // Past the stall angle for STALL_S (a gust's single frame is not a stall).
+  st.stallS = sim.aglFt > DS_FLARE_FT && sim.aoaDeg > stallAoaDeg(sim.spec, sim.flapsIndex) ? (st.stallS ?? 0) + dt : 0;
+  if (st.stallS >= STALL_S) st.stalled = true;
+  // The nose against the track while airborne (+ = nose right): its last value is the touchdown's.
+  if (!sim.onGround && sim.quat) {
+    const { x, y, z, w } = sim.quat;
+    const nose = -deg(Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)));
+    st.driftDeg = wrap180(nose - deg(Math.atan2(sim.vel.x, -sim.vel.z)));
+  }
 }
+const STALL_S = 0.5;
 
 // The grade. Off the pavement (or the wrong way, on 34): the dead-stick's card (a D at best, how
 // far and which way). On 16's pavement the spot is half the score and the touchdown (landing.js:
-// rate, centreline, flare, speed; its zone is the spot's job) the other half. Short of the spot is
-// a fail on the test: a C at best. Past the window the spot's marks fall away fast, and the card
-// says how far. A stall on the approach is a D at best. A crash stays a crash.
+// rate, centreline, flare, speed; its zone is the spot's job; and the ACS's "no side drift,
+// longitudinal axis aligned": the nose against the track) the other half. Both sides of the window
+// fail the test: just short is a C at best (C to D further short), just past it a B at best (the
+// spot's marks falling away), and the card says how far. A stall on the approach is a D at best.
+// A crash stays a crash.
 const SHORT_CAP = 69; // the top of a C
+const LONG_CAP = 84; // the top of a B
 const STALL_CAP = 54; // the top of a D
 const W_SPOT = 0.5;
-const TD_WEIGHTS = { rate: 0.35, centreline: 0.2, flare: 0.15, speed: 0.1 };
+const TD_WEIGHTS = { rate: 0.35, centreline: 0.2, flare: 0.15, speed: 0.1, align: 0.1 };
 const ftText = (ft) => `${Math.max(1, Math.round(ft)).toLocaleString('en-US')} ft`;
-export const spotScore = (pastFt) => (pastFt < 0 ? 0 : curve(pastFt, [[BEYOND_FT, 100], [300, 60], [600, 30], [1200, 0]]));
+export const spotScore = (pastFt) => (pastFt < 0 ? curve(-pastFt, [[0, 60], [100, 40], [300, 0]]) : curve(pastFt, [[BEYOND_FT, 100], [250, 70], [400, 40], [800, 0]]));
 
 export function deadStickResult(landing, end, pos, st = null) {
   const base = deadStickResult0(landing, end, pos);
@@ -212,18 +234,23 @@ export function deadStickResult(landing, end, pos, st = null) {
   const spot = Math.round(spotScore(pastFt));
   const factors = [{ key: 'spot', label: 'The spot', value: pastFt < 0 ? `${ftText(-pastFt)} short` : `${ftText(pastFt)} past`, score: spot },
     ...landing.factors.filter((f) => f.key !== 'zone')];
+  if (typeof st?.driftDeg === 'number') {
+    const d = Math.abs(st.driftDeg);
+    factors.push({ key: 'align', label: 'Nose along the track', value: `${d.toFixed(1)}° off`, score: Math.round(curve(d, [[0, 100], [3, 100], [10, 30], [15, 0]])) });
+  }
   // The strip shades the ACS window past the spot (touchdownStrip.js zoneM).
   const touchdown = landing.touchdown && { ...landing.touchdown, zoneM: [SPOT_M, SPOT_M + BEYOND_FT / M_TO_FT] };
   const out = { ...landing, title: 'Power-off 180', factors, touchdown, pastSpotFt: Math.round(pastFt) };
   if (landing.grade === 'CRASH') return out;
   let w = 0, td = 0;
-  for (const f of landing.factors) if (TD_WEIGHTS[f.key]) { td += f.score * TD_WEIGHTS[f.key]; w += TD_WEIGHTS[f.key]; }
+  for (const f of factors) if (TD_WEIGHTS[f.key]) { td += f.score * TD_WEIGHTS[f.key]; w += TD_WEIGHTS[f.key]; }
   let score = Math.round(spot * W_SPOT + (w ? td / w : 0) * (1 - W_SPOT));
   let reason = null;
   if (pastFt < 0) {
     score = Math.min(score, SHORT_CAP);
     reason = st?.kid ? `Short of the spot by ${ftText(-pastFt)}.` : `Short of the spot by ${ftText(-pastFt)}: the test fails that. Turn sooner, or flaps later.`;
   } else if (pastFt > BEYOND_FT) {
+    score = Math.min(score, LONG_CAP);
     reason = st?.kid ? `${ftText(pastFt)} past the spot.` : `${ftText(pastFt)} past the spot (the test allows 200): turn later, or flaps sooner.`;
   }
   if (st?.stalled) {

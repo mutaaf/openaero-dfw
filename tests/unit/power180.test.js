@@ -133,11 +133,17 @@ describe('power-off 180 start (power180.js p180Step)', () => {
   const v3 = (x, y, z) => ({ x, y, z, set(a, b, c) { this.x = a; this.y = b; this.z = c; } });
   it('holds the Cessna at its spawn behind the start screen, and the engine quits (the coach\'s clock starts) as flying starts', () => {
     const st = createDeadStick(5);
-    const sim = { simTime: 5, pos: v3(1, 300, 2), vel: v3(0, -1, -40), angVel: v3(0, 0, 0), quat: { x: 0, y: 0.98, z: 0, w: 0.17, set(a, b, c, d) { Object.assign(this, { x: a, y: b, z: c, w: d }); } } };
+    const m = missionByKey(P180_KEY);
+    // The chunk arrived late (a slow link): the Cessna has glided 50 m on and 15 ft down since the spawn.
+    const sim = { simTime: 5, aglFt: 985, pos: v3(m.pos[0] - 17, 310, m.pos[1] - 47), vel: v3(0, -1, -40), angVel: v3(0, 0, 0), quat: { x: 0, y: 0.98, z: 0, w: 0.17, set(a, b, c, d) { Object.assign(this, { x: a, y: b, z: c, w: d }); } } };
     p180Step(st, sim, false);
+    const held = [sim.pos.x, sim.pos.y, sim.pos.z];
+    expect(held[0]).toBe(m.pos[0]);
+    expect(held[2]).toBe(m.pos[1]);
+    expect(held[1]).toBeCloseTo(310 + 15 / M_TO_FT, 6); // back up to the mission's 1,000 ft
     sim.pos.set(1, 290, -40); sim.angVel.set(0.1, 0, 0); sim.simTime = 9; // the start screen's 4 s of gliding
     p180Step(st, sim, false);
-    expect([sim.pos.x, sim.pos.y, sim.pos.z]).toEqual([1, 300, 2]);
+    expect([sim.pos.x, sim.pos.y, sim.pos.z]).toEqual(held);
     expect(sim.angVel.x).toBe(0);
     expect(st.t0).toBe(9);
     sim.simTime = 12;
@@ -145,6 +151,7 @@ describe('power-off 180 start (power180.js p180Step)', () => {
     expect(st.live).toBe(true);
     expect(st.t0).toBe(12);
     expect(power180Target(input({ t: sim.simTime - st.t0 }))).toBe('p1Fail');
+    Object.assign(sim, { spec: AIRCRAFT_DATABASE.c172, flapsIndex: 0, aoaDeg: 0, onGround: false });
     sim.pos.set(1, 250, -100); sim.simTime = 20;
     p180Step(st, sim, false); // a menu opened mid-flight: no jump back
     expect(sim.pos.y).toBe(250);
@@ -185,14 +192,37 @@ describe('power-off 180 grade (power180.js deadStickResult)', () => {
 
   it('on Kid (the plane flew it) the card says how far, with no advice', () => {
     const st = createDeadStick(0);
-    p180Step(st, { assist: 'kid', aglFt: 300, aoaDeg: 0, spec: AIRCRAFT_DATABASE.c172, flapsIndex: 0 });
+    p180Step(st, { assist: 'kid', simTime: 0, aglFt: 300, aoaDeg: 0, spec: AIRCRAFT_DATABASE.c172, flapsIndex: 0, onGround: true });
     expect(grade(400, {}, st).reason).toBe('400 ft past the spot.');
     expect(grade(-50, {}, st).reason).toMatch(/^Short of the spot by 5\d ft\.$/);
   });
 
+  it('both sides of the window fail the test: just short is a C, just past is a B, never better', () => {
+    expect(grade(-1).grade).toBe('C');
+    expect(grade(-1).score).toBe(69);
+    expect(grade(201).grade).toBe('B');
+    expect(grade(201).reason).toMatch(/^201 ft past the spot/);
+    expect(grade(250).score).toBeLessThanOrEqual(84);
+    expect(grade(-300).grade).toBe('D'); // far short: the spot's marks are gone
+    expect(spotScore(-1)).toBeGreaterThan(spotScore(-100));
+    expect(spotScore(201)).toBeLessThan(100);
+  });
+
+  it('the nose against the track at touchdown is graded (ACS: longitudinal axis aligned)', () => {
+    const t = touchdown(100);
+    const st = createDeadStick(0);
+    st.driftDeg = 0.5;
+    const straight = deadStickResult(t.landing, t.end, t.pos, st);
+    st.driftDeg = 9;
+    const crabbed = deadStickResult(t.landing, t.end, t.pos, st);
+    expect(straight.factors.find((f) => f.key === 'align').score).toBe(100);
+    expect(crabbed.factors.find((f) => f.key === 'align').score).toBeLessThan(50);
+    expect(crabbed.score).toBeLessThan(straight.score);
+  });
+
   it('50 ft short: a C at best, and it says short of the spot', () => {
     const r = grade(-50);
-    expect(['C', 'D']).toContain(r.grade);
+    expect(r.grade).toBe('C');
     expect(r.score).toBeLessThanOrEqual(69);
     expect(r.reason).toMatch(/^Short of the spot by 5\d ft/);
     expect(r.factors[0].value).toMatch(/short$/);
@@ -203,6 +233,7 @@ describe('power-off 180 grade (power180.js deadStickResult)', () => {
     expect(r.reason).toMatch(/^600 ft past the spot/);
     expect(r.factors[0].score).toBeLessThanOrEqual(30);
     expect(['C', 'D']).toContain(r.grade);
+    expect(r.score).toBeLessThanOrEqual(84);
     expect(spotScore(300)).toBeLessThan(spotScore(250));
   });
 
@@ -215,12 +246,16 @@ describe('power-off 180 grade (power180.js deadStickResult)', () => {
 
   it('a stall on the way down is a D at best', () => {
     const st = createDeadStick(0);
-    const spec = AIRCRAFT_DATABASE.c172;
-    p180Step(st, { aglFt: 300, aoaDeg: stallAoaDeg(spec, 0) - 1, spec, flapsIndex: 0 });
+    const spec = AIRCRAFT_DATABASE.c172, stall = stallAoaDeg(spec, 0);
+    const step = (simTime, aglFt, aoaDeg) => p180Step(st, { simTime, aglFt, aoaDeg, spec, flapsIndex: 0, onGround: false });
+    step(0, 300, 0); // flying starts (live)
+    step(0.1, 300, stall - 1);
     expect(st.stalled).toBe(false);
-    p180Step(st, { aglFt: 30, aoaDeg: stallAoaDeg(spec, 0) + 1, spec, flapsIndex: 0 }); // the flare: not counted
+    for (let t = 0.2; t < 2; t += 0.1) step(t, 30, stall + 1); // the flare: not counted
     expect(st.stalled).toBe(false);
-    p180Step(st, { aglFt: 300, aoaDeg: stallAoaDeg(spec, 0) + 1, spec, flapsIndex: 0 });
+    step(2.1, 300, stall + 1); step(2.2, 300, stall - 1); // a gust's moment past it: not a stall
+    expect(st.stalled).toBe(false);
+    for (let t = 2.3; t < 3; t += 0.1) step(t, 300, stall + 1); // held past it for 0.5 s
     expect(st.stalled).toBe(true);
     const r = grade(100, {}, st);
     expect(r.grade).toBe('D');
