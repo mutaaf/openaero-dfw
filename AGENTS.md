@@ -214,6 +214,15 @@ src/deadStick.js    dead-stick challenge (0036, lazy chunk): the C172 3,500 ft A
                     floor, autothrottle or auto flaps). The touchdown is graded on Addison
                     wherever it is (made the runway 30%; missed = D with the distance and why:
                     short, long or beside); ?debug openaeroDebugDeadStick puts it on a final
+src/power180.js     power-off 180 (0189, lazy chunk, loaded in deadStick.js's place: the same calls,
+                    sim.deadStick.spot): the C172 on a left downwind for Addison 16, 0.5 NM out, 1,000 ft
+                    AGL, abeam the spot (the 1,000 ft aiming point, AIM_POINT_M), held there until the
+                    first live frame (p180Step), then engine out. Coach: glide on until the way round
+                    (base + final, flaps 20 on its last 600 m, the wind per leg) is within TURN_FT,
+                    then a 90° base closing on the centreline; flaps 20/30 when they still reach. Kid's
+                    guide flies it and sets Kid's flaps. Card: the spot 50% (ACS −0/+200 ft full marks),
+                    the touchdown 50% (landing.js without its zone); short ≤ C, a stall above 50 ft ≤ D,
+                    off 16's pavement the dead-stick's miss card. Flown in tests/flight/power180.test.js
 src/pattern.js      traffic pattern (0048, lazy chunk): the C172 on a left downwind for Addison 16 at
                     1,000 ft AGL (AC 90-66C), 0.75 NM out. patternLeg names the leg around any runway
                     end (upwind, crosswind, downwind, base, final; left or right traffic), the turn
@@ -725,7 +734,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-15 (0188): 200.53 kB (the wing-low lesson's mission entry and blurb, its lazy import, checkWingLow, the weather, coach, flaps and landing hooks, the touch pedals' ramp and toggle and the snapshot's wingLow, +0.72 kB over main's 199.81; wingLow.js is a lazy chunk). 2026-11-15 (0187): 199.81 kB (the pattern-entry mission's entry and blurb, its entryStep and entryResult hooks, +0.19 kB over main's 199.62; the entry is pattern.js's lazy chunk). 2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
+2026-11-16 (0189): 200.96 kB (the power-off 180's mission entry and blurb, its lazy import and p180Step hook, +0.49 kB, paid for in part by the ?debug snapshot's wingLow and wake moving into their lazy chunks (debugSnap), −0.06 kB; power180.js is a lazy chunk). 2026-11-15 (0188): 200.53 kB (the wing-low lesson's mission entry and blurb, its lazy import, checkWingLow, the weather, coach, flaps and landing hooks, the touch pedals' ramp and toggle and the snapshot's wingLow, +0.72 kB over main's 199.81; wingLow.js is a lazy chunk). 2026-11-15 (0187): 199.81 kB (the pattern-entry mission's entry and blurb, its entryStep and entryResult hooks, +0.19 kB over main's 199.62; the entry is pattern.js's lazy chunk). 2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
 the snapshot's softField and surfaceMu, gear.js's surface μ and deeplink.js skipping the lesson for ?airport and the callouts off in it, +0.42 kB; softField.js is a lazy chunk). 2026-11-14 (0181): 199.17 kB (the short-field lesson's mission entry and blurb, its lazy import, step, coach target, flaps and flare height,
 gate, Kid, speed bug and stop-hold hooks and the snapshot's shortField, +0.68 kB over main's 198.49; shortField.js is a lazy chunk). 2026-11-12 (0171): 198.49 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
 fetch, +0.15 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks

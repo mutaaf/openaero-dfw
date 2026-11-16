@@ -65,6 +65,8 @@ export const CHECK_FLOOR_FT = 100;
 const NO_JET_WORDS = { tailwind: 'the wind is behind you', 'too close': 'you started too close', dark: "it's dark" };
 
 // end: the drill's runway end (airports.js). Allocates (a mission load, not a frame).
+// The ?debug snapshot's wake (main.js openaeroDebug): the state without its path, the end by id.
+export const debugSnap = (w) => ({ ...w, path: undefined, end: w.end.id });
 export function createWake(end) {
   const n = Math.ceil((TO_M - FROM_M) / BIN_M);
   return {

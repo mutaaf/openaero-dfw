@@ -1108,7 +1108,8 @@ function startDrills(mission) {
   if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
   if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
-  if (mission.deadStick) loadDrill(mission, deadLib, () => import('./deadStick.js'), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
+  // The power-off 180 (0189): power180.js stands in for deadStick.js (the same calls; the import is the module map's after the first).
+  if (mission.deadStick) loadDrill(mission, null, () => (mission.power180 ? import('./power180.js') : import('./deadStick.js')), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
   if (mission.engineOutFt) loadDrill(mission, eoLib, () => import('./engineOut.js'), (lib) => { eoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.engineOut = lib.createEngineOut(mission); });
   if (mission.rto) loadDrill(mission, rtoLib, () => import('./rto.js'), (lib) => { rtoLib = lib; if (sim.aircraftKey === mission.aircraft) sim.rto = lib.createRto(); });
@@ -1203,7 +1204,7 @@ function checkTouchdown(dt) {
   if (sim.wingLow?.end.id === end.id) result = wlLib.wingLowResult(result, sim.wingLow, sim.assist === 'kid'); // 0188: the wing, the nose, the first wheel
   if (sim.wake?.end.id === end.id) result = wakeLib.wakeResult(result, sim.wake, -g.distM); // 0115: past the jet's point, above its path
   if (sim.pattern?.ent && sim.aircraftKey === sim.pattern.aircraft) result = patLib.entryResult(result, sim.pattern); // 0187: the join on the card (not another airframe's)
-  if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos);
+  if (sim.deadStick) result = deadLib.deadStickResult(result, end, sim.pos, sim.deadStick);
   else if (glideLib) result = eoLib.engineOutResult(result, sim.engineOut, end, sim.pos);
   if (kidSoftLanding(result)) return;
   const gate = sim.gate && sim.gate.runway === end.id ? sim.gate : null;
@@ -1792,6 +1793,7 @@ function step6DofPhysics(dt) {
   checkGoAround();
   checkStallDrill(dt);
   if (sim.engineOut && eoLib.engineOutStep(sim.engineOut, sim)) sim.engineFailed = true;
+  if (sim.deadStick?.spot) deadLib.p180Step(sim.deadStick, sim, cockpitEntered && !modalOpen()); // 0189: held at the spawn until flying starts; a stall on the way down
   checkRto();
   checkWindshear(dt);
   checkSteepTurns(dt);
@@ -3703,9 +3705,9 @@ window.openaeroDebug = () => {
     steepTurns: sim.steepTurns ? { ...sim.steepTurns } : null,
     upset: sim.upset ? { ...sim.upset } : null,
     slowFlight: sim.slowFlight ? { ...sim.slowFlight } : null,
-    wake: sim.wake ? { ...sim.wake, path: undefined, end: sim.wake.end.id } : null,
+    wake: sim.wake && wakeLib.debugSnap(sim.wake), // wake.js
     shortField: sim.shortField && { ...sim.shortField, end: sim.shortField.end.id },
-    wingLow: sim.wingLow && { ...sim.wingLow, end: sim.wingLow.end.id, wx: undefined, src: undefined, windDirDeg: sim.wingLow.wx?.windDirDeg, windKts: sim.wingLow.wx?.windKts, live: !!sim.wingLow.wx?.live },
+    wingLow: sim.wingLow && wlLib.debugSnap(sim.wingLow), // wingLow.js (0189 paid for the power-off 180's wiring with it)
     touchYaw: sim.touchYaw,
     softField: sim.softField && { ...sim.softField, end: sim.softField.end.id },
     surfaceMu: sim.surfaceMu,
