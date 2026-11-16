@@ -11,8 +11,8 @@
 // plane are projected along
 // the sun onto the ground plane at the shadow's centre, so bank, pitch and heading shape it the way
 // the sun would (a flat-silhouette approximation of the 3D airframe; the ground under it is taken
-// flat, which the runways are). Faded in with the sun (none below 3°, the Dawn/Dusk presets'
-// 2.5° sun and the night), weaker the more the METAR's clouds cover the sky, and gone above 600 ft AGL,
+// flat, which the runways are). Faded in with the sun (none below 3°: the Dawn/Dusk presets'
+// sun, ~3° on their 5-minute samples, and the night), weaker the more the METAR's clouds cover the sky, and gone above 600 ft AGL,
 // where it is no cue. In runwayLights.js's lazy chunk, made with its landing light; boot pays nothing.
 // It is drawn in every view and the replay (it follows the drawn airframe, not the physics), and is
 // no effect for reduced motion. ?debug: window.openaeroShadow.
@@ -54,7 +54,9 @@ export function shadowOpacity(sunElevationDeg, aglFt, cloudCover = 0) {
   if (!(sunElevationDeg >= SHADOW.minSunDeg) || !(aglFt <= SHADOW.maxAglFt)) return 0;
   const sunK = smooth(SHADOW.minSunDeg, SHADOW.fullSunDeg, sunElevationDeg);
   const hK = 1 - smooth(SHADOW.fadeFromFt, SHADOW.maxAglFt, aglFt);
-  const cloudK = 1 - Math.max(0, Math.min(1, cloudCover || 0));
+  // Squared: a FEW layer (0.2) hardly dims the sun (×0.96), BKN (0.75) mostly does, OVC hides it.
+  const c = Math.max(0, Math.min(1, cloudCover || 0));
+  const cloudK = 1 - c * c;
   return SHADOW.alpha * sunK * hK * cloudK;
 }
 

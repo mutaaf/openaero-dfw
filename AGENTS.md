@@ -410,7 +410,7 @@ src/shadow.js       the aircraft's ground shadow (0190, in runwayLights.js's chu
                     in the body's x-z plane through the main wheels (spec.gearHeight under the CG) projected along main.js's sun light onto terrain.js heights where the shadow falls (lifted
                     0.15 m + 0.4% of the camera distance, ≤ 1.5 m, polygon offset like the landing light). shadowOffset (h / tan el, away from the
                     sun), shadowOpacity (0.55 by day, fades in from a 3° to a 10° sun, out from 400 to 600 ft AGL, × (1 - the METAR's
-                    largest layer coverage)), cloudCover: pure, tested. scene.onBeforeRender chained; follows the root, so the replay
+                    largest layer coverage²)), cloudCover: pure, tested. scene.onBeforeRender chained; follows the root, so the replay
                     too; every view and level. ?debug: window.openaeroShadow (state: visible, opacity, sunElevationDeg, aglFt, offsetM)
 src/touchdownFeel.js touchdown you can feel (0147, in runwayLights.js's chunk like landingLight.js): at each contact main.js touchdownBuzz
                     counts (first touchdown and re-contacts) touch() plays a synthesized tyre chirp (band-passed noise) and, from
