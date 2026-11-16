@@ -27,13 +27,15 @@ test('?mission=kads_16_soft_field: in Drills, flaps 10 on the soft surface, the 
   await page.screenshot({ path: test.info().outputPath('soft-field-1280.png') });
   await page.click('#btnToga');
   // Nose up from the start (the arrow held while under 8°: the nose carries on ~3-5° after the key comes up, frame-timing
-  // dependent; holding to 10° overshot to 11-13° in 2 of 5 runs, the tail struck, the lesson ended before lift-off), hands off once flying.
+  // dependent; holding to 10° overshot to 11-13° in 2 of 5 runs, the tail struck, the lesson ended before lift-off), and
+  // in ground effect it keeps the nose up to 6° until 30 ft: let go at lift-off (~50 kt), the nose fell and the Cessna sank
+  // back onto the runway hard (603 fpm, a landing card instead of the lesson's) in ~1 run in 4, on main as on #268.
   await page.evaluate(() => {
     let held = false;
     const key = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: 'ArrowUp', key: 'ArrowUp' }));
     const step = () => {
       const d = window.openaeroDebug();
-      const want = d.onGround && d.pitchDeg < 8;
+      const want = d.pitchDeg < (d.onGround ? 8 : 6);
       if (want !== held) { key(want ? 'keydown' : 'keyup'); held = want; }
       if (d.onGround || d.aglFt < 30) requestAnimationFrame(step);
       else if (held) key('keyup');
