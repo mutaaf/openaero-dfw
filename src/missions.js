@@ -19,6 +19,9 @@ const ADS_DOWNWIND = latLonToSimMeters(32.97173, -96.82205);
 // Joining the pattern (0187, pattern.js entryLeg): 4 NM out on the 45° line to the downwind's middle
 // (abeam the runway's midpoint, 0.75 NM east), heading it (295°: a right turn onto the 340° downwind).
 const ADS_ENTRY = latLonToSimMeters(32.94468, -96.75069);
+// The power-off 180 (0189, power180.js): a left downwind for 16 half a mile east of the centreline, abeam the
+// spot (the 1,000 ft aiming-point marking past the displaced threshold; tests/unit/power180.test.js checks it).
+const ADS_ABEAM_SPOT = latLonToSimMeters(32.97555, -96.82898);
 
 export const MISSIONS = [
   { key: 'kdfw_35c_final', label: 'KDFW RWY 35C (4 NM ILS Final)', blurb: '4 NM out, lined up on 35C. Follow the green velocity vector and the 4-light PAPI down.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4 },
@@ -50,6 +53,8 @@ export const MISSIONS = [
   { key: 'pattern_kads_16', label: 'KADS Traffic Pattern (Cessna)', blurb: 'Fly around the airport like a pilot: downwind 1,000 ft above the field, base, final, land.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_DOWNWIND.x, ADS_DOWNWIND.z], aglFt: 1000, kias: 85, hdg: 340, pattern: true },
   // Joining the pattern (0187, pattern.js entryLeg): the 45° entry to that downwind, then the circuit; the join is graded on the card.
   { key: 'pattern_entry_kads', label: 'KADS Join the Pattern (Cessna)', blurb: 'Arrive the way pilots do: 4 NM out, level at 1,000 ft above the field. Fly the 45° to meet the downwind abeam the middle of Addison\'s runway, turn right onto it, then fly the pattern and land. The card checks you joined level at 1,000 ft, on the 45°, at 70-100 knots; skip the downwind and the best is C.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_ENTRY.x, ADS_ENTRY.z], aglFt: 1000, kias: 90, hdg: 295, pattern: true, entry: true },
+  // Power-off 180 (0189, power180.js, the dead-stick's machinery): the engine quits abeam the spot, 1,000 ft up; land on it.
+  { key: 'pad_180_kads_16', label: 'KADS Power-Off 180 (Cessna)', blurb: 'The engine quits on downwind, 1,000 ft up, abeam the white blocks on 16. Glide at 68 knots, pick your turn, land on the blocks or up to 200 ft past, never short.', kind: 'drill', airport: 'KADS', rwy: '16', aircraft: 'c172', pos: [ADS_ABEAM_SPOT.x, ADS_ABEAM_SPOT.z], aglFt: 1000, kias: 85, hdg: 340, deadStick: true, power180: true, group: 'drills' },
   // Engine failure after takeoff (0104, engineOut.js): the Cessna's engine quits in the climb out of 16.
   // POH normal takeoff (flaps 0°) from the start of the pavement (16's displaced 979 ft is usable for it).
   // Short-field landing (0181, shortField.js): the POH's technique to Addison 16's numbers, graded against Fig. 5-11's roll.

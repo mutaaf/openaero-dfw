@@ -64,6 +64,8 @@ const OTHER = { R: 'L', L: 'R' };
 // touch words are short: a phone held sideways moves a three-line card over the wind box (device panel).
 const KEY = { R: 'E', L: 'Q' };
 const BTN = { R: 'RUD ▶', L: '◀ RUD' };
+// The ?debug snapshot's wingLow (main.js openaeroDebug): the lesson's state, its wind and where it came from.
+export const debugSnap = (w) => ({ ...w, end: w.end.id, wx: undefined, src: undefined, windDirDeg: w.wx?.windDirDeg, windKts: w.wx?.windKts, live: !!w.wx?.live });
 export const WL_TEXT = {};
 export const WL_TOUCH = {};
 for (const s of ['R', 'L']) {
