@@ -1,7 +1,7 @@
 ---
 id: 0190
 title: The aircraft casts a sun-direction shadow on the ground, so the flare has a height cue
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
@@ -33,11 +33,11 @@ the runway decals with polygon offset so it does not z-fight (0002's lesson). `?
 `window.openaeroShadow`.
 
 ## Acceptance criteria
-- [ ] Unit (pure helper): shadow offset on flat ground for sun elevations 10°, 45°, 80° and heights 0, 50, 300 ft equals h / tan(el) along the sun's azimuth; hidden at sun below 3° and above 600 ft AGL.
-- [ ] e2e: at the default final the shadow mesh exists, is visible under 300 ft AGL by day, and is hidden at night (the Night chip) and above 600 ft.
-- [ ] Screenshot at 1,000 ft, 50 ft and touchdown shows the shadow converging on the aircraft; nothing flickers on the runway (no z-fighting) at 1280x720 and 390x844.
-- [ ] No per-frame allocations (the existing hot-path allocation test stays green); the e2e perf probe's frame time is within budget on SwiftShader; boot chunk size unchanged (script `check:size`).
-- [ ] Reduced motion unaffected (the shadow is not an effect).
+- [x] Unit (pure helper): shadow offset on flat ground for sun elevations 10°, 45°, 80° and heights 0, 50, 300 ft equals h / tan(el) along the sun's azimuth; hidden at sun below 3° and above 600 ft AGL.
+- [x] e2e: at the default final the shadow mesh exists, is visible under 300 ft AGL by day, and is hidden at night (the Night chip) and above 600 ft.
+- [x] Screenshot at 1,000 ft, 50 ft and touchdown shows the shadow converging on the aircraft; nothing flickers on the runway (no z-fighting) at 1280x720 and 390x844.
+- [x] No per-frame allocations (the existing hot-path allocation test stays green); the e2e perf probe's frame time is within budget on SwiftShader; boot chunk size unchanged (script `check:size`).
+- [x] Reduced motion unaffected (the shadow is not an effect).
 
 ## Test plan
 tests/unit/shadow.test.js (the offset and visibility helper), tests/e2e/shadow.spec.js (mesh

@@ -9,7 +9,8 @@
 import * as THREE from 'three';
 import { courseVector } from './airports.js';
 // The aircraft's landing light (0076) rides in this chunk: its own would cost the boot chunk a name.
-export { createLandingLight } from './landingLight.js';
+import { createLandingLight as landingLight } from './landingLight.js';
+import { createShadow } from './shadow.js';
 import { createTouchdownFeel as touchdownFeel } from './touchdownFeel.js';
 import { createBuffet } from './buffet.js';
 import { createFuel } from './fuel.js';
@@ -17,6 +18,16 @@ import { nightUniforms } from './nightGround.js'; // landingLight.js imports it 
 // The touchdown's chirp and tyre smoke (0147), and with it the stall buffet's shake and rumble (0079)
 // the Cessna's fuel (0162) and the ambient traffic (0080): all hook the scene the touchdown group is added to (main.js
 // scene.add), so boot pays nothing for them (its 201 kB line had no room for even a constructor call).
+// The landing light (0076), and with it the aircraft's ground shadow (0190), which needs the same
+// three things: the shared state, the aircraft's root and terrain.js heights. In this chunk, not one
+// of its own: a dynamic import adds its file list to boot's preload map (+20 B, and boot has none).
+export function createLandingLight(sim, root, heightAt) {
+  const light = landingLight(sim, root, heightAt);
+  let shadow = null;
+  light.group.addEventListener('added', () => { shadow ??= createShadow(light.group.parent, sim, root, heightAt); });
+  return light;
+}
+
 export function createTouchdownFeel(sim, root, audio, reducedMotion) {
   const feel = touchdownFeel(sim, root, audio, reducedMotion);
   let buffet = null, fuel = null, traffic = false;
