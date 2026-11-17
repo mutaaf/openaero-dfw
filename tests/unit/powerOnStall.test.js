@@ -158,7 +158,7 @@ describe('the power-on stall coach (0191)', () => {
     expect(RANK.poStall).toBeGreaterThan(RANK.poNose);
     expect(coachText('poFlaps', { touch: true })).toMatch(/tap FLAPS/);
     expect(coachText('poFlaps')).toMatch(/press F/);
-    expect(Object.values(PO_TEXT).join(' ')).not.toMatch(/rudder/); // no pedals on a phone here; no left yaw yet (0194)
+    expect(Object.values(PO_TEXT).join(' ')).not.toMatch(/rudder/); // no pedals on a phone here; the torque (0194) is held with the ailerons
   });
 });
 

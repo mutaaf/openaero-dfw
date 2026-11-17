@@ -48,11 +48,12 @@ export const STEEP_KTS = 5;
 export const REPEAT_S = 4;
 // Over at 1,000 ft above the runway: the climb-out is done, and the card goes away.
 export const DONE_FT = 1000;
+export const BANK_CUE_DEG = 5;
 
 // Ranks (coach.js: a higher one interrupts at once, the same or lower holds 1.5 s first).
 Object.assign(RANK, {
   toRoll: 1, toLeft: 1, toRight: 1, toClimb: 1, toKidRoll: 1, toKidClimb: 1,
-  toPower: 2, toBrakes: 2, toHold: 2, toGear: 2, toKidPower: 2, toStop: 2,
+  toPower: 2, toBrakes: 2, toHold: 2, toBank: 2, toGear: 2, toKidPower: 2, toStop: 2,
   toRotate: 3, toSlow: 3, toKidRotate: 3, toSteep: 4, toEase: 4, toKidEase: 4, toOff: 4,
 });
 
@@ -86,6 +87,7 @@ export function takeoffWords(key, spec, flapsIndex = 0) {
       toEase: 'Ease the nose down: the tail is close',
       toSteep: 'Too steep: nose down a little',
       toSlow: 'Slow: lower the nose a little',
+      toBank: 'Left wing down: a little right stick (D or →)',
       toGear: 'Positive rate: gear up (G)',
       toClimb: climb ? `Climbing: hold ${climb} kt, wings level` : `Climbing: nose ${pitch}° up, wings level`,
       toKidPower: 'Hold Shift: power up to 100%',
@@ -103,6 +105,7 @@ export function takeoffWords(key, spec, flapsIndex = 0) {
       toStop: 'Stopping: tap BRAKES',
       toRotate: `Rotate: stick up to ${pitch}° nose up`,
       toGear: 'Positive rate: tap GEAR to raise it',
+      toBank: 'Left wing down: a little stick right',
       toKidPower: 'Push the throttle to the top',
       toKidRoll: `Let it roll: stick up at ${vr} kt`,
       toKidRotate: 'Slide the stick up gently: nose up',
@@ -130,7 +133,7 @@ const resetFlight = (st) => { st.over = false; st.rolled = false; st.rejected = 
 
 export const createTakeoffCoach = (key, spec, flapsIndex = 0) => configureTakeoffCoach({
   over: false, rolled: false, rejected: false, flew: false, last: null, left: {}, blank: false, prevCross: null, prevT: 0, crossRate: 0, touch: null,
-  prompt(sim, pitchDeg) { return takeoffPromptFor(this, sim, pitchDeg); }, // main.js calls it (no lib handle on the boot side)
+  prompt(sim, pitchDeg, bankRightDeg) { return takeoffPromptFor(this, sim, pitchDeg, bankRightDeg); }, // main.js calls it (no lib handle on the boot side)
 }, key, spec, flapsIndex);
 
 // The prompt the roll or the climb asks for now (null: nothing to say). s: { onGround, raFt (the
@@ -167,6 +170,9 @@ export function takeoffTarget(st, s) {
   if (s.raFt > 5 && s.iasKts < st.slowKts) return 'toSlow';
   if (s.pitchDeg > st.pitchDeg + STEEP_DEG && s.iasKts < st.climbKts - STEEP_KTS) return 'toSteep';
   if (st.retractable && s.gearDown && s.raFt > 5 && s.vsiFpm > 300) return 'toGear';
+  // The prop's torque rolls a full-power climb left (flightModel.js propTorqueAileron, 0194); Learner's and
+  // Kid's assists hold it, a raw Pilot holds a little right stick. Past 5° of left bank, say so.
+  if (s.pilot && s.raFt > 5 && (s.bankDeg ?? 0) < -BANK_CUE_DEG) return 'toBank';
   return 'toClimb';
 }
 
@@ -187,9 +193,9 @@ export function takeoffPrompt(st, s, t) {
 // The game's input, from main.js's sim (no allocation: one object reused per coach).
 const _in = {
   onGround: true, raFt: 0, aglFt: 0, iasKts: 0, gsKts: 0, vsiFpm: 0, throttle: 0, brakesOn: false, gearDown: true, kid: false,
-  crossM: 0, crossRateMps: 0, halfWidthM: 0, pitchDeg: 0, pitchRateDegS: 0, autoSteer: false,
+  crossM: 0, crossRateMps: 0, halfWidthM: 0, pitchDeg: 0, pitchRateDegS: 0, autoSteer: false, pilot: false, bankDeg: 0,
 };
-export function takeoffPromptFor(st, sim, pitchDeg) {
+export function takeoffPromptFor(st, sim, pitchDeg, bankRightDeg = 0) {
   // Another airframe or flap notch picked: its numbers and words (the climb speed is the flaps').
   if (st.key !== sim.aircraftKey) resetFlight(st);
   if (st.key !== sim.aircraftKey || st.flaps !== sim.flapsIndex) configureTakeoffCoach(st, sim.aircraftKey, sim.spec, sim.flapsIndex);
@@ -203,6 +209,7 @@ export function takeoffPromptFor(st, sim, pitchDeg) {
   _in.halfWidthM = (sim.activeEnd?.widthM ?? 0) / 2;
   _in.pitchRateDegS = (sim.angVel?.x ?? 0) * 180 / Math.PI;
   _in.autoSteer = sim.assist !== 'pilot' || (st.touch && sim.gsKts > 40);
+  _in.pilot = sim.assist === 'pilot'; _in.bankDeg = bankRightDeg;
   st.slowKts = slowKtsFor(sim.spec, sim.stallKts, sim.flapsIndex);
   return takeoffPrompt(st, _in, t);
 }

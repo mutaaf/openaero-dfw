@@ -174,7 +174,7 @@ export function createTrafficJet(end, distNm, air, fm, spec = AIRCRAFT_DATABASE[
     autoTrim: true, trimAlphaDeg: trimAoaDeg(spec, vApp, FLAPS),
     onGround: false, groundY: end.thrY, iasKts: vApp / KTS_TO_MPS, tasKts: 0, aoaDeg: trimAoaDeg(spec, vApp, FLAPS),
     // Every field stepFlightModel writes, present from the start: one object shape for its lookups.
-    gsKts: 0, mach: 0, betaDeg: 0, accelY: 0, loadFactor: 1, sigma: 1, lastAirVsi: 0, spoilers: 0,
+    gsKts: 0, mach: 0, betaDeg: 0, accelY: 0, loadFactor: 1, sigma: 1, lastAirVsi: 0, spoilers: 0, propAil: 0,
     mslOffsetM, isaDevC, altimInHg,
   };
   body.engineN = body.throttle;

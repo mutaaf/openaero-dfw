@@ -1212,6 +1212,9 @@ function handsOffTakeoff(flaps, pitchDeg, { trimAlphaDeg = takeoffTrimAoaDeg(c17
       if (!x.onGround && wheelsFt(x) > 5 && vsFpm(x) > 300) { rel = x.t; h0 = wheelsFt(x); }
     }
     x.elevInput += (target - x.elevInput) * Math.min(1, dt * 10);
+    // Hands off in pitch only: the wings are held level against the prop's torque (0194), which
+    // hands-off rolls it left, and a bank drops the nose: that is not the trim this card tests.
+    x.aileronInput = aileronForBank(0, attitude(x).bankRightDeg, -x.angVel.z) + (x.propAil ?? 0);
     if (standIn && rel === null && Math.abs(x.elevInput) > 0.05) {
       x.trimAlphaDeg = clampTrim(x.trimAlphaDeg + (x.aoaDeg - x.trimAlphaDeg) * dt / 8, x.trimAlphaDeg, c172, x.flapsIndex);
     }

@@ -82,7 +82,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gust
     Object.assign(s, {
       pitchIn: stick ? stick(wheelM * M_TO_FT) : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS),
       yawRateRight: -x.angVel.y, driftDeg: driftAngleDeg(noseDeg, x.vel.x, x.vel.z),
-      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * DEG_TO_RAD), stallAoaDeg: stallAoaDeg(spec, x.flapsIndex),
+      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * DEG_TO_RAD), propAil: x.propAil ?? 0, stallAoaDeg: stallAoaDeg(spec, x.flapsIndex),
       tailstrikeDeg: spec.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, noseWheelDown: x.wheelLoads?.[0] > 0, wheelHeightM: wheelM,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, flarePerS: spec.kidFlarePerS,
     });

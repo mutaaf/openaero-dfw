@@ -71,7 +71,7 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}, { rollS = 0, key = PATTERN_KE
     if (steer && !steer(x, st, s, sim)) steer = null;
     Object.assign(s, {
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(c172, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y,
-      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * Math.PI / 180), stallAoaDeg: stallAoaDeg(c172, x.flapsIndex),
+      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * Math.PI / 180), propAil: x.propAil ?? 0, stallAoaDeg: stallAoaDeg(c172, x.flapsIndex),
       tailstrikeDeg: c172.maxGroundPitchDeg ?? 15, onGround: !!x.onGround, noseWheelDown: x.wheelLoads?.[0] > 0, wheelHeightM: x.pos.y - c172.gearHeight,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, flarePerS: c172.kidFlarePerS,
       driftDeg: headingError(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI),

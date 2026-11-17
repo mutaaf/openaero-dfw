@@ -30,7 +30,7 @@ export const POWER_ON_KEY = 'c172_power_on_stall';
 export const STALL_KEY = POWER_ON_KEY;
 export const PO_TEXT = {
   poPower: 'Full power: throttle all the way in',
-  poNose: 'Raise the nose to 20°, hold it, wings level',
+  poNose: 'Raise the nose to 20°; it rolls left: level it',
   poStall: 'Stall! Nose down, keep the power in',
   poWings: 'Wings level',
   poFlaps: 'Flaps up: press F once',
@@ -41,8 +41,8 @@ export const PO_TEXT = {
 Object.assign(DRILL_TEXT, PO_TEXT);
 Object.assign(TOUCH_WORDS, { poFlaps: 'Flaps up: tap FLAPS once' });
 // Each entry step outranks the one before, so it shows at once (no 1.5 s hold with the old words up); the stall
-// outranks everything. No "right rudder": the default flight model has no left-turning tendency yet (0194) and a
-// touch screen has no pedals in this drill.
+// outranks everything. No "right rudder": in this flight model the left-turning tendency is the prop's torque, a
+// roll the ailerons hold (0194; the real airplane's yaw is 0200), and a touch screen has no pedals in this drill.
 Object.assign(RANK, { poPower: 4, poNose: 5, poKidUp: 4, poWings: 4, poFlaps: 4, poClimb: 4, poStall: 6, poKid: 6 });
 
 // ACS S4: no less than 65% power. Rated power, not lever travel: the piston's power lapses with

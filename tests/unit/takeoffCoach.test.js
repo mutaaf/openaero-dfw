@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { coachText, coachTarget, createCoach, stepCoach, COACH_MIN_HOLD_S } from '../../src/coach.js';
 import {
-  createTakeoffCoach, takeoffTarget, takeoffPrompt, takeoffWords, takeoffPromptFor, climbKts, tailStrikeDeg,
+  createTakeoffCoach, configureTakeoffCoach, takeoffTarget, takeoffPrompt, takeoffWords, takeoffPromptFor, climbKts, tailStrikeDeg,
   ROTATE_PITCH_DEG, REPEAT_S, DONE_FT, OFF_M, SLOW_VS, TAIL_MARGIN_DEG, slowKtsFor,
 } from '../../src/takeoffCoach.js';
 import { stallSpeedKts } from '../../src/aero.js';
@@ -296,5 +296,26 @@ describe('device panel', () => {
     expect(st.over).toBe(false);
     expect(takeoffPromptFor(st, { ...sim, aircraftKey: 'c172', spec: AIRCRAFT_DATABASE.c172, simTime: 2.1 }, 0)).toBe('toPower');
     expect(coachText('toRoll')).toContain('55 kt');
+  });
+});
+
+// 0194: the prop's torque rolls a full-power climb left; a raw Pilot (no assist holding it) is told.
+describe('takeoffTarget: the left wing down cue (0194)', () => {
+  const spec = AIRCRAFT_DATABASE.c172;
+  const air = { ...parked, onGround: false, throttle: 1, raFt: 40, aglFt: 50, vsiFpm: 600, pitchDeg: 8, iasKts: 70 };
+  it('Pilot, past 5° of left bank in the climb: toBank; not at 4°, not right bank, not below 5 ft, not Learner or Kid', () => {
+    const st = rolled(createTakeoffCoach('c172', spec, 0));
+    expect(takeoffTarget(st, { ...air, pilot: true, bankDeg: -6 })).toBe('toBank');
+    expect(takeoffTarget(st, { ...air, pilot: true, bankDeg: -4 })).toBe('toClimb');
+    expect(takeoffTarget(st, { ...air, pilot: true, bankDeg: 8 })).toBe('toClimb');
+    expect(takeoffTarget(st, { ...air, pilot: true, bankDeg: -6, raFt: 3 })).not.toBe('toBank');
+    expect(takeoffTarget(st, { ...air, pilot: false, bankDeg: -6 })).toBe('toClimb');
+    expect(takeoffTarget(st, { ...air, pilot: true, kid: true, bankDeg: -6 })).toBe('toKidClimb');
+  });
+  it('the words: keys name the stick keys, touch the stick; both short', () => {
+    configureTakeoffCoach(createTakeoffCoach('c172', spec, 0), 'c172', spec, 0);
+    expect(coachText('toBank')).toMatch(/right stick \(D or →\)/);
+    expect(coachText('toBank', { touch: true })).toMatch(/stick right/);
+    expect(coachText('toBank').length).toBeLessThanOrEqual(48);
   });
 });

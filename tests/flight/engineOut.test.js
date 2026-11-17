@@ -54,10 +54,11 @@ export function flyEngineOut(key, mode, { headwindKts = 0 } = {}) {
       : Math.max(-1, Math.min(1, (x.betaDeg ?? 0) * 0.1));
     if (x.onGround && !x.engineFailed) {
       x.elevInput = (x.iasKts ?? 0) >= c172.vrKts ? elevatorForPitch(8, pitchDeg, x.angVel.x) : 0;
-      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z) + (x.propAil ?? 0);
       return;
     }
-    if (failT === null) { climb(x, dt); return; }
+    // Climbing at full power the pilot holds the right aileron the prop's torque takes (0194).
+    if (failT === null) { climb(x, dt); x.aileronInput += x.propAil ?? 0; return; }
     if (x.t - failT < EO_REACT_S) return; // the moment it takes to notice: hands as they were
     if (failT !== null) minIas = Math.min(minIas, x.iasKts);
     const wheelM = x.pos.y - c172.gearHeight;
