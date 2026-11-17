@@ -49,6 +49,7 @@ import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun, defaultTimeMode } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
+import { loadPrefs, savePrefs } from './prefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
@@ -2700,6 +2701,7 @@ function loadScenario(key, final = null) {
   sim.lastLanding = null;
   sim.fuelGal = null; // fuel.js fills the tanks (and clears fuelOut) for the new flight (0162)
   pendingLanding = null;
+  if (cockpitEntered) rememberPrefs(); // the last mission flown (0022); a deep link counts once flown
   startGoAroundDrill(mission);
   startDrills(mission);
   resetCoach();
@@ -3059,7 +3061,13 @@ byId('btnStartFlight').addEventListener('click', () => {
   // The (billable) Google session starts only when someone actually flies, once per page.
   if (photorealAllowed(window.location) && !terrainOnly(window.location.search)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   closeModal();
+  rememberPrefs();
+  byId('btnStartFlight').textContent = 'Fly ✈';
 });
+// Sound, camera and the last mission flown, kept between visits (0022, src/prefs.js). The
+// start screen's sound box is the one record of sound: the in-flight toggle writes it too.
+const prefStore = () => window.localStorage;
+const rememberPrefs = () => savePrefs(prefStore, { sound: byId('chkAutoSound').checked, camera: sim.cameraMode, mission: sim.missionKey });
 byId('btnOpenMissions').addEventListener('click', (e) => {
   setHudMenu(false);
   syncDensityAltitude(); // the active runway may have changed since the pick
@@ -3101,6 +3109,7 @@ byId('missionList').addEventListener('click', (e) => {
   const btn = e.target.closest('.btnMission');
   if (!btn) return;
   const scenario = btn.dataset.scenario;
+  byId('btnStartFlight').textContent = 'Fly ✈'; // Continue is only for the remembered mission
   byId('selScenario').value = scenario;
   loadScenario(scenario);
 });
@@ -3148,9 +3157,13 @@ byId('selScenario').addEventListener('change', e => {
 
 // Camera, Satellite & Time Toggles
 byId('btnCamera').addEventListener('click', () => {
-  sim.cameraMode = (sim.cameraMode + 1) % sim.cameraNames.length;
-  byId('txtCamMode').textContent = sim.cameraNames[sim.cameraMode];
+  setCamera((sim.cameraMode + 1) % sim.cameraNames.length);
+  rememberPrefs();
 });
+function setCamera(i) {
+  sim.cameraMode = i;
+  byId('txtCamMode').textContent = sim.cameraNames[i];
+}
 
 byId('btnSatLayer').addEventListener('click', () => {
   sim.satelliteEnabled = !sim.satelliteEnabled;
@@ -3547,6 +3560,8 @@ byId('btnAudio').addEventListener('click', () => {
     sim.audioEnabled = !sim.audioEnabled;
     updateAudioButton();
   }
+  byId('chkAutoSound').checked = sim.audioEnabled;
+  rememberPrefs();
 });
 
 const wakeLock = createWakeLock();
@@ -3851,11 +3866,20 @@ function boot() {
     });
   }).catch(() => {});
   buildAircraft('b738');
-  // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap.
+  // Deep links (?airport= / ?mission=): pick the flight; Start flight is still a tap. Without one
+  // a returning player's last mission, sound and camera come back (0022); sound still waits for Fly.
   const linked = missionFromLink(window.location.search);
-  loadScenario(linked || 'kdfw_35c_final');
+  const p = loadPrefs(prefStore, MISSIONS.map((m) => m.key), sim.cameraNames.length);
+  byId('chkAutoSound').checked = p.sound;
+  setCamera(p.camera);
+  const key = linked || p.mission;
+  loadScenario(key || 'kdfw_35c_final');
+  if (key) byId('selScenario').value = key;
+  // A returning player sees what Continue flies: its card scrolled into view, and a remembered mute
+  // shown (Options open on its sound box) rather than a silent mystery.
+  if (p.mission && !linked) { byId('btnStartFlight').textContent = 'Continue ✈'; byId('btnStartFlight').classList.replace('px-7', 'px-4'); document.querySelector('#missionList .btnMission.active')?.scrollIntoView({ block: 'nearest' }); }
+  if (!p.sound) byId('chkAutoSound').closest('details').open = true;
   if (linked) {
-    byId('selScenario').value = linked;
     try { history.replaceState(null, '', `${location.pathname}${stripDeepLink(location.search)}${location.hash}`); } catch { /* sandboxed */ }
   }
   handleResize();

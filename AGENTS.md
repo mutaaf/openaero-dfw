@@ -120,7 +120,8 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    first-flight coach remembers `openaero_coach_v1 = { v: 1, seen, at }` (`src/coach.js`);
    the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`); the assist
    level `openaero_assist_v1 = { v: 1, level, at }` (`src/assists.js`); the clean view
-   `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`); haptics
+   `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`); sound, camera and the last mission flown
+  `openaero_prefs_v1 = { v: 1, sound, camera, mission, at }` (`src/prefs.js`, 0022); haptics
    `openaero_haptics_v1 = { v: 1, on, at }` (`src/haptics.js`); the player's keys
    `openaero_keys_v1 = { v: 1, map, labels, at }` (`src/keyMap.js`, 0171; anything invalid falls back
    to the default keys). Kid and Learner keep
@@ -497,6 +498,14 @@ src/gateVerdict.js  the stabilized gate's HUD verdict (0020; lazy, fetched after
                     deck (TOUCH_DECK_H + 40 px of inset) it takes the callout caption's slot under the heading box, as
                     narrow, and gives way while a caption shows (on a 320 px phone its lines are squeezed to fit)
 src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembered
+src/prefs.js        sound, camera and the last mission flown (0022): loadPrefs/savePrefs over a storage getter (window.localStorage
+                    can throw), each field validated alone (a dropped mission or crosswind_today is not restored). Restored at boot
+                    unless a deep link picks the flight (the Fly button then reads "Continue ✈"); written on Fly, on every mission
+                    load once flying, the camera button and the sound toggle (which also sets #chkAutoSound, sound's one record).
+                    Sound still starts only on the Fly tap
+src/noPmrem.js      a stand-in for three's PMREMGenerator in the renderer's WebGLEnvironments only (vite.config.js alias, 0022):
+                    the sim sets no env map, scene.environment or texture background; −4.0 kB gz of boot. tests/unit/noPmrem.test.js
+                    holds src/ to that. Want env maps: drop the alias
 src/resScale.js     adaptive render resolution: steps the 3D pixel ratio down on slow 1 s
                     windows, back up after a fast cool-down that backs off (pure, tested)
 src/haptics.js      phone haptics (0033): touchdownPattern by sink (landing.js's bands: < 240 fpm a 40 ms
@@ -742,7 +751,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-16 (0189): 200.96 kB (the power-off 180's mission entry and blurb, its lazy import and p180Step hook, +0.11 kB over main's 200.85 measured the same way (the 0188 line's 200.53 no longer rebuilds: main measured 200.85 on 2026-11-16), paid for in part by the ?debug snapshot's wingLow and wake moving into their lazy chunks (debugSnap); power180.js is a lazy chunk). ~40 B of headroom: the next boot feature trims first. 2026-11-15 (0188): 200.53 kB (the wing-low lesson's mission entry and blurb, its lazy import, checkWingLow, the weather, coach, flaps and landing hooks, the touch pedals' ramp and toggle and the snapshot's wingLow, +0.72 kB over main's 199.81; wingLow.js is a lazy chunk). 2026-11-15 (0187): 199.81 kB (the pattern-entry mission's entry and blurb, its entryStep and entryResult hooks, +0.19 kB over main's 199.62; the entry is pattern.js's lazy chunk). 2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
+2026-11-17 (0022): 197.24 kB (remembered sound, camera and mission: src/prefs.js and its boot wiring, +0.27 kB over main's 200.97, paid for by aliasing the renderer's PMREMGenerator to src/noPmrem.js, −4.0 kB: WebGLEnvironments built it, and the classes only it used, for env maps the sim never sets). ~3.7 kB of headroom: spend it on features, not by default. 2026-11-16 (0189): 200.96 kB (the power-off 180's mission entry and blurb, its lazy import and p180Step hook, +0.11 kB over main's 200.85 measured the same way (the 0188 line's 200.53 no longer rebuilds: main measured 200.85 on 2026-11-16), paid for in part by the ?debug snapshot's wingLow and wake moving into their lazy chunks (debugSnap); power180.js is a lazy chunk). ~40 B of headroom: the next boot feature trims first. 2026-11-15 (0188): 200.53 kB (the wing-low lesson's mission entry and blurb, its lazy import, checkWingLow, the weather, coach, flaps and landing hooks, the touch pedals' ramp and toggle and the snapshot's wingLow, +0.72 kB over main's 199.81; wingLow.js is a lazy chunk). 2026-11-15 (0187): 199.81 kB (the pattern-entry mission's entry and blurb, its entryStep and entryResult hooks, +0.19 kB over main's 199.62; the entry is pattern.js's lazy chunk). 2026-11-14 (0182): 199.59 kB (the soft-field lesson's mission entry and blurb, its lazy import, step, coach and landing-skip hooks,
 the snapshot's softField and surfaceMu, gear.js's surface μ and deeplink.js skipping the lesson for ?airport and the callouts off in it, +0.42 kB; softField.js is a lazy chunk). 2026-11-14 (0181): 199.17 kB (the short-field lesson's mission entry and blurb, its lazy import, step, coach target, flaps and flare height,
 gate, Kid, speed bug and stop-hold hooks and the snapshot's shortField, +0.68 kB over main's 198.49; shortField.js is a lazy chunk). 2026-11-12 (0171): 198.49 kB (rebindable keys: input.js keyCode/setKeyMap, the key listeners reading it and the stored map's lazy
 fetch, +0.15 kB; the table, storage and Keys view are keyMap.js in controlsSheet.js's lazy chunk: in input.js they cost +0.57 kB). 2026-11-12 (0164): 198.34 kB (the slow-flight mission's entry, its lazy import and wiring, the snapshot's slowFlight, +0.32 kB; slowFlight.js is a lazy chunk). 2026-11-12 (0115): 198.02 kB (the wake lesson's mission entry, its lazy import, checkWake, the coach/gate/Kid-guide hooks
