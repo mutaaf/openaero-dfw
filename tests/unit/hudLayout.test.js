@@ -127,6 +127,21 @@ describe('wind readout (0075)', () => {
     expect(windReadout({ windDirDeg: 80, windKts: 10, gustKts: 10, live: false }, null, o).source).toBe('SCENARIO');
   });
 
+  // Ticket 0195: moderate turbulence or more (turbulence.js isBumpy) heads the box BUMPY; a wet runway and an IFR
+  // report keep their line (they say more about the landing) and the box's amber edge says bumpy. 'BUMPY METAR' fits the 68 px box like 'LIFR METAR'.
+  it('a bumpy day heads the box BUMPY METAR / BUMPY SCN; wet and IFR keep theirs; smooth says nothing', () => {
+    const o = {}, wx = { windDirDeg: 360, windKts: 20, gustKts: 40, live: true };
+    expect(windReadout(wx, null, o, true).source).toBe('BUMPY METAR');
+    expect(o.bumpy).toBe(true);
+    expect(windReadout({ ...wx, live: false }, null, o, true).source).toBe('BUMPY SCN');
+    expect(windReadout({ ...wx, wetRunway: true }, null, o, true).source).toBe('WET RWY');
+    expect(o.bumpy).toBe(true); // the amber edge still says it (main.js drawWindBox)
+    expect(windReadout({ ...wx, fltCat: 'IFR' }, null, o, true).source).toBe('IFR METAR');
+    expect(windReadout(wx, null, o).source).toBe('METAR WIND');
+    expect(o.bumpy).toBe(false);
+    expect('BUMPY METAR'.length).toBeLessThanOrEqual('LIFR METAR'.length + 1);
+  });
+
   it('the arrow points where the wind blows, relative to the nose', () => {
     expect(windArrowDeg(350, 10, 350)).toBeCloseTo(180); // on the nose: blows at you
     expect(windArrowDeg(80, 10, 0)).toBeCloseTo(260); // from the right: blows to the left

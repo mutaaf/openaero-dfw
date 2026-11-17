@@ -14,17 +14,18 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg, landingFlaps } from '../../src/aero.js';
 import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src/airports.js';
-import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide } from '../../src/assists.js';
 import { missionByKey } from '../../src/missions.js';
 import { kidLiftM, wakeResult, createWake, DONE_NOTE } from '../../src/wake.js';
 import { SHORT_FIELD_KEY, kidKts as sfKidKts, kidLiftM as sfKidLiftM, LONG_M as SF_LONG_M, FULL_FLAPS as SF_FULL_FLAPS } from '../../src/shortField.js';
 import { AIM_POINT_M } from '../../src/airports.js';
-import { makeBody, fly, attitude } from './harness.js';
+import { makeBody, fly, attitude, turbulentAir } from './harness.js';
 
 const _e = new Euler(0, 0, 0, 'YXZ');
 
 // Kid, hands off, from the mission's spawn to the touchdown. wind: { fromDeg, kts } (steady).
 // stick(ft): the kid's fore/aft stick at a wheel height (+ = push), else hands off.
+// air(body, dt): replaces the steady wind each step (harness.js turbulentAir: a METAR's gusts and turbulence, 0195).
 // rollS: keep rolling that long past the touchdown (idle, no brakes, Kid's pedals: main.js runwayUnderWheels).
 // learnerBelowM: the player switches to Learner that low (no de-crab: a crabbed touchdown; the rollout is Learner's).
 // every: the assist runs every that many 1/120 s sub-steps, as main.js runs it once a frame (4: 30 fps).
@@ -32,7 +33,7 @@ const _e = new Euler(0, 0, 0, 'YXZ');
 // A mission with its own spawn speed and flaps (`kias`, `flaps`: the short-field lesson, 0181) spawns at them, as main.js
 // loadScenario does; drillKts(flapsFull) is its autothrottle target (main.js applyAssists drillKts; 0: Kid's own) and
 // fullFlaps the notch Kid's auto-flaps go to past the landing flaps (main.js applyAssists: the lesson's 30°).
-function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1, lift = null, drillKts = null, fullFlaps = null) {
+function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gustAddKts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1, lift = null, drillKts = null, fullFlaps = null) {
   const spec = AIRCRAFT_DATABASE[acKey];
   const m = missionByKey(missionKey);
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
@@ -67,6 +68,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
   let step = 0, lastRud = 0, lastStep = 0;
   const papi = [0, 0, 0, 0, 0]; // samples by white lamps (main.js updatePapi: the CG to the box), 200 ft up and higher
   fly(b, spec, 700, (x, dt) => { // 700 s: a 5 NM Cessna final into 25 kt (the wake lesson) takes ~450
+    air?.(x, dt); // the game's air on a METAR (harness.js turbulentAir, 0195): gust cycle, log law, turbulence
     const ap = approachGeometry(end, x.pos);
     const wheelM = x.pos.y - spec.gearHeight;
     if (wheelM < learnerBelowM && !x.onGround) cfg = assistConfig('learner');
@@ -120,7 +122,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0 } = {}, over = nu
     if (wheelM > 8) {
       const gamma = Math.atan2(x.vel.y, Math.max(20, Math.hypot(x.vel.x, x.vel.z))) * 180 / Math.PI;
       const full = fullFlaps ?? landingFlaps(spec);
-      const tgt = drillKts?.(x.flapsIndex >= full && x.flapPos >= full - 0.001) || kidTargetKts(spec, x.flapsIndex);
+      const tgt = drillKts?.(x.flapsIndex >= full && x.flapPos >= full - 0.001) || kidTargetKts(spec, x.flapsIndex, gustAddKts);
       const ff = trimThrottle(spec, tgt * KTS_TO_MPS, x.flapsIndex, gamma, x.gearDown, airAt(x.pos.y));
       x.throttle = autothrottleCommand(ff, at, x.iasKts, tgt, iasRate, dt);
     } else x.throttle = Math.max(0, x.throttle - dt * 0.5);
@@ -435,5 +437,63 @@ describe('Kid hands off on the short-field lesson touches down in the first 1,00
       expect(r.thrFt).toBeGreaterThan(20);
       expect(r.td.iasKts).toBeLessThan(61);
     });
+  }
+});
+
+// Ticket 0195: a gusty day's turbulence (turbulence.js, Dryden on the METAR) at Kid's share (half, none below 200 ft), with the gust
+// cycle and the log law as main.js updateWind flies them. Kid's hands-off landing still lands, C or better, on
+// several seeds (the gusts differ every flight): the Cessna into Addison 16 and the 737 into DFW 35C on 25G38.
+describe('Kid hands off on a turbulent 25G38 day still lands C or better (ticket 0195)', () => {
+  const grade = (spec, r) => gradeLanding({ vsFpm: r.td.vsFpm, crossM: r.td.crossM, bankDeg: r.td.bankDeg, pastThresholdM: r.td.pastThrM,
+    pitchDeg: r.td.pitchDeg, runwayWidthM: r.td.widthM, iasKts: r.td.iasKts, vrefKts: spec.vrefKts });
+  for (const [ac, key, fromDeg] of [['c172', 'kads_16_final', 160], ['b738', 'kdfw_35c_final', 0]]) {
+    for (let seed = 1; seed <= 30; seed++) { // main.js seeds each flight at random: sweep 30 (the 737 crashed 2 in 30 at a flat half)
+      it(`${ac} ${key}, 25G38 down the runway, seed ${seed}: on the runway, gently, graded C or better`, () => {
+        const spec = AIRCRAFT_DATABASE[ac];
+        const wx = { windDirDeg: fromDeg, windKts: 25, gustKts: 38 };
+        const r = flyKidFinal(ac, key, { fromDeg, kts: 25, gustAddKts: kidGustAddKts(spec, wx), air: turbulentAir(spec, wx, { seed, level: 'kid' }) });
+        log(ac, key, `25G38 turbulent seed ${seed}`, r);
+        expect(r.td).not.toBeNull();
+        const g = grade(spec, r);
+        console.log(`[${ac} kid final] 25G38 turbulent seed ${seed}: ${g.grade} ${g.score}`);
+        expect(['S', 'A', 'B', 'C']).toContain(g.grade);
+        expect(Math.abs(r.td.crossM)).toBeLessThan(8);
+      }, 30000);
+    }
+  }
+});
+
+// 0195: the short-field lesson on a gusty day. The lesson's 61 KIAS wins over Kid's own target, so its autothrottle takes the
+// same half-gust additive (shortField.js kidKts, ACS S7's "gust factor applied"); a 15G25 and a 25G38 day at Kid's share of the
+// turbulence, ten seeds each: on the runway past the threshold, not hard (the 1,000 ft zone is the lesson's grade, not this card's).
+describe('Kid hands off on the short-field lesson on a turbulent gusty day lands on the runway (ticket 0195)', () => {
+  for (const [w, k, g] of [[160, 15, 25], [160, 20, 30]]) {
+    for (let seed = 1; seed <= 10; seed++) {
+      it(`kads_16_short_field, ${k}G${g} down the runway, seed ${seed}`, () => {
+        const spec = AIRCRAFT_DATABASE.c172, wx = { windDirDeg: w, windKts: k, gustKts: g }, add = kidGustAddKts(spec, wx);
+        const r = flyKidFinal('c172', SHORT_FIELD_KEY, { fromDeg: w, kts: k, air: turbulentAir(spec, wx, { seed, level: 'kid' }) }, null, null, 0, 0, 1,
+          () => sfKidLiftM({ windDirDeg: w, windKts: k }, 160), (full) => sfKidKts(full, add), SF_FULL_FLAPS);
+        log('c172', SHORT_FIELD_KEY, `${k}G${g} turbulent seed ${seed}`, r);
+        expect(r.td).not.toBeNull();
+        expect(r.td.pastThrM).toBeGreaterThan(0);
+        expect(r.td.vsFpm).toBeGreaterThan(-600);
+        expect(Math.abs(r.td.crossM)).toBeLessThan(8);
+      }, 30000);
+    }
+  }
+});
+
+
+// 0195: the e2e's Kid 737 in a steady 15 kt crosswind (tests/e2e/assists.spec.js, its bound -300 fpm, inside 600 m) with
+// Kid's share of that day's light turbulence, 30 seeds: thinning it only below 100 ft, 4 seeds landed harder or 800 m long.
+describe('Kid hands off in the 737 in a 15 kt crosswind with its light turbulence, 30 seeds (ticket 0195)', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    it(`kdfw_35c_final, 15 kt from 270°, seed ${seed}: gently, inside 600 m`, () => {
+      const spec = AIRCRAFT_DATABASE.b738, wx = { windDirDeg: 270, windKts: 15, gustKts: 15 };
+      const r = flyKidFinal('b738', 'kdfw_35c_final', { fromDeg: 270, kts: 15, air: turbulentAir(spec, wx, { seed, level: 'kid' }) });
+      expectLanded(r);
+      expect(r.td.vsFpm).toBeGreaterThan(-300);
+      expect(r.td.pastThrM).toBeLessThan(600);
+    }, 30000);
   }
 });

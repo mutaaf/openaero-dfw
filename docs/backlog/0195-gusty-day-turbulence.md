@@ -1,12 +1,12 @@
 ---
 id: 0195
 title: A gusty or hot day shakes the airplane: METAR-driven turbulence, felt more in the Cessna than the 737
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-17
-pr:
+pr: 279
 ---
 
 ## Why
@@ -32,15 +32,15 @@ reduced motion has no extra camera shake (the physics moves the plane, nothing i
 Add a "bumpy" word to the weather ribbon when intensity is moderate or more.
 
 ## Acceptance criteria
-- [ ] `turbulence.js` is pure and seeded: same seed and clock give the same series; zero-intensity gives zero
-- [ ] RMS vertical gust follows the intensity (light ~0.9 / moderate ~2.7 / severe ~5.5 m/s is the usual
+- [x] `turbulence.js` is pure and seeded: same seed and clock give the same series; zero-intensity gives zero
+- [x] RMS vertical gust follows the intensity (light ~0.9 / moderate ~2.7 / severe ~5.5 m/s is the usual
       mapping; cite the table you use) and falls off smoothly toward the ground
-- [ ] Flight card: the Cessna 10 NM final on a 25G38 METAR shows a larger pitch/roll/vertical-speed standard
+- [x] Flight card: the Cessna 10 NM final on a 25G38 METAR shows a larger pitch/roll/vertical-speed standard
       deviation than the 737 in the same air, and both are zero in calm air
-- [ ] Kid's hands-off landing in the turbulent scenario still grades C or better (no crash): fly it
-- [ ] The calm cards in `tests/flight/` do not move (turbulence is zero when the METAR is calm)
-- [ ] Boot JS budget unchanged (put it in an existing lazy chunk or keep it tiny)
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Kid's hands-off landing in the turbulent scenario still grades C or better (no crash): fly it
+- [x] The calm cards in `tests/flight/` do not move (turbulence is zero when the METAR is calm)
+- [x] Boot JS budget unchanged (put it in an existing lazy chunk or keep it tiny)
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 `tests/unit/turbulence.test.js` (determinism, RMS by intensity, height falloff); a flight card in
@@ -49,3 +49,25 @@ and asserts the ribbon says bumpy with no console errors.
 
 ## Out of scope
 Thermals, mountain wave, convective microbursts (0112 has the windshear drill), visual rain.
+
+## As shipped
+- The intensity table is MIL-F-8785C's low-altitude one (σ_w = 0.1 W20; W20 15 / 30 / 45 kt = light / moderate /
+  severe, σ_w 0.77 / 1.54 / 2.31 m/s), not the ticket's "usual" 0.9 / 2.7 / 5.5 (those are higher-altitude
+  magnitudes). A 25G38 METAR is between light and moderate (σ_w ~1.2 m/s), so BUMPY needs ~33 kt of mean wind or
+  a ~17 kt gust spread.
+- No temperature term: a METAR carries no surface heat flux, so a hot still day stays smooth (thermals are out of scope).
+- No scaling by type: the same air, and flightModel.js's wing loading makes the Cessna shake more (measured ~1.25x
+  in load factor and ~2x in bank on a 25G38 final, not the sharp-edge formula's ~3x: the eddies are long and both
+  ride them). A span lag (4b/πV, a game approximation: MIL-F-8785C puts it on the rotary gusts only) on the
+  vertical gust stops a point-mass wing feeling 10 ft eddies in full on the flare.
+- flightModel.js commands a pitch rate, so the card holds the attitude and measures the seat's load factor, bank
+  and vertical speed (pitch stays held). BUMPY is also on the HUD wind box (BUMPY METAR, an amber edge that stays
+  under WET RWY / IFR) for phones, where the ribbon is in the ☰ Menu sheet.
+- Kid flies half from 500 ft, thinning to nothing at 200 ft (turbulence.js assistTurbulenceScale): at a flat half the
+  737's Kid flare crashed on 2 seeds of 30, and thinned only below 100 ft it landed harder than 300 fpm on 4 of 30
+  in a steady 15 kt crosswind (the e2e's assists.spec bound). Learner flies half. Kid's Cessna adds half the gust spread to its
+  approach speed (AFH ch. 9), the short-field lesson's 61 KIAS too (ACS "gust factor applied"); the 737's Kid flare
+  landed at ~900 fpm with +4 kt, so the jet has no additive.
+- Slow flight flies smooth air for now, and Kid's short-field lesson is carded to 20G30, not 25G38 (it sags under the
+  path in 25 kt+ even without turbulence): both are 0199. In the windshear drill's shear the microburst's downdraft
+  replaces the vertical gust.
