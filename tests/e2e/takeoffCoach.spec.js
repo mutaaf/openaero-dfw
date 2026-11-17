@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { stubTiles, enterCockpit } from './helpers.js';
-// A takeoff roll: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+// A takeoff roll: sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 test.beforeEach(async ({ page }) => { await stubTiles(page); });
 

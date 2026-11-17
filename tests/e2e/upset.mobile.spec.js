@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Ticket 0174 on a phone (390x844, touch), at Kid level: the instructor hands the Cessna over nose-high
 // and slowing; hands off, Kid's assists lower the nose and level it, and the results card says the plane

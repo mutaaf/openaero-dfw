@@ -236,8 +236,8 @@ test('phone: telemetry and touch labels are at least 10 px and reach 4.5:1 (0007
 });
 
 test.describe(() => {
-  // A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-  test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+  // A long flight: sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+  test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
   test('phone: the go-around drill flies by touch alone, and its card fits (0047)', async ({ page }) => {
     test.setTimeout(240_000);

@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Short-field landing lesson (ticket 0181): the deep link opens the lesson in the picker's Drills, the Cessna spawns on
 // Addison 16's 3 NM final flaps up at 70 KIAS (POH Section 4), and the coach briefs it. Then Kid flies a short final of

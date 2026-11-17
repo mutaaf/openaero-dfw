@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
-// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+// A long flight: sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Engine failure after takeoff (ticket 0104): the Cessna on all of Addison 16, flaps up. Full
 // power, rotate at Vr, and Kid's guide climbs; the engine quits at 300 ft, the HUD says ENG OUT, the coach

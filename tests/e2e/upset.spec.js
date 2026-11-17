@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Unusual attitudes (ticket 0174): the deep link opens the nose-low drill's briefing; once the player
 // starts flying, the instructor hands the Cessna over in a 60° left bank, 25° nose down, and the coach

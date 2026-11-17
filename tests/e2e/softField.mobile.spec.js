@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Ticket 0182 on a phone (390x844, touch), at Kid level: the coach's touch words, full power from the touch throttle,
 // the stick held up from the start of the roll and let go once flying (Kid climbs away by itself); the card fits.
