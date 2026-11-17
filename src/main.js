@@ -39,7 +39,7 @@ import {
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls, slewRudder,
-  autoConfigure, kidTargetKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
   groundSteerRudder,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare, keyCode } from './input.js';
@@ -1599,7 +1599,7 @@ async function fetchWeather() {
     // responses to hours, and weather must never be served stale from a browser cache.
     const bucket = Math.floor(Date.now() / 60000);
     const res = await fetch(`${import.meta.env.BASE_URL}api/metar?ids=${WX_IDS}&t=${bucket}`, { cache: 'no-store' });
-    if (!res.ok) return;
+    if (!res.ok) { metarLib ??= await import('./metar.js'); return; } // the scenario's turbulence rides in it too (0195)
     const body = await res.json();
     metarLib ??= await import('./metar.js'); // reading a report is a lazy chunk (0092)
     const next = {};
@@ -1713,12 +1713,15 @@ function syncDensityAltitude() {
 // Wind at the aircraft: steady + smoothed gusts, the METAR's 10 m wind thinned by the log law
 // below 10 m at the CG's height (weather.js, 0106): on the runway the wing still feels ~70%
 // of it. A parked aircraft holds still on its tyres (gear.js), not on calm air.
+let turb = null; // turbulence.js's gusts (0195), in metar.js's lazy chunk
 function updateWind(dt) {
   sim.simTime += dt;
   const wx = sim.wx;
   sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
   const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY));
   sim.windVec.set(w.x, 0, w.z);
+  // The METAR's turbulence (0195, Dryden: turbulence.js) at the wheels' height; Kid and Learner fly it at half strength.
+  if (metarLib) metarLib.addTurbulence(turb ??= metarLib.createTurbulence(Date.now()), dt, metarLib.turbulenceSigmaW(wx) * (sim.assist === 'pilot' ? 1 : 0.5), sim.raFt * FT_TO_M, sim.tasKts * KTS_TO_MPS, sim.quat, sim.windVec, sim.spec.wingSpanM);
   if (sim.windshear) wsLib.addShearWind(sim.windshear, sim); // the microburst (0112)
 }
 
@@ -1743,12 +1746,14 @@ function syncWeatherUI(dt) {
   // Remarks (RMK …) are for forecasters; drop them so the age stays visible.
   byId('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
   byId('txtWindBadge').textContent = windText(wx);
+  const bumpy = !!metarLib?.isBumpy(metarLib.turbulenceSigmaW(wx)); // moderate turbulence or more (0195)
+  byId('wxBumpy').classList.toggle('hidden', !bumpy);
   const dfw = sim.dh ? sim.wx : sim.wxByIcao.KDFW || scenarioWeather(); // the low-ceiling day's DFW is its scripted one (0092)
   const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
   byId('txtFlow').textContent = `${flow} (RWY ${flow === 'NORTH' ? '35/36' : '17/18'})`;
   // HUD wind box (0075): components against the active runway only low down, near it.
   const low = sim.activeEnd && nearRunwayForWind(sim.approach, sim.activeEnd.lengthM, sim.aglFt);
-  windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind);
+  windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind, bumpy);
   const rw = byId('txtRwyWind');
   if (sim.activeEnd && wx.windKts) {
     const c = runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT);
@@ -2407,7 +2412,7 @@ function drawWindBox(w, h, hdgDeg) {
   hudCtx.strokeRect(r.x, r.y, r.w, r.h);
   hudCtx.textAlign = 'left';
   hudCtx.font = 'bold 9px monospace';
-  hudCtx.fillStyle = hw.wet ? '#fcd34d' : hw.live ? '#6ee7b7' : '#cbd5e1';
+  hudCtx.fillStyle = hw.wet || hw.bumpy ? '#fcd34d' : hw.live ? '#6ee7b7' : '#cbd5e1';
   hudCtx.fillText(hw.source, r.x + 3, r.y + 10);
   const arrow = windArrowDeg(hw.dirDeg, hw.kts, hdgDeg);
   if (arrow !== null) {
@@ -2645,7 +2650,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
       const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS)) : 0;
-      sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex), gammaDeg, dt);
+      sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, kidGustAddKts(spec, sim.wx)), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
     }
@@ -3696,6 +3701,7 @@ window.openaeroDebug = () => {
     groundY: sim.groundY,
     aglFt: sim.aglFt,
     raFt: sim.raFt, // radio altitude at the main wheels (0122)
+    windUpMps: sim.windVec.y, // the turbulence's vertical gust (0195)
     mslFt: sim.mslFt,
     onGround: sim.onGround,
     iasKts: sim.iasKts,

@@ -5,6 +5,8 @@
 // Pure module (no THREE, no DOM); tested in tests/unit/weather.test.js.
 import { runwayWindComponents } from './weather.js';
 import { CROSSWIND_KEY } from './missions.js';
+// Turbulence (0195) rides in this chunk: main.js reads it through metarLib once a report (or the API's refusal) arrives.
+export { turbulenceSigmaW, isBumpy, createTurbulence, addTurbulence } from './turbulence.js';
 
 const HPA_TO_INHG = 0.0295299830714;
 
