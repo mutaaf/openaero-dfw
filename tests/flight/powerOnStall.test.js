@@ -9,8 +9,9 @@
 //
 // What the measurements say (logged as [c172 <model>] lines): at full power and flaps 10 the nose
 // held at 15° climbs and never stalls; held at 20° it stalls in ~8-10 s at ~47-49 KIAS, under the
-// POH's power-off flaps 10 stall (50 KCAS, Fig. 5-3): at 20° of pitch part of the weight hangs on
-// the propeller (T·sin θ), so the wing stalls at a lower airspeed. JSBSim's C172 (stock P-factor
+// model's own power-off flaps 10 stall at the same height (~49.8 KIAS; POH Fig. 5-3: 50 KCAS): the
+// thrust line sits at about α to the flight path, so T·sin α carries part of the weight, and in a
+// climb the wing carries only W·cos γ, so it stalls at a lower airspeed. JSBSim's C172 (stock P-factor
 // and torque) yaws left and drops the left wing with no rudder; flightModel.js has no left-turning
 // tendency at all (KNOWN GAP 0194).
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -34,6 +35,17 @@ const yawLeftDeg = (x) => { _e.setFromQuaternion(x.quat, 'YXZ'); return _e.y * R
 const gapCard = (gaps, id) => (gaps.has(id) ? (title, ...rest) => it.fails(`KNOWN GAP (${gaps.get(id)}): ${title}`, ...rest) : it);
 const GAPS = { flightModel: new Map([['leftTurning', '0194']]), jsbsim: new Map() };
 
+// The model's power-off stall at flaps 10 here: idle, wings level, 1 kt/s down from 70 KIAS (c172.test.js's
+// method) until the wing passes its stall angle.
+function powerOffStallKts() {
+  const b = Object.assign(makeBody(c172, { kts: 70, altM: ALT_M, flaps: FLAPS, throttle: 0 }), { autoTrim: false });
+  const slow = speedHoldPilot((x) => Math.max(20, 70 - x.t));
+  const sa = stallAoaDeg(c172, FLAPS);
+  let kts = null;
+  fly(b, c172, 60, (x, dt) => { x.throttle = 0; slow(x, dt); }, (x) => { if (x.aoaDeg > sa) kts = x.iasKts; return kts !== null; });
+  return kts;
+}
+
 // The mission's spawn: 60 KIAS, flaps 10, in trim and level (main.js's drill spawn), 15 s settled.
 function spawn() {
   const m = missionByKey('c172_power_on_stall');
@@ -44,7 +56,8 @@ function spawn() {
 }
 
 // pilot: 'correct' | 'held' (full back stick from the stall) | 'lazy' (eases the nose to 12° and
-// lets the power fly it out) | 'yank' (nose down, then full back stick as soon as it flies again).
+// lets the power fly it out) | 'yank' (nose down, then full back stick as soon as it flies again) |
+// 'yankOnce' (that yank for 1 s, then the correct recovery) | 'dive' (full forward stick to -30°).
 // rudder: hold the heading with the pedals through the entry (AFH: "adding right rudder").
 function powerOnStall(pilot = 'correct', { rudder = true, pitchDeg = PO_PITCH_DEG } = {}) {
   const b = spawn();
@@ -68,8 +81,14 @@ function powerOnStall(pilot = 'correct', { rudder = true, pitchDeg = PO_PITCH_DE
     x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
     if (pilot === 'held') { x.elevInput = -1; return; }
     if (pilot === 'lazy') { x.elevInput = elevatorForPitch(12, p, x.angVel.x); return; }
-    if (pilot === 'yank' && st.phase === 'unstalled' && !yanked) { yanked = true; }
-    if (yanked && st.phase === 'unstalled') { x.elevInput = -1; return; }
+    if (pilot === 'dive') {
+      if (noseDown && p > -30) { x.elevInput = 1; return; }
+      noseDown = false;
+      if (p < 3 && !yanked) { x.elevInput = elevatorForPitch(p + 2, p, x.angVel.x); return; } // eased back up, not yanked
+      yanked = true; // (re-used: out of the dive)
+    }
+    if ((pilot === 'yank' || pilot === 'yankOnce') && st.phase === 'unstalled' && !yanked) { yanked = x.t; }
+    if (yanked && (pilot === 'yank' ? st.phase === 'unstalled' : x.t - yanked < 1 && !st.secondary)) { x.elevInput = -1; noseDown = true; return; }
     if (noseDown && (x.aoaDeg > sa - 4 || p > 5)) x.elevInput = elevatorForPitch(0, p, x.angVel.x);
     else {
       noseDown = false; climb(x, dt);
@@ -101,9 +120,10 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S power-on st
     const low = powerOnStall('correct', { pitchDeg: 15 });
     expect(low.st.phase).toBe('armed');
     const r = powerOnStall('correct');
-    console.log(`[c172 ${model}] power-on stall: ${r.stallAt.kts.toFixed(1)} KIAS, pitch ${r.stallAt.pitchDeg.toFixed(1)}° (peak ${r.peakPitch.toFixed(1)}°), `
+    const off = powerOffStallKts();
+    console.log(`[c172 ${model}] power-off flaps 10 stall ${off.toFixed(1)} KIAS; power-on stall: ${r.stallAt.kts.toFixed(1)} KIAS, pitch ${r.stallAt.pitchDeg.toFixed(1)}° (peak ${r.peakPitch.toFixed(1)}°), `
       + `bank ${r.stallAt.bankDeg.toFixed(1)}°, heading ${r.stallAt.yawLeftDeg.toFixed(1)}° left; 1.5 s later bank ${r.breakAt.bankDeg.toFixed(1)}°, ${r.breakAt.yawLeftDeg.toFixed(1)}° left`);
-    expect(r.stallAt.kts).toBeLessThan(50);
+    expect(r.stallAt.kts).toBeLessThan(off - 1); // the power takes at least a knot off it
     expect(r.stallAt.kts).toBeGreaterThan(42);
     expect(r.peakPitch).toBeLessThan(PO_PITCH_DEG + 2);
   });
@@ -137,6 +157,21 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S power-on st
     console.log(`[c172 ${model}] power-on, lazy nose: ${r.st.phase}, nose down to ${r.st.minPitchDeg.toFixed(1)}°, ${r.result.grade} ${r.result.score}, ${r.result.reason}`);
     expect(r.st.phase).toBe('complete');
     expect(r.st.minPitchDeg).toBeGreaterThan(10);
+    expect(r.result.grade).toBe('B');
+  });
+
+  it('a stall-then-yank that recovers after the second stall is capped at C', () => {
+    const r = powerOnStall('yankOnce');
+    console.log(`[c172 ${model}] power-on, yanked once: ${r.st.phase}, secondary ${r.st.secondary}, ${r.result.grade} ${r.result.score}`);
+    expect(r.st.phase).toBe('complete');
+    expect(r.st.secondary).toBe(true);
+    expect(r.result.grade).toBe('C');
+  });
+
+  it('pushing far past the horizon (-30°) is capped at B though nothing else went wrong', () => {
+    const r = powerOnStall('dive');
+    console.log(`[c172 ${model}] power-on, dived: ${r.st.phase}, nose to ${r.st.minPitchDeg.toFixed(1)}°, lost ${(r.st.stallFt - r.st.lowFt).toFixed(0)} ft, ${r.result.grade} ${r.result.score}`);
+    expect(r.st.phase).toBe('complete');
     expect(r.result.grade).toBe('B');
   });
 

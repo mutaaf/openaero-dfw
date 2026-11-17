@@ -208,8 +208,10 @@ src/stallDrill.js   stall recovery drill (0087, lazy chunk like goAround.js): th
 src/powerOnStall.js power-on (departure) stall (0191, lazy chunk; main.js loads both stall drills through it, the
                     idle one as its `idle` re-export): the C172 at 4,500 ft over Grapevine Lake, flaps 10 at 60 KIAS
                     (mission.flaps on the drill spawn); stallDrill.js's calls with the ACS's standards (FAA-S-ACS-6C
-                    VII.C: ≥ 65% power or it stays armed, heading ±10° while inducing it, done above 1,500 ft AGL, Vx
-                    less 5 kt to complete; no height factor, the ACS sets none); the nose never below 10° after it caps B.
+                    VII.C: ≥ 65% rated power (throttle 0.8 × engine.js's lapse at ~5,000 ft) or it stays armed, heading
+                    ±10° from where the power came in, done above 1,500 ft AGL, Vx less 5 kt to complete; no height factor,
+                    the ACS sets none); the nose never below 10° after it, or pushed past −10°, caps B. While it flies
+                    again the flap lever steps up a notch (main.js moveFlapLever, as in a go-around).
                     drillAssist lifts Kid's/Learner's pitch cap (assists.js s.pitchUpMaxDeg) and Kid's guide raises
                     the nose to 20° at full power until the stall; its coach is powerOnPrompt through s.ds.
                     Cards: tests/flight/powerOnStall.test.js (flightModel.js has no left yaw at power: gap 0194)

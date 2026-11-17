@@ -942,6 +942,7 @@ function startGoAroundDrill(mission) {
 // Slow the Cessna at idle until the wing stalls, then recover: graded on the results card
 // once it climbs away (or fails). stallDrill.js is a lazy chunk, loaded with the drill.
 let stallLib = null;
+let stallRoot = null; // powerOnStall.js, both stall drills' chunk (0191): kept, so FLY AGAIN arms at once
 let aircraftBeforeMission = null; // yours, while a mission flies its own airframe (the drill's)
 let sunBeforeMission = null; // your When? choice, while a night or dusk mission flies its own (0060)
 let sunPickedFor = null; // the mission you picked a When? on: its reloads (METAR, assist, FLY AGAIN) keep your pick
@@ -1111,7 +1112,7 @@ function startDrills(mission) {
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
   // The stall drills: powerOnStall.js (0191) is the one chunk, the idle drill its `idle` (stallDrill.js, 0087): the same calls, the
   // power-on drill's plus its coach's powerOnPrompt (one import: each import() adds boot bytes to Vite's preload map).
-  if (mission.stallDrill) loadDrill(mission, null, () => import('./powerOnStall.js'), (lib) => { stallLib = mission.powerOn ? lib : lib.idle; sim.stallDrill = stallLib.createStallDrill(); });
+  if (mission.stallDrill) loadDrill(mission, stallRoot, () => import('./powerOnStall.js'), (lib) => { stallRoot = lib; stallLib = mission.powerOn ? lib : lib.idle; sim.stallDrill = stallLib.createStallDrill(); });
   // The power-off 180 (0189): power180.js stands in for deadStick.js (the same calls; the import is the module map's after the first).
   if (mission.deadStick) loadDrill(mission, null, () => (mission.power180 ? import('./power180.js') : import('./deadStick.js')), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
@@ -3334,7 +3335,7 @@ byId('btnGear').addEventListener('click', () => {
 // The flap lever cycles down a notch (wrapping to up); in the drill's missed approach (0047)
 // it comes up a notch, the one direction a go-around needs.
 function moveFlapLever() {
-  if (goAroundActive()) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1);
+  if (goAroundActive() || sim.stallDrill?.flapsUp) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1); // the power-on stall's climb-away (0191) too
   else sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 }
 byId('btnFlaps').addEventListener('click', moveFlapLever);

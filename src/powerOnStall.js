@@ -7,16 +7,17 @@
 // the power, return to the climb. The standards are the Private Pilot ACS (FAA-S-ACS-6C, Area VII
 // Task C, pp. 44-45): no lower than 1,500 ft AGL (S2), no less than 65% power (S4), the heading
 // within ±10° while inducing the stall (S6), recover promptly (S7), accelerate to Vx or Vy (S9).
-// The ACS (p. 45, and Appendix p. 78) says the recovery "should not mandate a predetermined value
-// for altitude loss": the grade has no height factor (the idle drill's POH 230 ft is for that
-// stall); falling through 1,500 ft AGL is a fail.
+// The ACS (Appendix 2, p. 78) says the recovery "should not mandate a predetermined value for
+// altitude loss": the grade has no height factor (the idle drill's POH 230 ft is for that stall);
+// falling through 1,500 ft AGL is a fail, and a dive far past the horizon caps the grade (the AFH's
+// nose-down is "as much ... as required to eliminate the stall warning", not more).
 //
 // The same calls as stallDrill.js (main.js loads one or the other: createStallDrill,
 // stallDrillState, drillAssist, gradeStallRecovery, stallResultInput, STALL_PLACE), plus the
 // coach's prompt (powerOnPrompt, through coach.js s.ds). Pure: no THREE, no DOM. Tested in
 // tests/unit/powerOnStall.test.js and flown headless in tests/flight/powerOnStall.test.js.
 import { curve, letterGrade } from './landing.js';
-import { DRILL_TEXT, RANK } from './coach.js';
+import { DRILL_TEXT, RANK, TOUCH_WORDS } from './coach.js';
 import {
   STALL_WARN_MARGIN_DEG, STALL_MIN_CLIMB_FPM, STALL_LEVEL_DEG, STALL_SECONDARY_S, STALL_HELD_S, STALL_PULL,
   STALL_PULL_WINDOW_S, STALL_HELD_MARGIN_DEG, STALL_ENTRY_KTS, STALL_MIN_THROTTLE, STALL_FAIL_LOST_FT, STALL_FAIL_S,
@@ -29,20 +30,25 @@ export const POWER_ON_KEY = 'c172_power_on_stall';
 export const STALL_KEY = POWER_ON_KEY;
 export const PO_TEXT = {
   poPower: 'Full power: throttle all the way in',
-  poNose: 'Raise the nose to 20° and hold it',
-  poHold: 'Hold 20°, wings level, right rudder',
+  poNose: 'Raise the nose to 20°, hold it, wings level',
   poStall: 'Stall! Nose down, keep the power in',
   poWings: 'Wings level',
-  poFlaps: 'Flaps up (F, or tap FLAPS)',
+  poFlaps: 'Flaps up: press F once',
   poClimb: 'Climb away at 62 kt',
   poKidUp: 'Let go: the nose comes up until it stalls',
   poKid: 'Stall! The plane noses down and climbs away',
 };
 Object.assign(DRILL_TEXT, PO_TEXT);
-Object.assign(RANK, { poPower: 4, poNose: 4, poHold: 4, poKidUp: 4, poWings: 4, poFlaps: 4, poClimb: 4, poStall: 5, poKid: 5 });
+Object.assign(TOUCH_WORDS, { poFlaps: 'Flaps up: tap FLAPS once' });
+// Each entry step outranks the one before, so it shows at once (no 1.5 s hold with the old words up); the stall
+// outranks everything. No "right rudder": the default flight model has no left-turning tendency yet (0194) and a
+// touch screen has no pedals in this drill.
+Object.assign(RANK, { poPower: 4, poNose: 5, poKidUp: 4, poWings: 4, poFlaps: 4, poClimb: 4, poStall: 6, poKid: 6 });
 
-// ACS S4: no less than 65% power. Below it, a stall is not this drill's (it stays armed).
-export const PO_ENTRY_THROTTLE = 0.65;
+// ACS S4: no less than 65% power. Rated power, not lever travel: the piston's power lapses with
+// altitude (engine.js pistonPowerLapse: 0.83 at the drill's ~5,000 ft MSL), so 0.8 of throttle is ~66%
+// (tests/unit/powerOnStall.test.js). Below it, a stall is not this drill's (it stays armed).
+export const PO_ENTRY_THROTTLE = 0.8;
 // The attitude the coach asks for and Kid's guide flies (AFH: "a climb attitude", then the nose
 // raised and held; ~20° is the usual Cessna figure, and the headless cards measure what it does:
 // at full power and flaps 10, 15° climbs without stalling, 20° stalls in ~8-10 s).
@@ -62,6 +68,10 @@ export const PO_MIN_KTS = PO_VX_KTS - 5;
 export const PO_NOSE_LOW_DEG = 10;
 export const PO_NOSE_HIGH_CAP = 84; // the top of a B
 export const PO_NOSE_HIGH_REASON = 'The nose stayed above 10°: lower it nearer the horizon first. Capped at B.';
+// ...and pushed far below the horizon: height thrown away for nothing (ours; the correct pilots of
+// tests/flight/powerOnStall.test.js reach 1.5-3°, Kid's protection 4°). Capped at B.
+export const PO_DIVE_DEG = -10;
+export const PO_DIVE_REASON = 'Pushed far past the horizon: just enough to stop the stall warning. Capped at B.';
 export const STALL_PLACE = { name: 'Over Grapevine Lake · 4,500 ft · power on' };
 export const PO_KID_NOTE = 'Kid level: the plane raised and lowered its nose for you';
 
@@ -73,6 +83,7 @@ export const createStallDrill = () => ({
   stalledS: 0, recoverS: null, unstallT: null, secondary: false, climbFpm: 0,
   hdg0: null, entryHdgDeg: 0, minPitchDeg: Infinity, stallKts: null, stallPitchDeg: null,
   pitchDeg: 0, bankDeg: 0, iasKts: 0, vsFpm: 0, flaps: 0,
+  flapsUp: false, // the flap lever steps up a notch (main.js moveFlapLever, as in a go-around) while it flies again
 });
 
 // One frame. s: stallDrill.js's inputs plus hdgDeg (the nose's heading), pitchDeg, flapsIndex.
@@ -81,8 +92,13 @@ export function stallDrillState(st, s) {
   st.pitchDeg = s.pitchDeg; st.bankDeg = s.bankDeg; st.iasKts = s.iasKts; st.vsFpm = s.vsFpm; st.flaps = s.flapsIndex;
   const stalled = s.aoaDeg > s.stallAoaDeg;
   if (st.phase === 'armed') {
-    if (st.hdg0 === null) st.hdg0 = s.hdgDeg;
-    if (s.throttle >= PO_ENTRY_THROTTLE) st.entryHdgDeg = Math.max(st.entryHdgDeg, Math.abs(hdgDiff(s.hdgDeg, st.hdg0)));
+    // The entry starts with the power in (AFH): its heading is the one the power came in on; power back
+    // off (clearing turns, a restart) starts it again.
+    if (s.throttle < PO_ENTRY_THROTTLE) { st.hdg0 = null; st.entryHdgDeg = 0; }
+    else {
+      if (st.hdg0 === null) st.hdg0 = s.hdgDeg;
+      st.entryHdgDeg = Math.max(st.entryHdgDeg, Math.abs(hdgDiff(s.hdgDeg, st.hdg0)));
+    }
     if (!stalled || s.iasKts > s.warnKts + STALL_ENTRY_KTS || s.throttle < PO_ENTRY_THROTTLE) return '';
     st.phase = 'stalled'; st.stallT = s.t; st.stallFt = s.altFt; st.lowFt = s.altFt;
     st.peakBankDeg = Math.abs(s.bankDeg); st.stallKts = s.iasKts; st.stallPitchDeg = s.pitchDeg; st.minPitchDeg = s.pitchDeg;
@@ -101,7 +117,7 @@ export function stallDrillState(st, s) {
   }
   if (st.phase === 'stalled') {
     if (s.aoaDeg >= s.stallAoaDeg - STALL_WARN_MARGIN_DEG) return '';
-    st.phase = 'unstalled'; st.unstallT = s.t;
+    st.phase = 'unstalled'; st.unstallT = s.t; st.flapsUp = true;
     if (st.recoverS === null) st.recoverS = s.t - st.stallT;
     return 'unstalled';
   }
@@ -112,7 +128,7 @@ export function stallDrillState(st, s) {
   }
   if (s.aoaDeg < s.stallAoaDeg - STALL_WARN_MARGIN_DEG && s.vsFpm >= STALL_MIN_CLIMB_FPM && bank <= STALL_LEVEL_DEG
     && s.throttle >= STALL_MIN_THROTTLE && s.iasKts >= PO_MIN_KTS && s.t - st.unstallT >= STALL_SECONDARY_S) {
-    st.phase = 'complete'; st.climbFpm = s.vsFpm;
+    st.phase = 'complete'; st.climbFpm = s.vsFpm; st.flapsUp = false;
     return 'complete';
   }
   return '';
@@ -122,8 +138,7 @@ export function stallDrillState(st, s) {
 export function powerOnPrompt(st, kid, throttle) {
   if (st.phase === 'armed') {
     if (kid) return 'poKidUp';
-    if (throttle < 0.9) return 'poPower';
-    return st.pitchDeg < PO_PITCH_DEG - 5 ? 'poNose' : 'poHold';
+    return throttle < 0.9 ? 'poPower' : 'poNose';
   }
   if (st.phase === 'stalled') return kid ? 'poKid' : 'poStall';
   if (st.phase !== 'unstalled') return null;
@@ -169,9 +184,10 @@ export function gradeStallRecovery(t) {
   else if (t.stalledS > STALL_HELD_S) { score = Math.min(score, STALL_HELD_CAP); reason = STALL_HELD_REASON; }
   else if (t.secondary) { score = Math.min(score, STALL_SECONDARY_CAP); reason = STALL_SECONDARY_REASON; }
   else if (t.minPitchDeg > PO_NOSE_LOW_DEG) { score = Math.min(score, PO_NOSE_HIGH_CAP); reason = PO_NOSE_HIGH_REASON; }
+  else if (t.minPitchDeg < PO_DIVE_DEG) { score = Math.min(score, PO_NOSE_HIGH_CAP); reason = PO_DIVE_REASON; }
   const lost = Math.max(0, Math.round(t.lostFt ?? 0));
   return { kind: 'stall', title: t.failed ? 'Power-on stall not recovered' : 'Power-on stall recovered', grade: letterGrade(score), score, factors,
-    reason: reason ?? `Lost ${lost} ft (the ACS sets no figure for it).`, note: t.kid && !t.failed ? PO_KID_NOTE : null };
+    reason, note: t.failed ? null : t.kid ? PO_KID_NOTE : `Lost ${lost} ft: no limit on this one` };
 }
 
 export const stallResultInput = (st, kid = false, aglFt = Infinity) => ({ kid,

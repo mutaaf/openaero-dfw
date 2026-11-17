@@ -13,6 +13,8 @@ import { assistConfig, createAssistState, shapeControls, assistBestKey } from '.
 import { makeBody, fly, attitude, vsFpm } from '../flight/harness.js';
 import { M_TO_FT, RAD_TO_DEG } from '../../src/constants.js';
 import { rollHoldScale } from '../../src/flightModel.js';
+import { pistonPowerLapse } from '../../src/engine.js';
+import { airAt } from '../../src/atmosphere.js';
 import { Euler } from 'three';
 
 const SA = 14.1;
@@ -46,7 +48,8 @@ describe('powerOnStall state machine (0191)', () => {
     expect(st.recoverS).toBeCloseTo(0.1, 5);
     const r = gradeStallRecovery(stallResultInput(st));
     expect(r.grade).toBe('S');
-    expect(r.reason).toMatch(/Lost 20 ft/);
+    expect(r.reason).toBe(null); // a clean pass shows no reason line
+    expect(r.note).toMatch(/Lost 20 ft: no limit/);
   });
 
   it('a stall under 65% power is not this drill (ACS S4): it stays armed', () => {
@@ -60,10 +63,22 @@ describe('powerOnStall state machine (0191)', () => {
     expect(trace(st, hold(5, { aoa: 15, kts: 75 }))).toEqual([]);
   });
 
-  it('measures the heading wander under power only (ACS S6), from the first frame\'s heading', () => {
+  it('measures the heading wander under power only (ACS S6), from the heading the power came in on', () => {
     const st = createStallDrill();
-    trace(st, [{ aoa: 5, hdg: 0, thr: 0.4 }, { aoa: 5, hdg: 30, thr: 0.4 }, { aoa: 5, hdg: -7, thr: 1 }, { aoa: 5, hdg: 355, thr: 1 }]);
+    trace(st, [{ aoa: 5, hdg: 0, thr: 1 }, { aoa: 5, hdg: 90, thr: 1 }, { aoa: 5, hdg: 30, thr: 0.4 }, // a clearing turn, power back: starts again
+      { aoa: 5, hdg: 40, thr: 1 }, { aoa: 5, hdg: 47, thr: 1 }, { aoa: 5, hdg: 35, thr: 1 }]);
     expect(st.entryHdgDeg).toBe(7);
+    trace(st, [{ aoa: 5, hdg: 179, thr: 1 }]);
+    const wrap = createStallDrill();
+    trace(wrap, [{ aoa: 5, hdg: 355, thr: 1 }, { aoa: 5, hdg: 3, thr: 1 }]);
+    expect(wrap.entryHdgDeg).toBe(8);
+  });
+
+  it('ACS S4\'s 65% is rated power: the entry throttle times the piston lapse at the drill\'s height', () => {
+    const m = missionByKey(POWER_ON_KEY);
+    const air = airAt((m.aglFt + 550) * 0.3048); // Grapevine Lake ~535 ft MSL
+    expect(PO_ENTRY_THROTTLE * pistonPowerLapse(air.pressurePa, air.tempK)).toBeGreaterThanOrEqual(0.65);
+    expect((PO_ENTRY_THROTTLE - 0.05) * pistonPowerLapse(air.pressurePa, air.tempK)).toBeLessThan(0.65);
   });
 
   it('not recovered: falling through 1,500 ft AGL fails (ACS S2), and the card says why', () => {
@@ -106,6 +121,9 @@ describe('the power-on stall grade (0191)', () => {
     const high = gradeStallRecovery({ ...base, minPitchDeg: 11 });
     expect(high).toMatchObject({ grade: 'B', score: PO_NOSE_HIGH_CAP });
     expect(high.reason).toMatch(/above 10°/);
+    const dive = gradeStallRecovery({ ...base, minPitchDeg: -30 });
+    expect(dive).toMatchObject({ grade: 'B', score: PO_NOSE_HIGH_CAP });
+    expect(dive.reason).toMatch(/past the horizon/);
   });
   it('Kid\'s card says the airplane flew it', () => {
     expect(gradeStallRecovery({ ...base, kid: true }).note).toMatch(/for you/);
@@ -118,7 +136,7 @@ describe('the power-on stall coach (0191)', () => {
   it('steps through the Handbook: power, nose up, hold; stall: nose down; wings, power, flaps, climb', () => {
     expect(powerOnPrompt(st({ phase: 'armed' }), false, 0.5)).toBe('poPower');
     expect(powerOnPrompt(st({ phase: 'armed', pitchDeg: 8 }), false, 1)).toBe('poNose');
-    expect(powerOnPrompt(st({ phase: 'armed', pitchDeg: 19 }), false, 1)).toBe('poHold');
+    expect(powerOnPrompt(st({ phase: 'armed', pitchDeg: 19 }), false, 1)).toBe('poNose'); // one prompt: no flip-flop at 15°
     expect(powerOnPrompt(st({ phase: 'stalled' }), false, 1)).toBe('poStall');
     expect(powerOnPrompt(st({ phase: 'unstalled', bankDeg: -12 }), false, 1)).toBe('poWings');
     expect(powerOnPrompt(st({ phase: 'unstalled' }), false, 0.6)).toBe('poPower');
@@ -131,12 +149,16 @@ describe('the power-on stall coach (0191)', () => {
     expect(powerOnPrompt(st({ phase: 'stalled' }), true, 1)).toBe('poKid');
   });
   it('goes through coach.js as s.ds, worded short in the lazy chunk; the stall interrupts at once', () => {
-    expect(coachTarget({ aglFt: 4500, vsiFpm: 0, throttle: 1, onGround: false, autopilot: false, stall: null, ds: 'poHold' })).toBe('poHold');
+    expect(coachTarget({ aglFt: 4500, vsiFpm: 0, throttle: 1, onGround: false, autopilot: false, stall: null, ds: 'poNose' })).toBe('poNose');
     for (const k of Object.keys(PO_TEXT)) {
       expect(coachText(k)).toBe(PO_TEXT[k]);
       expect(PO_TEXT[k].length).toBeLessThanOrEqual(48);
     }
-    expect(RANK.poStall).toBeGreaterThan(RANK.poHold);
+    expect(RANK.poNose).toBeGreaterThan(RANK.poPower); // full power in: the nose line shows at once
+    expect(RANK.poStall).toBeGreaterThan(RANK.poNose);
+    expect(coachText('poFlaps', { touch: true })).toMatch(/tap FLAPS/);
+    expect(coachText('poFlaps')).toMatch(/press F/);
+    expect(Object.values(PO_TEXT).join(' ')).not.toMatch(/rudder/); // no pedals on a phone here; no left yaw yet (0194)
   });
 });
 

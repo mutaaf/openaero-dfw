@@ -28,9 +28,9 @@ describe('noShadowMap.js (the renderer\'s WebGLShadowMap stand-in, 0191)', () =>
     expect(() => sm.render([{}], {}, {})).toThrow(/noShadowMap/);
   });
 
-  it('no source turns shadow maps on or makes anything cast or receive one', () => {
+  it('no source sets shadowMap.enabled at all (the stand-in throws whenever it is on) or makes anything cast or receive one', () => {
     for (const f of walk('src').filter((x) => x.endsWith('.js') && !x.endsWith('noShadowMap.js'))) {
-      expect(readFileSync(f, 'utf8'), f).not.toMatch(/shadowMap\.enabled\s*=\s*true|castShadow|receiveShadow/);
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(/shadowMap\.enabled\s*=(?!=)|castShadow|receiveShadow/);
     }
   });
 });
