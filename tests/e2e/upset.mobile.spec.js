@@ -20,14 +20,18 @@ test('phone, Kid, nose-high: hands off, the plane recovers itself and the card s
   expect((await snap()).pitchDeg).toBeGreaterThan(0); // still nose-up (Kid's assists are already pushing; the set-up's +35° is carded headless)
   await expect(page.locator('#txtCoach')).toHaveText(/levels itself/, { timeout: 10_000 });
   // The coach card fits on screen, clear of the stall banner (up top: the zoom is slow).
-  const coach = await page.locator('#coach').boundingBox();
+  // One synchronous read of both boxes: at 4x sim warp (0193) the stall banner toggles between
+  // two Playwright calls, so isVisible() then boundingBox() handed back null (main went red).
+  const { coach, b } = await page.evaluate(() => {
+    const box = (el) => { const r = el.getBoundingClientRect(); return { y: r.y, height: r.height }; };
+    const banner = document.getElementById('stallAlertBanner');
+    const shown = !banner.classList.contains('hidden') && getComputedStyle(banner).display !== 'none';
+    return { coach: box(document.getElementById('coach')), b: shown ? box(banner) : null };
+  });
+  expect(coach.height).toBeGreaterThan(0);
   expect(coach.y).toBeGreaterThanOrEqual(0);
   expect(coach.y + coach.height).toBeLessThanOrEqual(844);
-  const banner = page.locator('#stallAlertBanner');
-  if (await banner.isVisible()) {
-    const b = await banner.boundingBox();
-    expect(coach.y >= b.y + b.height || coach.y + coach.height <= b.y).toBe(true);
-  }
+  if (b) expect(coach.y >= b.y + b.height || coach.y + coach.height <= b.y).toBe(true);
   expect(await page.evaluate(() => document.scrollingElement.scrollTop)).toBe(0);
   await page.screenshot({ path: test.info().outputPath('upset-high-390.png') });
   await expect(page.locator('#resultsCard')).toBeVisible({ timeout: 60_000 });
