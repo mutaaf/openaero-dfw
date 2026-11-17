@@ -24,8 +24,14 @@ export const EO_BANK_DEG = 45;
 // Before the first input: the moment it takes to see the engine has quit.
 export const EO_REACT_S = 1;
 // The coach says "you can turn back" only with this much height to spare over the need (a turn
-// that makes it by a few feet is not a plan).
-export const EO_MARGIN_FT = 25;
+// that makes it by a few feet is not a plan). 25 ft before 0183: on PHAK's ground effect the need
+// is within ~10 ft of the airplane in still air (800 ft made it, need 794; 850 did not, need 852),
+// and the shallower climb (no induced-drag credit at 300-700 ft) puts the 700 ft failure's need at
+// 680: with 25 ft the coach would call 705 and the mission (its blurb: "can make it") would say land
+// ahead in calm air. 15 ft calls 695, 5 ft under the failure: a slower climb than 74 KIAS can tip it
+// to "land ahead", which the blurb allows ("if today's wind and your climb allow it"). The need is
+// checked every 50 ft (tests/flight/engineOut.test.js), so "within ~10 ft" rests on 800 / 850.
+export const EO_MARGIN_FT = 15;
 // Turned back: the track more than this far off the runway's heading ("land ahead" allows
 // small turns to pick a field; the coach calls past EO_TURN_FROM_DEG a turn). Back: within this
 // of the reciprocal.
