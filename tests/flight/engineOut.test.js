@@ -170,7 +170,7 @@ describe('Cessna 172S engine failure after takeoff at Addison (flightModel, tick
     console.log(`[engineOut] turnback window, ${headwindKts} kt: ${rows.map((w) => `${w.ft}:${w.made ? 'made' : 'no'}/${w.needFt}${w.can ? '+' : ''}`).join(' ')}`);
     for (const w of rows) {
       if (w.can) expect(w).toMatchObject({ made: true });
-      if (w.needFt > w.ft && !headwindKts) expect(w).toMatchObject({ made: false });
+      if (w.needFt > w.ft && !(headwindKts && w.ft === 400)) expect(w).toMatchObject({ made: false }); // 10 kt, 400 ft: KNOWN GAP (0198) below
     }
     expect(rows.filter((w) => w.can).length).toBeGreaterThanOrEqual(5);
     expect(rows[0].made).toBe(false);

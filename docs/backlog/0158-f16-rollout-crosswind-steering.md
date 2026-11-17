@@ -22,10 +22,10 @@ pedal or failed the 0110 skip card (the 0150 PR's sweep).
 Give the F-16's nose-wheel steering its own authority schedule (the real one has a low-gain mode above taxi speed;
 find a cited source for its authority, e.g. the F-16 flight manual's NWS description), in gear.js
 noseSteerYawRate / spec.gear, so the pedal at landing speed is the rudder's and the nose wheel's steering is gentle.
-Then flip the two `it.fails` KNOWN GAP (0158) cards in tests/flight/kidFinal.test.js.
+Then flip the `it.fails` KNOWN GAP (0158) card in tests/flight/kidFinal.test.js (the 25 kt from 90° one: the Learner 20 kt from 270° card holds since 0183's ground effect, 6.1 m, and is a plain card).
 
 ## Acceptance criteria
-- [ ] The two KNOWN GAP (0158) cards pass (flip to `it`)
+- [ ] The KNOWN GAP (0158) card passes (flip to `it`); the Learner 270° card stays green
 - [ ] The 0110 groundSteer cards, the 0100/0150 rollout cards and the 30 fps card still pass
 - [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
 

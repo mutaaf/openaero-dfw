@@ -37,8 +37,10 @@ constant could re-centre (power180.js FLOAT_M 95 → 40, TURN_FT 170 → 180; en
 
 ## Acceptance criteria
 - [ ] The three KNOWN GAP (0198) cards pass and become plain cards.
-- [ ] `npm test -- tests/flight` green, no card regressed; tests/e2e/power180.spec.js, engineOut and
-      pattern specs green.
+- [ ] `npm test -- tests/flight` green, no card regressed; `node scripts/check-gaps.mjs` passes;
+      tests/e2e/power180.spec.js, engineOut.spec.js, pattern.spec.js and pattern.mobile.spec.js green.
+- [ ] The power-off 180's still-air and 5 kt cards keep more than +5 ft over the spot (0183 left
+      250°/5 kt at +5 ft).
 
 ## Test plan
 The three cards above; the power-off 180's wind table in the PR body.

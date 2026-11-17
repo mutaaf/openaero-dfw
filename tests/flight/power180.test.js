@@ -112,8 +112,9 @@ describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', (
   // 5 and 10 kt. Measured 2026-11-16 on 0179's ground effect (5 / 10 kt): 160°: +139 / +170 ft, 340°: +76 / +68,
   // 250°: +77 / +36, 070°: +86 / +82; still air +83. Since 0183 (PHAK's ground effect: less float; FLOAT_M 95 → 40,
   // TURN_FT 170 → 180): 160°: +100 / +299, 340°: +20 / +228, 250°: +5 / −39, 070°: +27 / +18; still air +23.
-  // It aims long because the test fails short. 15 kt is logged, not carded. How touchy it is: the turn height
-  // (TURN_FT) 5 ft either side moved still air to −96 / +112 ft (a flaps 30 call made or missed): a real
+  // It aims long because the test fails short. 15 kt is logged, not carded. How touchy it is: on 0179's curve
+  // the turn height (TURN_FT) 5 ft either side moved still air to −96 / +112 ft (a flaps 30 call made or missed);
+  // since 0183 FLOAT_M 45 / 40 / 35 at TURN_FT 180 put still air at +6 / +23 / +37 and 250°/5 at −11 / +5 / +23: a real
   // pilot's judgement is no finer, but the coach's call is not a guarantee. At 10 kt the flap notches are
   // too coarse: lined up between two notches' glides (e.g. 50 ft over the flaps-up line, not enough for
   // flaps 20) nothing in the coach takes the extra height off, and no FLOAT_M/TURN_FT/FINAL_M/FLAPS_FT

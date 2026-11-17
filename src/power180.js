@@ -52,8 +52,9 @@ export const FINAL_M = 600;
 const CLOSE_DEG_PER_M = 0.2;
 export const TURN_FT = 180;
 // Kid's guide turns this much later (lower): its auto-flare floats further than the test pilot's
-// round-out (tests/e2e/power180.spec.js: the coach's turn put Kid ~266 ft past, this one 134 ft).
-export const KID_TURN_FT = TURN_FT - 75;
+// round-out (tests/e2e/power180.spec.js, since 0183: TURN_FT − 75 put Kid 343 ft past, − 105 90 ft,
+// − 110 52 ft, − 120 27 ft short; on 0179's ground effect the coach's turn put Kid ~266 ft past, − 75 134 ft).
+export const KID_TURN_FT = TURN_FT - 105;
 // Lined up: when a glide with the next notch out still reaches the aim with this much to spare,
 // the coach asks for it (flaps 20, then 30); Kid's guide sets them.
 export const FLAPS_FT = 10;

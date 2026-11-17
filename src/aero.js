@@ -91,14 +91,17 @@ export const overspeedStep = (warned, iasKts, limitKts) =>
 // 23.5% at a quarter, 47.6% at a tenth (Pilot's Handbook of Aeronautical Knowledge, FAA-H-8083-25C,
 // ch. 5, "Ground Effect"; tests/flight/groundEffect.test.js), as 0.791 / (1 + 0.655 h/b)^8: three
 // constants through three points (1.41 / 23.51 / 47.62%). It tracks Wieselsberger's
-// (1 - 1.32 h/b) / (1.05 + 7.4 h/b) within ~1 point from a twentieth to half a span, and unlike it
-// stays positive above ~0.76 span and tends to 0 (0.1% at two spans). Ticket 0183; it was McCormick's
+// (1 - 1.32 h/b) / (1.05 + 7.4 h/b) within ~1 point from ~0.09 to half a span (below that it
+// takes less off: 4.7 points less at a twentieth), and unlike it stays positive above ~0.76 span
+// and tends to 0 (0.1% at two spans). Ticket 0183; it was McCormick's
 // (16h/b)² / (1 + (16h/b)²) applied as (r/(1+r))², ~11 / 36 / 62% at those heights.
-// h is the CG's height (flightModel.js): the specs carry no wing height. The 1 m floor only binds
-// below every airframe's CG height on its wheels (gearHeight 1.65 m and up), i.e. not in flight.
+// h is the CG's height (flightModel.js): the specs carry no wing height. The 1 m floor binds only
+// below every airframe's CG height on its locked gear (gearHeight 1.65 m and up): not in flight.
 export function groundEffectFactor(heightM, wingSpanM) {
   const x = Math.max(1.0, heightM) / wingSpanM;
-  return 1 - 0.791 / Math.pow(1 + 0.655 * x, 8);
+  let y = 1 + 0.655 * x;
+  y *= y; y *= y; y *= y; // the 8th power, ~8x cheaper than Math.pow (every physics substep)
+  return 1 - 0.791 / y;
 }
 
 export function inducedDragK(spec) {
