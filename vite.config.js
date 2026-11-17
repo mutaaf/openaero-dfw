@@ -57,11 +57,13 @@ export default defineConfig({
   // (Don't group three's boot modules into one chunk: rolldown's runtime helpers stay in the entry
   // and the chunks import each other in a cycle; the page throws at boot.)
   // WebGLRenderer's WebXRManager is src/noXr.js, a stand-in with XR off (0174: ~4 kB gz of boot the sim never used);
-  // its environments' PMREMGenerator is src/noPmrem.js (0022: the sim sets no env map, ~4 kB gz).
+  // its environments' PMREMGenerator is src/noPmrem.js (0022: the sim sets no env map, ~4 kB gz);
+  // its WebGLShadowMap is src/noShadowMap.js (0191: the sim turns no shadow map on).
   resolve: { alias: [
     { find: /^three$/, replacement: fileURLToPath(new URL('./node_modules/three/src/Three.js', import.meta.url)) },
     { find: /^\.\/webxr\/WebXRManager\.js$/, replacement: fileURLToPath(new URL('./src/noXr.js', import.meta.url)) },
     { find: /^\.\.\/\.\.\/extras\/PMREMGenerator\.js$/, replacement: fileURLToPath(new URL('./src/noPmrem.js', import.meta.url)) },
+    { find: /^\.\/webgl\/WebGLShadowMap\.js$/, replacement: fileURLToPath(new URL('./src/noShadowMap.js', import.meta.url)) },
   ] },
   build: {
     outDir: 'dist/openaero',

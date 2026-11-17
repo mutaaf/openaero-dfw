@@ -79,6 +79,7 @@ export function updateDeparture(st, onGround, aglFt) {
 // s: { pitchIn, rollIn, yawIn (raw stick targets: pitch + = nose down, roll + = right),
 //      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), rollScale (rollHoldScale), aoaDeg, betaDeg, dihedralAil,
 //      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true), vsMps (+ = up), flarePerS (spec.kidFlarePerS),
+//      pitchUpMaxDeg (a drill's lifted pitch cap, else null: the power-on stall's, 0191),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
 //      localizer bank and glidepath angle on a final), rwyHdgDeg, noseHdgDeg, crossM, crossVelMps,
 //      steerRateDegS (on the runway: its true heading or null off it, the nose's, the offset and
@@ -129,7 +130,7 @@ export function shapeControls(cfg, st, s, dt, out) {
     const ballooning = cfg.autoFlare && s.wheelHeightM < FLARE_FROM_M && s.vsMps > 0;
     st.pitchHoldDeg += clamp(s.guideGammaDeg + s.aoaDeg - st.pitchHoldDeg, ballooning ? 0 : -step, step);
   }
-  st.pitchHoldDeg = clamp(st.pitchHoldDeg, cfg.pitchDownMaxDeg * CMD_SHARE, cfg.pitchUpMaxDeg * CMD_SHARE);
+  st.pitchHoldDeg = clamp(st.pitchHoldDeg, cfg.pitchDownMaxDeg * CMD_SHARE, (s.pitchUpMaxDeg ?? cfg.pitchUpMaxDeg) * CMD_SHARE); // a drill may lift the cap (0191)
   // Kid ground floor: a dive held from higher up is shallowed out before the ground.
   if (cfg.groundFloor && !s.noFloor && s.wheelHeightM < FLOOR_BELOW_M) {
     st.pitchHoldDeg = Math.max(st.pitchHoldDeg, FLOOR_GAMMA_DEG + s.aoaDeg);
