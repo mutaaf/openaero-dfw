@@ -6,7 +6,7 @@ priority: P1
 size: S
 lens: player-feel
 created: 2026-10-17
-pr:
+pr: 272
 ---
 
 ## Note (2026-11-06 groom)
