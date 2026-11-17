@@ -3877,7 +3877,7 @@ function boot() {
   if (key) byId('selScenario').value = key;
   // A returning player sees what Continue flies: its card scrolled into view, and a remembered mute
   // shown (Options open on its sound box) rather than a silent mystery.
-  if (p.mission && !linked) { byId('btnStartFlight').textContent = 'Continue ✈'; document.querySelector('#missionList .btnMission.active')?.scrollIntoView({ block: 'nearest' }); }
+  if (p.mission && !linked) { byId('btnStartFlight').textContent = 'Continue ✈'; byId('btnStartFlight').classList.replace('px-7', 'px-4'); document.querySelector('#missionList .btnMission.active')?.scrollIntoView({ block: 'nearest' }); }
   if (!p.sound) byId('chkAutoSound').closest('details').open = true;
   if (linked) {
     try { history.replaceState(null, '', `${location.pathname}${stripDeepLink(location.search)}${location.hash}`); } catch { /* sandboxed */ }
