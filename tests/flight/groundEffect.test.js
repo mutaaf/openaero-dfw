@@ -19,8 +19,14 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 // The 1 m clamp (Math.max(1.0, heightM)) holds the factor at its 1 m value below 1 m: for the C172
 // (b 11.0 m) h/b 1/20 = 0.55 m reads as 1 m (h/b 0.091); for the F-16 (b 10.0 m) h/b 1/20 = 0.50 m
 // reads as 1 m (h/b 0.10) and 1/10 sits exactly on it; the 737 (b 35.8 m) is unclamped down to
-// 1/20 (1.79 m). flightModel.js passes the CG's height above the ground, not the wing's: that
-// difference is outside this card (see 0183).
+// 1/20 (1.79 m). In flight the floor never binds: every airframe's CG rides at least gearHeight
+// (1.65 m and up) above the ground on its wheels.
+//
+// The height (0183's decision): flightModel.js passes the CG's height above the ground, not the
+// wing's. The specs carry no cited wing height (the Cessna's high wing sits above its CG, the 737's
+// and F-16's low wings near it), and the Cessna's CG height is itself an over-tall fitted number
+// (aircraft.js: the CG 1.73 m above the axles against ~1.22 m), so a wing offset on top of it would be two
+// guesses. On the wheels (gearHeight) the CG height reads h/b 0.15 (C172), 0.09 (737), 0.22 (F-16).
 const PHAK = [
   { hOverB: 1, reductionPct: 1.4 },
   { hOverB: 1 / 4, reductionPct: 23.5 },
@@ -72,10 +78,10 @@ describe('ground effect on induced drag (0179, PHAK ch. 5)', () => {
     });
   }
 
-  // Model (r = 16h/b, factor (r/(1+r))²): ~11.4% at one span, ~36% at a quarter, ~62% at a tenth,
-  // against 1.4 / 23.5 / 47.6. The curve is the same for every airframe (it is a function of h/b);
-  // the clamp does not touch the cited heights. Fixing it moves the flare float and landing cards.
-  it.fails('KNOWN GAP (0183): the induced-drag reduction at h/b 1, 1/4 and 1/10 is within 3 percentage points of PHAK\'s 1.4 / 23.5 / 47.6% (model: ~11.4 / 36 / 62%)', () => {
+  // Closed by 0183: the model was (r/(1+r))², r = 16h/b, ~11.4 / 36 / 62%; it is now a fit through
+  // PHAK's three figures (aero.js), 1.41 / 23.51 / 47.62%. The curve is the same for every airframe
+  // (a function of h/b); the clamp does not touch the cited heights.
+  it('the induced-drag reduction at h/b 1, 1/4 and 1/10 is within 3 percentage points of PHAK\'s 1.4 / 23.5 / 47.6% (0183)', () => {
     for (const id of AIRCRAFT) {
       const b = AIRCRAFT_DATABASE[id].wingSpanM;
       for (const { hOverB, reductionPct: cited } of PHAK) {

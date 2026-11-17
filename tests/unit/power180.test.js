@@ -108,8 +108,8 @@ describe('power-off 180 coach (power180.js power180Target)', () => {
     const fin = (pastM, aglFt, flaps = 0) => input({ ...atSpot(pastM, 0), aglFt, flaps, trackDeg: E16.hdgT, turned: true });
     expect(power180Target(fin(-700, 600))).toBe('p1Flaps');
     expect(power180Target(fin(-700, 600, 2))).toBe('p1High');
-    expect(power180Target(fin(-700, 260))).toBe('p1Final'); // 600 m to the aim: 9:1 makes it (219 ft), 7.6:1 just (259)
-    expect(power180Target(fin(-700, 210))).toBe('p1Final'); // a little under the glide: not yet "low"
+    expect(power180Target(fin(-700, 260))).toBe('p1Final'); // 660 m to the aim (FLOAT_M 40): 9.2:1 makes it (235 ft), 7.5:1 does not (289)
+    expect(power180Target(fin(-700, 225))).toBe('p1Final'); // a little under the glide: not yet "low"
     expect(power180Target(fin(-700, 120))).toBe('p1LowF');
     expect(P180_TEXT.p1LowF).not.toMatch(/flaps up/);
     expect(power180Target(fin(-150, 80, 2))).toBe('p1High'); // still high over the pavement: flaps 30

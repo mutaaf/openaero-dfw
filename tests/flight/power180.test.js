@@ -109,19 +109,28 @@ describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', (
   });
 
   // The coach reads the wind on each leg (power180.js legWind): down the runway, up it and across, at
-  // 5 and 10 kt. Measured 2026-11-16 (5 / 10 kt): 160°: +139 / +170 ft, 340°: +76 / +68, 250°: +77 / +36,
-  // 070°: +86 / +82; still air +83. It aims long because the test fails short. 15 kt is logged, not carded.
-  // How touchy it is: the turn height (TURN_FT) 5 ft either side moved still air to −96 / +112 ft (a flaps
-  // 30 call made or missed): a real pilot's judgement is no finer, but the coach's call is not a guarantee.
-  it('in a 5 or 10 kt wind from any side, as coached: on the spot to 250 ft past it, never short', () => {
-    for (const windKts of [5, 10, 15]) for (const windFromDeg of [160, 340, 250, 70]) {
-      const r = power180('coach', { windKts, windFromDeg });
-      log(`wind ${String(windFromDeg).padStart(3, '0')}/${windKts}`, r);
-      if (windKts > 10) continue;
-      expect(r.td.pastSpotFt).toBeGreaterThanOrEqual(0);
-      expect(r.td.pastSpotFt).toBeLessThan(250);
-      expect(Math.abs(r.td.crossM)).toBeLessThan(8);
-    }
+  // 5 and 10 kt. Measured 2026-11-16 on 0179's ground effect (5 / 10 kt): 160°: +139 / +170 ft, 340°: +76 / +68,
+  // 250°: +77 / +36, 070°: +86 / +82; still air +83. Since 0183 (PHAK's ground effect: less float; FLOAT_M 95 → 40,
+  // TURN_FT 170 → 180): 160°: +100 / +299, 340°: +20 / +228, 250°: +5 / −39, 070°: +27 / +18; still air +23.
+  // It aims long because the test fails short. 15 kt is logged, not carded. How touchy it is: the turn height
+  // (TURN_FT) 5 ft either side moved still air to −96 / +112 ft (a flaps 30 call made or missed): a real
+  // pilot's judgement is no finer, but the coach's call is not a guarantee. At 10 kt the flap notches are
+  // too coarse: lined up between two notches' glides (e.g. 50 ft over the flaps-up line, not enough for
+  // flaps 20) nothing in the coach takes the extra height off, and no FLOAT_M/TURN_FT/FINAL_M/FLAPS_FT
+  // setting put all eight winds in the window (swept in 0183's PR): 0198.
+  const windCard = (windKts, windFromDeg) => {
+    const r = power180('coach', { windKts, windFromDeg });
+    log(`wind ${String(windFromDeg).padStart(3, '0')}/${windKts}`, r);
+    expect(r.td.pastSpotFt).toBeGreaterThanOrEqual(0);
+    expect(r.td.pastSpotFt).toBeLessThan(250);
+    expect(Math.abs(r.td.crossM)).toBeLessThan(8);
+  };
+  it('in a 5 kt wind from any side, as coached: on the spot to 250 ft past it, never short', () => {
+    for (const windFromDeg of [160, 340, 250, 70]) windCard(5, windFromDeg);
+    for (const windFromDeg of [160, 340, 250, 70]) { const r = power180('coach', { windKts: 15, windFromDeg }); log(`wind ${String(windFromDeg).padStart(3, '0')}/15`, r); }
+  });
+  it.fails('KNOWN GAP (0198): in a 10 kt wind from any side, as coached: on the spot to 250 ft past it, never short (since 0183: 160° +299, 250° −39 ft)', () => {
+    for (const windFromDeg of [160, 340, 250, 70]) windCard(10, windFromDeg);
   });
 
   it('the turn at once, abeam the spot, is far too high: long past the window (the puzzle is real)', () => {

@@ -37,18 +37,20 @@ export const DOWNWIND_NM = 0.5;
 // flap drag (CHANGELOG 2026-11-15: 9.2 / 8.8 / 7.5 / 6.6; deadStick.js's older table reads 9 / 8.3 /
 // 7.6 / 7). The flaps-up figure is the POH's 9:1 (Fig. 3-1) within 2%.
 export const RATIO_BY_FLAPS = [9.2, 8.8, 7.5, 6.6];
-// The glide is aimed this far before the spot: the round-out and hold-off float the rest.
-export const FLOAT_M = 95;
+// The glide is aimed this far before the spot: the round-out and hold-off float the rest (95 m on
+// 0179's ground effect; 40 m since PHAK's, 0183, which floats less).
+export const FLOAT_M = 40;
 const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 
 // The coach's plan: a short final (FINAL_M before the spot) flown with flaps 20 (RATIO_BY_FLAPS:
 // 7.5:1), reached from where you are flaps up (9.2:1). Turn when the height above that glide falls to
 // TURN_FT: until then the extra height is used up by gliding on down the downwind. The base leg cuts
 // the corner and the flare floats, which TURN_FT and FINAL_M absorb: flown headless from the spawn
-// (tests/flight/power180.test.js), the coached pilot touches down inside the ACS window.
+// (tests/flight/power180.test.js), the coached pilot touches down inside the ACS window (still air and
+// 5 kt; at 10 kt the flap notches are too coarse, KNOWN GAP 0198). TURN_FT was 170 before 0183.
 export const FINAL_M = 600;
 const CLOSE_DEG_PER_M = 0.2;
-export const TURN_FT = 170;
+export const TURN_FT = 180;
 // Kid's guide turns this much later (lower): its auto-flare floats further than the test pilot's
 // round-out (tests/e2e/power180.spec.js: the coach's turn put Kid ~266 ft past, this one 134 ft).
 export const KID_TURN_FT = TURN_FT - 75;

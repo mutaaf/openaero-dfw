@@ -24,8 +24,11 @@ export const EO_BANK_DEG = 45;
 // Before the first input: the moment it takes to see the engine has quit.
 export const EO_REACT_S = 1;
 // The coach says "you can turn back" only with this much height to spare over the need (a turn
-// that makes it by a few feet is not a plan).
-export const EO_MARGIN_FT = 25;
+// that makes it by a few feet is not a plan). 25 ft before 0183: on PHAK's ground effect the need
+// is within ~10 ft of the airplane in still air (800 ft made it, need 794; 850 did not, need 852),
+// and the shallower climb (no induced-drag credit at 300-700 ft) puts the 700 ft failure's need at
+// 680, so 15 ft keeps the mission's turn back (its blurb: "can make it") with 20 ft to spare.
+export const EO_MARGIN_FT = 15;
 // Turned back: the track more than this far off the runway's heading ("land ahead" allows
 // small turns to pick a field; the coach calls past EO_TURN_FROM_DEG a turn). Back: within this
 // of the reciprocal.
