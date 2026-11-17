@@ -56,10 +56,12 @@ export default defineConfig({
   // free: the same single copy of three, but the bundler can leave the lazy chunks' classes in them.
   // (Don't group three's boot modules into one chunk: rolldown's runtime helpers stay in the entry
   // and the chunks import each other in a cycle; the page throws at boot.)
-  // WebGLRenderer's WebXRManager is src/noXr.js, a stand-in with XR off (0174: ~4 kB gz of boot the sim never used).
+  // WebGLRenderer's WebXRManager is src/noXr.js, a stand-in with XR off (0174: ~4 kB gz of boot the sim never used);
+  // its environments' PMREMGenerator is src/noPmrem.js (0022: the sim sets no env map, ~2 kB gz).
   resolve: { alias: [
     { find: /^three$/, replacement: fileURLToPath(new URL('./node_modules/three/src/Three.js', import.meta.url)) },
     { find: /^\.\/webxr\/WebXRManager\.js$/, replacement: fileURLToPath(new URL('./src/noXr.js', import.meta.url)) },
+    { find: /^\.\.\/\.\.\/extras\/PMREMGenerator\.js$/, replacement: fileURLToPath(new URL('./src/noPmrem.js', import.meta.url)) },
   ] },
   build: {
     outDir: 'dist/openaero',

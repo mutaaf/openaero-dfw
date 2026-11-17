@@ -1,7 +1,7 @@
 ---
 id: 0022
 title: Remember sound, camera and last mission between visits
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
