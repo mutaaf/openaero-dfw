@@ -942,10 +942,11 @@ function startGoAroundDrill(mission) {
 // Slow the Cessna at idle until the wing stalls, then recover: graded on the results card
 // once it climbs away (or fails). stallDrill.js is a lazy chunk, loaded with the drill.
 let stallLib = null;
+let stallRoot = null; // powerOnStall.js, both stall drills' chunk (0191): kept, so FLY AGAIN arms at once
 let aircraftBeforeMission = null; // yours, while a mission flies its own airframe (the drill's)
 let sunBeforeMission = null; // your When? choice, while a night or dusk mission flies its own (0060)
 let sunPickedFor = null; // the mission you picked a When? on: its reloads (METAR, assist, FLY AGAIN) keep your pick
-const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0, iasKts: 0, warnKts: 0 };
+const _stIn = { t: 0, dt: 0, altFt: 0, aglFt: 0, aoaDeg: 0, stallAoaDeg: 0, vsFpm: 0, bankDeg: 0, pullIn: 0, throttle: 0, iasKts: 0, warnKts: 0, hdgDeg: 0, pitchDeg: 0, flapsIndex: 0 };
 let stallPullIn = 0; // the player's back stick this sub-step, before the assists
 let towerLib = null;
 let drillCoach = false; // the drill is always coached (its only instructions) until Skip
@@ -960,9 +961,10 @@ function checkStallDrill(dt) {
   _stIn.vsFpm = sim.vsiFpm; _stIn.bankDeg = -_euler.z * RAD_TO_DEG;
   _stIn.pullIn = stallPullIn; _stIn.throttle = sim.throttle;
   _stIn.iasKts = sim.iasKts; _stIn.warnKts = stallWarningKts(sim.spec, sim.flapsIndex);
+  _stIn.hdgDeg = -_euler.y * RAD_TO_DEG; _stIn.pitchDeg = _euler.x * RAD_TO_DEG; _stIn.flapsIndex = sim.flapsIndex; // the power-on drill's (0191)
   const step = stallLib.stallDrillState(st, _stIn);
   if (step !== 'complete' && step !== 'failed') return;
-  const result = stallLib.gradeStallRecovery(stallLib.stallResultInput(st, sim.assist === 'kid'));
+  const result = stallLib.gradeStallRecovery(stallLib.stallResultInput(st, sim.assist === 'kid', sim.aglFt));
   drillCard(result, stallLib.STALL_PLACE);
 }
 
@@ -1108,7 +1110,9 @@ function startDrills(mission) {
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
   if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
-  if (mission.stallDrill) loadDrill(mission, stallLib, () => import('./stallDrill.js'), (lib) => { stallLib = lib; sim.stallDrill = lib.createStallDrill(); });
+  // The stall drills: powerOnStall.js (0191) is the one chunk, the idle drill its `idle` (stallDrill.js, 0087): the same calls, the
+  // power-on drill's plus its coach's powerOnPrompt (one import: each import() adds boot bytes to Vite's preload map).
+  if (mission.stallDrill) loadDrill(mission, stallRoot, () => import('./powerOnStall.js'), (lib) => { stallRoot = lib; stallLib = mission.powerOn ? lib : lib.idle; sim.stallDrill = stallLib.createStallDrill(); });
   // The power-off 180 (0189): power180.js stands in for deadStick.js (the same calls; the import is the module map's after the first).
   if (mission.deadStick) loadDrill(mission, null, () => (mission.power180 ? import('./power180.js') : import('./deadStick.js')), (lib) => { deadLib = lib; sim.deadStick = lib.createDeadStick(sim.simTime); });
   if (mission.pattern) loadDrill(mission, patLib, () => import('./pattern.js'), (lib) => { patLib = lib; sim.pattern = lib.createPattern(mission); });
@@ -1428,8 +1432,9 @@ function updateCoach(dt) {
       coachInput.flapsLanding = sim.flapsIndex >= sim.goAround.callFlaps;
     }
     _euler.setFromQuaternion(sim.quat, 'YXZ');
-    coachInput.stall = sim.stallDrill?.phase ?? null;
-    coachInput.ds = sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
+    coachInput.stall = sim.stallDrill && !stallLib.powerOnPrompt ? sim.stallDrill.phase : null;
+    coachInput.ds = sim.stallDrill && stallLib.powerOnPrompt ? stallLib.powerOnPrompt(sim.stallDrill, coachInput.kid, coachInput.throttle)
+      : sim.deadStick ? deadLib.deadStickPrompt(sim.deadStick, sim) : sim.pattern ? patLib.patternPrompt(sim.pattern, sim)
       : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim)
       : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
       : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
@@ -2570,6 +2575,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   // The stall drill (0087) turns the stall protection off until the wing stalls (drillAssist).
   const drill = sim.stallDrill ? stallLib.drillAssist(sim.stallDrill.phase) : null;
   _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex);
+  _assistIn.pitchUpMaxDeg = drill?.pitchUpMaxDeg ?? null; // the power-on stall's nose (0191)
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;
   _assistIn.noseWheelDown = !(sim.wheelLoads?.[0] <= 0); // JSBSim reports no wheel loads: its nose wheel steers
@@ -2588,6 +2594,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   const wsEscape = sim.windshear && wsLib.kidEscape(sim.windshear);
   if (wsEscape) {
     _assistIn.guideGammaDeg = 15 - sim.aoaDeg; // the escape's 15° nose up (Kid's pitch cap, 12.75°, and stall margin hold it under)
+  } else if (drill?.kidPitchDeg) {
+    _assistIn.guideGammaDeg = drill.kidPitchDeg - sim.aoaDeg; // the power-on stall (0191): Kid's nose up to its attitude
   } else if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
@@ -2754,12 +2762,12 @@ function loadScenario(key, final = null) {
     const d = courseVector(mission.hdg);
     sim.pos.set(x, y, z);
     sim.vel.set(d.x * vTas, 0, d.z * vTas);
-    sim.flapsIndex = 0;
+    sim.flapsIndex = mission.flaps ?? 0; // the power-on stall's takeoff flaps (0191)
     sim.gearDown = !!sim.spec.fixedGear;
-    sim.quat.setFromEuler(_euler.set(trimAoaDeg(sim.spec, vIas, 0) * DEG_TO_RAD, -mission.hdg * DEG_TO_RAD, 0, 'YXZ'));
+    sim.quat.setFromEuler(_euler.set(trimAoaDeg(sim.spec, vIas, sim.flapsIndex) * DEG_TO_RAD, -mission.hdg * DEG_TO_RAD, 0, 'YXZ'));
     // The dead-stick challenge: the engine has just quit, the trim already set for best glide.
-    sim.throttle = mission.deadStick ? 0 : trimThrottle(sim.spec, vIas, 0, 0, sim.gearDown, air);
-    trimAlpha = trimAoaDeg(sim.spec, mission.deadStick ? sim.spec.vGlideKts * KTS_TO_MPS : vIas, 0);
+    sim.throttle = mission.deadStick ? 0 : trimThrottle(sim.spec, vIas, sim.flapsIndex, 0, sim.gearDown, air);
+    trimAlpha = trimAoaDeg(sim.spec, mission.deadStick ? sim.spec.vGlideKts * KTS_TO_MPS : vIas, sim.flapsIndex);
     sim.onGround = false;
     sim.activeEnd = null;
   } else {
@@ -3327,7 +3335,7 @@ byId('btnGear').addEventListener('click', () => {
 // The flap lever cycles down a notch (wrapping to up); in the drill's missed approach (0047)
 // it comes up a notch, the one direction a go-around needs.
 function moveFlapLever() {
-  if (goAroundActive()) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1);
+  if (goAroundActive() || sim.stallDrill?.flapsUp) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1); // the power-on stall's climb-away (0191) too
   else sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 }
 byId('btnFlaps').addEventListener('click', moveFlapLever);
