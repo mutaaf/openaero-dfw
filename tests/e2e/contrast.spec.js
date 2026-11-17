@@ -58,6 +58,10 @@ for (const [w, h] of [[1280, 720], [390, 844]]) {
     await page.emulateMedia({ contrast: 'no-preference' });
     await page.goto(BASE);
     await page.keyboard.press('Escape');
+    // The stubbed METAR lands asynchronously and the ribbon repaints once a second, even paused
+    // (main.js syncWeatherUI): SCENARIO WX -> LIVE METAR moved four boxes after a 300 ms settle
+    // on CI (main red, 2026-11-17). Take the baseline in the weather the page will keep.
+    await expect(page.locator('#wxBadge')).toHaveText('LIVE METAR');
     // Freeze the readouts so a changing number can't move a box between the two reads.
     await page.evaluate(() => document.getElementById('btnPause').click());
     // Wait until the layout has settled (the mission name fills its select after boot).
