@@ -10,6 +10,8 @@
 // pair it with deviceScaleFactor 0.25 (frames that stay under the cap) to keep CI under its
 // 30 min job limit (lesson 2026-10-28). Specs that time frames, count pixels or catch a
 // moment that lasts a fraction of a second (the bounce) don't use it.
+// The long flights run at 4x (0193, 2026-11-17: 27.0 → 21.6 min for the suite); a spec that times
+// a voice against the sim (tower, captions) or grades the harness's own reaction (rto) stays at 2x.
 import { test as base, expect } from '@playwright/test';
 
 export const test = base.extend({

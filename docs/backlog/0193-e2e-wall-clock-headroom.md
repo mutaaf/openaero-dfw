@@ -1,12 +1,12 @@
 ---
 id: 0193
 title: Win back e2e wall-clock: CI is within 5 minutes of its 30-minute limit
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: tech-health
 created: 2026-11-17
-pr:
+pr: 271
 ---
 
 ## Why
