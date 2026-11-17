@@ -1,6 +1,6 @@
 ---
 id: 0194
-title: The Cessna yaws left at full power and high pitch in flightModel.js (P-factor, slipstream, torque)
+title: The Cessna rolls left at full power in flightModel.js (prop torque); the yaw (P-factor, slipstream) is 0200
 status: shipped
 priority: P2
 size: M

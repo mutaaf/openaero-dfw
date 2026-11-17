@@ -86,6 +86,7 @@ const sim = {
   throttle: 0.44, elevInput: 0, aileronInput: 0, rudderInput: 0,
   flapsIndex: 2, flapAngles: [0, 10, 25, 40], // labels for airframes without spec.flapDetentsDeg
   spoilers: 0, // ground spoiler extension 0–1 (flightModel.js)
+  propAil: 0, // the aileron the prop's torque takes (flightModel.js, 0194)
   gearDown: true, brakesOn: false, onGround: false,
   // Systems (systems.js): the levers above are commands; gearPos/flapDeg/brakePress/
   // reverserPos are where things are. autobrake 0 OFF, 1–3, 4 MAX; reverseCmd the reverse levers.
@@ -1445,7 +1446,7 @@ function updateCoach(dt) {
       : sim.wingLow ? wlLib.wingLowPrompt(sim.wingLow, wingLowCoachIn())
       : sim.softField ? sfoLib.softFieldPrompt(sim.softField, sim, _euler.x * RAD_TO_DEG)
       : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
-      : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG) : null;
+      : sim.toCoach ? sim.toCoach.prompt(sim, _euler.x * RAD_TO_DEG, -_euler.z * RAD_TO_DEG) : null;
     coachInput.dsGround = sim.onGround && (sim.engineOut || sim.rto || sim.toCoach || sim.softField) ? coachInput.ds : null;
     coachInput.bankDeg = -_euler.z * RAD_TO_DEG;
     coachInput.driftDeg = sim.gsKts > 30 ? driftAngleDeg((-_euler.y * RAD_TO_DEG + 360) % 360, sim.vel.x, sim.vel.z) : 0;
@@ -1932,7 +1933,8 @@ function integrateSubStep(dt) {
     const holdHeading = (hdgDeg) => {
       const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg), sim.tasKts * KTS_TO_MPS);
       // Plus the aileron the prop's torque takes, fed forward (0194): the hold is proportional only.
-      sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight, rollHoldScale(spec, sim.tasKts * KTS_TO_MPS)) + (sim.propAil ?? 0);
+      sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight, rollHoldScale(spec, sim.tasKts * KTS_TO_MPS)) + sim.propAil;
+      sim.aileronInput = THREE.MathUtils.clamp(sim.aileronInput, -1, 1);
     };
     // Fly a flight-path angle: pitch = path + current angle of attack.
     // Pitch is capped at 9.5° nose-up (737 tailstrike is ~11°).
@@ -1974,7 +1976,8 @@ function integrateSubStep(dt) {
 
   // Forces, moments and integration (flightModel.js, pure and flight-tested headless), or
   // JSBSim under ?fdm=jsbsim once it has loaded, for the airframes it has a model of.
-  if (jsbsim && jsbsim.flies(sim.aircraftKey)) { stepSystems(sim, spec, dt); jsbsim.step(sim, spec, dt); }
+  // JSBSim flies its own prop torque: nothing for the AP or the assists to feed forward (0194).
+  if (jsbsim && jsbsim.flies(sim.aircraftKey)) { stepSystems(sim, spec, dt); jsbsim.step(sim, spec, dt); sim.propAil = 0; }
   else stepFlightModel(sim, spec, dt);
 
   // Telemetry derivatives
@@ -2582,7 +2585,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.aoaDeg = sim.aoaDeg;
   _assistIn.betaDeg = sim.betaDeg;
   _assistIn.dihedralAil = dihedralAileron(spec, sim.betaDeg * DEG_TO_RAD);
-  _assistIn.propAil = sim.propAil ?? 0; // the prop's torque (0194)
+  _assistIn.propAil = sim.propAil; // the prop's torque (0194)
   // The stall drill (0087) turns the stall protection off until the wing stalls (drillAssist).
   const drill = sim.stallDrill ? stallLib.drillAssist(sim.stallDrill.phase) : null;
   _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex);
