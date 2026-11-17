@@ -1721,10 +1721,10 @@ function updateWind(dt) {
   sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
   const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY));
   sim.windVec.set(w.x, 0, w.z);
-  // The METAR's turbulence (0195, Dryden: turbulence.js) at the wheels' height; Kid and Learner fly part of it
-  // (assistTurbulenceScale). The slow-flight drill flies smooth air for now (its band has no turbulence margin: 0199);
+  // The METAR's turbulence (0195, Dryden: turbulence.js) at the wheels' height, none on the ground; Kid and Learner fly
+  // part of it (assistTurbulenceScale). The slow-flight drill flies smooth air for now (its band has no turbulence margin: 0199);
   // in the windshear drill's shear the microburst's downdraft replaces the vertical gust (windshear.js sets windVec.y).
-  if (metarLib) metarLib.addTurbulence(turb ??= metarLib.createTurbulence(Date.now()), dt, sim.slowFlight ? 0 : metarLib.turbulenceSigmaW(wx) * metarLib.assistTurbulenceScale(sim.assist, sim.raFt), sim.raFt * FT_TO_M, sim.tasKts * KTS_TO_MPS, sim.quat, sim.windVec, sim.spec.wingSpanM);
+  if (metarLib) metarLib.addTurbulence(turb ??= metarLib.createTurbulence(Date.now()), dt, sim.slowFlight || sim.onGround ? 0 : metarLib.turbulenceSigmaW(wx) * metarLib.assistTurbulenceScale(sim.assist, sim.raFt), sim.raFt * FT_TO_M, sim.tasKts * KTS_TO_MPS, sim.quat, sim.windVec, sim.spec.wingSpanM);
   if (sim.windshear) wsLib.addShearWind(sim.windshear, sim); // the microburst (0112)
 }
 

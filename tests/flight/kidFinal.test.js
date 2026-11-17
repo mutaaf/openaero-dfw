@@ -440,7 +440,7 @@ describe('Kid hands off on the short-field lesson touches down in the first 1,00
   }
 });
 
-// Ticket 0195: a gusty day's turbulence (turbulence.js, Dryden on the METAR) at Kid's share (half, thinning out below 100 ft), with the gust
+// Ticket 0195: a gusty day's turbulence (turbulence.js, Dryden on the METAR) at Kid's share (half, none below 200 ft), with the gust
 // cycle and the log law as main.js updateWind flies them. Kid's hands-off landing still lands, C or better, on
 // several seeds (the gusts differ every flight): the Cessna into Addison 16 and the 737 into DFW 35C on 25G38.
 describe('Kid hands off on a turbulent 25G38 day still lands C or better (ticket 0195)', () => {
@@ -480,5 +480,20 @@ describe('Kid hands off on the short-field lesson on a turbulent gusty day lands
         expect(Math.abs(r.td.crossM)).toBeLessThan(8);
       }, 30000);
     }
+  }
+});
+
+
+// 0195: the e2e's Kid 737 in a steady 15 kt crosswind (tests/e2e/assists.spec.js, its bound -300 fpm, inside 600 m) with
+// Kid's share of that day's light turbulence, 30 seeds: thinning it only below 100 ft, 4 seeds landed harder or 800 m long.
+describe('Kid hands off in the 737 in a 15 kt crosswind with its light turbulence, 30 seeds (ticket 0195)', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    it(`kdfw_35c_final, 15 kt from 270°, seed ${seed}: gently, inside 600 m`, () => {
+      const spec = AIRCRAFT_DATABASE.b738, wx = { windDirDeg: 270, windKts: 15, gustKts: 15 };
+      const r = flyKidFinal('b738', 'kdfw_35c_final', { fromDeg: 270, kts: 15, air: turbulentAir(spec, wx, { seed, level: 'kid' }) });
+      expectLanded(r);
+      expect(r.td.vsFpm).toBeGreaterThan(-300);
+      expect(r.td.pastThrM).toBeLessThan(600);
+    }, 30000);
   }
 });

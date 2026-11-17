@@ -117,13 +117,14 @@ describe('turbulence in the sim frame and by assist level (0195)', () => {
     expect(wind.x).toBeCloseTo(out.u, 9);
     expect(wind.z).toBeCloseTo(out.v, 9);
   });
-  it('Pilot flies all of it, Learner half, Kid half thinning smoothly to nothing below 100 ft', () => {
+  it('Pilot flies all of it, Learner half, Kid half from 500 ft thinning smoothly to nothing at 200 ft', () => {
     expect(assistTurbulenceScale('pilot', 0)).toBe(1);
     expect(assistTurbulenceScale('learner', 0)).toBe(0.5);
+    expect(assistTurbulenceScale('kid', 3000)).toBe(0.5);
     expect(assistTurbulenceScale('kid', 500)).toBe(0.5);
-    expect(assistTurbulenceScale('kid', 100)).toBe(0.5);
-    expect(assistTurbulenceScale('kid', 50)).toBeCloseTo(0.25, 6);
+    expect(assistTurbulenceScale('kid', 350)).toBeCloseTo(0.25, 6);
+    expect(assistTurbulenceScale('kid', 200)).toBe(0);
     expect(assistTurbulenceScale('kid', 0)).toBe(0);
-    expect(assistTurbulenceScale('kid', 20)).toBeLessThan(assistTurbulenceScale('kid', 30));
+    expect(assistTurbulenceScale('kid', 300)).toBeLessThan(assistTurbulenceScale('kid', 400));
   });
 });

@@ -63,8 +63,9 @@ Thermals, mountain wave, convective microbursts (0112 has the windshear drill), 
 - flightModel.js commands a pitch rate, so the card holds the attitude and measures the seat's load factor, bank
   and vertical speed (pitch stays held). BUMPY is also on the HUD wind box (BUMPY METAR, an amber edge that stays
   under WET RWY / IFR) for phones, where the ribbon is in the ☰ Menu sheet.
-- Kid flies half, thinning to nothing from 100 ft down (turbulence.js assistTurbulenceScale): at a flat half the
-  737's Kid flare crashed on 2 seeds of 30. Learner flies half. Kid's Cessna adds half the gust spread to its
+- Kid flies half from 500 ft, thinning to nothing at 200 ft (turbulence.js assistTurbulenceScale): at a flat half the
+  737's Kid flare crashed on 2 seeds of 30, and thinned only below 100 ft it landed harder than 300 fpm on 4 of 30
+  in a steady 15 kt crosswind (the e2e's assists.spec bound). Learner flies half. Kid's Cessna adds half the gust spread to its
   approach speed (AFH ch. 9), the short-field lesson's 61 KIAS too (ACS "gust factor applied"); the 737's Kid flare
   landed at ~900 fpm with +4 kt, so the jet has no additive.
 - Slow flight flies smooth air for now, and Kid's short-field lesson is carded to 20G30, not 25G38 (it sags under the

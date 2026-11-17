@@ -29,7 +29,7 @@
 // larger jolt than the 737's (~520 kg/m²) in the same gust; the eddies here are long, so both
 // mostly ride them and the measured difference is smaller (tests/flight/turbulence.test.js: ~1.25x
 // in load factor, ~2x in bank). Kid and Learner fly it at half strength, Kid's thinning out below
-// 100 ft over the ground (assistTurbulenceScale): the flare is the assists' to keep safe.
+// 200 ft over the ground (assistTurbulenceScale): the final and the flare are the assists' to keep safe.
 import { KTS_TO_MPS, FT_TO_M, M_TO_FT } from './constants.js';
 import { surfaceWindFactor } from './weather.js';
 
@@ -51,13 +51,15 @@ export function isBumpy(sigmaW) {
   return sigmaW >= 0.1 * W20_KTS.moderate * KTS_TO_MPS - 1e-9;
 }
 
-// The share of the METAR's turbulence an assist level flies (0195): Pilot all of it, Learner half; Kid half, thinning
-// smoothly to nothing from 100 ft over the ground down to the wheels, so Kid's auto-flare is never shaken into the
-// runway (a gust lull on the 737's flare landed it at ~650 fpm on 2 seeds in 30). wheelsFt: the wheels' height.
+// The share of the METAR's turbulence an assist level flies (0195): Pilot all of it, Learner half; Kid half from
+// KID_FULL_FT up, thinning smoothly to nothing at KID_CALM_FT, so Kid's final and auto-flare fly settled air. Thinning
+// only below 100 ft, the 737's Kid flare still landed harder than 300 fpm (or 800 m long) on 4 seeds in 30 in a steady
+// 15 kt crosswind: the path it carried down was the gusts'. wheelsFt: the wheels' height.
+export const KID_CALM_FT = 200, KID_FULL_FT = 500;
 export function assistTurbulenceScale(level, wheelsFt) {
   if (level === 'pilot') return 1;
   if (level !== 'kid') return 0.5;
-  const k = Math.max(0, Math.min(1, wheelsFt / 100));
+  const k = Math.max(0, Math.min(1, (wheelsFt - KID_CALM_FT) / (KID_FULL_FT - KID_CALM_FT)));
   return 0.5 * k * k * (3 - 2 * k);
 }
 
