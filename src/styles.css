@@ -239,6 +239,32 @@ body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
   .scanlines { display: none; }
 }
 
+/* Increase Contrast (ticket 0192): iOS "Increase Contrast", Windows contrast themes, Android
+   high-contrast text. The glass goes opaque with a firm light edge and secondary text lifts to
+   the primary slate, so every HUD label reads >= 7:1 over a white day scene (WCAG 1.4.6).
+   The 2 px edge is the 1 px border plus a 1 px inset ring: no box changes size (no reflow). */
+@media (prefers-contrast: more) {
+  .hud-glass, .hud-btn {
+    background-color: #0a0f1d;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: #e2e8f0;
+  }
+  .hud-glass { box-shadow: inset 0 0 0 1px #e2e8f0, 0 12px 32px rgba(0, 0, 0, 0.8); }
+  .hud-btn { box-shadow: inset 0 0 0 1px #e2e8f0; }
+  .hud-btn.active { background-color: #022c22; border-color: #6ee7b7; box-shadow: inset 0 0 0 1px #6ee7b7; }
+  .hud-btn.active-amber { background-color: #3b1d02; border-color: #fcd34d; box-shadow: inset 0 0 0 1px #fcd34d; }
+  .hud-btn.active-sky { background-color: #082f49; border-color: #bae6fd; box-shadow: inset 0 0 0 1px #bae6fd; }
+  .hud-glass .text-slate-400, .hud-glass .text-slate-500, .hud-btn .text-slate-400, .hud-btn .text-slate-500 { color: #e2e8f0; }
+  .hud-btn.text-red-400 { color: #fca5a5; }
+}
+/* Forced colours (Windows contrast themes): the browser flattens every fill, so the ON state
+   of a button would vanish; system colours survive, so ON wears the Highlight edge. */
+@media (forced-colors: active) {
+  .hud-glass, .hud-btn { border-color: CanvasText; }
+  .hud-btn.active, .hud-btn.active-amber, .hud-btn.active-sky { border-color: Highlight; }
+}
+
 /* The autopilot is moving these controls (src/apTutor.js "show and teach"). */
 .ap-flying { box-shadow: 0 0 0 2px rgb(252 211 77 / 0.85), 0 0 14px rgb(252 211 77 / 0.45); }
 .ap-flying::after {

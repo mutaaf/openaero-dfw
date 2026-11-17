@@ -1,7 +1,7 @@
 ---
 id: 0192
 title: Honour prefers-contrast: more (a firmer HUD for low-vision players)
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: accessibility
@@ -23,10 +23,10 @@ opaque (alpha 1, no blur), borders 2 px in a light colour, secondary text raised
 unchanged. No layout change: boxes keep their sizes, so the 390x844 no-overlap guarantee holds.
 
 ## Acceptance criteria
-- [ ] With `page.emulateMedia({ contrast: 'more' })` the `.hud-glass` background alpha is 1 and the contrast of every HUD text over its own box (existing accessibility spec's probe) is >= 7:1
-- [ ] Without it, nothing changes (the existing accessibility and layout specs pass unchanged)
-- [ ] 390x844 and 1280x720 element rectangles are identical with and without the query (no reflow)
-- [ ] No new JS at boot
+- [x] With `page.emulateMedia({ contrast: 'more' })` the `.hud-glass` background alpha is 1 and the contrast of every HUD text over its own box (existing accessibility spec's probe) is >= 7:1
+- [x] Without it, nothing changes (the existing accessibility and layout specs pass unchanged)
+- [x] 390x844 and 1280x720 element rectangles are identical with and without the query (no reflow)
+- [x] No new JS at boot
 
 ## Test plan
 Extend `tests/e2e/accessibility.spec.js`: emulate `contrast: 'more'`, assert the computed alpha and the 7:1 probe;
