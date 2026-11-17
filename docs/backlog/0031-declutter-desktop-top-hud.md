@@ -1,13 +1,16 @@
 ---
 id: 0031
 title: Declutter the desktop top HUD so the sky stays open
-status: proposed
+status: dropped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-10-18
 pr:
 ---
+
+## Dropped (2026-11-17 groom): stale, its criteria are already met on main by other work (no PR carried this ticket)
+Already met on `main`: at 1280x720 the top HUD is one 44 px strip plus the Menu and Panels buttons (bottom edge ~52 px), the weather ribbon moved into a compact box at the right of the horizon, and camera/sound/pause/reset live in the Menu. Seen playing the build at 1280x720.
 
 ## Why
 At 1280x720 three full-width bars (plane/mission/MCP, camera/sound buttons, scenario weather
