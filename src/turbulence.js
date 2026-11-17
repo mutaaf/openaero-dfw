@@ -10,8 +10,10 @@
 // It is defined from 10 ft to 1,000 ft; above 1,000 ft this holds the 1,000 ft values (there
 // L_u = L_w = 1,000 ft and σ_u = σ_w: isotropic), a simplification of the spec's blend into its
 // medium/high-altitude table by 2,000 ft. Below 10 ft the lengths stay at 10 ft's and the gusts fade
-// to nothing at the wheels (h / (h + 10 ft)): a game choice, so a parked or rolling airplane is not
-// shaken off its tyres. u is along the nose (horizontal), v across it, w up (+ = updraft).
+// linearly to nothing at the wheels (full strength from 10 ft up): a game choice, so a parked or
+// rolling airplane is not shaken off its tyres. u is along the nose (horizontal), v across it, w up.
+// weather.js's slow gust cycle already swings the mean wind through the reported spread; these
+// gusts are the faster eddies on top of it (the spread sets both: a deliberate double use).
 //
 // The intensity comes from the METAR two ways and takes the larger: the mean wind (W20 from the
 // report's 10 m wind by weather.js's log law) and the gust spread. A reported gust is a peak; with
@@ -22,9 +24,12 @@
 //
 // The same air for every airplane: nothing here is scaled by type. The Cessna feels more because
 // the flight model makes it so: a vertical gust w changes the angle of attack by w / V, and the load
-// it adds is Δn = ρ V CLα w / (2 W/S) (the gust load formula of 14 CFR 25.341 without its
-// alleviation factor), so the light, slow wing (W/S ~70 kg/m²) moves several times more than the
-// 737's (~550 kg/m²) in the same gust. Kid and Learner fly it at half strength (main.js).
+// it adds is Δn = ρ V CLα w / (2 W/S) (the Pratt-Walker sharp-edged gust formula, the pre-1996
+// 14 CFR 25.341's, without its alleviation factor), so the light wing (W/S ~70 kg/m²) takes a
+// larger jolt than the 737's (~520 kg/m²) in the same gust; the eddies here are long, so both
+// mostly ride them and the measured difference is smaller (tests/flight/turbulence.test.js: ~1.25x
+// in load factor, ~2x in bank). Kid and Learner fly it at half strength, Kid's thinning out below
+// 100 ft over the ground (assistTurbulenceScale): the flare is the assists' to keep safe.
 import { KTS_TO_MPS, FT_TO_M, M_TO_FT } from './constants.js';
 import { surfaceWindFactor } from './weather.js';
 
@@ -44,6 +49,16 @@ export function turbulenceSigmaW(wx) {
 // 'moderate' or more is MIL-F-8785C's W20 30 kt: σ_w ≥ 3 kt. The weather ribbon says BUMPY there.
 export function isBumpy(sigmaW) {
   return sigmaW >= 0.1 * W20_KTS.moderate * KTS_TO_MPS - 1e-9;
+}
+
+// The share of the METAR's turbulence an assist level flies (0195): Pilot all of it, Learner half; Kid half, thinning
+// smoothly to nothing from 100 ft over the ground down to the wheels, so Kid's auto-flare is never shaken into the
+// runway (a gust lull on the 737's flare landed it at ~650 fpm on 2 seeds in 30). wheelsFt: the wheels' height.
+export function assistTurbulenceScale(level, wheelsFt) {
+  if (level === 'pilot') return 1;
+  if (level !== 'kid') return 0.5;
+  const k = Math.max(0, Math.min(1, wheelsFt / 100));
+  return 0.5 * k * k * (3 - 2 * k);
 }
 
 export function createTurbulence(seed = 1) {
@@ -73,8 +88,9 @@ function gauss(st) { // Box-Muller, the second value kept for the next call
 // (1 + √3 τs) / (1 + τs)², built from two lags: y = √3 x1 + (1 − √3) x2 has variance 2 for a unit x1.
 // spanM (optional): the wing averages a vertical gust over its span, so an eddy smaller than the wing
 // (low down, where L_w = h) lifts it far less than a point model says. w then passes a lag of 4b / (πV),
-// the span time constant of MIL-F-8785C's rotary-gust filters (p_g, q_g); without it a point-mass wing
-// felt 10 ft eddies in full on the flare. The air is the same; a bigger wing averages more of it.
+// the span time constant of MIL-F-8785C's rotary-gust filters (p_g, q_g). A game approximation: the spec
+// applies that lag to the rotary gusts only, never to w_g; without it a point-mass wing felt 10 ft
+// eddies in full on the flare. The air is the same; a bigger wing averages more of it.
 export function stepTurbulence(st, dt, sigmaW, heightM, airspeedMps, out, spanM = 0) {
   if (!(sigmaW > 0) || !(dt > 0)) {
     st.u = st.v1 = st.v2 = st.w1 = st.w2 = st.wf = 0;
@@ -93,7 +109,7 @@ export function stepTurbulence(st, dt, sigmaW, heightM, airspeedMps, out, spanM 
   st.v2 += (st.v1 - st.v2) * (1 - au);
   st.w1 = aw * st.w1 + kw * gauss(st);
   st.w2 += (st.w1 - st.w2) * (1 - aw);
-  const fade = hm / (hm + 10 * FT_TO_M);
+  const fade = Math.min(1, hm / (10 * FT_TO_M));
   const su = sigmaW / r ** 0.4 * fade, sw = sigmaW * fade;
   out.u = su * st.u;
   out.v = su * (SQRT3 * st.v1 + (1 - SQRT3) * st.v2) / Math.SQRT2;

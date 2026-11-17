@@ -9,7 +9,7 @@ import { KTS_TO_MPS, RAD_TO_DEG, DEG_TO_RAD, M_TO_FT, GRAVITY } from '../../src/
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg } from '../../src/aero.js';
 import { surfaceWindFactor, windVector, gustFactor } from '../../src/weather.js';
-import { turbulenceSigmaW, createTurbulence, addTurbulence } from '../../src/turbulence.js';
+import { turbulenceSigmaW, createTurbulence, addTurbulence, assistTurbulenceScale } from '../../src/turbulence.js';
 // The F-16's g/AoA limiter (0121): the game loads it right after boot (main.js), the cards fly with it.
 import '../../src/fbw.js';
 import '../../src/supersonic.js';
@@ -618,9 +618,10 @@ export function steadyRoll(spec, kts, altM, { fromDeg = 120, windowDeg = 20, fla
 
 // The game's air on a METAR (main.js updateWind, ticket 0195): the reported wind with weather.js's
 // gust cycle, thinned by the log law at the CG's height, plus turbulence.js's Dryden gusts at the
-// wheels' height (flat ground at y = 0), `scale` of the METAR's intensity (Kid and Learner fly 0.5).
+// wheels' height (flat ground at y = 0), `scale` of the METAR's intensity, or an assist `level`'s share as main.js
+// flies it (turbulence.js assistTurbulenceScale: Learner half, Kid half thinning out below 100 ft).
 // Returns air(body, dt): call it before each step; it sets body.windVec.
-export function turbulentAir(spec, wx, { seed = 1, scale = 1 } = {}) {
+export function turbulentAir(spec, wx, { seed = 1, scale = 1, level = null } = {}) {
   const st = createTurbulence(seed), sigmaW = turbulenceSigmaW(wx) * scale;
   let t = 0;
   return (body, dt) => {
@@ -628,6 +629,7 @@ export function turbulentAir(spec, wx, { seed = 1, scale = 1 } = {}) {
     const w = windVector(wx.windDirDeg, gustFactor(t, wx.windKts, wx.gustKts) * KTS_TO_MPS * surfaceWindFactor(body.pos.y - body.groundY));
     body.windVec.set(w.x, 0, w.z);
     const tas = body.tasKts ?? body.iasKts ?? 0;
-    addTurbulence(st, dt, sigmaW, body.pos.y - body.groundY - spec.gearHeight, tas * KTS_TO_MPS, body.quat, body.windVec, spec.wingSpanM);
+    const wheelsM = body.pos.y - body.groundY - spec.gearHeight;
+    addTurbulence(st, dt, level ? sigmaW * assistTurbulenceScale(level, wheelsM * 3.28084) : sigmaW, wheelsM, tas * KTS_TO_MPS, body.quat, body.windVec, spec.wingSpanM);
   };
 }

@@ -440,23 +440,43 @@ describe('Kid hands off on the short-field lesson touches down in the first 1,00
   }
 });
 
-// Ticket 0195: a gusty day's turbulence (turbulence.js, Dryden on the METAR) at Kid's half strength, with the gust
+// Ticket 0195: a gusty day's turbulence (turbulence.js, Dryden on the METAR) at Kid's share (half, thinning out below 100 ft), with the gust
 // cycle and the log law as main.js updateWind flies them. Kid's hands-off landing still lands, C or better, on
 // several seeds (the gusts differ every flight): the Cessna into Addison 16 and the 737 into DFW 35C on 25G38.
 describe('Kid hands off on a turbulent 25G38 day still lands C or better (ticket 0195)', () => {
   const grade = (spec, r) => gradeLanding({ vsFpm: r.td.vsFpm, crossM: r.td.crossM, bankDeg: r.td.bankDeg, pastThresholdM: r.td.pastThrM,
     pitchDeg: r.td.pitchDeg, runwayWidthM: r.td.widthM, iasKts: r.td.iasKts, vrefKts: spec.vrefKts });
   for (const [ac, key, fromDeg] of [['c172', 'kads_16_final', 160], ['b738', 'kdfw_35c_final', 0]]) {
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
+    for (let seed = 1; seed <= 30; seed++) { // main.js seeds each flight at random: sweep 30 (the 737 crashed 2 in 30 at a flat half)
       it(`${ac} ${key}, 25G38 down the runway, seed ${seed}: on the runway, gently, graded C or better`, () => {
         const spec = AIRCRAFT_DATABASE[ac];
         const wx = { windDirDeg: fromDeg, windKts: 25, gustKts: 38 };
-        const r = flyKidFinal(ac, key, { fromDeg, kts: 25, gustAddKts: kidGustAddKts(spec, wx), air: turbulentAir(spec, wx, { seed, scale: 0.5 }) });
+        const r = flyKidFinal(ac, key, { fromDeg, kts: 25, gustAddKts: kidGustAddKts(spec, wx), air: turbulentAir(spec, wx, { seed, level: 'kid' }) });
         log(ac, key, `25G38 turbulent seed ${seed}`, r);
         expect(r.td).not.toBeNull();
         const g = grade(spec, r);
         console.log(`[${ac} kid final] 25G38 turbulent seed ${seed}: ${g.grade} ${g.score}`);
         expect(['S', 'A', 'B', 'C']).toContain(g.grade);
+        expect(Math.abs(r.td.crossM)).toBeLessThan(8);
+      }, 30000);
+    }
+  }
+});
+
+// 0195: the short-field lesson on a gusty day. The lesson's 61 KIAS wins over Kid's own target, so its autothrottle takes the
+// same half-gust additive (shortField.js kidKts, ACS S7's "gust factor applied"); a 15G25 and a 25G38 day at Kid's share of the
+// turbulence, ten seeds each: on the runway past the threshold, not hard (the 1,000 ft zone is the lesson's grade, not this card's).
+describe('Kid hands off on the short-field lesson on a turbulent gusty day lands on the runway (ticket 0195)', () => {
+  for (const [w, k, g] of [[160, 15, 25], [160, 20, 30]]) {
+    for (let seed = 1; seed <= 10; seed++) {
+      it(`kads_16_short_field, ${k}G${g} down the runway, seed ${seed}`, () => {
+        const spec = AIRCRAFT_DATABASE.c172, wx = { windDirDeg: w, windKts: k, gustKts: g }, add = kidGustAddKts(spec, wx);
+        const r = flyKidFinal('c172', SHORT_FIELD_KEY, { fromDeg: w, kts: k, air: turbulentAir(spec, wx, { seed, level: 'kid' }) }, null, null, 0, 0, 1,
+          () => sfKidLiftM({ windDirDeg: w, windKts: k }, 160), (full) => sfKidKts(full, add), SF_FULL_FLAPS);
+        log('c172', SHORT_FIELD_KEY, `${k}G${g} turbulent seed ${seed}`, r);
+        expect(r.td).not.toBeNull();
+        expect(r.td.pastThrM).toBeGreaterThan(0);
+        expect(r.td.vsFpm).toBeGreaterThan(-600);
         expect(Math.abs(r.td.crossM)).toBeLessThan(8);
       }, 30000);
     }

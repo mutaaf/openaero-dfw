@@ -1,6 +1,6 @@
 // Ticket 0195: METAR-driven Dryden turbulence (src/turbulence.js, MIL-F-8785C low-altitude form).
 import { describe, it, expect } from 'vitest';
-import { turbulenceSigmaW, isBumpy, createTurbulence, stepTurbulence, W20_KTS } from '../../src/turbulence.js';
+import { turbulenceSigmaW, isBumpy, createTurbulence, stepTurbulence, addTurbulence, assistTurbulenceScale, W20_KTS } from '../../src/turbulence.js';
 import { scenarioWeather } from '../../src/weather.js';
 import { KTS_TO_MPS, FT_TO_M } from '../../src/constants.js';
 
@@ -79,7 +79,7 @@ describe('Dryden gusts (0195)', () => {
     const ratio = 1 / (0.177 + 0.0823) ** 0.4; // 1.71 at 100 ft
     expect(r.u).toBeGreaterThan(ratio * 0.88);
     expect(r.u).toBeLessThan(ratio * 1.12);
-    expect(r.w).toBeGreaterThan(0.9 * 100 / 103); // the 10 ft fade: h / (h + 10 ft)
+    expect(r.w).toBeGreaterThan(0.9); // full strength from 10 ft up
     expect(r.w).toBeLessThan(1.1);
   });
   it('falls off smoothly toward the ground and is zero on the wheels', () => {
@@ -93,5 +93,37 @@ describe('Dryden gusts (0195)', () => {
     const r = rms(1, 30, 35, 4000, 0.25);
     expect(r.w).toBeLessThan(1.2);
     expect(r.u).toBeLessThan(2.5);
+  });
+});
+
+describe('turbulence in the sim frame and by assist level (0195)', () => {
+  // A one-step gust along each axis, fed through addTurbulence with the nose north (identity quaternion: nose -Z)
+  // and east (yaw -90°): u is along the nose, v to its right, w up.
+  const q = (yawRightDeg) => { const h = -yawRightDeg * Math.PI / 360; return { x: 0, y: Math.sin(h), z: 0, w: Math.cos(h) }; };
+  function gustOnce(quat) {
+    const st = createTurbulence(5), out = {};
+    stepTurbulence(createTurbulence(5), 0.1, 1, 300, 40, out); // the same draw addTurbulence will make
+    const wind = addTurbulence(st, 0.1, 1, 300, 40, quat, { x: 0, y: 0, z: 0 });
+    return { out, wind };
+  }
+  it('nose north: u blows north (-z), v east (+x), w up', () => {
+    const { out, wind } = gustOnce(q(0));
+    expect(wind.z).toBeCloseTo(-out.u, 9);
+    expect(wind.x).toBeCloseTo(out.v, 9);
+    expect(wind.y).toBeCloseTo(out.w, 9);
+  });
+  it('nose east: u blows east (+x), v south (+z)', () => {
+    const { out, wind } = gustOnce(q(90));
+    expect(wind.x).toBeCloseTo(out.u, 9);
+    expect(wind.z).toBeCloseTo(out.v, 9);
+  });
+  it('Pilot flies all of it, Learner half, Kid half thinning smoothly to nothing below 100 ft', () => {
+    expect(assistTurbulenceScale('pilot', 0)).toBe(1);
+    expect(assistTurbulenceScale('learner', 0)).toBe(0.5);
+    expect(assistTurbulenceScale('kid', 500)).toBe(0.5);
+    expect(assistTurbulenceScale('kid', 100)).toBe(0.5);
+    expect(assistTurbulenceScale('kid', 50)).toBeCloseTo(0.25, 6);
+    expect(assistTurbulenceScale('kid', 0)).toBe(0);
+    expect(assistTurbulenceScale('kid', 20)).toBeLessThan(assistTurbulenceScale('kid', 30));
   });
 });

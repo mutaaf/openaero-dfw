@@ -6,7 +6,7 @@
 import { runwayWindComponents } from './weather.js';
 import { CROSSWIND_KEY } from './missions.js';
 // Turbulence (0195) rides in this chunk: main.js reads it through metarLib once a report (or the API's refusal) arrives.
-export { turbulenceSigmaW, isBumpy, createTurbulence, addTurbulence } from './turbulence.js';
+export { turbulenceSigmaW, isBumpy, createTurbulence, addTurbulence, assistTurbulenceScale } from './turbulence.js';
 
 const HPA_TO_INHG = 0.0295299830714;
 

@@ -151,7 +151,8 @@ export function windArrowDeg(fromDeg, kts, hdgDeg) {
 // nothing per frame). wx is the weather module's record ({ windDirDeg, windKts, gustKts,
 // live, wetRunway }); comps is runwayWindComponents for the active runway, or null when there is none
 // or the aircraft is above WIND_SHOW_COMPONENTS_FT.
-// bumpy (0195): the METAR's turbulence is moderate or more (turbulence.js isBumpy): 'BUMPY METAR' / 'BUMPY SCN', in amber.
+// bumpy (0195): the METAR's turbulence is moderate or more (turbulence.js isBumpy): 'BUMPY METAR' / 'BUMPY SCN' in amber
+// and an amber edge (the edge stays when a wet runway or an IFR report takes the line).
 export function windReadout(wx, comps, out = {}, bumpy = false) {
   const kts = Math.round(wx.windKts || 0);
   const vrb = wx.windDirDeg === null || wx.windDirDeg === undefined;
@@ -161,7 +162,7 @@ export function windReadout(wx, comps, out = {}, bumpy = false) {
   // An IFR or low-IFR report (AIM 7-1-7, the Worker's fltCat or lowIfr.js's) says so (0092): the
   // ceiling is why the runway is not in sight. 'LIFR METAR' / 'LIFR SCN' fit the box.
   const cat = /IFR/.test(wx.fltCat) && wx.fltCat; // IFR, LIFR (not MVFR)
-  out.bumpy = !!bumpy && !out.wet && !cat;
+  out.bumpy = !!bumpy; // the box's edge turns amber (main.js drawWindBox); the line says BUMPY unless WET RWY / IFR has it
   out.source = out.wet ? 'WET RWY' : cat ? `${cat} ${out.live ? 'METAR' : 'SCN'}` : out.bumpy ? `BUMPY ${out.live ? 'METAR' : 'SCN'}` : out.live ? 'METAR WIND' : 'SCENARIO';
   out.calm = kts < 2;
   // The arrow reads these, so it always agrees with the text it sits beside.

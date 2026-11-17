@@ -53,11 +53,20 @@ Thermals, mountain wave, convective microbursts (0112 has the windshear drill), 
 ## As shipped
 - The intensity table is MIL-F-8785C's low-altitude one (σ_w = 0.1 W20; W20 15 / 30 / 45 kt = light / moderate /
   severe, σ_w 0.77 / 1.54 / 2.31 m/s), not the ticket's "usual" 0.9 / 2.7 / 5.5 (those are higher-altitude
-  magnitudes). A 25G38 METAR is between light and moderate (σ_w ~1.2 m/s), so BUMPY needs ~33 kt or a 20 kt spread.
+  magnitudes). A 25G38 METAR is between light and moderate (σ_w ~1.2 m/s), so BUMPY needs ~33 kt of mean wind or
+  a ~17 kt gust spread.
 - No temperature term: a METAR carries no surface heat flux, so a hot still day stays smooth (thermals are out of scope).
-- No scaling by type: the same air, and flightModel.js's wing loading makes the Cessna shake more. A span lag
-  (4b/πV) on the vertical gust stops a point-mass wing feeling 10 ft eddies in full on the flare.
+- No scaling by type: the same air, and flightModel.js's wing loading makes the Cessna shake more (measured ~1.25x
+  in load factor and ~2x in bank on a 25G38 final, not the sharp-edge formula's ~3x: the eddies are long and both
+  ride them). A span lag (4b/πV, a game approximation: MIL-F-8785C puts it on the rotary gusts only) on the
+  vertical gust stops a point-mass wing feeling 10 ft eddies in full on the flare.
 - flightModel.js commands a pitch rate, so the card holds the attitude and measures the seat's load factor, bank
-  and vertical speed (pitch stays held); the ribbon word is also on the HUD wind box (BUMPY METAR) for phones.
-- Kid's Cessna adds half the gust spread to its approach speed (AFH ch. 9): without it one seed of twelve landed
-  24 m short. The 737's Kid flare landed at ~900 fpm with +4 kt, so the jet has no additive.
+  and vertical speed (pitch stays held). BUMPY is also on the HUD wind box (BUMPY METAR, an amber edge that stays
+  under WET RWY / IFR) for phones, where the ribbon is in the ☰ Menu sheet.
+- Kid flies half, thinning to nothing from 100 ft down (turbulence.js assistTurbulenceScale): at a flat half the
+  737's Kid flare crashed on 2 seeds of 30. Learner flies half. Kid's Cessna adds half the gust spread to its
+  approach speed (AFH ch. 9), the short-field lesson's 61 KIAS too (ACS "gust factor applied"); the 737's Kid flare
+  landed at ~900 fpm with +4 kt, so the jet has no additive.
+- Slow flight flies smooth air for now, and Kid's short-field lesson is carded to 20G30, not 25G38 (it sags under the
+  path in 25 kt+ even without turbulence): both are 0199. In the windshear drill's shear the microburst's downdraft
+  replaces the vertical gust.

@@ -1599,7 +1599,7 @@ async function fetchWeather() {
     // responses to hours, and weather must never be served stale from a browser cache.
     const bucket = Math.floor(Date.now() / 60000);
     const res = await fetch(`${import.meta.env.BASE_URL}api/metar?ids=${WX_IDS}&t=${bucket}`, { cache: 'no-store' });
-    if (!res.ok) { metarLib ??= await import('./metar.js'); return; } // the scenario's turbulence rides in it too (0195)
+    if (!res.ok) { metarLib ??= await import('./metar.js').catch(() => null); return; } // the scenario's turbulence rides in it too (0195)
     const body = await res.json();
     metarLib ??= await import('./metar.js'); // reading a report is a lazy chunk (0092)
     const next = {};
@@ -1609,6 +1609,7 @@ async function fetchWeather() {
     console.warn(e); // offline, or metar.js failed to load (the error names its chunk)
     // Keep the last real weather, or the labelled scenario weather.
   }
+  metarLib ??= await import('./metar.js').catch(() => null); // the scenario's turbulence rides in it (0195)
   refreshWeather();
   refreshCrosswindMission();
   // Before the first Fly, spawn again in the weather that just arrived: the boot spawn folded
@@ -1720,8 +1721,10 @@ function updateWind(dt) {
   sim.windNowKts = gustFactor(sim.simTime, wx.windKts, wx.gustKts);
   const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY));
   sim.windVec.set(w.x, 0, w.z);
-  // The METAR's turbulence (0195, Dryden: turbulence.js) at the wheels' height; Kid and Learner fly it at half strength.
-  if (metarLib) metarLib.addTurbulence(turb ??= metarLib.createTurbulence(Date.now()), dt, metarLib.turbulenceSigmaW(wx) * (sim.assist === 'pilot' ? 1 : 0.5), sim.raFt * FT_TO_M, sim.tasKts * KTS_TO_MPS, sim.quat, sim.windVec, sim.spec.wingSpanM);
+  // The METAR's turbulence (0195, Dryden: turbulence.js) at the wheels' height; Kid and Learner fly part of it
+  // (assistTurbulenceScale). The slow-flight drill flies smooth air for now (its band has no turbulence margin: 0199);
+  // in the windshear drill's shear the microburst's downdraft replaces the vertical gust (windshear.js sets windVec.y).
+  if (metarLib) metarLib.addTurbulence(turb ??= metarLib.createTurbulence(Date.now()), dt, sim.slowFlight ? 0 : metarLib.turbulenceSigmaW(wx) * metarLib.assistTurbulenceScale(sim.assist, sim.raFt), sim.raFt * FT_TO_M, sim.tasKts * KTS_TO_MPS, sim.quat, sim.windVec, sim.spec.wingSpanM);
   if (sim.windshear) wsLib.addShearWind(sim.windshear, sim); // the microburst (0112)
 }
 
@@ -1746,7 +1749,8 @@ function syncWeatherUI(dt) {
   // Remarks (RMK …) are for forecasters; drop them so the age stays visible.
   byId('txtMetarString').textContent = `${String(wx.raw).split(' RMK')[0]}${age}`;
   byId('txtWindBadge').textContent = windText(wx);
-  const bumpy = !!metarLib?.isBumpy(metarLib.turbulenceSigmaW(wx)); // moderate turbulence or more (0195)
+  // Moderate turbulence or more in the air itself (0195), whatever share the assist level flies.
+  const bumpy = !!metarLib?.isBumpy(metarLib.turbulenceSigmaW(wx));
   byId('wxBumpy').classList.toggle('hidden', !bumpy);
   const dfw = sim.dh ? sim.wx : sim.wxByIcao.KDFW || scenarioWeather(); // the low-ceiling day's DFW is its scripted one (0092)
   const flow = flowForWind(dfw.windDirDeg, dfw.windKts);
@@ -2407,7 +2411,7 @@ function drawWindBox(w, h, hdgDeg) {
   const hw = sim.hudWind;
   // Calm is quiet but still legible: a dim border, the text at full contrast.
   hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';
-  hudCtx.strokeStyle = hw.calm ? '#475569' : '#38bdf8';
+  hudCtx.strokeStyle = hw.calm ? '#475569' : hw.bumpy ? '#fcd34d' : '#38bdf8'; // amber edge on a bumpy day, even under WET RWY / IFR (0195)
   hudCtx.fillRect(r.x, r.y, r.w, r.h);
   hudCtx.strokeRect(r.x, r.y, r.w, r.h);
   hudCtx.textAlign = 'left';
@@ -2649,7 +2653,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS)) : 0;
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : 0;
       sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, kidGustAddKts(spec, sim.wx)), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland

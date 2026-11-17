@@ -174,8 +174,9 @@ export function shortFieldPrompt(sf, s, ap) {
   return sf.headKts < -TAIL_SAY_KTS && sf.t - sf.readyT < 2 * SAY_S ? 'sfTail' : null;
 }
 
-// Kid's autothrottle on the lesson: the POH's 61 KIAS once the flaps are full (0: Kid's own target until then).
-export const kidKts = (flapsFull) => (flapsFull ? APPROACH_KTS : 0);
+// Kid's autothrottle on the lesson: the POH's 61 KIAS once the flaps are full (0: Kid's own target until then), plus
+// gustAddKts on a gusty day (assists.js kidGustAddKts: half the gust spread, ACS S7's "gust factor applied", 0195).
+export const kidKts = (flapsFull, gustAddKts = 0) => (flapsFull ? APPROACH_KTS + gustAddKts : 0);
 // Kid's guide (assists.js kidFinalGuide liftM): its flare floats the Cessna ~390 m in on the PAPI's path in calm air (past
 // the 1,000 ft line, ~480 m in a 5 kt tailwind), so Kid's path aims KID_LIFT_M lower, less KID_HEAD_M per knot of the
 // METAR's headwind (a headwind already lands it short; none lower past 12 kt). Kid crosses the threshold ~27 ft up and
