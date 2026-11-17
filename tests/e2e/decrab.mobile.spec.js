@@ -8,8 +8,8 @@ import { BASE, stubMetar, collectErrors, TEST_METAR } from './helpers.js';
 const debug = (page) => page.evaluate(() => window.openaeroDebug());
 
 test.describe(() => {
-  // Sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-  test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+  // Sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+  test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
   test('phone, Kid hands off in a 15 kt crosswind: crabbed on short final, straight at touchdown', async ({ page }) => {
     test.setTimeout(90_000);

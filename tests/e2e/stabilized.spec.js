@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { stubTiles, stubMetar, enterCockpit, lowContrastLabels, TEST_METAR } from './helpers.js';
-// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+// A long flight: sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Stabilized-approach gate (ticket 0020): evaluated once at 500 ft above the runway in VMC
 // (1,000 ft in IMC), recorded on the landing and shown on the results card.
@@ -49,7 +49,7 @@ test('a fast, steep approach is called unstabilized at the gate', async ({ page 
   // (a shallower dive sinks too slowly: the 400 ft call comes > 2.5 s after the gate and cuts it).
   let s = await snap(page);
   for (const until = Date.now() + 90_000; !s.stabilizedGate && Date.now() < until; s = await snap(page)) {
-    if (s.pitchDeg > -8) { await page.keyboard.down('KeyW'); await page.waitForTimeout(80); await page.keyboard.up('KeyW'); }
+    if (s.pitchDeg > -8) { await page.keyboard.down('KeyW'); await page.waitForTimeout(40); await page.keyboard.up('KeyW'); }
     await page.waitForTimeout(100);
   }
   expect(s.stabilizedGate).not.toBeNull();

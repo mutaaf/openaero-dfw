@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Soft-field takeoff lesson (ticket 0182): the deep link opens the lesson in the picker's Drills, the Cessna sits on
 // Addison 16 flaps 10 with the soft surface's rolling μ (a game surface, named in the briefing), and the coach starts

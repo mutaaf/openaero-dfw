@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors, lowContrastLabels } from './helpers.js';
-// A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+// A long flight: sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Power-off 180 (ticket 0189): the Cessna on a left downwind for Addison 16, 1,000 ft up, abeam
 // the spot, its engine dead once the flight starts. Kid level, hands off from the spawn: its guide

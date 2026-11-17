@@ -147,8 +147,8 @@ test('Learner: full stick right stays inside 45° of bank', async ({ page }) => 
 });
 
 test.describe(() => {
-  // A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-  test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+  // A long flight: sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+  test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
   test('Kid takeoff: full power, rotate, let go, and it climbs away (no "landing" graded)', async ({ page }) => {
     test.setTimeout(180_000);
@@ -168,7 +168,7 @@ test.describe(() => {
 });
 
 test.describe('Kid on a phone', () => {
-  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, simWarp: 2, deviceScaleFactor: 0.25 });
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, simWarp: 4, deviceScaleFactor: 0.25 });
 
   test('touch only: Kid flies the default final down to a graded landing, no crash', async ({ page }) => {
     test.setTimeout(240_000);
@@ -184,17 +184,20 @@ test.describe('Kid on a phone', () => {
     await expect(page.locator('#onboardingModal')).toBeHidden();
     expect((await debug(page)).assist).toBe('kid');
 
-    // A kid yanks the stick hard over and back for two seconds: the envelope holds.
+    // A kid yanks the stick hard over and holds it for 4 s of sim time: the envelope holds.
     const stick = await page.locator('#touchStick').boundingBox();
     const cdp = await page.context().newCDPSession(page);
     const cx = stick.x + stick.width / 2, cy = stick.y + stick.height / 2;
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 1 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: stick.x + stick.width - 2, y: stick.y + stick.height - 2, id: 1 }] });
+    // Bounded by sim time and sampled every ~100 ms of it at 4x (wall time only caps a stalled page).
     let maxBank = 0;
-    const t0 = Date.now();
-    while (Date.now() - t0 < 2_000) {
-      maxBank = Math.max(maxBank, Math.abs((await debug(page)).bankRightDeg));
-      await page.waitForTimeout(100);
+    const t0 = (await debug(page)).simTime;
+    for (const until = Date.now() + 20_000; Date.now() < until;) {
+      const d = await debug(page);
+      maxBank = Math.max(maxBank, Math.abs(d.bankRightDeg));
+      if (d.simTime - t0 >= 4) break;
+      await page.waitForTimeout(25);
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     expect(maxBank).toBeGreaterThan(3);
@@ -218,8 +221,8 @@ test.describe('Kid on a phone', () => {
 // Ticket 0097: Kid's hands-off line-up flies the ground track, so a crosswind's crab leaves no
 // steady offset (on the nose heading the 737 settled ~40 m downwind, off the side of 35C).
 test.describe(() => {
-  // A long flight: sim time at 2x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
-  test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+  // A long flight: sim time at 4x wall time, a quarter of the pixels (fixtures.js; CI's 30 min limit).
+  test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
   test('Kid hands off in a 15 kt crosswind lands on the centreline, crabbed, and de-crabs for the touchdown', async ({ page }) => {
     test.setTimeout(180_000);

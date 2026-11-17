@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
-test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
+test.use({ simWarp: 4, deviceScaleFactor: 0.25 });
 
 // Wing-low crosswind lesson (ticket 0188): the deep link opens it in the picker's Drills, the Cessna spawns on Addison 16's
 // 2 NM final at 70 KIAS with flaps 10 (POH p. 4-34), the wind is the scenario's 12 kt from 250° (the test has no live METAR)
