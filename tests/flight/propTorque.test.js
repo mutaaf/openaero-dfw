@@ -50,9 +50,9 @@ describe('Cessna 172S propeller torque (ticket 0194)', () => {
   for (const model of ['jsbsim', 'flightModel']) describe(model, () => {
     beforeAll(async () => {
       useFdm(model === 'jsbsim' ? await nodeJsbsim() : null);
-      runs[model] = { 74: wingsLevelAileron(74, 1), 90: wingsLevelAileron(90, 1), idle: wingsLevelAileron(65, 0), handsOff: handsOffBank(74) };
+      runs[model] = { 55: wingsLevelAileron(55, 1), 74: wingsLevelAileron(74, 1), 90: wingsLevelAileron(90, 1), 110: wingsLevelAileron(110, 1), idle: wingsLevelAileron(65, 0), handsOff: handsOffBank(74) };
       const r = runs[model];
-      console.log(`[c172 ${model}] wings-level aileron, full power: 74 KIAS ${r[74].ail.toFixed(3)} (|β| ${r[74].beta.toFixed(2)}°), 90 KIAS ${r[90].ail.toFixed(3)}; idle 65 KIAS ${r.idle.ail.toFixed(3)}; `
+      console.log(`[c172 ${model}] wings-level aileron, full power: 55 KIAS ${r[55].ail.toFixed(3)}, 110 KIAS ${r[110].ail.toFixed(3)}, 74 KIAS ${r[74].ail.toFixed(3)} (|β| ${r[74].beta.toFixed(2)}°), 90 KIAS ${r[90].ail.toFixed(3)}; idle 65 KIAS ${r.idle.ail.toFixed(3)}; `
         + `hands off at Vy, full power: bank ${r.handsOff.toFixed(1)}° in 10 s`);
     }, 120000);
     afterAll(() => useFdm(null));
@@ -69,11 +69,18 @@ describe('Cessna 172S propeller torque (ticket 0194)', () => {
   });
 
   // Hands off, JSBSim's C172 spirals away to the left (-22° in 10 s; its spiral mode diverges); flightModel.js
-  // rolls the same way and settles into a shallow left bank (-7°, ~-11° by 25 s). Same direction; ours the gentler.
+  // rolls the same way and settles into a shallow left bank (~-9° in 10 s). Same direction; ours the gentler.
   it('hands off at Vy and full power the Cessna rolls left on both models, flightModel.js no faster than JSBSim', () => {
     expect(runs.flightModel.handsOff).toBeLessThan(-3);
     expect(runs.jsbsim.handsOff).toBeLessThan(-3);
     expect(runs.flightModel.handsOff).toBeGreaterThanOrEqual(runs.jsbsim.handsOff);
+  });
+
+  // Agreement is close at the climb speeds and looser at the ends: the arm is fixed at CP/CT 0.745 (J 0-0.5) and
+  // the aileron needed goes as 1/q, which runs steeper at lift-off speed than JSBSim's (prop rpm falls) and
+  // leaves out CP/CT's rise past J 0.6 at cruise. Measured: 55 KIAS 0.090 vs 0.070 (+29%), 110 KIAS 0.018 vs 0.021.
+  it('at lift-off speed (55 KIAS) and cruise (110 KIAS) within 35% of JSBSim\'s aileron', () => {
+    for (const k of [55, 110]) expect(Math.abs(runs.flightModel[k].ail / runs.jsbsim[k].ail - 1)).toBeLessThan(0.35);
   });
 
   it('flightModel.js takes JSBSim\'s aileron within 0.01 of full throw at 74 and 90 KIAS', () => {

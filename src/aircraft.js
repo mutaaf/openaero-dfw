@@ -275,8 +275,10 @@ export const AIRCRAFT_DATABASE = {
     // the seat, so its reaction rolls the airframe left: Q = T·D/2π·CP/CT, and our JSBSim C172's prop76
     // table (public/jsbsim/engine/prop76.xml) has CP/CT 0.74-0.75 from static to Vy (J 0-0.5), so the arm
     // is 1.93 m / 2π × 0.745 = 0.229 m: 474 N·m on 2,070 N static, the POH's 180 hp at 2,700 rpm (475
-    // N·m). JSBSim, flying that prop, holds the wings level at full power with 0.046 of right aileron at
-    // 74 KIAS and 0.031 at 90; this gives 0.047 and 0.028 (tests/flight/propTorque.test.js). The other
+    // N·m). JSBSim, flying that prop, holds the wings level at full power with 0.045 of right aileron at
+    // 74 KIAS and 0.031 at 90; this gives 0.047 and 0.030 (tests/flight/propTorque.test.js). Two-point
+    // agreement: at 55 KIAS this asks ~0.09 against JSBSim's ~0.07 (the 1/q runs steeper there), at 110
+    // ~0.018 against ~0.021 (CP/CT rises past J 0.6, which the constant arm leaves out). The other
     // left-turning tendencies (P-factor, the slipstream's swirl on the fin) are not modelled: no C172
     // figure for the rudder they take was found, and JSBSim's C172 has neither (p_factor 0) (0200).
     prop: { torqueArmM: 0.229 },

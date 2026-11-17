@@ -249,7 +249,8 @@ export function stepFlightModel(body, spec, dt) {
   }
 
   // Hands off (under 0.05 of the old full rate, 0156: on the F-16 0.05 of stick is 15°/s), the roll dies away.
-  if (Math.abs(body.aileronInput) * rg < 0.05 * legacyRollRate(spec) && !body.apMaster) {
+  // The net roll input: a stick holding the prop's torque (0194) is not hands off, and a released one is not held.
+  if (Math.abs(body.aileronInput - propAil) * rg < 0.05 * legacyRollRate(spec) && !body.apMaster) {
     body.angVel.z -= body.angVel.z * 1.5 * dt;
   }
 
