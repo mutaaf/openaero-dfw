@@ -1931,7 +1931,8 @@ function integrateSubStep(dt) {
     const pitchRateUp = sim.angVel.x;
     const holdHeading = (hdgDeg) => {
       const bankCmd = bankCommandForHeading(headingError(hdgDeg, curHdg), sim.tasKts * KTS_TO_MPS);
-      sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight, rollHoldScale(spec, sim.tasKts * KTS_TO_MPS));
+      // Plus the aileron the prop's torque takes, fed forward (0194): the hold is proportional only.
+      sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight, rollHoldScale(spec, sim.tasKts * KTS_TO_MPS)) + (sim.propAil ?? 0);
     };
     // Fly a flight-path angle: pitch = path + current angle of attack.
     // Pitch is capped at 9.5° nose-up (737 tailstrike is ~11°).
@@ -2581,6 +2582,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.aoaDeg = sim.aoaDeg;
   _assistIn.betaDeg = sim.betaDeg;
   _assistIn.dihedralAil = dihedralAileron(spec, sim.betaDeg * DEG_TO_RAD);
+  _assistIn.propAil = sim.propAil ?? 0; // the prop's torque (0194)
   // The stall drill (0087) turns the stall protection off until the wing stalls (drillAssist).
   const drill = sim.stallDrill ? stallLib.drillAssist(sim.stallDrill.phase) : null;
   _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex);

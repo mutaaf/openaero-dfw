@@ -35,7 +35,7 @@ function finalStats(acKey, wx, seed, scale = 1) {
     air(x, dt);
     const a = attitude(x);
     x.elevInput = elevatorForPitch(pitch0, a.pitchDeg, x.angVel.x);
-    x.aileronInput = aileronForBank(0, a.bankRightDeg, -x.angVel.z);
+    x.aileronInput = aileronForBank(0, a.bankRightDeg, -x.angVel.z) + (x.propAil ?? 0); // the hold trims the prop's torque, as main.js's does (0194)
   }, (x) => {
     const n = meter(x);
     if (x.pos.y < 500 * FT_TO_M) return true;

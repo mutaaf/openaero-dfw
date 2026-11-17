@@ -11,9 +11,10 @@
 // held at 15° climbs and never stalls; held at 20° it stalls in ~8-10 s at ~47-49 KIAS, under the
 // model's own power-off flaps 10 stall at the same height (~49.8 KIAS; POH Fig. 5-3: 50 KCAS): the
 // thrust line sits at about α to the flight path, so T·sin α carries part of the weight, and in a
-// climb the wing carries only W·cos γ, so it stalls at a lower airspeed. JSBSim's C172 (stock P-factor
-// and torque) yaws left and drops the left wing with no rudder; flightModel.js has no left-turning
-// tendency at all (KNOWN GAP 0194).
+// climb the wing carries only W·cos γ, so it stalls at a lower airspeed. With no rudder both models yaw
+// left and drop the left wing: the prop's torque rolls it left (JSBSim's prop76 torque; flightModel.js
+// propTorqueAileron, 0194, the same 475 N·m) and the wings-level hold stands a degree or two off it, so
+// it turns (JSBSim 6.6°, flightModel.js 4.5°). Neither models P-factor or the slipstream's swirl (0200).
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
@@ -33,7 +34,7 @@ const ALT_M = 4500 * 0.3048;
 const _e = new Euler();
 const yawLeftDeg = (x) => { _e.setFromQuaternion(x.quat, 'YXZ'); return _e.y * RAD_TO_DEG; };
 const gapCard = (gaps, id) => (gaps.has(id) ? (title, ...rest) => it.fails(`KNOWN GAP (${gaps.get(id)}): ${title}`, ...rest) : it);
-const GAPS = { flightModel: new Map([['leftTurning', '0194']]), jsbsim: new Map() };
+const GAPS = { flightModel: new Map(), jsbsim: new Map() };
 
 // The model's power-off stall at flaps 10 here: idle, wings level, 1 kt/s down from 70 KIAS (c172.test.js's
 // method) until the wing passes its stall angle.

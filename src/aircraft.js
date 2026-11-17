@@ -271,6 +271,15 @@ export const AIRCRAFT_DATABASE = {
     // mean aileron throw over roll damping Clp −0.47 is p·b/2V = 0.116 at full aileron, so the rate
     // is 0.116 × 2V / 11.0 m: 60°/s at 97 KTAS (tests/flight/c172.test.js flies it against JSBSim).
     rollPerTas: 0.02103, // (0.178 × 0.3054 rad) / 0.47 × 2 / 11.0 m
+    // The propeller's torque (flightModel.js propTorqueAileron, 0194). The prop turns clockwise seen from
+    // the seat, so its reaction rolls the airframe left: Q = T·D/2π·CP/CT, and our JSBSim C172's prop76
+    // table (public/jsbsim/engine/prop76.xml) has CP/CT 0.74-0.75 from static to Vy (J 0-0.5), so the arm
+    // is 1.93 m / 2π × 0.745 = 0.229 m: 474 N·m on 2,070 N static, the POH's 180 hp at 2,700 rpm (475
+    // N·m). JSBSim, flying that prop, holds the wings level at full power with 0.046 of right aileron at
+    // 74 KIAS and 0.031 at 90; this gives 0.047 and 0.028 (tests/flight/propTorque.test.js). The other
+    // left-turning tendencies (P-factor, the slipstream's swirl on the fin) are not modelled: no C172
+    // figure for the rudder they take was found, and JSBSim's C172 has neither (p_factor 0) (0200).
+    prop: { torqueArmM: 0.229 },
   },
   f16: {
     name: 'F-16C Fighting Falcon',

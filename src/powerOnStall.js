@@ -41,8 +41,8 @@ export const PO_TEXT = {
 Object.assign(DRILL_TEXT, PO_TEXT);
 Object.assign(TOUCH_WORDS, { poFlaps: 'Flaps up: tap FLAPS once' });
 // Each entry step outranks the one before, so it shows at once (no 1.5 s hold with the old words up); the stall
-// outranks everything. No "right rudder": the default flight model has no left-turning tendency yet (0194) and a
-// touch screen has no pedals in this drill.
+// outranks everything. No "right rudder": the default flight model's left-turning tendency is the prop's torque
+// (0194), which the ailerons hold (poWings), not a yaw the pedals must; and a touch screen has no pedals in this drill.
 Object.assign(RANK, { poPower: 4, poNose: 5, poKidUp: 4, poWings: 4, poFlaps: 4, poClimb: 4, poStall: 6, poKid: 6 });
 
 // ACS S4: no less than 65% power. Rated power, not lever travel: the piston's power lapses with

@@ -77,7 +77,7 @@ export function updateDeparture(st, onGround, aglFt) {
 
 // One sub-step of input shaping. cfg = assistConfig(level) (never null here).
 // s: { pitchIn, rollIn, yawIn (raw stick targets: pitch + = nose down, roll + = right),
-//      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), rollScale (rollHoldScale), aoaDeg, betaDeg, dihedralAil,
+//      pitchDeg, bankRightDeg, pitchRateUp, rollRateRight (rad/s), rollScale (rollHoldScale), aoaDeg, betaDeg, dihedralAil, propAil,
 //      stallAoaDeg, tailstrikeDeg, onGround, wheelHeightM, airspeedMps (true), vsMps (+ = up), flarePerS (spec.kidFlarePerS),
 //      pitchUpMaxDeg (a drill's lifted pitch cap, else null: the power-on stall's, 0191),
 //      guideBankDeg, guideGammaDeg (Kid hands-off targets: 0/0 for level flight, the
@@ -168,11 +168,12 @@ export function shapeControls(cfg, st, s, dt, out) {
     ? clamp(s.guideBankDeg, -bankShare, bankShare)
     : clamp(s.rollIn, -1, 1) * bankShare;
   // Plus the aileron that cancels the sideslip's rolling moment (s.dihedralAil, flightModel.js
-  // dihedralAileron), fed forward like trim: a held rudder must not out-roll the bank hold.
+  // dihedralAileron), fed forward like trim: a held rudder must not out-roll the bank hold. And the
+  // aileron the propeller's torque takes (s.propAil, flightModel.js propTorqueAileron, 0194), the same way.
   // s.rollScale (flightModel.js rollHoldScale, 0156) keeps the hold's loop the same whatever the
   // airframe's roll rate per aileron at this speed (the F-16's is up to ten times the Cessna's).
   const k = s.rollScale ?? 1;
-  out.ail = clamp(aileronForBank(bankCmd, s.bankRightDeg, s.rollRateRight, k) - (s.dihedralAil ?? 0), -1, 1);
+  out.ail = clamp(aileronForBank(bankCmd, s.bankRightDeg, s.rollRateRight, k) - (s.dihedralAil ?? 0) + (s.propAil ?? 0), -1, 1);
   // A bank past the cap (gust, upset) is rolled back at the most roll the hold's gains were tuned
   // on (full aileron of the old constant rate, ~31-38°/s), not the F-16's 308°/s snap (0156).
   if (Math.abs(s.bankRightDeg) > bankLimit) out.ail = -Math.sign(s.bankRightDeg) * Math.min(1, k);

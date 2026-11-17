@@ -10,7 +10,7 @@
 // dead-stick drill, 0036: the engine makes no power whatever the throttle; the prop windmills); optional
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
 // writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY, loadFactor,
-// sigma (density ratio), engineN (spooled power setting; seed it with the throttle on spawn),
+// sigma (density ratio), propAil (the aileron the prop's torque takes, 0194), engineN (spooled power setting; seed it with the throttle on spawn),
 // spoilers (ground spoiler extension 0–1, airframes with spec.groundSpoilers). Systems
 // (systems.js) run first: the gear, flaps, brakes and reversers follow their levers at
 // their own rates, so the aerodynamics see where the surfaces are, not where the levers are.
@@ -215,11 +215,18 @@ export function stepFlightModel(body, spec, dt) {
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
   // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
   const dihedral = dihedralAileron(spec, betaRad);
+  // The propeller's torque (0194) rolls the airframe left, as the aileron that makes the same moment.
+  // In the air only: on its wheels the gear takes it (475 N·m across the Cessna's 2.54 m track moves
+  // ~190 N, 2% of the weight, from one main to the other, not modelled), and this roll law is a rate
+  // law: an aileron's worth of torque at a crawl's q would lean it on its struts and steer it in circles.
+  // Written back as body.propAil: the autopilot and the assists feed it forward, as they do the dihedral's.
+  const propAil = spec.prop && !body.onGround ? propTorqueAileron(spec, thrustForce, qDyn) : 0;
+  body.propAil = propAil;
   // The aileron's steady rate is rollRateGain (0156): it grows with the speed where a source gives it.
   // On the wheels never more than the old constant rate: a game choice (no source), so a held stick on
   // the F-16's takeoff roll can't cartwheel it past the wingtip (it banked 99° at Vr with the full gain).
   const rg = rollRateGain(spec, airspeed);
-  const pRate = (-(body.aileronInput + dihedral) * (body.onGround ? Math.min(rg, legacyRollRate(spec)) : rg) - body.angVel.z) * spec.rollDamping * (airspeed / 120);
+  const pRate = (-(body.aileronInput + dihedral - propAil) * (body.onGround ? Math.min(rg, legacyRollRate(spec)) : rg) - body.angVel.z) * spec.rollDamping * (airspeed / 120);
   // Rudder + directional stability: the nose weathervanes into the relative wind, so a
   // banked aircraft actually turns.
   const rRate = (-body.rudderInput * 1.2 + sideslipYawAccel(betaRad) - body.angVel.y * spec.yawDamping) * (airspeed / 120);
@@ -289,6 +296,13 @@ export const rollHoldScale = (spec, tasMps) => Math.min(4, legacyRollRate(spec) 
 export const dihedralAileron = (spec, betaRad) => (spec.clBeta && spec.clAileron
   ? (spec.clBeta * MathUtils.clamp(betaRad, -BETA_LIN, BETA_LIN)) / spec.clAileron
   : 0);
+
+// The propeller's torque reaction (N·m, + rolls left; spec.prop, 0194): Q = T × torqueArmM while it
+// pulls, nothing while it windmills. As aileron (+ = right) it is Q over full aileron's moment at qPa
+// (Clδa·δa max · q·S·b), at most full throw: a fixed-pitch prop's torque stays up as the airspeed falls,
+// so at a crawl it asks for more than the aileron has.
+export const propTorqueNm = (spec, thrustN) => (spec.prop ? Math.max(0, thrustN) * spec.prop.torqueArmM : 0);
+export const propTorqueAileron = (spec, thrustN, qPa) => Math.min(1, propTorqueNm(spec, thrustN) / (spec.clAileron * Math.max(qPa, 1) * spec.wingAreaM2 * spec.wingSpanM));
 
 // Throttle that holds `iasMps` on a steady flight path of `gammaDeg` (negative = descent)
 // at the trim angle of attack, out of ground effect: thrust·cos α = D + W·sin γ. Spawns use

@@ -1,12 +1,12 @@
 ---
 id: 0194
 title: The Cessna yaws left at full power and high pitch in flightModel.js (P-factor, slipstream, torque)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-17
-pr:
+pr: 280
 ---
 
 ## Why
@@ -34,3 +34,15 @@ JSBSim's c172.xml moments as a stand-in, said so). Promote the gap card; re-meas
 
 ## Out of scope
 The jets (no propeller); spin dynamics.
+
+## Shipped (2026-11-17)
+The torque, not a fitted yaw. A probe of our JSBSim C172 found it needs ~0 rudder in any steady
+full-power climb (50-110 KIAS): its only left-turning term is the prop's torque (`p_factor` 0), and its
+6.6° in the power-on card comes from that roll and the wings-level hold standing off it. No C172 figure
+for the rudder P-factor or the slipstream's swirl takes could be found, so a yaw term would have been a
+number fitted to JSBSim's outcome with a mechanism JSBSim does not have. Instead flightModel.js gets the
+torque at its cited size: Q = T·D/2π·CP/CT (prop76, 0.229 m arm) = 474 N·m static, the POH's 180 hp at
+2,700 rpm; it takes 0.047 / 0.030 of right aileron at 74 / 90 KIAS (JSBSim 0.045 / 0.031). That alone
+yaws the no-rudder power-on entry 4.5° left (bank −2.1°; JSBSim 6.6°, −2.7°): the gap card is a plain `it`.
+In the air only (the gear takes it on the wheels). The autopilot and Kid/Learner feed it forward; raw
+Pilot holds a touch of right stick. P-factor and swirl: 0200.

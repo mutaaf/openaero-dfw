@@ -213,7 +213,7 @@ describe('Kid and Learner hold bank against a held rudder (dihedral, 0081)', () 
           const { pitchDeg, bankRightDeg } = attitude(x);
           Object.assign(s, {
             pitchIn: 0, rollIn: 0, yawIn: 1, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
-            aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * Math.PI / 180),
+            aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * Math.PI / 180), propAil: x.propAil ?? 0,
             stallAoaDeg: stallAoaDeg(spec, 0), tailstrikeDeg: 15, onGround: false, wheelHeightM: 600, airspeedMps: x.vel.length(),
             guideBankDeg: 0, guideGammaDeg: 0,
           });
@@ -228,6 +228,38 @@ describe('Kid and Learner hold bank against a held rudder (dihedral, 0081)', () 
       });
     }
   }
+});
+
+// The Cessna's prop torque rolls it left at full power (flightModel.js propTorqueAileron, 0194). Kid and
+// Learner feed the aileron it takes forward, so a centred stick still holds the wings level; without it
+// the proportional hold stands off ~1-2° to the left and the airplane turns.
+describe('Kid and Learner hold the wings level against the prop\'s torque (0194)', () => {
+  const spec = AIRCRAFT_DATABASE.c172;
+  const climb = (level, feed) => {
+    const b = makeBody(spec, { kts: 74, altM: 600, flaps: 0, throttle: 1 });
+    b.apMaster = false;
+    const st = createAssistState(), cfg = assistConfig(level), s = {}, out = {};
+    let worst = 0;
+    fly(b, spec, 20, (x, dt) => {
+      const { pitchDeg, bankRightDeg } = attitude(x);
+      Object.assign(s, {
+        pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * 0.514444),
+        aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, (x.betaDeg ?? 0) * Math.PI / 180), propAil: feed ? x.propAil ?? 0 : 0,
+        stallAoaDeg: stallAoaDeg(spec, 0), tailstrikeDeg: 15, onGround: false, wheelHeightM: 600, airspeedMps: x.vel.length(),
+        guideBankDeg: 0, guideGammaDeg: 0,
+      });
+      shapeControls(cfg, st, s, dt, out);
+      x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = out.rud; x.throttle = 1;
+      if (x.t > 10) worst = Math.max(worst, Math.abs(bankRightDeg));
+    });
+    return { worst, propAil: b.propAil };
+  };
+  for (const level of ['kid', 'learner']) it(`${level}: full power, stick centred: wings within 0.3° (it is 1°+ off without the feed)`, () => {
+    const fed = climb(level, true), unfed = climb(level, false);
+    expect(fed.propAil).toBeGreaterThan(0.02); // the torque is there
+    expect(fed.worst).toBeLessThan(0.3);
+    expect(unfed.worst).toBeGreaterThan(1);
+  });
 });
 
 describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {

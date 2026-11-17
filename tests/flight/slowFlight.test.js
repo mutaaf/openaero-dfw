@@ -48,7 +48,8 @@ function slowFlight({ holdKts = null, tail = null } = {}) {
     x.pitchTrim = (x.pitchTrim ?? x.pitchCmd) + err * 0.08 * dt;
     x.pitchCmd = Math.max(-10, Math.min(20, x.pitchTrim + err * 0.6 + trend * 2.5));
     x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
-    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
+    // Wings level, holding the right aileron the prop's torque takes at this power (0194): on the heading.
+    x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z) + (x.propAil ?? 0);
     // The height with the power.
     const altErr = (alt0 - x.pos.y), vs = x.vel.y;
     thrInt = Math.max(0, Math.min(1, thrInt + (altErr * 0.004 - vs * 0.01) * dt));
@@ -128,7 +129,7 @@ function assisted(level, { pitchIn = () => 0, throttle = null, seconds = 240 } =
     Object.assign(s, {
       pitchIn: pitchIn(x), rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
       rollScale: rollHoldScale(c172, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y, driftDeg: 0,
-      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * DEG_TO_RAD),
+      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * DEG_TO_RAD), propAil: x.propAil ?? 0,
       stallAoaDeg: stallAoaDeg(c172, 0), tailstrikeDeg: 15, onGround: false, noseWheelDown: false, wheelHeightM: 1400,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, bankMaxDeg: 0,
     });

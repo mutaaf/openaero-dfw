@@ -51,7 +51,7 @@ function flyBank(spec, kts, altFt, roller, { seconds = 10, lastS = 3, dt = DT60,
 }
 
 const apHold = (spec, cmdDeg) => (x) => {
-  x.aileronInput = aileronForBank(cmdDeg, attitude(x).bankRightDeg, -x.angVel.z, rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS));
+  x.aileronInput = aileronForBank(cmdDeg, attitude(x).bankRightDeg, -x.angVel.z, rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS)) + (x.propAil ?? 0); // main.js feeds the prop's torque forward (0194)
 };
 
 const ENVELOPE = [
@@ -85,7 +85,7 @@ function assistInput(spec, x, rollIn) {
   return {
     pitchIn: 0, rollIn, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
     rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y, driftDeg: 0,
-    aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, ((x.betaDeg ?? 0) * Math.PI) / 180),
+    aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(spec, ((x.betaDeg ?? 0) * Math.PI) / 180), propAil: x.propAil ?? 0,
     stallAoaDeg: stallAoaDeg(spec, x.flapsIndex), tailstrikeDeg: spec.maxGroundPitchDeg ?? 15, onGround: false,
     wheelHeightM: x.pos.y - spec.gearHeight, airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y,
     guideBankDeg: 0, guideGammaDeg: 0,
