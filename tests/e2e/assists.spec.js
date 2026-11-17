@@ -184,17 +184,20 @@ test.describe('Kid on a phone', () => {
     await expect(page.locator('#onboardingModal')).toBeHidden();
     expect((await debug(page)).assist).toBe('kid');
 
-    // A kid yanks the stick hard over and back for two seconds of wall time (8 s of sim time at 4x): the envelope holds.
+    // A kid yanks the stick hard over and holds it for 4 s of sim time: the envelope holds.
     const stick = await page.locator('#touchStick').boundingBox();
     const cdp = await page.context().newCDPSession(page);
     const cx = stick.x + stick.width / 2, cy = stick.y + stick.height / 2;
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 1 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: stick.x + stick.width - 2, y: stick.y + stick.height - 2, id: 1 }] });
+    // Bounded by sim time and sampled every ~100 ms of it at 4x (wall time only caps a stalled page).
     let maxBank = 0;
-    const t0 = Date.now();
-    while (Date.now() - t0 < 2_000) {
-      maxBank = Math.max(maxBank, Math.abs((await debug(page)).bankRightDeg));
-      await page.waitForTimeout(100);
+    const t0 = (await debug(page)).simTime;
+    for (const until = Date.now() + 20_000; Date.now() < until;) {
+      const d = await debug(page);
+      maxBank = Math.max(maxBank, Math.abs(d.bankRightDeg));
+      if (d.simTime - t0 >= 4) break;
+      await page.waitForTimeout(25);
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     expect(maxBank).toBeGreaterThan(3);

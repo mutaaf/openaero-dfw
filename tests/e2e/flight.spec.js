@@ -69,7 +69,7 @@ test('ILS autoland holds the localizer and glideslope from 4 NM, pitch steady', 
     expect(Math.abs(s.heightAbovePathM), 'glideslope').toBeLessThan(20);
     expect(Math.abs(s.bankRightDeg), 'wings').toBeLessThan(30);
     if (t > 10) pitches.push(s.pitchDeg);
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(125);
   }
   expect(pitches.length).toBeGreaterThan(20);
   // Ticket 0016: no autothrottle/glidepath phugoid. Before the fix pitch swung −2.5°…+6.3°

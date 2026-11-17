@@ -10,8 +10,11 @@
 // pair it with deviceScaleFactor 0.25 (frames that stay under the cap) to keep CI under its
 // 30 min job limit (lesson 2026-10-28). Specs that time frames, count pixels or catch a
 // moment that lasts a fraction of a second (the bounce) don't use it.
-// The long flights run at 4x (0193, 2026-11-17: 27.0 → 21.6 min for the suite); a spec that times
-// a voice against the sim (tower, captions) or grades the harness's own reaction (rto) stays at 2x.
+// The long flights run at 4x (0193, 2026-11-17: 27.0 → 21.6 min for the suite). Kept at 2x: specs
+// that time a voice against the sim (tower, captions), grade the harness's own reaction (rto,
+// rto.mobile), and short ones where 4x saved under ~5 s (buffet, slowFlight, steepTurns,
+// pitchTrim, haptics, wingLow.mobile, wake.mobile). At 4x a wall-clock poll timeout covers
+// twice the sim time, and a fixed hold twice as much (stricter).
 import { test as base, expect } from '@playwright/test';
 
 export const test = base.extend({

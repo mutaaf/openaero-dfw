@@ -45,8 +45,8 @@ test('Kid on a short final of the lesson, brakes on at the touchdown: the card c
   await expect.poll(async () => (await snap(page)).onGround, { timeout: 90_000 }).toBe(true);
   await page.keyboard.press('KeyB'); // brakes on (the coach's "Brakes on (B) to stop")
   const card = page.locator('#resultsCard');
-  // Not at the touchdown: the lesson grades at the stop.
-  await page.waitForTimeout(1500);
+  // Not at the touchdown: the lesson grades at the stop (750 ms is 3 s of sim time at 4x).
+  await page.waitForTimeout(750);
   const rolling = await snap(page);
   if (rolling.gsKts > 10) await expect(card).toBeHidden();
   await expect(card).toBeVisible({ timeout: 60_000 });

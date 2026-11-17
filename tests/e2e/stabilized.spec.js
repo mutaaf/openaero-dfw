@@ -49,7 +49,7 @@ test('a fast, steep approach is called unstabilized at the gate', async ({ page 
   // (a shallower dive sinks too slowly: the 400 ft call comes > 2.5 s after the gate and cuts it).
   let s = await snap(page);
   for (const until = Date.now() + 90_000; !s.stabilizedGate && Date.now() < until; s = await snap(page)) {
-    if (s.pitchDeg > -8) { await page.keyboard.down('KeyW'); await page.waitForTimeout(80); await page.keyboard.up('KeyW'); }
+    if (s.pitchDeg > -8) { await page.keyboard.down('KeyW'); await page.waitForTimeout(40); await page.keyboard.up('KeyW'); }
     await page.waitForTimeout(100);
   }
   expect(s.stabilizedGate).not.toBeNull();
