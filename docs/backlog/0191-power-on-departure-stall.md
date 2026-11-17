@@ -1,12 +1,12 @@
 ---
 id: 0191
 title: Power-on (departure) stall mission: full power, nose up, recover without losing the wing
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: content
 created: 2026-11-17
-pr:
+pr: 274
 ---
 
 ## Why
