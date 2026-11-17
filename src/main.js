@@ -3062,6 +3062,7 @@ byId('btnStartFlight').addEventListener('click', () => {
   if (photorealAllowed(window.location) && !terrainOnly(window.location.search)) photoreal.start(`${import.meta.env.BASE_URL}api/config`);
   closeModal();
   rememberPrefs();
+  byId('btnStartFlight').textContent = 'Fly ✈';
 });
 // Sound, camera and the last mission flown, kept between visits (0022, src/prefs.js). The
 // start screen's sound box is the one record of sound: the in-flight toggle writes it too.
@@ -3108,6 +3109,7 @@ byId('missionList').addEventListener('click', (e) => {
   const btn = e.target.closest('.btnMission');
   if (!btn) return;
   const scenario = btn.dataset.scenario;
+  byId('btnStartFlight').textContent = 'Fly ✈'; // Continue is only for the remembered mission
   byId('selScenario').value = scenario;
   loadScenario(scenario);
 });
@@ -3873,7 +3875,10 @@ function boot() {
   const key = linked || p.mission;
   loadScenario(key || 'kdfw_35c_final');
   if (key) byId('selScenario').value = key;
-  if (p.mission && !linked) byId('btnStartFlight').textContent = 'Continue ✈';
+  // A returning player sees what Continue flies: its card scrolled into view, and a remembered mute
+  // shown (Options open on its sound box) rather than a silent mystery.
+  if (p.mission && !linked) { byId('btnStartFlight').textContent = 'Continue ✈'; document.querySelector('#missionList .btnMission.active')?.scrollIntoView({ block: 'nearest' }); }
+  if (!p.sound) byId('chkAutoSound').closest('details').open = true;
   if (linked) {
     try { history.replaceState(null, '', `${location.pathname}${stripDeepLink(location.search)}${location.hash}`); } catch { /* sandboxed */ }
   }

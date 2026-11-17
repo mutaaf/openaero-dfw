@@ -33,6 +33,8 @@ test('sound, camera and the last mission are restored after a reload; bests unto
   await expect(page.locator('#selScenario')).toHaveValue('kdal_13l_final');
   await expect(page.locator('#btnStartFlight')).toHaveText('Continue ✈');
   await expect(page.locator('#chkAutoSound')).not.toBeChecked();
+  await expect(page.locator('#chkAutoSound')).toBeVisible(); // a remembered mute is shown, not hidden in Options
+  await expect(page.locator('.btnMission.active')).toBeInViewport();
   await expect(page.locator('#txtCamMode')).toHaveText('Spotter Flyby');
   expect(await page.evaluate(() => localStorage.getItem('openaero_best'))).toBe(best);
   // Nothing started the sound before the tap, and with the box clear Fly leaves it off.
@@ -41,6 +43,13 @@ test('sound, camera and the last mission are restored after a reload; bests unto
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   await expect(page.locator('#txtAudioState')).toHaveText('OFF');
   await expect(page.locator('#selScenario')).toHaveValue('kdal_13l_final');
+
+  // Continue is the remembered mission's word only: another pick reads Fly again.
+  await page.locator('#btnOpenMissions').click();
+  await expect(page.locator('#btnStartFlight')).toHaveText(/Fly/);
+  await page.locator('.btnMission[data-scenario="kdfw_takeoff"]').click();
+  await expect(page.locator('#btnStartFlight')).toHaveText(/Fly/);
+  await page.locator('#btnStartFlight').click();
 
   // A deep link still wins over the remembered mission, and is not stored until it is flown.
   await page.goto(`${BASE}?mission=kdfw_takeoff`);
