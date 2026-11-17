@@ -52,10 +52,11 @@ test('sound, camera and the last mission are restored after a reload; bests unto
   await page.locator('#btnStartFlight').click();
 
   // A deep link still wins over the remembered mission, and is not stored until it is flown.
-  await page.goto(`${BASE}?mission=kdfw_takeoff`);
-  await expect(page.locator('.btnMission.active')).toHaveAttribute('data-scenario', 'kdfw_takeoff');
+  expect((await prefs(page)).mission).toBe('kdfw_takeoff'); // the last one flown
+  await page.goto(`${BASE}?mission=kdfw_35c_flare`);
+  await expect(page.locator('.btnMission.active')).toHaveAttribute('data-scenario', 'kdfw_35c_flare');
   await expect(page.locator('#btnStartFlight')).toHaveText(/Fly/);
-  expect((await prefs(page)).mission).toBe('kdal_13l_final');
+  expect((await prefs(page)).mission).toBe('kdfw_takeoff');
   expect(errors).toEqual([]);
 });
 
