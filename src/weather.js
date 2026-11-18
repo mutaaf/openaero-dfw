@@ -55,6 +55,12 @@ export function fogDensityForVisibility(sm) {
   return 1.517 / m;
 }
 
+// The haze in rain or snow (0196): a clear day's "10 SM" draws 25 km (10+ above); with precipitation at the
+// field it reads the report's own 10 SM, and a lower reported visibility is used as it is (never thicker).
+export function precipFogSm(sm, p) {
+  return p && p.kind ? Math.min(sm, 9.99) : sm;
+}
+
 export function metarAgeMinutes(obsTimeS, nowS) {
   return Math.max(0, Math.round((nowS - obsTimeS) / 60));
 }

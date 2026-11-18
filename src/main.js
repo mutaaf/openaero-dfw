@@ -26,7 +26,7 @@ import {
 } from './autopilot.js';
 import {
   scenarioWeather, windVector, gustFactor, runwayWindComponents, surfaceWindFactor,
-  fogDensityForVisibility, metarAgeMinutes, flowForWind,
+  fogDensityForVisibility, precipFogSm, metarAgeMinutes, flowForWind,
 } from './weather.js';
 import { createTerrainLod } from './terrainLod.js';
 import { createLazyPhotoreal, photorealAllowed } from './photorealLazy.js';
@@ -1581,9 +1581,10 @@ placeSun();
 // the haze matched to its horizon. Moonlight lifts the night ambient.
 function applySky() {
   const base = sim.wx.ceilingFt;
-  const k = base !== null && base <= 12000 ? (sim.wx.ceilingCover === 'BKN' ? 0.45 : 0.8) : 0;
+  const ts = sim.wx.live && sim.wx.precip?.ts; // a thunderstorm at the field (0196): a dark, low sky
+  const k = ts ? 0.9 : base !== null && base <= 12000 ? (sim.wx.ceilingCover === 'BKN' ? 0.45 : 0.8) : 0;
   const look = skyForSun(sun.elevationDeg);
-  _overcast.copy(OVERCAST_GREY).multiplyScalar(Math.min(1, 0.12 + look.ambientIntensity * 0.9 + look.sunIntensity * 0.15));
+  _overcast.copy(OVERCAST_GREY).multiplyScalar(Math.min(1, 0.12 + look.ambientIntensity * 0.9 + look.sunIntensity * 0.15) * (ts ? 0.45 : 1));
   _skyDate.setTime(sun.at ?? Date.now());
   skyDome?.setSky({
     look, sunDir: _sunVec, sunElevationDeg: sun.elevationDeg, date: _skyDate,
@@ -1600,6 +1601,11 @@ function applySky() {
 }
 
 let metarLib = null; // metar.js, with the first report
+let precipFx = null; // precip.js (0196), fetched only when a live report has rain, snow or TS at the field
+function syncPrecip(p) {
+  if (p && !precipFx) import('./precip.js').then((l) => { precipFx ??= l.createPrecip(scene, reducedMotion); refreshWeather(); }).catch(console.warn);
+  precipFx?.set(p, sim.activeEnd?.thrY ?? 0, sim.wx.ceilingFt);
+}
 async function fetchWeather() {
   try {
     // no-store + a minute bucket: the zone's Browser Cache TTL can stretch cached edge
@@ -1669,7 +1675,9 @@ function refreshWeather() {
   sim.isaDevC = isaDeviationC(sim.wx.tempC, REF_ELEV_M);
   sim.altimInHg = sim.wx.altimInHg || 29.92;
   sim.wetRunway = !!sim.wx.wetRunway; // the METAR's rain: wet braking (systems.js, 0108)
-  scene.fog.density = fogDensityForVisibility(sim.wx.visibilitySm);
+  const precip = sim.wx.live ? sim.wx.precip : null; // rain, snow, TS at the field (0196): live reports only
+  scene.fog.density = fogDensityForVisibility(precipFogSm(sim.wx.visibilitySm, precip));
+  syncPrecip(precip);
   // METAR cloud bases are above the reporting field.
   skyDome?.setClouds(sim.wx.cloudLayers, sim.activeEnd?.thrY ?? 0);
   applySky();
@@ -3632,6 +3640,7 @@ function renderLoop(time) {
   syncWeatherUI(dt);
   if (replaying) replaying.step(dt); else updateCamera();
   updateSkyAndLights(time / 1000);
+  precipFx?.update(dt, camera, sim.vel, sim.windVec);
   if (!gfx.lost) terrainLod.update(dt, camera);
   photoreal.update(dt);
   updateDebugOverlay(dt);
@@ -3737,6 +3746,7 @@ window.openaeroDebug = () => {
     aoaDeg: sim.aoaDeg,
     wxLive: sim.wx.live,
     wetRunway: !!sim.wetRunway,
+    precip: precipFx && { ...precipFx.state }, // 0196: what falls, how many streaks, flashes so far
     // The HUD wind box (0075): what it says and where it is (canvas px = CSS px).
     hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, hdg), box: { ..._windBox } },
     pixelRatio: resScale.ratio,

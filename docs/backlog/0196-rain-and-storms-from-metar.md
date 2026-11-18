@@ -1,7 +1,7 @@
 ---
 id: 0196
 title: Rain, snow and thunderstorms from the METAR show on screen, not just as a "wet runway" flag
-status: ready
+status: in-progress
 priority: P2
 size: M
 lens: content
