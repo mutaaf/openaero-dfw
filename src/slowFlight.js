@@ -10,7 +10,8 @@
 import { curve, letterGrade } from './landing.js';
 import { DRILL_TEXT, RANK } from './coach.js';
 import { stallAoaDeg, stallWarningKts, stallSpeedKts, liftCoefficient } from './aero.js';
-import { M_TO_FT } from './constants.js';
+import { M_TO_FT, KTS_TO_MPS } from './constants.js';
+import { turbulenceSigmaW } from './turbulence.js';
 
 export const SLOW_KEY = 'c172_slow_flight';
 // The ACS tolerances (Area VII Task A, skill S5).
@@ -26,6 +27,12 @@ export const SLOW_TARGET_OVER_WARN_KTS = 5;
 // ch. 9, borrowed): a sharp 10 kt gust from behind drops the IAS ~10 kt at once, and mid-band in 15G25 the
 // model's wing went from the warning's angle to the stall in 0.4 s (tests/flight/slowFlight.test.js).
 export const SLOW_GUST_SHARE = 0.5;
+// The METAR's turbulence (0195, turbulence.js) on top (0199): a vertical gust w lifts the wing's angle of attack by
+// w / V (V the true airspeed). The band's low edge is at least the speed where the 1 g angle plus a SLOW_TURB_SIGMAS σ_w
+// gust stays under the stall angle (turbulenceFloorKts); the gust share's band is kept when it is already higher. The
+// C172 at ~5,000 ft: a steady 25 kt (σ_w 1.18 m/s, no gust spread) raises the low edge 63 → 64 KIAS; 20G40 (σ_w 1.8)
+// needs 70.6, under the gust share's 73; 15G25 and 25G38 need 61-64, under theirs (68, 69.5).
+export const SLOW_TURB_SIGMAS = 3;
 // The hold: SLOW_HOLD_S seconds inside every tolerance ends it; it is graded anyway after
 // SLOW_HOLD_MAX_S in the band's reach.
 export const SLOW_HOLD_S = 45;
@@ -63,12 +70,14 @@ Object.assign(RANK, { sfwSlow: 1, sfwSlowing: 1, sfwSlowHigh: 1, sfwNear: 1, sfw
   sfwHdgL: 1, sfwHdgR: 1, sfwHold: 1, sfwTooSlow: 2, sfwHorn: 2, sfwKidIn: 1, sfwKid: 1 });
 // The band's numbers in the words (the HUD's tape marks the horn, not the band): rewritten when the target moves
 // (the flaps), in the drill's own DRILL_TEXT entries, so boot carries none of it.
-export function slowBandWords(targetKts) {
+// gusty: the band is raised for the METAR's gusts or turbulence, and the hold's words say why.
+export function slowBandWords(targetKts, gusty = false) {
   const t = Math.round(targetKts), top = t + SLOW_KTS_OVER;
   DRILL_TEXT.sfwSlow = `Throttle back, raise the nose bit by bit: slow to ${top} kt, hold your height`;
   DRILL_TEXT.sfwTooSlow = `Too slow: under ${t} kt. Lower the nose a little, add power`;
   DRILL_TEXT.sfwFast = `Fast: over ${top} kt. A little less power, nose up a little to stay level`;
-  DRILL_TEXT.sfwHold = `Hold it: ${t}-${top} kt, level, on your heading`;
+  DRILL_TEXT.sfwHold = gusty ? `Gusty air: fly higher in the band, ${t}-${top} kt, level, on your heading`
+    : `Hold it: ${t}-${top} kt, level, on your heading`;
 }
 
 // phase: 'wait' (the start screen: the drill starts when the player does), 'slowing' (cruise down to the
@@ -89,6 +98,26 @@ export function warnAoaDeg(spec, flaps) {
   let lo = 0, hi = aS;
   for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (liftCoefficient(spec, m * Math.PI / 180, flaps) < cl) lo = m; else hi = m; }
   return (lo + hi) / 2;
+}
+
+// The lowest IAS (kt) at which the 1 g angle of attack plus a SLOW_TURB_SIGMAS σ_w vertical gust stays under the stall
+// angle, by bisection on aero.js's lift curve (monotone: the faster, the lower the 1 g angle and the smaller w / V).
+// sigmaW (m/s, turbulence.js turbulenceSigmaW); tasPerIas: the true airspeed over the indicated where it is flown.
+// 0 in calm air. Called when the weather, the flaps or the airplane change, never per frame.
+function aoa1gDeg(spec, flaps, aS, clMax, vs, kts) {
+  const cl = clMax * (vs / kts) ** 2;
+  let lo = -10, hi = aS;
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (liftCoefficient(spec, m * Math.PI / 180, flaps) < cl) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+}
+export function turbulenceFloorKts(spec, flaps, sigmaW, tasPerIas = 1) {
+  if (!(sigmaW > 0)) return 0;
+  const aS = stallAoaDeg(spec, flaps), clMax = liftCoefficient(spec, aS * Math.PI / 180, flaps), vs = stallSpeedKts(spec, flaps);
+  const over = (kts) => aoa1gDeg(spec, flaps, aS, clMax, vs, kts) + SLOW_TURB_SIGMAS * sigmaW / (kts * KTS_TO_MPS * tasPerIas) * 180 / Math.PI > aS;
+  let lo = vs, hi = 3 * vs;
+  if (over(hi)) return hi;
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (over(m)) lo = m; else hi = m; }
+  return hi;
 }
 
 // One sub-step. st is mutated (no allocation). s: { dt, started (the player is flying), altFt (any datum,
@@ -187,7 +216,7 @@ export const slowKidKts = (st) => st.kidKts;
 // input, steps the drill and returns its transition. started: the player is flying (main.js
 // cockpitEntered && !modalOpen(): the sim flies behind the start screen, docs/LESSONS.md 0174).
 const _s = { dt: 0, started: false, altFt: 0, iasKts: 0, warnKts: 0, gustAddKts: 0, aoaDeg: 0, warnAoaDeg: 90, hdgDeg: 0, stalled: false, throttle: 0 };
-let wordsKts = 0, aoaFor = null, aoaFlaps = -1;
+let wordsKts = 0, wordsGusty = false, aoaFor = null, aoaFlaps = -1, floorWind = -1, floorGust = -1, floorFlaps = -1, floorKts = 0;
 export function slowSimStep(st, sim, dt, started) {
   const { x, y, z, w } = sim.quat;
   const flaps = sim.flapPos ?? sim.flapsIndex; // the horn's flaps (main.js): where the wing is
@@ -197,14 +226,21 @@ export function slowSimStep(st, sim, dt, started) {
   _s.iasKts = sim.iasKts;
   _s.warnKts = stallWarningKts(sim.spec, flaps);
   const wx = sim.wx;
-  _s.gustAddKts = wx?.gustKts > wx?.windKts ? SLOW_GUST_SHARE * (wx.gustKts - wx.windKts) : 0;
+  const share = wx?.gustKts > wx?.windKts ? SLOW_GUST_SHARE * (wx.gustKts - wx.windKts) : 0;
+  // The turbulence floor (0199), worked out again only when the weather, flaps or airplane change.
+  if (floorWind !== wx?.windKts || floorGust !== wx?.gustKts || floorFlaps !== flaps || aoaFor !== sim.spec) {
+    floorWind = wx?.windKts; floorGust = wx?.gustKts; floorFlaps = flaps;
+    floorKts = turbulenceFloorKts(sim.spec, flaps, turbulenceSigmaW(wx), sim.iasKts > 20 && sim.tasKts > 0 ? sim.tasKts / sim.iasKts : 1);
+  }
+  _s.gustAddKts = Math.max(share, floorKts - _s.warnKts - SLOW_TARGET_OVER_WARN_KTS);
   _s.hdgDeg = (-Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)) * 180 / Math.PI + 360) % 360;
   _s.aoaDeg = sim.aoaDeg ?? 0;
   if (aoaFor !== sim.spec || aoaFlaps !== flaps) { aoaFor = sim.spec; aoaFlaps = flaps; _s.warnAoaDeg = warnAoaDeg(sim.spec, flaps); }
   _s.stalled = _s.aoaDeg > stallAoaDeg(sim.spec, flaps);
   _s.throttle = sim.throttle ?? 0;
   const ev = slowFlightStep(st, _s);
-  if (Math.round(st.targetKts) !== wordsKts) { wordsKts = Math.round(st.targetKts); slowBandWords(st.targetKts); }
+  const gusty = _s.gustAddKts > 0;
+  if (Math.round(st.targetKts) !== wordsKts || gusty !== wordsGusty) { wordsKts = Math.round(st.targetKts); wordsGusty = gusty; slowBandWords(st.targetKts, gusty); }
   return ev;
 }
 export const slowCoach = (st, kid) => slowPrompt(st, _s, kid);

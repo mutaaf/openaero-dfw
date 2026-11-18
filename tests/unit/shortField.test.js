@@ -2,7 +2,7 @@
 // coach's words and the grade, driven with synthetic traces. The flown lesson is tests/flight/shortField.test.js.
 import { describe, it, expect } from 'vitest';
 import {
-  createShortField, shortFieldStep, shortFieldPrompt, shortFieldResult, pohRollFt, headwindKts, kidKts, kidLiftM, KID_LIFT_M, KID_HEAD_M,
+  createShortField, shortFieldStep, shortFieldPrompt, shortFieldResult, pohRollFt, headwindKts, kidKts, kidLiftM, KID_LIFT_M,
   ROLL_FT, FLARE_FT, STALL_KTS, tailFactor, longM, APPROACH_KTS, GATE_VREF, POH_AIR_FT, LONG_M, FENCE_M, CAP_B, CAP_C, DONE_NOTE, SAY_S, SHORT_FIELD_KEY, SF_TEXT,
 } from '../../src/shortField.js';
 import { gradeLanding, capBounced } from '../../src/landing.js';
@@ -80,11 +80,9 @@ describe('the lesson\'s numbers', () => {
     expect(kidKts(true)).toBe(61);
     expect(kidKts(false)).toBe(0);
   });
-  it('Kid\'s path aims lower than the PAPI\'s, less so into the wind, never higher', () => {
-    expect(kidLiftM(null, 160)).toBe(KID_LIFT_M);
-    expect(kidLiftM({ windDirDeg: 160, windKts: 4 }, 160)).toBeCloseTo(KID_LIFT_M + 4 * KID_HEAD_M, 9);
-    expect(kidLiftM({ windDirDeg: 340, windKts: 5 }, 160)).toBeCloseTo(KID_LIFT_M - 5 * KID_HEAD_M, 9);
-    expect(kidLiftM({ windDirDeg: 160, windKts: 20 }, 160)).toBe(0);
+  it('Kid\'s path aims lower than the PAPI\'s, the same in any wind (0199: the guide flies the path over the ground)', () => {
+    expect(KID_LIFT_M).toBeLessThan(0);
+    expect(kidLiftM()).toBe(KID_LIFT_M);
   });
 });
 

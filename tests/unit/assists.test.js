@@ -3,7 +3,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallAoaDeg, landingFlaps } from '../../src/aero.js';
 import {
   ASSIST_KEY, ASSIST_CONFIG, DEFAULT_ASSIST, assistConfig, createAssistState, shapeControls,
-  autoConfigure, groundSteerRudder, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, groundSteerRudder, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, airGammaDeg, headwindPathRatio, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
 import { dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
@@ -291,6 +291,24 @@ describe('Kid hands-off final guide (kidFinalGuide, 0098)', () => {
       out(at(-25000)), out(at(-3000, 1600, 160)), out(at(-3000, 0, 160), end.hdgT + 60)]) {
       expect(o).toEqual({ guideBankDeg: 0, guideGammaDeg: 0 });
     }
+  });
+  it('flies the path over the ground in a headwind (0199): sin γ_air = GS / TAS · tan γ_ground', () => {
+    expect(airGammaDeg(-3, 1)).toBe(-3);
+    expect(airGammaDeg(-3, 0.6)).toBeCloseTo(Math.asin(0.6 * Math.tan(-3 * Math.PI / 180)) * 180 / Math.PI, 9);
+    expect(airGammaDeg(-3, 0.6)).toBeGreaterThan(-1.85);
+    expect(airGammaDeg(-3, 1.3)).toBeLessThan(-3.85); // a tailwind: steeper through the air
+    const pos = at(-1000, 0, 1000 * 0.0524 + 0.5);
+    const calm = { guideBankDeg: 0, guideGammaDeg: 0 }, head = { guideBankDeg: 0, guideGammaDeg: 0 };
+    kidFinalGuide(end, approachGeometry(end, pos), end.hdgT, end.hdgT, calm);
+    kidFinalGuide(end, approachGeometry(end, pos), end.hdgT, end.hdgT, head, 0, 0.6);
+    expect(head.guideGammaDeg).toBeCloseTo(airGammaDeg(calm.guideGammaDeg, 0.6), 9);
+  });
+  it('headwindPathRatio (0199): a headwind\'s share of the airspeed along the track; a crosswind or calm leaves 1', () => {
+    expect(headwindPathRatio(0, -30, 0, 0)).toBe(1);
+    expect(headwindPathRatio(0, -20, 0, 13)).toBeCloseTo(20 / 33, 9); // north at 20 m/s into 13 m/s from the north
+    expect(headwindPathRatio(0, -36, 0, -5)).toBeCloseTo(36 / 31, 9); // a tailwind: over 1
+    expect(headwindPathRatio(0, -30, 8, 0)).toBeCloseTo(1, 9); // crabbed: the track's air speed is the ground speed
+    expect(headwindPathRatio(0, 0, 5, 5)).toBe(1); // stopped
   });
   it('steers back to the centreline past the threshold too', () => {
     expect(out(at(200, 20)).guideBankDeg).toBeLessThan(0); // right of it: bank left

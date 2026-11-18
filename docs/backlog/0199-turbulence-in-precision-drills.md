@@ -1,7 +1,7 @@
 ---
 id: 0199
 title: Fly slow flight in the METAR's turbulence with a fair band, and keep Kid's short-field final on the path in 25 kt+
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
@@ -29,14 +29,27 @@ Short field: find why Kid's guide sags under the path in a 25 kt+ gusty headwind
 autothrottle's lag, kidLiftM's headwind term) and fix it there.
 
 ## Acceptance criteria
-- [ ] tests/flight/slowFlight.test.js flies its pilot in turbulentAir (harness.js) at 15G25, 25G38 and a steady 25 kt,
+- [x] tests/flight/slowFlight.test.js flies its pilot in turbulentAir (harness.js) at 15G25, 25G38 and a steady 25 kt,
       several seeds: no stall, horn within the drill's rules
-- [ ] main.js no longer zeroes turbulence for slow flight
-- [ ] tests/flight/kidFinal.test.js's turbulent short-field card adds 25G38: on the runway, every seed of 10
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] main.js no longer zeroes turbulence for slow flight
+- [x] tests/flight/kidFinal.test.js's turbulent short-field card adds 25G38: on the runway, every seed of 10
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 `npx vitest run tests/flight/slowFlight.test.js tests/flight/kidFinal.test.js`.
+
+## As built (2026-11-18)
+- Slow flight: the stalls were mostly the test pilot's. It chased each eddy's IAS with the nose (pitch rates to 20°/s)
+  and started at 95 kt over the ground, not through the air. Flown on the drill's own 2 s airspeed filter (AFH ch. 4: hold
+  the attitude in turbulence), the band's middle held 18 of 18 runs (15G25, 25G38, steady 25 kt, 6 seeds each) at α ≤ 10.5°
+  with no warning. The band still gets its margin: slowFlight.js turbulenceFloorKts puts the low edge where the 1 g α plus
+  a 3 σ_w gust (w / V_true) reaches the stall angle. That raises a steady 25 kt day 63 → 64 KIAS; the gust share stays
+  higher on 15G25, 25G38 and 20G40. The hold's words say "Gusty air: fly higher in the band". Kid holds it hands off in
+  25G38 and 25 kt (6 seeds each).
+- Short field: Kid's guide flew its 3° through the air (pitch = γ + α). In a 25 kt+ headwind GS / TAS is ~0.6, so it rode
+  ~35 ft under the PAPI's path and crossed the threshold at 7-10 ft. assists.js now converts the path over the ground
+  (headwindPathRatio, airGammaDeg) before the threshold, and shortField.js drops the 0.5 m/kt headwind lift that made up for
+  it. Kid now crosses at 26-28 ft in calm, a 10 kt headwind, a 5 kt tailwind and 15G25 to 25G38, and touches down 114-231 m in.
 
 ## Out of scope
 The turbulence model itself (0195).
