@@ -35,6 +35,12 @@ body.aoaPrevRad = aoaRad;
 body.angVel.x += (qRate + adotQ) * dt;
 ```
 
+Before it ships (0170's device panel):
+- Guard `dt > 0`: a zero step gives NaN, `MathUtils.clamp` keeps NaN, and `angVel` stays NaN for good (systems.js:106 guards the same way).
+- Reset `aoaPrevRad` and `aoaRateF` on every teleport: loadScenario, the power-off 180 hold, upset.js, deadStick, an FDM switch. Otherwise the clamped ±2 rad/s spike kicks the pitch by up to ~3 rad/s².
+- Initialise both in makeBody / the sim's body, not lazily.
+- Stability is fine: gain × dt ≈ 0.04 at a 1/60 s sub-step.
+
 What it does:
 - Peak α 18.9 / 18.7° (JSBSim 18.9 / 19.1°). The two `KNOWN GAP (0202)` α cards in
   tests/flight/c172.test.js pass.
