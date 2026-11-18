@@ -158,7 +158,7 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
 
 describe('Kid auto-flare profile per airframe (0101)', () => {
   it('the 737 flares to its own, quicker sink profile; without one the default (the Cessna has its own, gentler)', () => {
-    // At 6 m and 75 m/s: the Cessna's profile (1.2 m/s) and the 737's (2.0 m/s) floor the
+    // At 6 m and 75 m/s: the default profile (1.2 m/s; the Cessna's own 0.18 gives 1.08) and the 737's (2.0 m/s) floor the
     // pitch at their own path + α; a quicker profile asks less nose-up at the same height.
     const s = {
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: 0, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,

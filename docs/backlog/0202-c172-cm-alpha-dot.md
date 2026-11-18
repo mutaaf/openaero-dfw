@@ -95,3 +95,7 @@ cards are plain `it`s; the pitch cards stay KNOWN GAP (0203), 23.3 / 24.4° agai
   5 kt +152 to +172, 10 kt +28 to +228 ft. Kid e2e 87-168 ft over 5 runs (main 113-173).
 - Kid's Cessna flare profile 0.2 → 0.18 (`kidFlarePerS`): the default touched 4-9 fpm firmer with Cmα̇ (15 kt from
   070° A 94); 0.18 lands calm at −186 fpm (main −185) and every crosswind case S 95.
+- Left at the window's edges (first-timer panel): 10 kt straight down the runway. Headwind on final (160°/10)
+  lands +28 ft, flaps up at 63 KIAS (main +170); tailwind (340°/10) +228 ft, past the ACS's 200 though inside
+  the card's 250 (main +68). 15 kt (logged): 160° −185, 070° −195, 340° +471 (main −90 / −63 / +311). The coach's
+  legWind under-corrects the turn for the wind on final; a fix belongs in a new ticket, not in this one.

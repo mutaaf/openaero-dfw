@@ -50,9 +50,8 @@ const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 export const FINAL_M = 600;
 const CLOSE_DEG_PER_M = 0.2;
 export const TURN_FT = 160;
-// Kid's guide turns this much later (lower): its auto-flare floats further than the test pilot's
-// round-out (tests/e2e/power180.spec.js; 0189: the coach's turn put Kid ~266 ft past, 75 ft lower 134 ft).
-// Since 0202 (Cmα̇, TURN_FT 160) it turns at 95 ft, as before: 87-168 ft past over 5 e2e runs (−75: 31-109).
+// Kid's guide turns this much later (lower), fitted in tests/e2e/power180.spec.js: since 0202 (Cmα̇, TURN_FT
+// 160) at 95 ft, as before, 87-168 ft past over 5 runs (main 113-173; TURN_FT − 75 gave 31-109).
 export const KID_TURN_FT = TURN_FT - 65;
 // Lined up: when a glide with the next notch out still reaches the aim with this much to spare,
 // the coach asks for it (flaps 20, then 30); Kid's guide sets them.
