@@ -38,6 +38,33 @@ export function metarWetRunway(raw) {
   return false;
 }
 
+// What is falling at the field (ticket 0196), for the precipitation layer (precip.js): the same groups as
+// metarWetRunway (before RMK/TEMPO, no vicinity), intensity from the prefix (- light 0, none moderate 1,
+// + heavy 2; the heaviest group of the kind drawn), snow over rain over drizzle in a mixed report, and TS
+// (with or without precipitation) for the storm sky. Blowing or drifting snow (BL/DR) is lifted off the
+// ground, not falling: skipped. Hail and ice pellets (GR, GS, PL, UP) draw as rain, ice crystals (IC) as
+// snow. Null when nothing falls and there is no thunderstorm.
+const PRECIP_GROUP = /^([+-]?)(MI|PR|BC|DR|BL|SH|TS|FZ)?((?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)*)$/;
+const RANK = { drizzle: 1, rain: 2, snow: 3 };
+export function metarPrecip(raw) {
+  const body = String(raw ?? '').split(/ (?:RMK|TEMPO|BECMG|NOSIG)\b/)[0].split(/\s+/);
+  const t = body.findIndex((g) => /^\d{6}Z$/.test(g));
+  const level = {};
+  let ts = false;
+  for (let i = t + 1; t >= 0 && i < body.length; i++) {
+    const m = PRECIP_GROUP.exec(body[i]);
+    if (!m) continue;
+    ts ||= m[2] === 'TS';
+    if (m[2] === 'BL' || m[2] === 'DR') continue;
+    const ph = m[3].match(/../g) || [];
+    const k = ph.some((p) => p === 'SN' || p === 'SG' || p === 'IC') ? 'snow'
+      : ph.some((p) => /RA|PL|GR|GS|UP/.test(p)) ? 'rain' : ph.includes('DZ') ? 'drizzle' : null;
+    if (k) level[k] = Math.max(level[k] ?? 0, m[1] === '-' ? 0 : m[1] === '+' ? 2 : 1);
+  }
+  const kind = Object.keys(level).sort((x, y) => RANK[y] - RANK[x])[0] ?? null;
+  return kind || ts ? { kind, intensity: kind ? level[kind] : 1, ts } : null;
+}
+
 export function parseMetar(m) {
   const variable = m.wdir === 'VRB' || typeof m.wdir !== 'number';
   const windKts = Number(m.wspd) || 0;
@@ -60,6 +87,7 @@ export function parseMetar(m) {
     tempC: m.temp,
     fltCat: m.fltCat || null,
     wetRunway: metarWetRunway(m.rawOb),
+    precip: metarPrecip(m.rawOb),
     live: true,
   };
 }
