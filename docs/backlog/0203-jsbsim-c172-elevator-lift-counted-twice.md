@@ -1,6 +1,6 @@
 ---
 id: 0203
-title: Our JSBSim C172 counts the elevator's lift twice (aero.js's POH-fitted CL table plus Roskam's CLδe)
+title: Our JSBSim C172 may count the elevator's lift twice (aero.js's POH-fitted CL table plus Roskam's CLδe)
 status: proposed
 priority: P2
 size: M
@@ -30,6 +30,7 @@ Then re-run every JSBSim card: stall speeds, takeoff distances, the Va pull. Its
 download double-counted is likely already high.
 
 ## Acceptance criteria
+- [ ] The PR says which of the two options it chose, and why (with the stall-speed numbers)
 - [ ] JSBSim's 1 g stall speeds (flaps 0/10/30) within the cards' POH bands, flown with the elevator it takes
 - [ ] The `KNOWN GAP (0202, 0203)` pitch cards in tests/flight/c172.test.js pass once 0202 has shipped
 - [ ] No JSBSim card regresses (`npx vitest run tests/flight`)

@@ -61,8 +61,8 @@ What it breaks (the reason it did not ship in 0170):
 
 ## Acceptance criteria
 - [ ] Both `KNOWN GAP (0202)` α cards in tests/flight/c172.test.js pass (within 0.75° of JSBSim) and become plain cards
-- [ ] The power-off 180 cards green, with the coach re-centred on a round-out that does not hop, and tests/e2e/power180.spec.js (Kid) re-run
-- [ ] Kid's 15 kt crosswind final still S, or the card's premise re-measured
+- [ ] The power-off 180 cards green, with the coach re-centred on a round-out that does not hop (the main wheels' radio altitude never rises again after first dropping below 1 ft), and tests/e2e/power180.spec.js (Kid) re-run
+- [ ] tests/flight/kidFinal.test.js: Kid's 15 kt / 070° Cessna final still grades the same as calm (S 95)
 - [ ] Every other card in `npm test` unchanged or better; tests/flight/c172.test.js 0144 tail-strike cards green at both sub-steps
 
 ## Test plan
