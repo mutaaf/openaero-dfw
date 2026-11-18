@@ -129,13 +129,13 @@ describe('wind readout (0075)', () => {
 
   // Ticket 0196: a thunderstorm at the field on the LIVE report heads the box T-STORM (over wet, IFR and bumpy:
   // the storm is the news) with the amber edge; scenario weather never says it.
-  it('a live TS report heads the box T-STORM with an amber edge; scenario and dry weather do not', () => {
-    const o = {}, wx = { windDirDeg: 200, windKts: 14, gustKts: 24, live: true, wetRunway: true, fltCat: 'IFR', precip: { kind: 'rain', intensity: 2, ts: true } };
-    expect(windReadout(wx, null, o).source).toBe('T-STORM');
+  // main.js passes storm only from the flown field's own live report (sim.precip; scenario and a lent DFW report never).
+  it('a live TS report heads the box T-STORM with an amber edge; otherwise wet / IFR keep theirs', () => {
+    const o = {}, wx = { windDirDeg: 200, windKts: 14, gustKts: 24, live: true, wetRunway: true, fltCat: 'IFR' };
+    expect(windReadout(wx, null, o, false, true).source).toBe('T-STORM');
     expect(o.storm).toBe(true);
-    expect(windReadout({ ...wx, live: false }, null, o).source).not.toBe('T-STORM');
-    expect(o.storm).toBe(false);
-    expect(windReadout({ ...wx, precip: { kind: 'rain', intensity: 1, ts: false } }, null, o).source).toBe('WET RWY');
+    expect(windReadout(wx, null, o, true, true).source).toBe('T-STORM');
+    expect(windReadout(wx, null, o).source).toBe('WET RWY');
     expect(o.storm).toBe(false);
   });
 

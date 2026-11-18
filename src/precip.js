@@ -133,10 +133,12 @@ export function createPrecip(scene, reducedMotion = false) {
     state.flash = 0;
   }
 
-  // Each frame: dt (s; 0 while paused: the drops hang), the camera and the wind (world m/s). Streaks
+  // Each frame: dt (s), the camera, the wind (world m/s) and idle (paused, a modal, graphics lost: the
+  // drops hang and no lightning flashes behind a menu; a flash under way ends at once). Streaks
   // are drawn relative to the camera's own motion (its position change over dt), so the tower view and
   // the replay see rain fall, not streak along the airplane's path. A jump (a new spawn) is not motion.
-  function update(dt, camera, wind) {
+  function update(dt, camera, wind, idle = false) {
+    if (idle) { dt = 0; if (flashT >= 0) endFlash(); }
     const c = camera.position;
     if (dt > 0) {
       if (haveCam) _camVel.subVectors(c, _lastCam).divideScalar(dt);
@@ -163,7 +165,7 @@ export function createPrecip(scene, reducedMotion = false) {
         if (whiten) c.setRGB(Math.max(c.r, 0.4), Math.max(c.g, 0.4), Math.max(c.b, 0.42));
       }
     }
-    if (!state.ts || reducedMotion || !scene.fog) return;
+    if (idle || !state.ts || reducedMotion || !scene.fog) return;
     if (flashT < 0) {
       toFlash -= dt;
       if (toFlash > 0) return;

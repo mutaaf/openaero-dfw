@@ -1675,7 +1675,8 @@ function refreshWeather() {
   sim.isaDevC = isaDeviationC(sim.wx.tempC, REF_ELEV_M);
   sim.altimInHg = sim.wx.altimInHg || 29.92;
   sim.wetRunway = !!sim.wx.wetRunway; // the METAR's rain: wet braking (systems.js, 0108)
-  const precip = sim.wx.live ? sim.wx.precip : null; // rain, snow, TS at the field (0196): live reports only
+  // Rain, snow, TS at the field (0196): live reports only, and the flown field's own (not DFW's lent to it).
+  const precip = sim.precip = sim.wx.live && sim.wx.icao === (sim.activeEnd?.airport ?? 'KDFW') ? sim.wx.precip : null;
   scene.fog.density = fogDensityForVisibility(precipFogSm(sim.wx.visibilitySm, precip));
   syncPrecip(precip);
   // METAR cloud bases are above the reporting field.
@@ -1772,7 +1773,7 @@ function syncWeatherUI(dt) {
   byId('txtFlow').textContent = `${flow} (RWY ${flow === 'NORTH' ? '35/36' : '17/18'})`;
   // HUD wind box (0075): components against the active runway only low down, near it.
   const low = sim.activeEnd && nearRunwayForWind(sim.approach, sim.activeEnd.lengthM, sim.aglFt);
-  windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind, bumpy);
+  windReadout(wx, low ? runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT) : null, sim.hudWind, bumpy, sim.precip?.ts);
   const rw = byId('txtRwyWind');
   if (sim.activeEnd && wx.windKts) {
     const c = runwayWindComponents(wx.windDirDeg, wx.windKts, sim.activeEnd.hdgT);
@@ -3640,7 +3641,7 @@ function renderLoop(time) {
   syncWeatherUI(dt);
   if (replaying) replaying.step(dt); else updateCamera();
   updateSkyAndLights(time / 1000);
-  precipFx?.update(sim.paused ? 0 : dt, camera, sim.windVec);
+  precipFx?.update(dt, camera, sim.windVec, idle);
   if (!gfx.lost) terrainLod.update(dt, camera);
   photoreal.update(dt);
   updateDebugOverlay(dt);

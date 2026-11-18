@@ -205,3 +205,23 @@ describe('createPrecip: a still camera (the tower view, a paused sim) sees rain 
     expect(Number.isFinite(s.x)).toBe(true);
   });
 });
+
+describe('createPrecip: no lightning behind a menu', () => {
+  it('idle (paused, a modal, graphics lost) ends a flash at once and counts no new one', () => {
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x445566, 0.0001);
+    const fx = createPrecip(scene);
+    fx.set({ kind: 'rain', intensity: 2, ts: true }, 0, 3000);
+    const camera = { position: new THREE.Vector3() }, wind = new THREE.Vector3();
+    let t = 0;
+    while (fx.state.flash === 0 && t < 30) { fx.update(1 / 60, camera, wind); t += 1 / 60; }
+    expect(fx.state.flash).toBeGreaterThan(0); // mid-flash
+    fx.update(1 / 60, camera, wind, true);
+    expect(fx.state.flash).toBe(0);
+    expect(scene.fog.color.getHex()).toBe(0x445566);
+    const n = fx.state.flashes;
+    for (let i = 0; i < 60 * 60; i++) fx.update(1 / 60, camera, wind, true);
+    expect(fx.state.flashes).toBe(n);
+    expect(scene.fog.color.getHex()).toBe(0x445566);
+  });
+});

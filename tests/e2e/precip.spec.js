@@ -63,3 +63,23 @@ test('reduced motion: the storm draws no streaks and flashes no lightning', asyn
     .toMatchObject({ kind: 'rain', intensity: 2, ts: true, count: 0, visible: false, flashes: 0 });
   expect(errors).toEqual([]);
 });
+
+test("DFW's storm is DFW's: flying Addison with no Addison report draws no rain and says no T-STORM", async ({ page }) => {
+  const errors = collectErrors(page);
+  const chunks = [];
+  page.on('request', (r) => { if (isPrecipChunk(r.url())) chunks.push(r.url()); });
+  await stubTiles(page);
+  await page.unroute('**/openaero/api/metar*');
+  await stubMetar(page, [STORM]);
+  await page.goto(`${BASE}?airport=KADS`);
+  await page.locator('#btnStartFlight').click();
+  await expect(page.locator('#onboardingModal')).toBeHidden();
+  await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).wxLive, { timeout: 10_000 }).toBe(true);
+  await page.waitForTimeout(2000);
+  const d = await page.evaluate(() => window.openaeroDebug());
+  expect(d.activeRunway).toMatch(/^KADS/);
+  expect(d.precip).toBeNull();
+  expect(chunks).toEqual([]);
+  expect(d.hudWind.source).not.toBe('T-STORM');
+  expect(errors).toEqual([]);
+});
