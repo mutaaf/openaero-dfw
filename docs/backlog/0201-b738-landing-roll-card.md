@@ -40,6 +40,7 @@ landing distances. So the shipped cards are what the page does show:
 - autobrake (FCOM decelerations, aircraft.js): autobrake 2 stops well past the ACAP distance
   (model 7,437 ft vs 3,465), MAX between it and the pedals (3,405 vs 3,243).
 Flaps 40 and any autobrake distance target need a cited chart (Boeing QRH/FCOM PI landing
-distance tables are not public); left for the Scout. The model stops 6-7% short of every dry
+distance tables are not public): filed as 0204 (proposed). The new cards also check the ground
+spoilers are out within 2 s and still out at 80 kt, and that each autobrake setting engaged. The model stops 6-8% short of every dry
 point (sea level and 2,000 ft alike): inside ±12%, consistent, worth a look if a source for the
 737's rolling/braking μ turns up.

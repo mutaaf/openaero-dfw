@@ -143,7 +143,7 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
     b.vel.set(0, -tas * Math.sin(3 * DEG_TO_RAD), -tas * Math.cos(3 * DEG_TO_RAD));
     const pitch0 = trimAoaDeg(spec, v, FLAPS_30) - 3;
     b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
-    let touchdown = null, spoilersAt80 = null, spoilers2s = null;
+    let touchdown = null, spoilersAt80 = null, spoilers2s = null, autobrakeEngaged = false;
     fly(b, spec, 90, (x) => {
       const { pitchDeg, bankRightDeg } = attitude(x);
       const ft = (x.pos.y - b738.gearHeight) * M_TO_FT;
@@ -153,12 +153,13 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
       x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
       x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
     }, (x) => {
-      if (!touchdown && x.onGround) touchdown = { sinkFpm: x.lastAirVsi, airFt: x.distM * M_TO_FT, t: x.t };
+      if (!touchdown && x.onGround) touchdown = { sinkFpm: x.lastAirVsi, airFt: x.distM * M_TO_FT, t: x.t, gsMps: -x.vel.z };
+      if (touchdown && x.autobrakeActive) autobrakeEngaged = true;
       if (touchdown && spoilers2s === null && x.t - touchdown.t >= 2) spoilers2s = x.spoilers ?? 0;
       if (touchdown && spoilersAt80 === null && -x.vel.z <= 80 * KTS_TO_MPS) spoilersAt80 = x.spoilers ?? 0;
       return touchdown && -x.vel.z < 0.3;
     });
-    return { ft: b.distM * M_TO_FT, touchdown, spoilersAt80, spoilers2s };
+    return { ft: b.distM * M_TO_FT, touchdown, spoilersAt80, spoilers2s, autobrakeEngaged };
   }
 
   for (const { label, massKg, chartFt } of [
@@ -200,17 +201,21 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   ]) {
     const target = Math.round(0.6 * chartFt / 10) * 10;
     it(`lands from 50 ft to a stop in about ${target.toLocaleString('en-US')} ft at ${label}, dry (Boeing ACAP §3.4.3 p. 3-51 × 0.6, ±12%)`, () => {
-      const { ft, touchdown, spoilers2s } = landFromFifty(massKg, { elevFt });
+      const { ft, touchdown, spoilers2s, spoilersAt80 } = landFromFifty(massKg, { elevFt });
       console.log(`[b738] 50 ft to stop, ${label}: ${ft.toFixed(0)} ft (chart × 0.6 ${(0.6 * chartFt).toFixed(0)}), touchdown ${touchdown.sinkFpm.toFixed(0)} fpm after ${touchdown.airFt.toFixed(0)} ft`);
       expect(touchdown.sinkFpm).toBeGreaterThan(-600);
       expect(touchdown.airFt).toBeGreaterThan(700);
       expect(spoilers2s).toBe(1);
+      expect(spoilersAt80).toBe(1);
       within(ft, 0.6 * chartFt, 0.12);
     });
   }
 
   // The chart's altitude slope at 65 t: 2,000 ft costs 275 ft of field length (5,690 → 5,965),
   // 165 ft of airplane. Two ±12% points alone would let the model get it backwards (±50%).
+  // The model adds ~116 ft, all on the ground: this test pilot's height-triggered flare lands a
+  // few feet sooner up high (1,060 → 1,051 ft in the air, sink 442 → 482 fpm), where a certified
+  // flare at the 3% faster true speed would float a little further.
   it('2,000 ft of field elevation adds ~165 ft from 50 ft to a stop, 65 t, as ACAP §3.4.3 p. 3-51 slopes (±50%)', () => {
     const d = landFromFifty(b738.massKg, { elevFt: 2000 }).ft - landFromFifty(b738.massKg).ft;
     console.log(`[b738] 2,000 ft vs sea level, 50 ft to stop: +${d.toFixed(0)} ft (chart × 0.6 +${(0.6 * (ACAP_2000_65T - ACAP_SL_65T)).toFixed(0)})`);
@@ -223,8 +228,16 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // about what the pedals take (within 3%: MAX's 14 ft/s² is near the tyres' limit). No public Boeing chart gives the autobrake distances themselves.
   it('at DFW, 65 t, dry: autobrake 2 stops well past the ACAP §3.4.3 distance, MAX shorter than 2 and about as short as the pedals', () => {
     const manual = landFromFifty(b738.massKg, { elevFt: DFW_FT }).ft;
-    const ab2 = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 2, manual: false }).ft;
-    const abMax = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 4, manual: false }).ft;
+    const r2 = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 2, manual: false });
+    const rMax = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 4, manual: false });
+    const ab2 = r2.ft, abMax = rMax.ft;
+    expect(r2.autobrakeEngaged).toBe(true);
+    expect(rMax.autobrakeEngaged).toBe(true);
+    // Autobrake 2 brakes to its 5 ft/s², no harder and no softer: the air distance plus V²/2a
+    // from the touchdown groundspeed, within 15% (the spin-up and the last knots add a little).
+    const kinFt = r2.touchdown.airFt + (r2.touchdown.gsMps * M_TO_FT) ** 2 / (2 * b738.systems.autobrake.decelFtS2[2]);
+    console.log(`[b738] autobrake 2 kinematic ${kinFt.toFixed(0)} ft`);
+    within(ab2, kinFt, 0.15);
     console.log(`[b738] DFW 65 t, 50 ft to stop: manual ${manual.toFixed(0)}, autobrake MAX ${abMax.toFixed(0)}, autobrake 2 ${ab2.toFixed(0)} ft`);
     expect(ab2).toBeGreaterThan(1.3 * 0.6 * acapAt(DFW_FT));
     expect(abMax).toBeLessThan(ab2);
