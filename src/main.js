@@ -1942,7 +1942,7 @@ function integrateSubStep(dt) {
     // Fly a flight-path angle: pitch = path + current angle of attack (capped 9.5° nose-up: the 737's tail
     // strikes at ~11°). The glideslope mode flies the path over the ground instead (autopilot.js pitchForPath,
     // tests/flight/apGlideslope.test.js); the flare and altitude hold keep path + α until a card flies them.
-    const pathDeg = Math.atan2(sim.vel.y, Math.max(1, Math.hypot(sim.vel.x, sim.vel.z))) * RAD_TO_DEG;
+    const pathDeg = Math.atan2(sim.vel.y, Math.max(20, Math.hypot(sim.vel.x, sim.vel.z))) * RAD_TO_DEG; // the flare's floor
     const holdGamma = (gammaDeg, overGround = false) => {
       const cmd = overGround ? pitchForPath(gammaDeg, pitchDeg, pathDeg) : Math.min(9.5, gammaDeg + sim.aoaDeg);
       sim.elevInput = elevatorForPitch(cmd, pitchDeg, pitchRateUp);

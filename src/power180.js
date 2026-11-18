@@ -197,6 +197,7 @@ export function p180Step(st, sim, live = true) {
     const h = st.hold ??= { p: [SPAWN.pos[0], sim.pos.y + (SPAWN.aglFt - sim.aglFt) / M_TO_FT, SPAWN.pos[1]], v: [sim.vel.x, sim.vel.y, sim.vel.z], q: [sim.quat.x, sim.quat.y, sim.quat.z, sim.quat.w] };
     sim.pos.set(...h.p); sim.vel.set(...h.v); sim.quat.set(...h.q); sim.angVel.set(0, 0, 0);
     sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
+    sim.gateVsFpm = null; // nor the old sink rate at the stabilized gate (aero.js gateVsStep)
     st.t0 = sim.simTime;
     return;
   }

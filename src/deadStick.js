@@ -232,5 +232,6 @@ export function debugFinal(sim, distNm, aglFt, ground) {
   sim.quat.set(0, Math.sin(-r / 2), 0, Math.cos(-r / 2));
   sim.angVel.set(0, 0, 0);
   sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
+  sim.gateVsFpm = null; // nor the old sink rate at the stabilized gate (aero.js gateVsStep)
   sim.flapsIndex = 0;
 }

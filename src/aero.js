@@ -254,8 +254,8 @@ export function stabilizedGate(g) {
   return { gateHeight: g.vmc ? GATE_VMC_FT : GATE_IMC_FT, stable: failing.length === 0, failing };
 }
 
-// The vertical speed the gate's SINK reads: a first-order lag of the instantaneous rate (τ 2 s), as a
-// cockpit VSI lags. A gust's spike (turbulence, 0195) or the autopilot's pitch ripple is not a sustained
+// The vertical speed the gate's SINK reads: a first-order lag of the instantaneous rate (τ 2 s; quicker than a
+// diaphragm VSI's, near an IVSI's; the HUD's VSI still shows the instantaneous rate). A gust's spike (turbulence, 0195) or the autopilot's pitch ripple is not a sustained
 // sink rate; a sustained one shows within a few seconds. Exact in dt; prev null seeds with vsFpm (a spawn).
 export const GATE_VS_TAU_S = 2;
 export function gateVsStep(prev, vsFpm, dt) {

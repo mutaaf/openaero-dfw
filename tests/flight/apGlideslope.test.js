@@ -3,9 +3,11 @@
 // (glidepathGammaDeg, the autothrottle on trimThrottle's feed-forward), in the reported air of two METARs: the
 // stabilized e2e's IFR day (18005KT, a 5 kt tailwind on a north final) and a gusty headwind day (36015G25KT).
 // The gate (aero.js stabilizedGate, FSF ALAR 7.1) wants within 1 dot of the glideslope and no more than 1,000 fpm
-// down at 1,000 ft in IMC, read on aero.js gateVsStep (a VSI's lag). A command built on path + α chased each gust's
-// α (w / V) and on e2e's IFR day read 1,004-1,064 fpm at the gate in 5 of 16 runs; the path flown over the ground
-// does not. Six turbulence seeds a day, from 1,300 ft (the spawn's height) down through the gate to 500 ft.
+// down at 1,000 ft in IMC, read on aero.js gateVsStep (smoothed over ~2 s). Which half of the fix does what: on the
+// e2e's IFR day both laws read 695-950 fpm here once smoothed, so there the lag is what closes stabilized.spec's
+// failure (its instantaneous reading crossed 1,000 in 5 of 16 runs). The law is pinned on the gusty day: path + α
+// chased each gust's α (w / V) and failed the gate (-1,234 fpm, seed 3); the path flown over the ground does not.
+// Six turbulence seeds a day, from 1,300 ft (the spawn's height) down through the gate to 500 ft.
 import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { KTS_TO_MPS, M_TO_FT, FT_TO_M, RAD_TO_DEG } from '../../src/constants.js';
