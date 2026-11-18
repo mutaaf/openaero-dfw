@@ -37,7 +37,8 @@ export const DOWNWIND_NM = 0.5;
 // flap drag (CHANGELOG 2026-11-15: 9.2 / 8.8 / 7.5 / 6.6; deadStick.js's older table reads 9 / 8.3 /
 // 7.6 / 7). The flaps-up figure is the POH's 9:1 (Fig. 3-1) within 2%.
 export const RATIO_BY_FLAPS = [9.2, 8.8, 7.5, 6.6];
-// The glide is aimed this far before the spot: the round-out and hold-off float the rest.
+// The glide is aimed this far before the spot: the round-out and hold-off float the rest. With TURN_FT,
+// fitted headless on flightModel.js (0202: 95 → 101 m, 170 → 160 ft, on a 20 ft round-out that doesn't hop).
 export const FLOAT_M = 101;
 const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 
@@ -50,7 +51,8 @@ export const FINAL_M = 600;
 const CLOSE_DEG_PER_M = 0.2;
 export const TURN_FT = 160;
 // Kid's guide turns this much later (lower): its auto-flare floats further than the test pilot's
-// round-out (tests/e2e/power180.spec.js: the coach's turn put Kid ~266 ft past, this one 134 ft).
+// round-out (tests/e2e/power180.spec.js; 0189: the coach's turn put Kid ~266 ft past, 75 ft lower 134 ft).
+// Since 0202 (Cmα̇, TURN_FT 160) it turns at 95 ft, as before: 87-168 ft past over 5 e2e runs (−75: 31-109).
 export const KID_TURN_FT = TURN_FT - 65;
 // Lined up: when a glide with the next notch out still reaches the aim with this much to spare,
 // the coach asks for it (flaps 20, then 30); Kid's guide sets them.

@@ -41,7 +41,7 @@ test('power-off 180, Kid hands off from the spawn: engine out, round to 16, grad
   await expect(page.locator('#txtResultRunway')).toHaveText('KADS 16');
   await expect(page.locator('#resultsFactors li').first()).toContainText('The spot');
   await expect(page.locator('#resultsFactors li').first()).toContainText(/[\d,]+ ft (past|short)/);
-  // Kid's guide lands in the ACS window (its own turn, power180.js KID_TURN_FT): ~135 ft past, an S or A.
+  // Kid's guide lands in the ACS window (its own turn, power180.js KID_TURN_FT): 87-168 ft past over 5 runs, an S or A.
   const pastFt = (await snap(page)).lastLanding.pastThresholdM * 3.28084 - 1000.66;
   console.log(`[power180 e2e] Kid hands off: ${pastFt.toFixed(0)} ft past the spot`);
   expect(pastFt).toBeGreaterThanOrEqual(0);
