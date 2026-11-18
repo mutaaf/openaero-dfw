@@ -1,7 +1,7 @@
 ---
 id: 0199
 title: Fly slow flight in the METAR's turbulence with a fair band, and keep Kid's short-field final on the path in 25 kt+
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
