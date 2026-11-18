@@ -1,12 +1,12 @@
 ---
 id: 0197
 title: DFW's Class B airspace drawn on the moving map, from FAA boundary data baked at build time
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-17
-pr:
+pr: 291
 ---
 
 ## Why
