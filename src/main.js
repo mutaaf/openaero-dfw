@@ -1604,7 +1604,7 @@ let metarLib = null; // metar.js, with the first report
 let precipFx = null; // precip.js (0196), fetched only when a live report has rain, snow or TS at the field
 function syncPrecip(p) {
   if (p && !precipFx) import('./precip.js').then((l) => { precipFx ??= l.createPrecip(scene, reducedMotion); refreshWeather(); }).catch(console.warn);
-  precipFx?.set(p, sim.activeEnd?.thrY ?? 0, sim.wx.ceilingFt);
+  precipFx?.set(p, sim.activeEnd?.thrY ?? 0, sim.wx.ceilingFt ?? sim.wx.cloudLayers?.[0]?.baseFt);
 }
 async function fetchWeather() {
   try {
@@ -3640,7 +3640,7 @@ function renderLoop(time) {
   syncWeatherUI(dt);
   if (replaying) replaying.step(dt); else updateCamera();
   updateSkyAndLights(time / 1000);
-  precipFx?.update(dt, camera, sim.vel, sim.windVec);
+  precipFx?.update(sim.paused ? 0 : dt, camera, sim.windVec);
   if (!gfx.lost) terrainLod.update(dt, camera);
   photoreal.update(dt);
   updateDebugOverlay(dt);

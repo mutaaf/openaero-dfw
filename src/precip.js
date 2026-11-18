@@ -22,13 +22,17 @@ const BOX_M = 40;
 const NEAR_M = 5;
 // Streaks by intensity (- light, none moderate, + heavy). Snow's flakes are slower and dimmer, so
 // more of them read as the same "heavy".
-const COUNTS = { rain: [1200, 2500, 4500], snow: [1600, 3200, 5000] };
-// Fall speeds: a 1-2 mm raindrop ~6-9 m/s (Gunn & Kinzer 1949); snowflakes ~1 m/s.
-const FALL_MPS = { rain: [6, 7.5, 9], snow: [1, 1.2, 1.5] };
+const COUNTS = { drizzle: [1500, 3000, 4500], rain: [1200, 2500, 4500], snow: [1600, 3200, 5000] };
+// Fall speeds (terminal velocity, Gunn & Kinzer 1949): drizzle (< 0.5 mm) ~1-2 m/s; rain 1.2-4 mm ~5-9 m/s,
+// bigger drops in heavier rain; snowflakes ~1 m/s. Hail falls faster (10-40 m/s): drawn as heavy rain.
+const FALL_MPS = { drizzle: [1.2, 1.6, 2], rain: [5, 7, 9], snow: [1, 1.2, 1.5] };
 // The "exposure" that turns a drop's relative velocity into a streak, and the longest streak.
-const STREAK_S = { rain: 0.02, snow: 0.006 };
+const STREAK_S = { drizzle: 0.012, rain: 0.02, snow: 0.006 };
+// With no reported cloud base, rain still comes out of a cloud: nothing falls above this.
+const NO_BASE_FT = 10000;
 const MAX_STREAK_M = 1.2;
 export const FLASH_S = 0.7;
+export { MAX_STREAK_M };
 
 // Streaks drawn for a report's precipitation (pure): none for a dry thunderstorm or reduced motion.
 export function precipCount(p, reducedMotion = false) {
@@ -94,14 +98,15 @@ export function createPrecip(scene, reducedMotion = false) {
   scene.add(lines);
 
   const state = { kind: null, intensity: 0, ts: false, count: 0, visible: false, flashes: 0, flash: 0 };
-  let fall = 6, streakS = 0.02, whiten = 0, fieldY = 0, ceilingM = Infinity, toFlash = nextFlashGapS(Math.random()), flashT = -1;
-  const _rel = new THREE.Vector3();
+  let fall = 6, streakS = 0.02, whiten = 0, fieldY = 0, ceilingM = NO_BASE_FT * FT, toFlash = nextFlashGapS(Math.random()), flashT = -1;
+  const _rel = new THREE.Vector3(), _camVel = new THREE.Vector3(), _lastCam = new THREE.Vector3();
+  let haveCam = false;
   const _base = new THREE.Color(), _wrote = new THREE.Color(), _white = new THREE.Color(1, 1, 1);
   let haveBase = false;
   const wrap = (v) => ((v % BOX_M) + BOX_M) % BOX_M;
 
-  // The flown field's report (null: nothing falls), the field's elevation (scene y, m) and its
-  // ceiling (ft above the field, or null).
+  // The flown field's report (null: nothing falls), the field's elevation (scene y, m) and the base
+  // rain falls from (ft above the field: the ceiling, else the lowest layer; null: NO_BASE_FT).
   function set(p, fieldYM = 0, ceilingFt = null) {
     state.kind = p?.kind ?? null;
     state.intensity = p?.intensity ?? 0;
@@ -109,7 +114,7 @@ export function createPrecip(scene, reducedMotion = false) {
     state.count = precipCount(p, reducedMotion);
     geo.setDrawRange(0, state.count * 2);
     fieldY = fieldYM;
-    ceilingM = typeof ceilingFt === 'number' ? ceilingFt * FT : Infinity;
+    ceilingM = (typeof ceilingFt === 'number' ? ceilingFt : NO_BASE_FT) * FT;
     if (state.kind) {
       const i = Math.max(0, Math.min(2, state.intensity | 0));
       fall = FALL_MPS[state.kind][i];
@@ -127,9 +132,18 @@ export function createPrecip(scene, reducedMotion = false) {
     state.flash = 0;
   }
 
-  // Each frame: dt (s, wall clock), the camera, the aircraft's velocity and the wind (world m/s).
-  function update(dt, camera, vel, wind) {
+  // Each frame: dt (s; 0 while paused: the drops hang), the camera and the wind (world m/s). Streaks
+  // are drawn relative to the camera's own motion (its position change over dt), so the tower view and
+  // the replay see rain fall, not streak along the airplane's path. A jump (a new spawn) is not motion.
+  function update(dt, camera, wind) {
     const c = camera.position;
+    if (dt > 0) {
+      if (haveCam) _camVel.subVectors(c, _lastCam).divideScalar(dt);
+      if (!haveCam || _camVel.lengthSq() > 400 * 400) _camVel.set(0, 0, 0);
+      _lastCam.copy(c);
+      haveCam = true;
+    }
+    const vel = _camVel;
     state.visible = state.count > 0 && c.y - fieldY < ceilingM;
     lines.visible = state.visible;
     if (state.visible) {

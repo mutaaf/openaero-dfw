@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { metarPrecip, parseMetar } from '../../src/metar.js';
-import { precipCount, flashLevel, nextFlashGapS, FLASH_S, MAX_COUNT, createPrecip } from '../../src/precip.js';
+import { precipCount, flashLevel, nextFlashGapS, FLASH_S, MAX_COUNT, MAX_STREAK_M, createPrecip } from '../../src/precip.js';
 import { precipFogSm } from '../../src/weather.js';
 
 // Ticket 0196: rain, snow and thunderstorms falling at the field (the raw METAR's present-weather
@@ -14,7 +14,9 @@ describe('metarPrecip: what is falling at the field', () => {
     expect(metarPrecip(raw('-RA'))).toEqual({ kind: 'rain', intensity: 0, ts: false });
     expect(metarPrecip(raw('RA'))).toEqual({ kind: 'rain', intensity: 1, ts: false });
     expect(metarPrecip(raw('+RA'))).toEqual({ kind: 'rain', intensity: 2, ts: false });
-    expect(metarPrecip(raw('-DZ BR'))).toEqual({ kind: 'rain', intensity: 0, ts: false });
+    expect(metarPrecip(raw('-DZ BR'))).toEqual({ kind: 'drizzle', intensity: 0, ts: false });
+    expect(metarPrecip(raw('FZDZ'))).toEqual({ kind: 'drizzle', intensity: 1, ts: false });
+    expect(metarPrecip(raw('-DZ RA'))).toEqual({ kind: 'rain', intensity: 1, ts: false });
     expect(metarPrecip(raw('SHRA'))).toEqual({ kind: 'rain', intensity: 1, ts: false });
   });
   it('thunderstorms: TS with rain, and TS alone (no particles, but a storm sky)', () => {
@@ -27,12 +29,19 @@ describe('metarPrecip: what is falling at the field', () => {
     expect(metarPrecip(raw('-RASN'))).toEqual({ kind: 'snow', intensity: 0, ts: false });
     expect(metarPrecip(raw('-RA +SN'))).toEqual({ kind: 'snow', intensity: 2, ts: false });
     expect(metarPrecip(raw('+TSRA -RA'))).toMatchObject({ intensity: 2, ts: true });
+    // The snow's own intensity, not the rain's.
+    expect(metarPrecip(raw('+RA -SN'))).toEqual({ kind: 'snow', intensity: 0, ts: false });
   });
   it('nothing falling: obscurations only, vicinity groups, remarks and trends are not "at the field"', () => {
     expect(metarPrecip(raw('BR'))).toBeNull();
     expect(metarPrecip(raw('FG'))).toBeNull();
     expect(metarPrecip(raw('VCTS'))).toBeNull();
     expect(metarPrecip(raw('VCSH'))).toBeNull();
+    // Blowing / drifting snow is lifted off the ground, not falling.
+    expect(metarPrecip(raw('BLSN'))).toBeNull();
+    expect(metarPrecip(raw('DRSN'))).toBeNull();
+    expect(metarPrecip(raw('-SN BLSN'))).toEqual({ kind: 'snow', intensity: 0, ts: false });
+    expect(metarPrecip(raw('RERA'))).toBeNull();
     expect(metarPrecip('METAR KDFW 162053Z 18012KT 10SM FEW250 24/10 A3002 RMK AO2 RAB15E30')).toBeNull();
     expect(metarPrecip('METAR EGLL 162050Z 18012KT 9999 FEW030 12/08 Q1012 TEMPO RA')).toBeNull();
     expect(metarPrecip('')).toBeNull();
@@ -55,6 +64,8 @@ describe('precipCount: streaks by intensity (pure)', () => {
     expect(h).toBeGreaterThan(m);
     expect(h).toBeLessThanOrEqual(MAX_COUNT);
     expect(precipCount({ kind: 'snow', intensity: 2 })).toBeLessThanOrEqual(MAX_COUNT);
+    expect(precipCount({ kind: 'drizzle', intensity: 2 })).toBeLessThanOrEqual(MAX_COUNT);
+    expect(precipCount({ kind: 'drizzle', intensity: 0 })).toBeGreaterThan(0);
     expect(precipCount({ kind: null, intensity: 1, ts: true })).toBe(0);
     expect(precipCount(null)).toBe(0);
     expect(precipCount({ kind: 'rain', intensity: 2 }, true)).toBe(0);
@@ -108,7 +119,10 @@ describe('createPrecip: the layer (no WebGL needed to step it)', () => {
     const camera = { position: new THREE.Vector3(1234.5, 300, -40000) };
     return { scene, fx, camera, vel: new THREE.Vector3(0, 0, -60), wind: new THREE.Vector3(3, 0, 1) };
   };
-  const run = ({ fx, camera, vel, wind }, s, onStep) => { for (let t = 0; t < s; t += 1 / 60) { fx.update(1 / 60, camera, vel, wind); onStep?.(); } };
+  // The camera flies with the airplane: the streaks come from its own motion.
+  const run = ({ fx, camera, vel, wind }, s, onStep) => {
+    for (let t = 0; t < s; t += 1 / 60) { camera.position.addScaledVector(vel, 1 / 60); fx.update(1 / 60, camera, wind); onStep?.(); }
+  };
 
   it('+TSRA: one draw object, heavy count, visible under the deck, and lightning flashes then gives the haze back', () => {
     const w = setup();
@@ -131,11 +145,21 @@ describe('createPrecip: the layer (no WebGL needed to step it)', () => {
     run(w, 0.1);
     expect(w.fx.state.visible).toBe(true);
     const s = w.fx.object.material.uniforms.uStreak.value;
-    expect(s.length()).toBeLessThanOrEqual(1.6 + 1e-6);
+    expect(s.length()).toBeLessThanOrEqual(MAX_STREAK_M + 1e-6);
+    expect(s.length()).toBeGreaterThan(MAX_STREAK_M - 1e-3); // 60 m/s: capped
+    expect(s.z).toBeGreaterThan(0); // flying -z, the rain streams back past the eye (+z)
     w.camera.position.y = 180 + 600 * 0.3048;
     run(w, 0.1);
     expect(w.fx.state.visible).toBe(false);
     expect(w.fx.object.visible).toBe(false);
+    // No base reported: nothing falls above 10,000 ft over the field.
+    w.fx.set({ kind: 'rain', intensity: 1, ts: false }, 180, null);
+    w.camera.position.y = 180 + 9000 * 0.3048;
+    run(w, 0.1);
+    expect(w.fx.state.visible).toBe(true);
+    w.camera.position.y = 180 + 11000 * 0.3048;
+    run(w, 0.1);
+    expect(w.fx.state.visible).toBe(false);
     w.fx.set(null);
     w.camera.position.y = 200;
     run(w, 0.1);
@@ -156,5 +180,28 @@ describe('createPrecip: the layer (no WebGL needed to step it)', () => {
     expect(w.fx.state.count).toBe(0);
     expect(w.fx.state.visible).toBe(false);
     expect(w.fx.state.flashes).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('createPrecip: a still camera (the tower view, a paused sim) sees rain fall, not streak', () => {
+  it('streaks point down along the fall plus the wind when the camera does not move', () => {
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x445566, 0.0001);
+    const fx = createPrecip(scene);
+    fx.set({ kind: 'rain', intensity: 1, ts: false }, 0, 3000);
+    const camera = { position: new THREE.Vector3(10, 50, 10) };
+    const wind = new THREE.Vector3(2, 0, 0);
+    for (let i = 0; i < 30; i++) fx.update(1 / 60, camera, wind);
+    const s = fx.object.material.uniforms.uStreak.value;
+    expect(s.y).toBeLessThan(0);
+    expect(Math.abs(s.x)).toBeLessThan(Math.abs(s.y));
+    expect(Math.abs(s.z)).toBeLessThan(1e-9);
+    // A spawn jump (km in one frame) is not motion.
+    camera.position.x += 5000;
+    fx.update(1 / 60, camera, wind);
+    expect(s.length()).toBeLessThan(0.5);
+    // Paused (dt 0): nothing moves or throws.
+    fx.update(0, camera, wind);
+    expect(Number.isFinite(s.x)).toBe(true);
   });
 });
