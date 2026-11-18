@@ -254,6 +254,16 @@ export function stabilizedGate(g) {
   return { gateHeight: g.vmc ? GATE_VMC_FT : GATE_IMC_FT, stable: failing.length === 0, failing };
 }
 
+// The vertical speed the gate's SINK reads: a first-order lag of the instantaneous rate (τ 2 s; quicker than a
+// diaphragm VSI's, near an IVSI's; the HUD's VSI still shows the instantaneous rate). A gust's spike (turbulence, 0195) or the autopilot's pitch ripple is not a sustained
+// sink rate; a sustained one shows within a few seconds. Exact in dt; prev null seeds with vsFpm (a spawn).
+export const GATE_VS_TAU_S = 2;
+export function gateVsStep(prev, vsFpm, dt) {
+  if (prev == null) return vsFpm;
+  if (!(dt > 0)) return prev;
+  return prev + (vsFpm - prev) * (1 - Math.exp(-dt / GATE_VS_TAU_S));
+}
+
 // When to evaluate the gate, once per approach. s = { armed, armFt, done } is mutated.
 // Above the gate the gate arms (and its height is fixed for this approach, so a METAR that
 // turns IMC at 700 ft doesn't evaluate a "1,000 ft" gate at 700 ft). Descending through the

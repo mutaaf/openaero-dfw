@@ -97,6 +97,7 @@ export function applyUpset(body, u) {
   if (body.windVec) body.vel.add(body.windVec);
   body.angVel.set(0, 0, 0);
   body.aoaPrevRad = null; body.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
+  body.gateVsFpm = null; // nor the old sink rate at the stabilized gate (aero.js gateVsStep)
   body.throttle = u.throttle;
   body.engineN = u.throttle;
   body.iasKts = u.kts;
