@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
+  localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg, pitchForPath,
   flareSinkMps, elevatorForPitch, throttleForSpeed, sideslipYawAccel, trimAoaDeg,
 } from '../../src/autopilot.js';
 import { rollRateGain, rollHoldScale } from '../../src/flightModel.js';
@@ -119,5 +119,16 @@ describe('rollRateGain / rollHoldScale (0156)', () => {
     expect(rollRateGain(AIRCRAFT_DATABASE.f16, 80) * 180 / Math.PI).toBeLessThan(150);
     expect(rollHoldScale(AIRCRAFT_DATABASE.f16, 300) * rollRateGain(AIRCRAFT_DATABASE.f16, 300)).toBeCloseTo(2.8 / 5.2, 9);
     expect(rollHoldScale(AIRCRAFT_DATABASE.f16, 0)).toBe(4); // capped (on the ground the hold's output is clamped anyway)
+  });
+});
+
+describe('pitchForPath: a flight-path hold on the path over the ground (0195)', () => {
+  it('on the commanded path it holds the pitch it has; steeper than commanded it raises the nose by the difference', () => {
+    expect(pitchForPath(-3, 2, -3)).toBe(2);
+    expect(pitchForPath(-3, 2, -4)).toBe(3);
+    expect(pitchForPath(-3, 2, -2)).toBe(1);
+  });
+  it('never commands more than 9.5° nose-up (the 737\'s tail strikes at ~11°)', () => {
+    expect(pitchForPath(0, 9, -6)).toBe(9.5);
   });
 });

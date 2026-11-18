@@ -31,6 +31,12 @@ export const aileronForBank = (bankCmdDeg, bankRightDeg, rollRateRight, k = 1) =
 export const glidepathGammaDeg = (heightAbovePathM, integralMs = 0) =>
   clamp(-3 - heightAbovePathM * 0.12 - integralMs * GS_KI, -6, -0.5);
 
+// Flight-path hold: the pitch command (deg) that flies gammaCmdDeg, from the path flown over the ground
+// (pathDeg, the velocity's angle: what a glideslope tracks), not path + angle of attack. A gust changes α
+// by w / V; a command built on α chased every gust (turbulence, 0195) and pitched the 737 through the
+// 1,000 ft gate at more than 1,000 fpm. Capped at 9.5° nose-up (the 737's tail strikes at ~11°).
+export const pitchForPath = (gammaCmdDeg, pitchDeg, pathDeg) => Math.min(9.5, pitchDeg + gammaCmdDeg - pathDeg);
+
 // Flare: target vertical speed (m/s, negative = down) from wheel height (m): perS of the height
 // (Kid's 737, 0101, and since 0202 the Cessna fly spec.kidFlarePerS), never under 0.8 m/s.
 export const flareSinkMps = (wheelHeightM, perS = 0.2) => -Math.max(0.8, wheelHeightM * perS);

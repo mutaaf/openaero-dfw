@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT,
+  gateVsStep, GATE_VS_TAU_S,
 } from '../../src/aero.js';
 
 // On speed, on path, configured: the 737 at Vref+5 on a 3° path (~700 fpm).
@@ -100,5 +101,33 @@ describe('gateStep: once per approach (0020)', () => {
 describe('isImc tolerates missing visibility', () => {
   it('treats an unknown visibility as VMC', () => {
     expect(isImc({ ceilingFt: null, visibilitySm: undefined })).toBe(false);
+  });
+});
+
+// The gate's SINK reads a lagged vertical speed (gateVsStep), as a cockpit VSI does: a gust's
+// one-frame spike (turbulence, 0195) is not a sustained sink rate, a sustained one still fails.
+describe('gateVsStep: the vertical speed the gate reads', () => {
+  const fly = (vs0, profile, seconds, dt = 1 / 30) => {
+    let v = gateVsStep(null, vs0, dt);
+    for (let t = 0; t < seconds; t += dt) v = gateVsStep(v, profile(t), dt);
+    return v;
+  };
+  it('seeds with the current rate (a spawn or teleport reads its own sink, not the last flight\'s)', () => {
+    expect(gateVsStep(null, -850, 1 / 30)).toBe(-850);
+  });
+  it('a steady descent reads its own rate', () => {
+    expect(fly(-850, () => -850, 10)).toBeCloseTo(-850, 6);
+  });
+  it('a 0.5 s gust of 1,500 fpm on an 850 fpm path does not fail the gate', () => {
+    const v = fly(-850, (t) => (t > 5 && t < 5.5 ? -1500 : -850), 5.5);
+    expect(stabilizedGate({ ...GOOD, vsFpm: v }).failing).not.toContain('SINK');
+  });
+  it('a sustained 1,100 fpm still fails within a few seconds', () => {
+    expect(stabilizedGate({ ...GOOD, vsFpm: fly(-850, () => -1100, 3 * GATE_VS_TAU_S) }).failing).toContain('SINK');
+  });
+  it('is the same at 30 and 120 Hz (exact in dt), and holds through dt 0', () => {
+    const a = fly(-700, () => -1200, 3, 1 / 30), b = fly(-700, () => -1200, 3, 1 / 120);
+    expect(Math.abs(a - b)).toBeLessThan(5);
+    expect(gateVsStep(-900, -2000, 0)).toBe(-900);
   });
 });

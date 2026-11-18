@@ -22,7 +22,7 @@ import { coachText, createCoach, stepCoach, coachSeen, markCoachSeen, BOUNCE_HIG
 import { createTutor, tutorOn, setTutorOn } from './tutorPrefs.js';
 import {
   localizerInterceptDeg, bankCommandForHeading, aileronForBank, glidepathGammaDeg,
-  flareSinkMps, elevatorForPitch, autothrottleCommand, trimAoaDeg,
+  flareSinkMps, elevatorForPitch, pitchForPath, autothrottleCommand, trimAoaDeg,
 } from './autopilot.js';
 import {
   scenarioWeather, windVector, gustFactor, runwayWindComponents, surfaceWindFactor,
@@ -34,7 +34,7 @@ import { createGround, decodeDem, DEM_URL_PATH, yToFtMsl, REF_ELEV_M } from './t
 import { airAt, isaDeviationC, tasFromIas, densityAltitudeFt, thinAir } from './atmosphere.js';
 import {
   headingError, isStallWarning, isGpwsWarning, isGearWarning, stallWarningKts,
-  stabilizedGate, gateStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor, vrFor, landingFlaps,
+  stabilizedGate, gateStep, gateVsStep, isImc, ilsDots, LOC_DOT_DEG, GS_DOT_DEG, GATE_VMC_FT, GATE_IMC_FT, stallAoaDeg, vrefFor, vrFor, landingFlaps,
   takeoffCalloutIndex, TAKEOFF_CALLOUTS, TAKEOFF_CALLOUT_HUD, TAKEOFF_CALLOUT_HUD_PLAIN, speedLimitKts, overspeedStep, stallSpeedKts,
 } from './aero.js';
 import {
@@ -88,6 +88,7 @@ const sim = {
   spoilers: 0, // ground spoiler extension 0–1 (flightModel.js)
   propAil: 0, // the aileron the prop's torque takes (flightModel.js, 0194)
   aoaPrevRad: null, aoaRateF: 0, // the α-rate damping's last α and filtered α̇ (flightModel.js Cmα̇, 0202)
+  gateVsFpm: null, // the lagged vertical speed the stabilized gate reads (aero.js gateVsStep)
   gearDown: true, brakesOn: false, onGround: false,
   // Systems (systems.js): the levers above are commands; gearPos/flapDeg/brakePress/
   // reverserPos are where things are. autobrake 0 OFF, 1–3, 4 MAX; reverseCmd the reverse levers.
@@ -854,7 +855,7 @@ function checkStabilizedGate() {
   if (step === 'reset') sim.gate = null;
   if (step !== 'evaluate') return;
   const gate = sim.gate = stabilizedGate({
-    iasKt: sim.iasKts, vref: sim.shortField ? sfdLib.GATE_VREF : vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.vsiFpm, gearDown: gearLocked(sim),
+    iasKt: sim.iasKts, vref: sim.shortField ? sfdLib.GATE_VREF : vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.gateVsFpm ?? sim.vsiFpm, gearDown: gearLocked(sim),
     // The two landing notches (737: 30°/40°, 172: 20°/30°), set and there (not in transit).
     flapsOk: flapsLanding(lessonFlaps()), // 0181: the short-field lesson's 30°
     // The wake lesson (0115): above the 3° path up to a path past the jet's touchdown point is on path (wake.js).
@@ -863,6 +864,7 @@ function checkStabilizedGate() {
   });
   gate.runway = end.id;
   gate.iasKt = Math.round(sim.iasKts);
+  gate.vsFpm = Math.round(sim.gateVsFpm ?? sim.vsiFpm); // what SINK read (lagged, aero.js gateVsStep)
   // HUD lines, 3 items each, built here so drawing them allocates nothing.
   sim.gateLines = [0, 3].map((i) => gate.failing.slice(i, i + 3).join(' · '));
   sim.gateShownUntil = sim.simTime + 6;
@@ -1937,10 +1939,10 @@ function integrateSubStep(dt) {
       sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight, rollHoldScale(spec, sim.tasKts * KTS_TO_MPS)) + sim.propAil;
       sim.aileronInput = THREE.MathUtils.clamp(sim.aileronInput, -1, 1);
     };
-    // Fly a flight-path angle: pitch = path + current angle of attack.
-    // Pitch is capped at 9.5° nose-up (737 tailstrike is ~11°).
+    // Fly a flight-path angle over the ground (autopilot.js pitchForPath; capped 9.5° nose-up).
+    const pathDeg = Math.atan2(sim.vel.y, Math.max(1, Math.hypot(sim.vel.x, sim.vel.z))) * RAD_TO_DEG;
     const holdGamma = (gammaDeg) => {
-      sim.elevInput = elevatorForPitch(Math.min(9.5, gammaDeg + sim.aoaDeg), pitchDeg, pitchRateUp);
+      sim.elevInput = elevatorForPitch(pitchForPath(gammaDeg, pitchDeg, pathDeg), pitchDeg, pitchRateUp);
     };
 
     updateIasTrend(dt);
@@ -1987,6 +1989,7 @@ function integrateSubStep(dt) {
   sim.raFt = Math.round(radioAltitudeM(sim, spec) * M_TO_FT);
   sim.mslFt = Math.round(yToFtMsl(sim.pos.y));
   sim.vsiFpm = Math.round(sim.vel.y * M_TO_FT * 60);
+  sim.gateVsFpm = gateVsStep(sim.gateVsFpm, sim.vel.y * M_TO_FT * 60, dt);
 
   // Warning alerts
   // Keyed to where the flaps are, like the tape's band (0128): moving the lever doesn't move the wing.
@@ -2807,6 +2810,7 @@ function loadScenario(key, final = null) {
   sim.trimUsed = false; // the hold-to-trim stand-in helps until the player trims (0094)
   sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
   sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
+  sim.gateVsFpm = null; // nor the old flight's sink rate at the gate
   // Airline practice on a final: autobrake 2 armed, reversers stowed (systems.js). The
   // gear and flaps start where the spawn put the levers.
   sim.autobrake = mission.kind === 'final' && systemsOf(sim.spec).autobrake ? 2 : 0;
@@ -3160,6 +3164,7 @@ function setAircraft(key) {
   sim.spec = AIRCRAFT_DATABASE[sim.aircraftKey];
   sim.trimAlphaDeg = null; // the new airframe trims where it flies now (0090)
   sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
+  sim.gateVsFpm = null; // nor the old flight's sink rate at the gate
   sim.trimUsed = false;
   if (sim.spec.fixedGear) sim.gearDown = true;
   if (!systemsOf(sim.spec).autobrake) sim.autobrake = 0;
