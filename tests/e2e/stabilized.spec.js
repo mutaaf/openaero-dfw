@@ -65,7 +65,10 @@ test('a fast, steep approach is called unstabilized at the gate', async ({ page 
 
 test('under a 800 ft ceiling the gate moves up to 1,000 ft', async ({ page }) => {
   test.setTimeout(150_000);
-  await stubMetar(page, [{ ...TEST_METAR, rawOb: 'METAR KDFW 161953Z 18005KT 4SM BR OVC008 18/16 A3002',
+  // Calm (00000KT, wspd 0): the METAR's wind drives the Dryden gusts (0195, seeded by the clock), and 5 kt of
+  // them put the instantaneous sink of this 4 NM autoland over the gate's 1,000 fpm on ~1 run in 3 under CI load.
+  // The test is about the gate's height; the SINK limit has its own unit tests.
+  await stubMetar(page, [{ ...TEST_METAR, rawOb: 'METAR KDFW 161953Z 00000KT 4SM BR OVC008 18/16 A3002', wspd: 0, wdir: 0,
     visib: '4', clouds: [{ cover: 'OVC', base: 800 }], fltCat: 'IFR' }]);
   await enterCockpit(page);
   await expect.poll(async () => (await snap(page)).wxLive, { timeout: 20_000 }).toBe(true);
