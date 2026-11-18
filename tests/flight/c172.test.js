@@ -1190,7 +1190,7 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
     //   aero.js's POH stall-speed fit (OAERO), which already holds the elevator's tail download, and it
     //   adds Roskam's CLδe 0.43 on top (full up: −0.21 CL), so held full back it climbs ~100-200 fpm in
     //   the first seconds where flightModel.js makes 400-1,000. With CLδe 0 JSBSim peaks at 22.1 / 23.7°,
-    //   flightModel.js with Cmα̇ at 23.4 / 24.4°: ticket 0203.
+    //   flightModel.js with Cmα̇ at 23.3 / 24.4° (an upper bound: only the trimmed elevator's share is counted twice): ticket 0203.
     it.fails(`KNOWN GAP (0202): flaps ${flaps * 10}, held: the peak angle of attack within 0.75° of JSBSim's C172 (Roskam's Cmα̇)`, async () => {
       useFdm(null);
       const fm = fullAftAtVr(flaps);
@@ -1290,7 +1290,7 @@ describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, t
 // every pull. So the premise did not hold, and the card is now the agreement: back on the runway in both
 // models, no stall warning in flightModel.js. The POH's way (Sec. 4: climb at 70-80 KIAS) is to hold the
 // attitude until the speed comes up, which the hands-off cards above fly. The game's flaps-10 spawn keeps
-// 1.2 Vr's trim (trim.js), where flightModel.js climbs away from a 50-60% pull.
+// 1.2 Vr's trim (trim.js), where flightModel.js climbs away from a 50-60% pull (40% and 80% warn; 80% settles back).
 function heldPullTakeoff(pull, flaps, trimKts = POH_VY_KTS) {
   const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: trimAoaDeg(c172, trimKts * KTS_TO_MPS, flaps) });
   const warnKts = stallWarningKts(c172, flaps);

@@ -35,6 +35,11 @@ body.aoaPrevRad = aoaRad;
 body.angVel.x += (qRate + adotQ) * dt;
 ```
 
+Also weigh (0170's physics panel):
+- The shortfall is pitch damping in general. Roskam's Mq alone is ~2.1/s at Vr against the model's 0.93/s total, so a speed-scaled pitchDamping is an alternative to Cmα̇, or a companion to it.
+- Use JSBSim's c̄, 4.9 ft = 1.494 m (c172.xml), not S/b = 1.473 m.
+- The 0.08 s α̇ smoothing sits on top of a term that already stands for the downwash lag, and it was picked against the tail-strike card. Justify it or drop it.
+
 Before it ships (0170's device panel):
 - Guard `dt > 0`: a zero step gives NaN, `MathUtils.clamp` keeps NaN, and `angVel` stays NaN for good (systems.js:106 guards the same way).
 - Reset `aoaPrevRad` and `aoaRateF` on every teleport: loadScenario, the power-off 180 hold, upset.js, deadStick, an FDM switch. Otherwise the clamped ±2 rad/s spike kicks the pitch by up to ~3 rad/s².

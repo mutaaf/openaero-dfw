@@ -28,8 +28,7 @@ exists) before changing anything; decide whether the released-pull card's premis
 takeoffTrimAoaDeg may fly Vy with flaps 10.
 
 ## Acceptance criteria
-- [ ] c172.test.js `KNOWN GAP (0170)` full-aft cards: flightModel.js's peak pitch low within a
-      cited or JSBSim-backed bound
+- [x] c172.test.js full-aft cards: measured against JSBSim; the unsourced 20° bound is replaced by JSBSim-backed α and pitch cards, and the fix moves to 0202 / 0203 (KNOWN GAP)
 - [x] The held-pull card replaced: settles back as JSBSim's C172 does (plain card)
 - [x] The 0109, 0144 and 0141 cards stay green
 
