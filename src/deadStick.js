@@ -231,5 +231,6 @@ export function debugFinal(sim, distNm, aglFt, ground) {
   sim.vel.set(dx * v * Math.cos(g), v * Math.sin(g), dz * v * Math.cos(g));
   sim.quat.set(0, Math.sin(-r / 2), 0, Math.cos(-r / 2));
   sim.angVel.set(0, 0, 0);
+  sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
   sim.flapsIndex = 0;
 }

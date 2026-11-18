@@ -32,7 +32,7 @@ download double-counted is likely already high.
 ## Acceptance criteria
 - [ ] The PR says which of the two options it chose, and why (with the stall-speed numbers)
 - [ ] JSBSim's 1 g stall speeds (flaps 0/10/30) within the cards' POH bands, flown with the elevator it takes
-- [ ] The `KNOWN GAP (0202, 0203)` pitch cards in tests/flight/c172.test.js pass once 0202 has shipped, or are re-measured and retargeted if the chosen option leaves part of the gap (the first option may)
+- [ ] The `KNOWN GAP (0203)` pitch cards in tests/flight/c172.test.js (0202 shipped: 23.3 / 24.4° against JSBSim's 20.0 / 21.7°) pass, or are re-measured and retargeted if the chosen option leaves part of the gap (the first option may)
 - [ ] No JSBSim card regresses (`npx vitest run tests/flight`)
 
 ## Test plan

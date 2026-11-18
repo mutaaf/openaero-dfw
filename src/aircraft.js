@@ -252,6 +252,14 @@ export const AIRCRAFT_DATABASE = {
     // 90 KIAS) and 1.3-1.4x. The trim α per stick is unchanged (elevatorAlphaDeg).
     pitchAuthority: 7.2,
     pitchDamping: 3.8,
+    // α-rate pitch damping (flightModel.js, 0202): Roskam's Cmα̇ −5.2 per radian, as our JSBSim C172 flies it
+    // (public/jsbsim/aircraft/c172/c172.xml aero/coefficient/Cmadot), in real units on the inertia below, on
+    // this spec's own mean chord S/b = 1.473 m (JSBSim's is 4.9 ft = 1.494 m: 2.8% more moment, as c̄²).
+    cmAlphaDot: -5.2,
+    // Kid's auto-flare sink profile (assists.js; autopilot.js's default is 0.2 /s): with Cmα̇ the nose answers the
+    // flare a little later, and the default touched down 4-9 fpm firmer (calm −190, 15 kt from 070° −194 fpm: A 94,
+    // not S 95). 0.18 lands where it did before Cmα̇ (tests/flight/kidFinal.test.js: calm −186, was −185 fpm).
+    kidFlarePerS: 0.18,
     // Elevator balance (flightModel.js, 0090): Roskam's Cmα −0.89 against Cmδe −1.28 per
     // radian, as in our JSBSim C172 (public/jsbsim/), at the TCDS's 25.5° mean elevator throw.
     // Linear only up to α 8°: from there spec.pitchBreak (src/pitchBreak.js, 0109, a lazy chunk) fades

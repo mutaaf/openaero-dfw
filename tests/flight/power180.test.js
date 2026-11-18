@@ -19,6 +19,11 @@ import { makeBody, fly, speedHoldPilot, attitude } from './harness.js';
 const c172 = AIRCRAFT_DATABASE.c172;
 const end = runwayEnd('KADS', '16');
 const D = { x: Math.sin(end.hdgT * Math.PI / 180), z: -Math.cos(end.hdgT * Math.PI / 180) };
+// The test pilot's round-out starts at 20 ft, the top of the Airplane Flying Handbook's "approximately 10 to 20
+// feet" (FAA-H-8083-3C ch. 9), since the idle flaps 30 glide arrives at ~1,000 fpm. From 15 ft (0189) it could
+// not stop that sink in time: on main it hit at 0.6 ft, hopped 1.2 ft and floated; with Cmα̇ (0202) it does not
+// hop and lands ~170 ft shorter (63 KIAS, 115 fpm): the coach had been fitted to the hop.
+const ROUND_OUT_FT = 20;
 
 // mode: 'coach' (glide on till it says turn, round to the final, flaps when it asks), 'late' (the
 // same, but the turn `lateS` seconds after the call: a long downwind), 'now' (the turn at once).
@@ -36,7 +41,7 @@ function power180(mode, { lateS = 8, windKts = 0, windFromDeg = 160 } = {}) {
   const hold = speedHoldPilot(() => c172.vGlideKts);
   const st = createDeadStick(0), guide = {};
   const prompts = [];
-  let flareI = null, td = null, callT = null;
+  let flareI = null, td = null, callT = null, below1 = false, hopFt = 0, flareFpm = null;
   fly(b, c172, 300, (x, dt) => {
     const sim = { windVec: x.windVec, simTime: x.t, iasKts: x.iasKts, aglFt: x.pos.y * M_TO_FT, pos: x.pos, vel: x.vel, flapsIndex: x.flapsIndex, gsKts: x.gsKts, tasKts: x.tasKts, assist: 'pilot', aoaDeg: x.aoaDeg, spec: c172 };
     p180Step(st, sim);
@@ -51,13 +56,17 @@ function power180(mode, { lateS = 8, windKts = 0, windFromDeg = 160 } = {}) {
     if (p === 'p1High') x.flapsIndex = 3;
     const wheelM = x.pos.y - c172.gearHeight;
     const { pitchDeg, bankRightDeg } = attitude(x);
-    if (wheelM > 15 / M_TO_FT) {
+    // The hop (0202): once the main wheels are under 1 ft, they never rise back above it.
+    if (wheelM * M_TO_FT < 1) below1 = true;
+    else if (below1) hopFt = Math.max(hopFt, wheelM * M_TO_FT);
+    if (wheelM > ROUND_OUT_FT / M_TO_FT) {
       hold(x, dt);
       x.aileronInput = aileronForBank(guide.guideBankDeg, bankRightDeg, -x.angVel.z);
     } else { // the round-out (harness.js shortFieldLanding's): sink shrinking with the height, held off short of the stall
       const sinkErr = -x.vel.y - Math.max(0.05, (wheelM - 0.3) / 2);
       const aoaRoom = stallAoaDeg(c172, x.flapsIndex) - 1 - x.aoaDeg;
       flareI ??= pitchDeg;
+      flareFpm ??= -x.vel.y * M_TO_FT * 60;
       if (sinkErr < 0 || aoaRoom > 0) flareI += sinkErr * 3 * dt;
       x.pitchCmd = Math.max(-5, Math.min(pitchDeg + aoaRoom, flareI + sinkErr * 5));
       x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
@@ -70,10 +79,10 @@ function power180(mode, { lateS = 8, windKts = 0, windFromDeg = 160 } = {}) {
     td = { pastSpotFt: (rx * D.x + rz * D.z) * M_TO_FT, crossM: rx * -D.z + rz * D.x, kts: x.iasKts, sinkFpm: -(x.lastAirVsi ?? 0), t: x.t, flaps: x.flapsIndex };
     return true;
   });
-  return { td, prompts, stalled: st.stalled };
+  return { td, prompts, stalled: st.stalled, hopFt, flareFpm };
 }
 
-const log = (name, r) => console.log(`[c172 flightModel] power-off 180 ${name}: ${r.td.pastSpotFt.toFixed(0)} ft past the spot, ${r.td.crossM.toFixed(1)} m off, ${r.td.kts.toFixed(0)} KIAS, ${r.td.sinkFpm.toFixed(0)} fpm, flaps ${r.td.flaps}, ${r.td.t.toFixed(0)} s; coach ${r.prompts.join(' > ')}`);
+const log = (name, r) => console.log(`[c172 flightModel] power-off 180 ${name}: ${r.td.pastSpotFt.toFixed(0)} ft past the spot, ${r.td.crossM.toFixed(1)} m off, ${r.td.kts.toFixed(0)} KIAS, ${r.td.sinkFpm.toFixed(0)} fpm, flaps ${r.td.flaps}, ${r.td.t.toFixed(0)} s; round-out from ${r.flareFpm?.toFixed(0)} fpm, hop ${r.hopFt.toFixed(1)} ft; coach ${r.prompts.join(' > ')}`);
 
 describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', () => {
   it("the coach's glide ratios are this model's: idle at 68 KIAS, each flap notch within 3%", () => {
@@ -100,6 +109,7 @@ describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', (
     expect(r.prompts.indexOf('p1WaitL')).toBeGreaterThan(0);
     expect(r.prompts.indexOf('p1TurnL')).toBeGreaterThan(r.prompts.indexOf('p1WaitL'));
     expect(r.prompts).not.toContain('p1Low');
+    expect(r.hopFt).toBe(0); // 0202: no hop, the main wheels never back above 1 ft once under it
   });
 
   it('a long downwind (the turn 8 s after the call) lands short of the spot', () => {
@@ -109,10 +119,10 @@ describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', (
   });
 
   // The coach reads the wind on each leg (power180.js legWind): down the runway, up it and across, at
-  // 5 and 10 kt. Measured 2026-11-16 (5 / 10 kt): 160°: +139 / +170 ft, 340°: +76 / +68, 250°: +77 / +36,
-  // 070°: +86 / +82; still air +83. It aims long because the test fails short. 15 kt is logged, not carded.
-  // How touchy it is: the turn height (TURN_FT) 5 ft either side moved still air to −96 / +112 ft (a flaps
-  // 30 call made or missed): a real pilot's judgement is no finer, but the coach's call is not a guarantee.
+  // 5 and 10 kt. Measured 2026-11-18 with Cmα̇ (0202) and the 20 ft round-out (5 / 10 kt): 160°: +172 / +28 ft,
+  // 340°: +154 / +228, 250°: +154 / +135, 070°: +152 / +149; still air +152. It aims long because the test fails
+  // short. 15 kt is logged, not carded. How touchy it is: FLOAT_M ±3 m or TURN_FT ±3 ft moved the 10 kt cases
+  // ~25 ft (TURN_FT 163 puts 340°/10 at +253, out); a real pilot's judgement is no finer, but the coach's call is not a guarantee.
   it('in a 5 or 10 kt wind from any side, as coached: on the spot to 250 ft past it, never short', () => {
     for (const windKts of [5, 10, 15]) for (const windFromDeg of [160, 340, 250, 70]) {
       const r = power180('coach', { windKts, windFromDeg });
@@ -121,6 +131,7 @@ describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', (
       expect(r.td.pastSpotFt).toBeGreaterThanOrEqual(0);
       expect(r.td.pastSpotFt).toBeLessThan(250);
       expect(Math.abs(r.td.crossM)).toBeLessThan(8);
+      expect(r.hopFt).toBe(0);
     }
   });
 

@@ -38,7 +38,7 @@ export const DOWNWIND_NM = 0.5;
 // 7.6 / 7). The flaps-up figure is the POH's 9:1 (Fig. 3-1) within 2%.
 export const RATIO_BY_FLAPS = [9.2, 8.8, 7.5, 6.6];
 // The glide is aimed this far before the spot: the round-out and hold-off float the rest.
-export const FLOAT_M = 95;
+export const FLOAT_M = 101;
 const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 
 // The coach's plan: a short final (FINAL_M before the spot) flown with flaps 20 (RATIO_BY_FLAPS:
@@ -48,10 +48,10 @@ const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 // (tests/flight/power180.test.js), the coached pilot touches down inside the ACS window.
 export const FINAL_M = 600;
 const CLOSE_DEG_PER_M = 0.2;
-export const TURN_FT = 170;
+export const TURN_FT = 160;
 // Kid's guide turns this much later (lower): its auto-flare floats further than the test pilot's
 // round-out (tests/e2e/power180.spec.js: the coach's turn put Kid ~266 ft past, this one 134 ft).
-export const KID_TURN_FT = TURN_FT - 75;
+export const KID_TURN_FT = TURN_FT - 65;
 // Lined up: when a glide with the next notch out still reaches the aim with this much to spare,
 // the coach asks for it (flaps 20, then 30); Kid's guide sets them.
 export const FLAPS_FT = 10;
@@ -195,6 +195,7 @@ export function p180Step(st, sim, live = true) {
     // on a slow link: the Cessna has glided on meanwhile), with the velocity and attitude it has.
     const h = st.hold ??= { p: [SPAWN.pos[0], sim.pos.y + (SPAWN.aglFt - sim.aglFt) / M_TO_FT, SPAWN.pos[1]], v: [sim.vel.x, sim.vel.y, sim.vel.z], q: [sim.quat.x, sim.quat.y, sim.quat.z, sim.quat.w] };
     sim.pos.set(...h.p); sim.vel.set(...h.v); sim.quat.set(...h.q); sim.angVel.set(0, 0, 0);
+    sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
     st.t0 = sim.simTime;
     return;
   }

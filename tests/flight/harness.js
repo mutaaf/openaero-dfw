@@ -39,6 +39,7 @@ export function makeBody(spec, { kts = 0, altM = 0, flaps = 0, gearDown = true, 
     flapsIndex: flaps, gearDown, brakesOn: false, apMaster: true,
     windVec: new Vector3(), groundY: 0, onGround,
     pitchCmd: 0, t: 0, distM: 0,
+    aoaPrevRad: null, aoaRateF: 0, // flightModel.js's α-rate damping state (Cmα̇, 0202)
     // The test pilots trim as they fly (flightModel.js autoTrim: the trim follows the angle of
     // attack, so the static stability term is zero and the elevator is all theirs); a
     // stick-fixed card sets autoTrim false and flies with the trim where it was (ticket 0090).

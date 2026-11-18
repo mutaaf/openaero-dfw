@@ -10,7 +10,8 @@
 // dead-stick drill, 0036: the engine makes no power whatever the throttle; the prop windmills); optional
 // air: mslOffsetM (MSL height of y = 0), isaDevC and altimInHg (atmosphere.js). The step
 // writes back onGround, lastAirVsi, iasKts, tasKts, gsKts, mach, aoaDeg, betaDeg, accelY, loadFactor,
-// sigma (density ratio), propAil (the aileron the prop's torque takes, 0194), engineN (spooled power setting; seed it with the throttle on spawn),
+// sigma (density ratio), propAil (the aileron the prop's torque takes, 0194), aoaPrevRad and aoaRateF (the
+// α-rate damping's last α and filtered α̇, 0202: null / 0 on every teleport), engineN (spooled power setting; seed it with the throttle on spawn),
 // spoilers (ground spoiler extension 0–1, airframes with spec.groundSpoilers). Systems
 // (systems.js) run first: the gear, flaps, brakes and reversers follow their levers at
 // their own rates, so the aerodynamics see where the surfaces are, not where the levers are.
@@ -212,6 +213,24 @@ export function stepFlightModel(body, spec, dt) {
   let qCmd = -body.elevInput * authority / spec.pitchDamping * (pb ? pb.eta(body.aoaDeg, body.elevInput) : 1);
   if (spec.fbw) qCmd = spec.fbw(body, spec, qCmd, aoaRad, fBodyY, airspeed, qDyn);
   const qRate = (qCmd * spec.pitchDamping - stiffness * alphaErr - body.angVel.x * spec.pitchDamping) * (airspeed / 120);
+  // α-rate pitch damping (Cmα̇, 0202): the downwash reaches the tail late, so a rising α pushes the nose
+  // down: M = q·S·c̄·Cmα̇·(c̄/2V)·α̇ (Roskam's C172 −5.2, our JSBSim C172's aero/coefficient/Cmadot; c̄ = S/b).
+  // α̇ from step to step, smoothed over 0.08 s: an α differenced at 1/60 s and at 1/180 s then gives the same
+  // damping (unsmoothed, the tail-strike card's 1/60 s peak ran 1.5x its 1/180 s one), and 0.08 s is a tenth
+  // of the short period, so the damping itself is Roskam's. Each sample is held to ±2 rad/s (a wheel's
+  // bump). Every teleport (a spawn, the upset and power-off 180 set-ups, the dead-stick final, an airframe or
+  // FDM switch) clears body.aoaPrevRad and body.aoaRateF, so a jump in α is never read as a rate. dt 0 (a
+  // paused step) leaves both as they were: a 0/0 α̇ would be NaN in angVel for good.
+  let adotQ = 0;
+  if (spec.cmAlphaDot && dt > 0) {
+    const prev = body.aoaPrevRad;
+    const sample = prev == null ? 0 : MathUtils.clamp((aoaRad - prev) / dt, -2, 2);
+    const rate = prev == null ? 0 : (body.aoaRateF ?? 0) + (sample - (body.aoaRateF ?? 0)) * Math.min(1, dt / 0.08);
+    body.aoaRateF = rate;
+    body.aoaPrevRad = aoaRad;
+    const cbar = spec.wingAreaM2 / spec.wingSpanM;
+    if (airspeed > 10) adotQ = qDyn * spec.wingAreaM2 * cbar * spec.cmAlphaDot * (cbar / (2 * airspeed)) * rate / spec.inertia.pitch;
+  }
   // aileron + rolls right (negative body z rate); see autopilot.js for the conventions.
   // Dihedral effect (Clβ): sideslip rolls the windward wing up (dihedralAileron below).
   const dihedral = dihedralAileron(spec, betaRad);
@@ -231,7 +250,7 @@ export function stepFlightModel(body, spec, dt) {
   // banked aircraft actually turns.
   const rRate = (-body.rudderInput * 1.2 + sideslipYawAccel(betaRad) - body.angVel.y * spec.yawDamping) * (airspeed / 120);
 
-  body.angVel.x += qRate * dt;
+  body.angVel.x += (qRate + adotQ) * dt;
   body.angVel.y += rRate * dt;
   body.angVel.z += pRate * dt;
 

@@ -87,6 +87,7 @@ const sim = {
   flapsIndex: 2, flapAngles: [0, 10, 25, 40], // labels for airframes without spec.flapDetentsDeg
   spoilers: 0, // ground spoiler extension 0–1 (flightModel.js)
   propAil: 0, // the aileron the prop's torque takes (flightModel.js, 0194)
+  aoaPrevRad: null, aoaRateF: 0, // the α-rate damping's last α and filtered α̇ (flightModel.js Cmα̇, 0202)
   gearDown: true, brakesOn: false, onGround: false,
   // Systems (systems.js): the levers above are commands; gearPos/flapDeg/brakePress/
   // reverserPos are where things are. autobrake 0 OFF, 1–3, 4 MAX; reverseCmd the reverse levers.
@@ -1977,7 +1978,7 @@ function integrateSubStep(dt) {
   // Forces, moments and integration (flightModel.js, pure and flight-tested headless), or
   // JSBSim under ?fdm=jsbsim once it has loaded, for the airframes it has a model of.
   // JSBSim flies its own prop torque: nothing for the AP or the assists to feed forward (0194).
-  if (jsbsim && jsbsim.flies(sim.aircraftKey)) { stepSystems(sim, spec, dt); jsbsim.step(sim, spec, dt); sim.propAil = 0; }
+  if (jsbsim && jsbsim.flies(sim.aircraftKey)) { stepSystems(sim, spec, dt); jsbsim.step(sim, spec, dt); sim.propAil = 0; sim.aoaPrevRad = null; }
   else stepFlightModel(sim, spec, dt);
 
   // Telemetry derivatives
@@ -2805,6 +2806,7 @@ function loadScenario(key, final = null) {
   sim.trimAlphaDeg = trimAlpha;
   sim.trimUsed = false; // the hold-to-trim stand-in helps until the player trims (0094)
   sim.spoilers = 0; // a landing's deployed spoilers must not ride into the next final
+  sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
   // Airline practice on a final: autobrake 2 armed, reversers stowed (systems.js). The
   // gear and flaps start where the spawn put the levers.
   sim.autobrake = mission.kind === 'final' && systemsOf(sim.spec).autobrake ? 2 : 0;
@@ -3157,6 +3159,7 @@ function setAircraft(key) {
   sim.aircraftKey = key;
   sim.spec = AIRCRAFT_DATABASE[sim.aircraftKey];
   sim.trimAlphaDeg = null; // the new airframe trims where it flies now (0090)
+  sim.aoaPrevRad = null; sim.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
   sim.trimUsed = false;
   if (sim.spec.fixedGear) sim.gearDown = true;
   if (!systemsOf(sim.spec).autobrake) sim.autobrake = 0;
