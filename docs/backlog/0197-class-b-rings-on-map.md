@@ -26,10 +26,22 @@ description / TAC and cite it, or set the ticket back to proposed with what was 
 `public/CREDITS.md`; label "for reference, not for navigation".
 
 ## Acceptance criteria
-- [ ] Baked file under 30 kB gz, loaded lazily with the map, with a `v` and a cited source/date
-- [ ] Each shelf's floor/ceiling matches the cited source (unit test over the baked JSON)
-- [ ] Map outlines are visible at 390x844 and do not hide the aircraft or runways
-- [ ] "Not for navigation" shown wherever airspace is drawn; credit in CREDITS.md
+- [x] Baked file under 30 kB gz, loaded lazily with the map, with a `v` and a cited source/date
+- [x] Each shelf's floor/ceiling matches the cited source (unit test over the baked JSON)
+- [x] Map outlines are visible at 390x844 and do not hide the aircraft or runways
+  (Builder, 2026-11-18: there is no moving map at 390x844. `#mapPanel` is hidden below `lg` and on every
+  touch screen (styles.css), so a phone shows no airspace and fetches none (tests/e2e/airspace.spec.js).
+  On the desktop map, the outlines draw under the runways and the ownship. A phone map is a ticket of its
+  own; the Scout can weigh it against 0044's HUD rules.)
+- [x] "Not for navigation" shown wherever airspace is drawn; credit in CREDITS.md
+
+## Builder notes (2026-11-18)
+- The ticket's `Boundary_Airspace` layer holds only ARTCC boundaries. The FAA publishes the Class B in its
+  sibling `Class_Airspace` layer, on the same host (IDENT DFW, "DALLAS CLASS B", 15 shelves, Areas A-N, two
+  pieces of A). Its data date is 2026-10-29. It has per-shelf `LOWER_VAL/LOWER_CODE` and `UPPER_VAL`.
+- That layer's Area J (4,000 ft) polygon encloses the inner shelves. Where the shelves overlap, the lowest
+  floor applies (`shelfAt`), and J's label sits outside them. Addison is under Area F (2,500 ft), as the ticket says.
+- The labels follow the chart's convention: ceiling over floor, in hundreds of feet (110/SFC, 110/40).
 
 ## Test plan
 Unit test of the baked JSON (shelf count, floors < ceilings, polygons inside the DFW area); e2e opens the

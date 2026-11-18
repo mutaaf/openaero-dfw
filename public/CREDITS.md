@@ -33,6 +33,13 @@
 - Elevation: USGS 3DEP via AWS Terrain Tiles.
 - Photorealistic 3D Tiles © Google (credited on screen while shown).
 
+## Airspace
+
+- DFW Class B shelves on the moving map (`airspace/dfw-classb-v1.json`, baked by
+  `scripts/bake-airspace.mjs`): **FAA Aeronautical Information Services, Class Airspace**
+  (https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Class_Airspace/FeatureServer/0),
+  a US Government work in the public domain. Simplified to 25 m. For reference, not for navigation.
+
 ## Sky
 
 - Stars: the **Yale Bright Star Catalogue, 5th revised edition** (Hoffleit & Warren, 1991),
