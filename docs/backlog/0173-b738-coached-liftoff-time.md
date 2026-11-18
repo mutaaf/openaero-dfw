@@ -1,7 +1,7 @@
 ---
 id: 0173
 title: The coached 737 takeoff lifts off 3–4 s after Vr, as the FCTM says
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: player-feel
@@ -64,3 +64,7 @@ Ways forward (Scout / operator to choose):
   unstick and rising fast; at 2.5°/s the real path never enters the margin (0.55° of room), so a predictor using
   the vertical acceleration would not call. That changes a safety call and needs the physics panel's agreement.
 - Or the 0.5 s lead / 1° margin reviewed against a cited tail-strike training figure.
+
+## Builder note (2026-11-18)
+Skipped: promoted to ready again (#281) with the findings above still open. A Builder cannot ship it until the
+Scout or operator picks one of the ways forward named above. Back to proposed.

@@ -1,7 +1,7 @@
 ---
 id: 0172
 title: The 737 keeps a 150 ft runway hands-off in a 5 kt crosswind on the flaps 5 roll
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -65,3 +65,7 @@ and the drift go into the wind, and the nose is still turning into it at Vr). Th
 **Needs the Scout or operator:** the card's "pedals neutral keeps a 150 ft runway" has no source, and the
 physics says any long enough roll fails it. Suggested: re-aim it at a Pilot who uses the pedals (a centreline card
 with the harness's rudder on the runway heading), then close 0172.
+
+## Builder note (2026-11-18)
+Skipped: promoted to ready again (#281) with the findings above still open. A Builder cannot ship it until the
+Scout or operator picks one of the ways forward named above. Back to proposed.
