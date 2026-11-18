@@ -39,17 +39,25 @@ autothrottle's lag, kidLiftM's headwind term) and fix it there.
 `npx vitest run tests/flight/slowFlight.test.js tests/flight/kidFinal.test.js`.
 
 ## As built (2026-11-18)
-- Slow flight: the stalls were mostly the test pilot's. It chased each eddy's IAS with the nose (pitch rates to 20°/s)
-  and started at 95 kt over the ground, not through the air. Flown on the drill's own 2 s airspeed filter (AFH ch. 4: hold
-  the attitude in turbulence), the band's middle held 18 of 18 runs (15G25, 25G38, steady 25 kt, 6 seeds each) at α ≤ 10.5°
-  with no warning. The band still gets its margin: slowFlight.js turbulenceFloorKts puts the low edge where the 1 g α plus
+- Slow flight: the stalls were mostly the test pilot's. It chased each eddy's IAS with the nose (pitch rates to 20°/s).
+  Flown on the drill's own 2 s airspeed filter (AFH ch. 4: hold the attitude in turbulence), and from the game's own spawn
+  (95 kt over the ground, so slower through the air in a tailwind: 0208), the band's middle held 18 of 18 runs (15G25,
+  25G38, steady 25 kt, 6 seeds each) at α ≤ 10.5° with no warning. It grades B-C there, not A: see 0208.
+- Learner's angle-of-attack protection (stall − 4°) in the drill is lowered by a 2 σ_w gust at Learner's half share
+  (slowGustAoaDeg). Full back stick at idle in 10G30-25G38 reaches the horn, never the stall (40 runs). Before this, 20G40
+  stalled 30 of 30 (0199 first-timer panel). The band still gets its margin: slowFlight.js turbulenceFloorKts puts the low edge where the 1 g α plus
   a 3 σ_w gust (w / V_true) reaches the stall angle. That raises a steady 25 kt day 63 → 64 KIAS; the gust share stays
-  higher on 15G25, 25G38 and 20G40. The hold's words say "Gusty air: fly higher in the band". Kid holds it hands off in
-  25G38 and 25 kt (6 seeds each).
+  higher on 15G25, 25G38 and 20G40. When the band is raised by at least 0.5 kt, the hold's words say "Bumpy air: nose steady, keep
+  64-74 kt (raised for the bumps), level". The coach line re-renders when the band's words change. Kid holds it hands off
+  in 25G38 and 25 kt (6 seeds each).
 - Short field: Kid's guide flew its 3° through the air (pitch = γ + α). In a 25 kt+ headwind GS / TAS is ~0.6, so it rode
   ~35 ft under the PAPI's path and crossed the threshold at 7-10 ft. assists.js now converts the path over the ground
   (headwindPathRatio, airGammaDeg) before the threshold, and shortField.js drops the 0.5 m/kt headwind lift that made up for
   it. Kid now crosses at 26-28 ft in calm, a 10 kt headwind, a 5 kt tailwind and 15G25 to 25G38, and touches down 114-231 m in.
+  The guide is shared, so every Kid hands-off final moved in a head- or tailwind, and all its cards stay green. 737 15 kt
+  headwind: 266 → 430 m (a float). 737 10 kt tailwind: 747 → 332 m. C172 KADS 16 in a 12 kt headwind: threshold 32 → 47 ft.
+  The wake lesson moved +20-25 m in headwinds and −40 to −80 m in tailwinds. wake.js's own per-knot headwind lift
+  (KID_HEAD_M = 10 m) was not re-derived.
 
 ## Out of scope
 The turbulence model itself (0195).

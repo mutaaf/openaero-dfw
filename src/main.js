@@ -1304,6 +1304,7 @@ byId('btnKeepRolling').addEventListener('click', () => {
 const coach = createCoach();
 let coachEnabled = false;
 let coachShown = undefined; // prompt key on screen, to touch the DOM only on change
+let slowWordsShown = 0; // slowFlight.js slowWordsRev at the last render
 let coachMarked = false; // 'seen' is stored the first time a prompt actually shows
 let coachDoneS = 0;
 const COACH_DONE_SHOW_S = 4;
@@ -1470,6 +1471,8 @@ function updateCoach(dt) {
   // The coach is silent while the autopilot flies, so the tutor takes its card then.
   const caption = updateTutor(dt);
   const key = caption ? `ap:${caption}` : prompt;
+  // A drill's words rewritten under the same key (slow flight's band, 0199) re-render the line.
+  if (sim.slowFlight && sfLib && sfLib.slowWordsRev() !== slowWordsShown) { slowWordsShown = sfLib.slowWordsRev(); coachShown = undefined; }
   if (key === coachShown) return;
   coachShown = key;
   byId('coach').classList.toggle('hidden', key === null);
@@ -2595,7 +2598,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.propAil = sim.propAil; // the prop's torque (0194)
   // The stall drill (0087) turns the stall protection off until the wing stalls (drillAssist).
   const drill = sim.stallDrill ? stallLib.drillAssist(sim.stallDrill.phase) : null;
-  _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex);
+  _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex)
+    - (sim.slowFlight && sfLib ? sfLib.slowGustAoaDeg(sim, sim.assist === 'pilot' ? 1 : 0.5) : 0); // the drill's bumps (0199)
   _assistIn.pitchUpMaxDeg = drill?.pitchUpMaxDeg ?? null; // the power-on stall's nose (0191)
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;

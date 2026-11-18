@@ -201,7 +201,7 @@ describe('the words and the wing (0164)', () => {
   });
   it('a gusty band says so in the hold\'s words (0199)', () => {
     slowBandWords(68, true);
-    expect(DRILL_TEXT.sfwHold).toMatch(/^Gusty air: fly higher in the band, 68-78 kt/);
+    expect(DRILL_TEXT.sfwHold).toMatch(/^Bumpy air: nose steady, keep 68-78 kt/);
     slowBandWords(63);
     expect(DRILL_TEXT.sfwHold).toBe('Hold it: 63-73 kt, level, on your heading');
   });
@@ -227,7 +227,7 @@ describe('the words and the wing (0164)', () => {
     expect(step({ windKts: 0, gustKts: 0 })).toBeCloseTo(TARGET, 0);
     expect(step({ windKts: 25, gustKts: 25 })).toBeCloseTo(turbulenceFloorKts(c, 0, turbulenceSigmaW({ windKts: 25 }), 1.077), 5);
     expect(step({ windKts: 15, gustKts: 25 })).toBeCloseTo(TARGET + SLOW_GUST_SHARE * 10, 0);
-    expect(DRILL_TEXT.sfwHold).toMatch(/^Gusty air/);
+    expect(DRILL_TEXT.sfwHold).toMatch(/^Bumpy air/);
   });
   it('warnAoaDeg: the wing\'s 1 g angle at the warning speed, between the cruise and the stall', () => {
     const c = AIRCRAFT_DATABASE.c172;

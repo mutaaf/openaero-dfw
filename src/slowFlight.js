@@ -70,13 +70,14 @@ Object.assign(RANK, { sfwSlow: 1, sfwSlowing: 1, sfwSlowHigh: 1, sfwNear: 1, sfw
   sfwHdgL: 1, sfwHdgR: 1, sfwHold: 1, sfwTooSlow: 2, sfwHorn: 2, sfwKidIn: 1, sfwKid: 1 });
 // The band's numbers in the words (the HUD's tape marks the horn, not the band): rewritten when the target moves
 // (the flaps), in the drill's own DRILL_TEXT entries, so boot carries none of it.
-// gusty: the band is raised for the METAR's gusts or turbulence, and the hold's words say why.
+// gusty: the band is raised for the METAR's gusts or turbulence, and the hold's words say why and how (AFH ch. 4: in
+// rough air hold the attitude and let the speed wander a little).
 export function slowBandWords(targetKts, gusty = false) {
   const t = Math.round(targetKts), top = t + SLOW_KTS_OVER;
   DRILL_TEXT.sfwSlow = `Throttle back, raise the nose bit by bit: slow to ${top} kt, hold your height`;
   DRILL_TEXT.sfwTooSlow = `Too slow: under ${t} kt. Lower the nose a little, add power`;
   DRILL_TEXT.sfwFast = `Fast: over ${top} kt. A little less power, nose up a little to stay level`;
-  DRILL_TEXT.sfwHold = gusty ? `Gusty air: fly higher in the band, ${t}-${top} kt, level, on your heading`
+  DRILL_TEXT.sfwHold = gusty ? `Bumpy air: nose steady, keep ${t}-${top} kt (raised for the bumps), level`
     : `Hold it: ${t}-${top} kt, level, on your heading`;
 }
 
@@ -216,7 +217,7 @@ export const slowKidKts = (st) => st.kidKts;
 // input, steps the drill and returns its transition. started: the player is flying (main.js
 // cockpitEntered && !modalOpen(): the sim flies behind the start screen, docs/LESSONS.md 0174).
 const _s = { dt: 0, started: false, altFt: 0, iasKts: 0, warnKts: 0, gustAddKts: 0, aoaDeg: 0, warnAoaDeg: 90, hdgDeg: 0, stalled: false, throttle: 0 };
-let wordsKts = 0, wordsGusty = false, aoaFor = null, aoaFlaps = -1, floorWind = -1, floorGust = -1, floorFlaps = -1, floorKts = 0;
+let wordsKts = 0, wordsGusty = false, wordsRev = 0, floorSigma = 0, aoaFor = null, aoaFlaps = -1, floorWind = -1, floorGust = -1, floorFlaps = -1, floorKts = 0;
 export function slowSimStep(st, sim, dt, started) {
   const { x, y, z, w } = sim.quat;
   const flaps = sim.flapPos ?? sim.flapsIndex; // the horn's flaps (main.js): where the wing is
@@ -231,7 +232,8 @@ export function slowSimStep(st, sim, dt, started) {
   // the lever, not the flaps' travel: flapPos moves every substep for seconds and the bisection is ~16 µs).
   if (floorWind !== wx?.windKts || floorGust !== wx?.gustKts || floorFlaps !== sim.flapsIndex || aoaFor !== sim.spec) {
     floorWind = wx?.windKts; floorGust = wx?.gustKts; floorFlaps = sim.flapsIndex;
-    floorKts = turbulenceFloorKts(sim.spec, sim.flapsIndex ?? flaps, turbulenceSigmaW(wx), sim.iasKts > 20 && sim.tasKts > 0 ? sim.tasKts / sim.iasKts : 1);
+    floorSigma = turbulenceSigmaW(wx);
+    floorKts = turbulenceFloorKts(sim.spec, sim.flapsIndex ?? flaps, floorSigma, sim.iasKts > 20 && sim.tasKts > 0 ? sim.tasKts / sim.iasKts : 1);
   }
   _s.gustAddKts = Math.max(share, floorKts - _s.warnKts - SLOW_TARGET_OVER_WARN_KTS);
   _s.hdgDeg = (-Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)) * 180 / Math.PI + 360) % 360;
@@ -240,11 +242,19 @@ export function slowSimStep(st, sim, dt, started) {
   _s.stalled = _s.aoaDeg > stallAoaDeg(sim.spec, flaps);
   _s.throttle = sim.throttle ?? 0;
   const ev = slowFlightStep(st, _s);
-  const gusty = _s.gustAddKts > 0;
-  if (Math.round(st.targetKts) !== wordsKts || gusty !== wordsGusty) { wordsKts = Math.round(st.targetKts); wordsGusty = gusty; slowBandWords(st.targetKts, gusty); }
+  const gusty = _s.gustAddKts >= 0.5; // the band visibly raised (a steady 22 kt's 0.3 kt is not)
+  if (Math.round(st.targetKts) !== wordsKts || gusty !== wordsGusty) { wordsKts = Math.round(st.targetKts); wordsGusty = gusty; slowBandWords(st.targetKts, gusty); wordsRev++; }
   return ev;
 }
 export const slowCoach = (st, kid) => slowPrompt(st, _s, kid);
+// Bumped when the band's words are rewritten (main.js re-renders a coach line whose key has not changed).
+export const slowWordsRev = () => wordsRev;
+// Learner's angle-of-attack protection in the drill (main.js applyAssists, assists.js: stall − 4°) less the gust a
+// SLOW_LEARNER_SIGMAS σ_w eddy adds (w / V) at the share of the turbulence the level flies (0199 panel: full back stick
+// at idle in Learner's half of 20G40 stalled 30 seeds in 30 on the protection alone). sim: tasKts; 0 in calm air.
+export const SLOW_LEARNER_SIGMAS = 2;
+export const slowGustAoaDeg = (sim, share) => (floorSigma > 0
+  ? SLOW_LEARNER_SIGMAS * floorSigma * share / Math.max(20, (sim.tasKts ?? 0) * KTS_TO_MPS) * 180 / Math.PI : 0);
 export const kidGuide = (st, out) => slowKidGuide(st, _s, out);
 
 const WEIGHTS = { alt: 0.35, hdg: 0.25, speed: 0.4 };
