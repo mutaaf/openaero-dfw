@@ -220,6 +220,25 @@ export function groundSteerRudder(rwyHdgDeg, noseHdgDeg, crossM, crossVelMps, st
 export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
   0.8 * bankCommandForHeading(headingError(runwayHdgDeg + clamp(-crossM * 0.15, -20, 20), curHdgDeg));
 
+// A path over the ground (deg) as the path through the air that flies it: the vertical speed is the same, GS tan γ_ground =
+// TAS sin γ_air. ratio = GS / TAS (1 in still air: unchanged to 0.01° at 3°).
+export function airGammaDeg(groundGammaDeg, ratio = 1) {
+  if (!(ratio > 0) || ratio === 1) return groundGammaDeg;
+  const s = ratio * Math.tan(groundGammaDeg * Math.PI / 180);
+  return Math.asin(Math.max(-1, Math.min(1, s))) * 180 / Math.PI;
+}
+
+// The guide's ratio for airGammaDeg (0199): the ground speed over the airspeed along the track (m/s; v the velocity over the
+// ground, w the wind, both in the sim frame's horizontal). A headwind's share only: in a crab the air's along-track speed
+// is the ground speed, so a crosswind leaves it 1. (The exact ratio, GS / TAS, is cos(crab) lower in a crosswind: under
+// 0.01 for the 737 in 15 kt, ~0.03 for the Cessna; a 0.1° shallower path left out.)
+export function headwindPathRatio(vx, vz, wx, wz) {
+  const gs = Math.hypot(vx, vz);
+  if (gs < 1) return 1;
+  const airAlong = ((vx - wx) * vx + (vz - wz) * vz) / gs;
+  return airAlong > 1 ? gs / airAlong : 1;
+}
+
 // Kid's hands-off final (main.js applyAssists): `ap` is airports.js approachGeometry for `end`.
 // Captured on the nose (within 45°), flown on the ground track so a crab holds the centreline
 // (0097), the 3° path to its aim point and on over the runway, under the auto-flare's floor, so
@@ -229,7 +248,10 @@ export const kidLocalizerBankDeg = (runwayHdgDeg, curHdgDeg, crossM) =>
 // alone (level flight) off the final. liftM: the path that much higher, its aim point liftM / tan 3° further down the
 // runway (the wake lesson, 0115: past the jet's touchdown point, wake.js kidLiftM): the threshold allowance (30 m +
 // liftM), the first third and the 2° floor (3° on a lifted path: it is still the path) move with it.
-export function kidFinalGuide(end, ap, noseDeg, trackDeg, out, liftM = 0) {
+// gsOverTas (headwindPathRatio): the path is the PAPI's, over the ground; the guide's angle is flown through the air
+// (pitch = γ + α), so it is converted: sin γ_air = (GS / TAS) tan γ_ground (0199: in a 25 kt+ headwind the Cessna's
+// ratio is ~0.6 and the unconverted 3° rode ~35 ft under the PAPI's path to the threshold).
+export function kidFinalGuide(end, ap, noseDeg, trackDeg, out, liftM = 0, gsOverTas = 1) {
   const past = ap.distM < 0;
   if (past && ap.heightAbovePathM + ap.pathHeightM > 30 + liftM) return;
   if (ap.distM < 20000 && Math.abs(ap.crossM) < 1500 && Math.abs(headingError(end.hdgT, noseDeg)) < 45) {
@@ -237,8 +259,9 @@ export function kidFinalGuide(end, ap, noseDeg, trackDeg, out, liftM = 0) {
     // float 12 m downwind; the bank, under the flare's 5° cap, puts the wing down into the wind).
     out.guideBankDeg = kidLocalizerBankDeg(end.hdgT, trackDeg, ap.crossM);
     if (past && -ap.distM > (end.lengthM - end.displacedM) / 3 + liftM * 19.08) return; // no path to dive at past the first third (19.08 = 1 / tan 3°)
-    out.guideGammaDeg = glidepathGammaDeg(ap.heightAbovePathM - liftM);
-    if (past) out.guideGammaDeg = Math.max(out.guideGammaDeg, liftM > 0 ? -3 : -2);
+    // The PAPI's path over the ground up to the threshold; over the runway the auto-flare's floor flies it (as before).
+    out.guideGammaDeg = past ? Math.max(glidepathGammaDeg(ap.heightAbovePathM - liftM), liftM > 0 ? -3 : -2)
+      : airGammaDeg(glidepathGammaDeg(ap.heightAbovePathM - liftM), gsOverTas);
   }
 }
 

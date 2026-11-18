@@ -15,7 +15,7 @@ import { airAt } from '../../src/atmosphere.js';
 import { stallAoaDeg, headingError } from '../../src/aero.js';
 import { autothrottleCommand } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, selectActiveRunway } from '../../src/airports.js';
-import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidFinalGuide, headwindPathRatio } from '../../src/assists.js';
 import { driftAngleDeg } from '../../src/landing.js';
 import { missionByKey } from '../../src/missions.js';
 import { PATTERN_KEY, ENTRY_KEY, createPattern, kidGuide, patternPrompt, patternLeg, entryLeg, entryStep, entryResult, PT_TPA_FT } from '../../src/pattern.js';
@@ -66,7 +66,8 @@ function flyPattern({ fromDeg = 0, kts = 0 } = {}, { rollS = 0, key = PATTERN_KE
     const ap = e ? approachGeometry(e, x.pos) : null;
     // main.js: the final's guide when lined up (assists.js kidFinalGuide), else the pattern's
     // (pattern.js kidGuide).
-    if (e) kidFinalGuide(e, ap, -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s);
+    if (e) kidFinalGuide(e, ap, -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s, 0,
+      headwindPathRatio(x.vel.x, x.vel.z, x.windVec.x, x.windVec.z)); // main.js applyAssists (0199)
     kidGuide(st, sim, s);
     if (steer && !steer(x, st, s, sim)) steer = null;
     Object.assign(s, {

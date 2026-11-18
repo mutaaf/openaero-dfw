@@ -3,6 +3,7 @@ import {
   SLOW_KEY, SLOW_TEXT, SLOW_ACS_CAP, SLOW_WARN_CAP, SLOW_LOST_CAP, SLOW_HOLD_S, SLOW_HOLD_MAX_S, SLOW_FAIL_SLOWING_S,
   SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_KID_DECEL_KTS_S, SLOW_GUST_SHARE,
   createSlowFlight, slowFlightStep, slowSimStep, slowPrompt, slowKidGuide, slowKidKts, gradeSlowFlight, slowBandWords, warnAoaDeg,
+  turbulenceFloorKts, SLOW_TURB_SIGMAS,
 } from '../../src/slowFlight.js';
 import { coachText, DRILL_TEXT } from '../../src/coach.js';
 import { MISSIONS, missionByKey, groupMissions } from '../../src/missions.js';
@@ -10,7 +11,8 @@ import { missionFromLink } from '../../src/deeplink.js';
 import { quietMission } from '../../src/tower.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallWarningKts, stallAoaDeg, stallSpeedKts, liftCoefficient } from '../../src/aero.js';
-import { M_TO_FT } from '../../src/constants.js';
+import { M_TO_FT, KTS_TO_MPS } from '../../src/constants.js';
+import { turbulenceSigmaW } from '../../src/turbulence.js';
 
 const DT = 0.1;
 const WARN = 58;
@@ -196,6 +198,36 @@ describe('the words and the wing (0164)', () => {
     expect(DRILL_TEXT.sfwTooSlow).toMatch(/under 63 kt/);
     expect(DRILL_TEXT.sfwFast).toMatch(/over 73 kt/);
     expect(DRILL_TEXT.sfwHold).toMatch(/63-73 kt/);
+  });
+  it('a gusty band says so in the hold\'s words (0199)', () => {
+    slowBandWords(68, true);
+    expect(DRILL_TEXT.sfwHold).toMatch(/^Bumpy air: nose steady, keep 68-78 kt/);
+    slowBandWords(63);
+    expect(DRILL_TEXT.sfwHold).toBe('Hold it: 63-73 kt, level, on your heading');
+  });
+  it('turbulenceFloorKts (0199): the 1 g angle plus a 3 σ_w gust (w / V) reaches the stall angle exactly at the floor', () => {
+    const c = AIRCRAFT_DATABASE.c172, aS = stallAoaDeg(c, 0), r = 1.077; // TAS / IAS at ~5,000 ft
+    expect(SLOW_TURB_SIGMAS).toBe(3);
+    expect(turbulenceFloorKts(c, 0, 0, r)).toBe(0);
+    const sw = turbulenceSigmaW({ windKts: 25, gustKts: 25 });
+    const v = turbulenceFloorKts(c, 0, sw, r);
+    // At the floor: CL(α1g) = CLmax (Vs/V)², α1g + 3 σ_w / V_true = the stall angle.
+    const gustDeg = 3 * sw / (v * KTS_TO_MPS * r) * 180 / Math.PI;
+    const cl = liftCoefficient(c, (aS - gustDeg) * Math.PI / 180, 0), clMax = liftCoefficient(c, aS * Math.PI / 180, 0);
+    expect(cl).toBeCloseTo(clMax * (stallSpeedKts(c, 0) / v) ** 2, 3);
+    expect(v).toBeGreaterThan(TARGET); // a steady 25 kt raises the C172's low edge 63 → ~64
+    expect(v).toBeLessThan(TARGET + 2);
+    // Higher in more turbulence, and at sea level (TAS = IAS: the same w is a larger angle at the same IAS).
+    expect(turbulenceFloorKts(c, 0, 2 * sw, r)).toBeGreaterThan(v);
+    expect(turbulenceFloorKts(c, 0, sw, 1)).toBeGreaterThan(v);
+  });
+  it('slowSimStep raises the band to the turbulence floor in a steady wind, keeps the gust share when higher (0199)', () => {
+    const c = AIRCRAFT_DATABASE.c172, sim = { quat: { x: 0, y: 0, z: 0, w: 1 }, pos: { y: 1524 }, iasKts: 95, tasKts: 95 * 1.077, spec: c, flapsIndex: 0, aoaDeg: 2 };
+    const step = (wx) => { const st = createSlowFlight(); sim.wx = wx; slowSimStep(st, sim, DT, false); return st.targetKts; };
+    expect(step({ windKts: 0, gustKts: 0 })).toBeCloseTo(TARGET, 0);
+    expect(step({ windKts: 25, gustKts: 25 })).toBeCloseTo(turbulenceFloorKts(c, 0, turbulenceSigmaW({ windKts: 25 }), 1.077), 5);
+    expect(step({ windKts: 15, gustKts: 25 })).toBeCloseTo(TARGET + SLOW_GUST_SHARE * 10, 0);
+    expect(DRILL_TEXT.sfwHold).toMatch(/^Bumpy air/);
   });
   it('warnAoaDeg: the wing\'s 1 g angle at the warning speed, between the cruise and the stall', () => {
     const c = AIRCRAFT_DATABASE.c172;

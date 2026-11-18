@@ -178,12 +178,13 @@ export function shortFieldPrompt(sf, s, ap) {
 // gustAddKts on a gusty day (assists.js kidGustAddKts: half the gust spread, ACS S7's "gust factor applied", 0195).
 export const kidKts = (flapsFull, gustAddKts = 0) => (flapsFull ? APPROACH_KTS + gustAddKts : 0);
 // Kid's guide (assists.js kidFinalGuide liftM): its flare floats the Cessna ~390 m in on the PAPI's path in calm air (past
-// the 1,000 ft line, ~480 m in a 5 kt tailwind), so Kid's path aims KID_LIFT_M lower, less KID_HEAD_M per knot of the
-// METAR's headwind (a headwind already lands it short; none lower past 12 kt). Kid crosses the threshold ~27 ft up and
-// touches down ~220 m in from a 10 kt headwind to a 5 kt tailwind (tests/flight/kidFinal.test.js). Metres, <= 0.
+// the 1,000 ft line), so Kid's path aims KID_LIFT_M lower, whatever the wind. Until 0199 it aimed 0.5 m higher per knot of
+// headwind: that made up for the guide flying its 3° through the air, which in a headwind rode under the PAPI's path (to
+// ~7 ft over the threshold in 25G38). The guide now flies the path over the ground (assists.js airGammaDeg), and Kid
+// crosses the threshold 26-28 ft up and touches down ~115-230 m in from a 25 kt headwind to a 5 kt tailwind
+// (tests/flight/kidFinal.test.js). Metres, < 0.
 export const KID_LIFT_M = -6;
-export const KID_HEAD_M = 0.5;
-export const kidLiftM = (wx, hdgT) => Math.min(0, KID_LIFT_M + KID_HEAD_M * headwindKts(wx, hdgT));
+export const kidLiftM = () => KID_LIFT_M;
 
 const ft = (m) => Math.round(Math.abs(m) * M_TO_FT);
 // Touchdown point, metres past the threshold: full marks from 400 ft short of the POH's touchdown to the 1,000 ft line.

@@ -12,12 +12,12 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { FT_TO_M, GRAVITY, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { elevatorForPitch, aileronForBank, autothrottleCommand } from '../../src/autopilot.js';
 import { stallAoaDeg, stallWarningKts } from '../../src/aero.js';
-import { createSlowFlight, slowSimStep, gradeSlowFlight, kidGuide, slowKidKts, SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_GUST_SHARE } from '../../src/slowFlight.js';
+import { createSlowFlight, slowSimStep, gradeSlowFlight, kidGuide, slowKidKts, SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_GUST_SHARE, SLOW_IAS_TAU_S, slowGustAoaDeg } from '../../src/slowFlight.js';
 import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
 import { assistConfig, createAssistState, shapeControls, slewRudder } from '../../src/assists.js';
 import { gustFactor } from '../../src/weather.js';
-import { makeBody, fly, attitude } from './harness.js';
+import { makeBody, fly, attitude, turbulentAir } from './harness.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const KTS = 95;
@@ -27,24 +27,36 @@ const TARGET = WARN + SLOW_TARGET_OVER_WARN_KTS;
 
 // holdKts: the speed the pilot slows to and holds (the band's middle unless asked otherwise).
 // tail: a METAR wind from behind (kts, gust kts), the air the game's updateWind adds (weather.js gustFactor).
-function slowFlight({ holdKts = null, tail = null } = {}) {
+// wx: a METAR from behind (windKts, gustKts) flown as the game flies it: weather.js's gust cycle and turbulence.js's
+// Dryden gusts (harness.js turbulentAir, the pilot's full share), seeded. holdKts then defaults to the drill's own band's middle.
+// The start is the game's: 95 kt along the heading over the ground (main.js spawns in-air missions without the wind), so a
+// tailwind starts it slower through the air.
+function slowFlight({ holdKts = null, tail = null, wx = null, seed = 1 } = {}) {
+  const midBand = holdKts === null && wx !== null;
   holdKts ??= TARGET + (tail ? SLOW_GUST_SHARE * (tail[1] - tail[0]) : 0) + SLOW_KTS_OVER / 2;
   const b = makeBody(c172, { kts: KTS, altM: ALT_FT * FT_TO_M, throttle: 0 });
   b.spec = c172;
   if (tail) b.wx = { windKts: tail[0], gustKts: tail[1] };
+  const air = wx && turbulentAir(c172, b.wx = { windDirDeg: 180, ...wx }, { seed });
   b.throttle = b.engineN = trimThrottle(c172, KTS * KTS_TO_MPS, 0, 0, true, airAt(b.pos.y));
   const st = createSlowFlight();
   const alt0 = b.pos.y;
   const prevVel = b.vel.clone(), f = new Vector3(), inv = new Quaternion();
-  let rudInt = 0, thrInt = b.throttle, ev = '', maxAoa = 0, minIas = Infinity, target = KTS, lastIas = null, trend = 0;
+  let iasR = KTS, rudInt = 0, thrInt = b.throttle, ev = '', maxAoa = 0, minIas = Infinity, target = null, lastIas = null, trend = 0;
   const pilot = (x, dt) => {
     if (tail) x.windVec.set(0, 0, -gustFactor(x.t, tail[0], tail[1]) * KTS_TO_MPS); // heading north, the air blowing north
+    if (air) air(x, dt);
+    if (midBand && st.targetKts > 0) holdKts = st.targetKts + SLOW_KTS_OVER / 2;
     const { pitchDeg, bankRightDeg } = attitude(x);
     // The speed with the nose: back from 95 at 1 kt/s to the hold speed, damped by the speed trend.
+    if (target === null) target = Math.min(KTS, x.iasKts); // from the speed it starts at (a tailwind spawn is slower through the air)
     target = Math.max(holdKts, target - dt);
-    if (lastIas !== null) trend += ((x.iasKts - lastIas) / dt - trend) * Math.min(1, dt * 4);
-    lastIas = x.iasKts;
-    const err = x.iasKts - target;
+    // In turbulence the pilot reads the airspeed through the eddies (AFH FAA-H-8083-3C ch. 4: hold the attitude, let the
+    // airspeed wander), as the drill's own SLOW_IAS_TAU_S filter does; chasing each gust's IAS pumped the elevator to 20°/s.
+    iasR = air ? iasR + (x.iasKts - iasR) * Math.min(1, dt / SLOW_IAS_TAU_S) : x.iasKts;
+    if (lastIas !== null) trend += ((iasR - lastIas) / dt - trend) * Math.min(1, dt * 4);
+    lastIas = iasR;
+    const err = iasR - target;
     x.pitchTrim = (x.pitchTrim ?? x.pitchCmd) + err * 0.08 * dt;
     x.pitchCmd = Math.max(-10, Math.min(20, x.pitchTrim + err * 0.6 + trend * 2.5));
     x.elevInput = elevatorForPitch(x.pitchCmd, pitchDeg, x.angVel.x);
@@ -115,14 +127,17 @@ describe('C172 slow flight (0164, FAA-S-ACS-6C Area VII Task A)', () => {
 
 // Kid and Learner through main.js applyAssists as it runs in the mission: assists.js shapeControls with
 // slowFlight.js's guide, Kid's autothrottle on slowKidKts (main.js autoThrottle). pitchIn: Learner's stick.
-function assisted(level, { pitchIn = () => 0, throttle = null, seconds = 240 } = {}) {
+function assisted(level, { pitchIn = () => 0, throttle = null, seconds = 240, wx = null, seed = 1 } = {}) {
   const b = makeBody(c172, { kts: KTS, altM: ALT_FT * FT_TO_M, throttle: 0 });
   b.spec = c172;
+  // wx: the METAR from behind, flown at the level's share of the turbulence (main.js updateWind, 0199: no smooth-air exemption).
+  const air = wx && turbulentAir(c172, b.wx = { windDirDeg: 180, ...wx }, { seed, level });
   b.throttle = b.engineN = trimThrottle(c172, KTS * KTS_TO_MPS, 0, 0, true, airAt(b.pos.y));
   b.apMaster = false;
   const cfg = assistConfig(level), ast = createAssistState(), st = createSlowFlight(), s = {}, out = {}, at = { trim: 0 };
   let prevIas = null, iasRate = 0, ev = '', maxAoa = 0, minIas = Infinity;
   fly(b, c172, seconds, (x, dt) => {
+    if (air) air(x, dt);
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
     kidGuide(st, s);
@@ -130,7 +145,7 @@ function assisted(level, { pitchIn = () => 0, throttle = null, seconds = 240 } =
       pitchIn: pitchIn(x), rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
       rollScale: rollHoldScale(c172, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y, driftDeg: 0,
       aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * DEG_TO_RAD), propAil: x.propAil ?? 0,
-      stallAoaDeg: stallAoaDeg(c172, 0), tailstrikeDeg: 15, onGround: false, noseWheelDown: false, wheelHeightM: 1400,
+      stallAoaDeg: stallAoaDeg(c172, 0) - (level === 'pilot' ? 0 : slowGustAoaDeg(x, 0.5)), tailstrikeDeg: 15, // main.js applyAssists (0199) onGround: false, noseWheelDown: false, wheelHeightM: 1400,
       airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, bankMaxDeg: 0,
     });
     shapeControls(cfg, ast, s, dt, out);
@@ -151,6 +166,24 @@ function assisted(level, { pitchIn = () => 0, throttle = null, seconds = 240 } =
   return { st, grade: gradeSlowFlight(st, level === 'kid'), maxAoa, minIas, t: b.t, throttle: b.throttle };
 }
 
+// 0199: the band's middle in the METAR's own turbulence (0195), several seeds: the pilot who flies the standard
+// neither stalls nor holds the horn. Before 0199 the band rose for the gust spread only and the drill flew smooth air.
+const GUSTY = [[15, 25], [25, 38], [25, 25]];
+const SEEDS = [1, 2, 3, 4, 5, 6];
+describe('C172 slow flight in turbulence (0199)', () => {
+  for (const [windKts, gustKts] of GUSTY) {
+    it(`${windKts}${gustKts > windKts ? `G${gustKts}` : ''} kt from behind with its Dryden gusts, ${SEEDS.length} seeds: the band's middle never stalls, the horn stays inside the drill's rules`, () => {
+      for (const seed of SEEDS) {
+        const r = slowFlight({ wx: { windKts, gustKts }, seed });
+        line(`${windKts}G${gustKts} seed ${seed}`, r);
+        expect(r.st.phase, `seed ${seed}`).toBe('complete');
+        expect(r.maxAoa, `seed ${seed}`).toBeLessThan(stallAoaDeg(c172, 0));
+        expect(r.st.warned, `seed ${seed}`).toBe(false);
+      }
+    });
+  }
+});
+
 describe('C172 slow flight on the assists (0164: main.js applyAssists in the mission)', () => {
   it('Kid, hands off: the guide and the autothrottle fly the hold inside the test standard', () => {
     const r = assisted('kid');
@@ -160,6 +193,23 @@ describe('C172 slow flight on the assists (0164: main.js applyAssists in the mis
     expect(r.st.warned).toBe(false);
     expect(['S', 'A']).toContain(r.grade.grade);
     expect(r.grade.note).toMatch(/for you/);
+  });
+  it('Kid, hands off in the METAR\'s turbulence (0199: Kid\'s half share at 4,500 ft), 25G38 and a steady 25 kt, 6 seeds: no stall, no horn', () => {
+    for (const [windKts, gustKts] of [[25, 38], [25, 25]]) for (const seed of SEEDS) {
+      const r = assisted('kid', { wx: { windKts, gustKts }, seed });
+      line(`kid ${windKts}G${gustKts} seed ${seed}`, r);
+      expect(r.st.phase, `${windKts}G${gustKts} seed ${seed}`).toBe('complete');
+      expect(r.maxAoa, `${windKts}G${gustKts} seed ${seed}`).toBeLessThan(stallAoaDeg(c172, 0));
+      expect(r.st.warned, `${windKts}G${gustKts} seed ${seed}`).toBe(false);
+    }
+  });
+  it('Learner, full back stick at idle in Learner\'s half of the turbulence (0199 panel), 10G30 to 25G38, 10 seeds: the horn, never the stall', () => {
+    for (const [windKts, gustKts] of [[10, 30], [15, 30], [20, 40], [25, 38]]) for (let seed = 1; seed <= 10; seed++) {
+      const r = assisted('learner', { pitchIn: () => -1, throttle: 0, seconds: 60, wx: { windKts, gustKts }, seed });
+      // At idle for a minute it may sink out of the drill's 500 ft (graded D for height): not a stall.
+      expect(r.maxAoa, `${windKts}G${gustKts} seed ${seed}`).toBeLessThan(stallAoaDeg(c172, 0));
+      expect(r.st.why, `${windKts}G${gustKts} seed ${seed}`).not.toBe('stall');
+    }
   });
   it('Learner, full back stick at idle: the assists let the Cessna reach the horn, not the stall (no floor above the band)', () => {
     const r = assisted('learner', { pitchIn: () => -1, throttle: 0, seconds: 60 });

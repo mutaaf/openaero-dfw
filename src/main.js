@@ -39,7 +39,7 @@ import {
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls, slewRudder,
-  autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide, headwindPathRatio, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
   groundSteerRudder,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare, keyCode } from './input.js';
@@ -1304,6 +1304,7 @@ byId('btnKeepRolling').addEventListener('click', () => {
 const coach = createCoach();
 let coachEnabled = false;
 let coachShown = undefined; // prompt key on screen, to touch the DOM only on change
+let slowWordsShown = 0; // slowFlight.js slowWordsRev at the last render
 let coachMarked = false; // 'seen' is stored the first time a prompt actually shows
 let coachDoneS = 0;
 const COACH_DONE_SHOW_S = 4;
@@ -1470,6 +1471,8 @@ function updateCoach(dt) {
   // The coach is silent while the autopilot flies, so the tutor takes its card then.
   const caption = updateTutor(dt);
   const key = caption ? `ap:${caption}` : prompt;
+  // A drill's words rewritten under the same key (slow flight's band, 0199) re-render the line.
+  if (sim.slowFlight && sfLib && sfLib.slowWordsRev() !== slowWordsShown) { slowWordsShown = sfLib.slowWordsRev(); coachShown = undefined; }
   if (key === coachShown) return;
   coachShown = key;
   byId('coach').classList.toggle('hidden', key === null);
@@ -1726,9 +1729,9 @@ function updateWind(dt) {
   const w = windVector(wx.windDirDeg, sim.windNowKts * KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY));
   sim.windVec.set(w.x, 0, w.z);
   // The METAR's turbulence (0195, Dryden: turbulence.js) at the wheels' height, none on the ground; Kid and Learner fly
-  // part of it (assistTurbulenceScale). The slow-flight drill flies smooth air for now (its band has no turbulence margin: 0199);
+  // part of it (assistTurbulenceScale); the slow-flight drill's band rises for it (0199, slowFlight.js turbulenceFloorKts);
   // in the windshear drill's shear the microburst's downdraft replaces the vertical gust (windshear.js sets windVec.y).
-  if (metarLib) metarLib.addTurbulence(turb ??= metarLib.createTurbulence(Date.now()), dt, sim.slowFlight || sim.onGround ? 0 : metarLib.turbulenceSigmaW(wx) * metarLib.assistTurbulenceScale(sim.assist, sim.raFt), sim.raFt * FT_TO_M, sim.tasKts * KTS_TO_MPS, sim.quat, sim.windVec, sim.spec.wingSpanM);
+  if (metarLib) metarLib.addTurbulence(turb ??= metarLib.createTurbulence(Date.now()), dt, sim.onGround ? 0 : metarLib.turbulenceSigmaW(wx) * metarLib.assistTurbulenceScale(sim.assist, sim.raFt), sim.raFt * FT_TO_M, sim.tasKts * KTS_TO_MPS, sim.quat, sim.windVec, sim.spec.wingSpanM);
   if (sim.windshear) wsLib.addShearWind(sim.windshear, sim); // the microburst (0112)
 }
 
@@ -2595,7 +2598,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   _assistIn.propAil = sim.propAil; // the prop's torque (0194)
   // The stall drill (0087) turns the stall protection off until the wing stalls (drillAssist).
   const drill = sim.stallDrill ? stallLib.drillAssist(sim.stallDrill.phase) : null;
-  _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex);
+  _assistIn.stallAoaDeg = drill && !drill.protect ? NO_AOA_LIMIT_DEG : stallAoaDeg(spec, sim.flapsIndex)
+    - (sim.slowFlight && sfLib ? sfLib.slowGustAoaDeg(sim, sim.assist === 'pilot' ? 1 : 0.5) : 0); // the drill's bumps (0199)
   _assistIn.pitchUpMaxDeg = drill?.pitchUpMaxDeg ?? null; // the power-on stall's nose (0191)
   _assistIn.tailstrikeDeg = spec.maxGroundPitchDeg ?? 15;
   _assistIn.onGround = sim.onGround;
@@ -2620,7 +2624,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   } else if (departing || drill?.kidClimb) {
     _assistIn.guideGammaDeg = KID_CLIMB_GAMMA_DEG; // after lift-off or a stall: climb away, wings level
   } else if (cfg.handsOff && sim.activeEnd && !pendingLanding) { // a bounce settles under the flare alone
-    kidFinalGuide(sim.activeEnd, ap, noseDeg, trackDeg, _assistIn, sim.wake?.end.id === sim.activeEnd.id ? wakeLib.kidLiftM(sim.wake, undefined, sim.wx) : sim.shortField ? sfdLib.kidLiftM(sim.wx, sim.activeEnd.hdgT) : 0);
+    kidFinalGuide(sim.activeEnd, ap, noseDeg, trackDeg, _assistIn, sim.wake?.end.id === sim.activeEnd.id ? wakeLib.kidLiftM(sim.wake, undefined, sim.wx) : sim.shortField ? sfdLib.kidLiftM() : 0,
+      headwindPathRatio(sim.vel.x, sim.vel.z, sim.windVec.x, sim.windVec.z)); // the path over the ground (0199)
   }
   // No engine (0036): Kid's hands-off guide flies best glide and the challenge's pattern to
   // Addison, not a glidepath it can't hold (deadStick.js kidGuide).

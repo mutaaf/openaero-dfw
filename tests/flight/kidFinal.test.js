@@ -14,7 +14,7 @@ import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { stallAoaDeg, landingFlaps } from '../../src/aero.js';
 import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src/airports.js';
-import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide, headwindPathRatio } from '../../src/assists.js';
 import { missionByKey } from '../../src/missions.js';
 import { kidLiftM, wakeResult, createWake, DONE_NOTE } from '../../src/wake.js';
 import { SHORT_FIELD_KEY, kidKts as sfKidKts, kidLiftM as sfKidLiftM, LONG_M as SF_LONG_M, FULL_FLAPS as SF_FULL_FLAPS } from '../../src/shortField.js';
@@ -78,7 +78,8 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gust
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
     const noseDeg = -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI;
-    kidFinalGuide(end, ap, noseDeg, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s, lift ? lift(ap) : 0);
+    kidFinalGuide(end, ap, noseDeg, Math.atan2(x.vel.x, -x.vel.z) * 180 / Math.PI, s, lift ? lift(ap) : 0,
+      headwindPathRatio(x.vel.x, x.vel.z, x.windVec.x, x.windVec.z)); // main.js applyAssists (0199)
     Object.assign(s, {
       pitchIn: stick ? stick(wheelM * M_TO_FT) : 0, rollIn: 0, yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z, rollScale: rollHoldScale(spec, (x.tasKts ?? 0) * KTS_TO_MPS),
       yawRateRight: -x.angVel.y, driftDeg: driftAngleDeg(noseDeg, x.vel.x, x.vel.z),
@@ -430,7 +431,7 @@ describe('Kid hands off on the wake lesson lands the Cessna beyond the jet (tick
 describe('Kid hands off on the short-field lesson touches down in the first 1,000 ft (ticket 0181)', () => {
   for (const [name, wind] of [['calm', {}], ['10 kt headwind', { fromDeg: 160, kts: 10 }], ['5 kt tailwind', { fromDeg: 340, kts: 5 }]]) {
     it(`kads_16_short_field, ${name}`, () => {
-      const r = flyKidFinal('c172', SHORT_FIELD_KEY, wind, null, null, 0, 0, 1, () => sfKidLiftM({ windDirDeg: wind.fromDeg ?? 0, windKts: wind.kts ?? 0 }, 160), sfKidKts, SF_FULL_FLAPS);
+      const r = flyKidFinal('c172', SHORT_FIELD_KEY, wind, null, null, 0, 0, 1, sfKidLiftM, sfKidKts, SF_FULL_FLAPS);
       log('c172', SHORT_FIELD_KEY, name, r);
       expectLanded(r);
       expect(r.td.pastThrM).toBeLessThanOrEqual(SF_LONG_M - 30); // 100 ft of margin to the line
@@ -463,19 +464,20 @@ describe('Kid hands off on a turbulent 25G38 day still lands C or better (ticket
   }
 });
 
-// 0195: the short-field lesson on a gusty day. The lesson's 61 KIAS wins over Kid's own target, so its autothrottle takes the
+// 0195: the short-field lesson on a gusty day (0199 adds 25G38: Kid's guide sagged ~35 ft under the path in its headwind). The lesson's 61 KIAS wins over Kid's own target, so its autothrottle takes the
 // same half-gust additive (shortField.js kidKts, ACS S7's "gust factor applied"); a 15G25 and a 25G38 day at Kid's share of the
 // turbulence, ten seeds each: on the runway past the threshold, not hard (the 1,000 ft zone is the lesson's grade, not this card's).
 describe('Kid hands off on the short-field lesson on a turbulent gusty day lands on the runway (ticket 0195)', () => {
-  for (const [w, k, g] of [[160, 15, 25], [160, 20, 30]]) {
+  for (const [w, k, g] of [[160, 15, 25], [160, 20, 30], [160, 25, 38]]) {
     for (let seed = 1; seed <= 10; seed++) {
       it(`kads_16_short_field, ${k}G${g} down the runway, seed ${seed}`, () => {
         const spec = AIRCRAFT_DATABASE.c172, wx = { windDirDeg: w, windKts: k, gustKts: g }, add = kidGustAddKts(spec, wx);
         const r = flyKidFinal('c172', SHORT_FIELD_KEY, { fromDeg: w, kts: k, air: turbulentAir(spec, wx, { seed, level: 'kid' }) }, null, null, 0, 0, 1,
-          () => sfKidLiftM({ windDirDeg: w, windKts: k }, 160), (full) => sfKidKts(full, add), SF_FULL_FLAPS);
+          sfKidLiftM, (full) => sfKidKts(full, add), SF_FULL_FLAPS);
         log('c172', SHORT_FIELD_KEY, `${k}G${g} turbulent seed ${seed}`, r);
         expect(r.td).not.toBeNull();
         expect(r.td.pastThrM).toBeGreaterThan(0);
+        expect(r.thrFt).toBeGreaterThan(20); // 0199: on the path to the threshold (25G38 crossed it at 7-10 ft before)
         expect(r.td.vsFpm).toBeGreaterThan(-600);
         expect(Math.abs(r.td.crossM)).toBeLessThan(8);
       }, 30000);
