@@ -227,10 +227,11 @@ export function slowSimStep(st, sim, dt, started) {
   _s.warnKts = stallWarningKts(sim.spec, flaps);
   const wx = sim.wx;
   const share = wx?.gustKts > wx?.windKts ? SLOW_GUST_SHARE * (wx.gustKts - wx.windKts) : 0;
-  // The turbulence floor (0199), worked out again only when the weather, flaps or airplane change.
-  if (floorWind !== wx?.windKts || floorGust !== wx?.gustKts || floorFlaps !== flaps || aoaFor !== sim.spec) {
-    floorWind = wx?.windKts; floorGust = wx?.gustKts; floorFlaps = flaps;
-    floorKts = turbulenceFloorKts(sim.spec, flaps, turbulenceSigmaW(wx), sim.iasKts > 20 && sim.tasKts > 0 ? sim.tasKts / sim.iasKts : 1);
+  // The turbulence floor (0199), worked out again only when the weather, the flap lever or the airplane change (keyed on
+  // the lever, not the flaps' travel: flapPos moves every substep for seconds and the bisection is ~16 µs).
+  if (floorWind !== wx?.windKts || floorGust !== wx?.gustKts || floorFlaps !== sim.flapsIndex || aoaFor !== sim.spec) {
+    floorWind = wx?.windKts; floorGust = wx?.gustKts; floorFlaps = sim.flapsIndex;
+    floorKts = turbulenceFloorKts(sim.spec, sim.flapsIndex ?? flaps, turbulenceSigmaW(wx), sim.iasKts > 20 && sim.tasKts > 0 ? sim.tasKts / sim.iasKts : 1);
   }
   _s.gustAddKts = Math.max(share, floorKts - _s.warnKts - SLOW_TARGET_OVER_WARN_KTS);
   _s.hdgDeg = (-Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)) * 180 / Math.PI + 360) % 360;
