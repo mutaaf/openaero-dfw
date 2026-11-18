@@ -1,8 +1,8 @@
 ---
 id: 0170
 title: C172 held pull at Vr: flightModel.js over-rotates 3-5° past JSBSim, and a released pull on Vy trim settles back
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: authenticity
 created: 2026-11-10
