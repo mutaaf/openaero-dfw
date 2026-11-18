@@ -1,6 +1,6 @@
 ---
 id: 0201
-title: 737 landing-roll flight card: autobrake and max manual braking stop within Boeing's dry-runway landing distance
+title: 737 landing-roll flight card: max manual braking stops within Boeing's dry-runway landing distance at DFW and 2,000 ft; autobrake ordered
 status: shipped
 priority: P2
 size: M
@@ -16,9 +16,9 @@ pr: 286
 Add a describe block to `tests/flight/b738.test.js` (and harness.js helper if needed) flying the 737 at 65 t, flaps 30/40, sea level and DFW field elevation, dry runway, no wind: touch down at Vref, spoilers and reversers as the game models them, then (a) max manual braking and (b) autobrake 2 and MAX. Assert the stop distance from the touchdown point and from 50 ft against the ACAP landing chart (±15%) and that MAX stops shorter than 2. Gaps found become `it.fails` cards with a new ticket tag (check-gaps.mjs). Only touch `src/` if a card needs a one-line fix; otherwise ticket the gap.
 
 ## Acceptance criteria
-- [ ] At least 3 new cards with the ACAP page cited in each name
-- [ ] A failing card is an `it.fails` with a ticket that exists and is ready (check-gaps passes)
-- [ ] `npm test` and `node scripts/check-gaps.mjs` pass; no existing card changes tolerance
+- [x] At least 3 new cards with the ACAP page cited in each name
+- [x] (none failed) A failing card is an `it.fails` with a ticket that exists and is ready (check-gaps passes)
+- [x] `npm test` and `node scripts/check-gaps.mjs` pass; no existing card changes tolerance
 
 ## Test plan
 The cards themselves (headless, `tests/flight/`). No e2e change.
@@ -26,7 +26,9 @@ The cards themselves (headless, `tests/flight/`). No e2e change.
 ## Out of scope
 Wet or contaminated runways (wetRunway.test.js), thrust reverser animation, brake fade.
 
-## Builder notes (2026-11-18)
+## Builder notes (2026-11-18): scope as shipped
+The acceptance boxes above were written before the source was read; flaps 40 and autobrake
+distances against the ACAP are not possible (see below). Shipped instead:
 Read ACAP D6-58325-7 Rev C §3.4.3 p. 3-51 at 300 dpi before writing the cards. That page is
 flaps 30 only, max manual braking (the FAR landing field length, ÷ 0.6 for the airplane's
 distance), and has no autobrake or flaps 40 curves; no other public Boeing chart gives autobrake

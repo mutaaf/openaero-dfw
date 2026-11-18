@@ -219,9 +219,9 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
 
   // The autobrake (aircraft.js systems.autobrake, the 737 NG FCOM's 4 / 5 / 7.2 / 14 ft/s²) brakes
   // to a deceleration, not to the tyres' limit, so the ACAP's distance (max manual braking, the
-  // certified technique) is the shortest stop: autobrake 2 needs much more, MAX less than 2 and
-  // no less than the pedals. No public Boeing chart gives the autobrake distances themselves.
-  it('at DFW, 65 t, dry: autobrake 2 stops well past the ACAP §3.4.3 distance, MAX between it and the pedals', () => {
+  // certified technique) is about the shortest stop: autobrake 2 needs much more, MAX less than 2 and
+  // about what the pedals take (within 3%: MAX's 14 ft/s² is near the tyres' limit). No public Boeing chart gives the autobrake distances themselves.
+  it('at DFW, 65 t, dry: autobrake 2 stops well past the ACAP §3.4.3 distance, MAX shorter than 2 and about as short as the pedals', () => {
     const manual = landFromFifty(b738.massKg, { elevFt: DFW_FT }).ft;
     const ab2 = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 2, manual: false }).ft;
     const abMax = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 4, manual: false }).ft;
