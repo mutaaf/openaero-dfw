@@ -34,6 +34,8 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
         .toMatchObject({ kind: 'rain', intensity: 2, ts: true, visible: true });
       const { precip } = await page.evaluate(() => window.openaeroDebug());
       expect(precip.count).toBeGreaterThan(2000);
+      // The storm has a word: the HUD wind box heads its line T-STORM (amber).
+      await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudWind.source, { timeout: 5_000 }).toBe('T-STORM');
       expect(chunks.length).toBeGreaterThan(0);
       // The HUD still draws over it: the attitude/speed readouts are DOM above the canvas.
       await page.waitForTimeout(800);

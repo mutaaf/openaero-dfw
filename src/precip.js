@@ -44,11 +44,12 @@ export function precipCount(p, reducedMotion = false) {
 export function nextFlashGapS(r) {
   return 8 + 17 * Math.min(Math.max(r, 0), 1);
 }
-// One flash's brightness t seconds after it starts: a 60 ms rise and a smooth decay, once.
+// One flash's brightness t seconds after it starts: a 120 ms rise (no snap) and a smooth decay, once.
+const RISE_S = 0.12;
 export function flashLevel(t) {
   if (t < 0 || t > FLASH_S) return 0;
-  if (t < 0.06) return t / 0.06;
-  const u = (t - 0.06) / (FLASH_S - 0.06);
+  if (t < RISE_S) return t / RISE_S;
+  const u = (t - RISE_S) / (FLASH_S - RISE_S);
   return (1 - u) * (1 - u);
 }
 
@@ -120,7 +121,7 @@ export function createPrecip(scene, reducedMotion = false) {
       fall = FALL_MPS[state.kind][i];
       streakS = STREAK_S[state.kind];
       whiten = state.kind === 'snow' ? 0.65 : 0; // flakes read white against the ground by day
-      u.uAlpha.value = state.kind === 'snow' ? 0.55 : 0.22 + 0.06 * i;
+      u.uAlpha.value = state.kind === 'snow' ? 0.7 : 0.22 + 0.06 * i;
     }
     if (!state.ts) endFlash();
   }
@@ -158,6 +159,8 @@ export function createPrecip(scene, reducedMotion = false) {
         const c = u.uColor.value.copy(haveBase ? _base : scene.fog.color);
         const lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; // dark at night: the flakes too
         c.multiplyScalar(1.35).lerp(_white, Math.max(whiten * Math.min(1, 2 * lum), 0.5 * state.flash));
+        // Flakes catch any light going (the landing light, the city): never darker than a dim grey.
+        if (whiten) c.setRGB(Math.max(c.r, 0.4), Math.max(c.g, 0.4), Math.max(c.b, 0.42));
       }
     }
     if (!state.ts || reducedMotion || !scene.fog) return;

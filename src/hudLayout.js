@@ -163,7 +163,8 @@ export function windReadout(wx, comps, out = {}, bumpy = false) {
   // ceiling is why the runway is not in sight. 'LIFR METAR' / 'LIFR SCN' fit the box.
   const cat = /IFR/.test(wx.fltCat) && wx.fltCat; // IFR, LIFR (not MVFR)
   out.bumpy = !!bumpy; // the box's edge turns amber (main.js drawWindBox); the line says BUMPY unless WET RWY / IFR has it
-  out.source = out.wet ? 'WET RWY' : cat ? `${cat} ${out.live ? 'METAR' : 'SCN'}` : out.bumpy ? `BUMPY ${out.live ? 'METAR' : 'SCN'}` : out.live ? 'METAR WIND' : 'SCENARIO';
+  out.storm = !!(wx.live && wx.precip?.ts); // 0196: a thunderstorm at the field, live reports only
+  out.source = out.storm ? 'T-STORM' : out.wet ? 'WET RWY' : cat ? `${cat} ${out.live ? 'METAR' : 'SCN'}` : out.bumpy ? `BUMPY ${out.live ? 'METAR' : 'SCN'}` : out.live ? 'METAR WIND' : 'SCENARIO';
   out.calm = kts < 2;
   // The arrow reads these, so it always agrees with the text it sits beside.
   out.dirDeg = vrb ? null : wx.windDirDeg;

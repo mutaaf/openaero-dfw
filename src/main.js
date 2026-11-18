@@ -2433,12 +2433,12 @@ function drawWindBox(w, h, hdgDeg) {
   const hw = sim.hudWind;
   // Calm is quiet but still legible: a dim border, the text at full contrast.
   hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';
-  hudCtx.strokeStyle = hw.calm ? '#475569' : hw.bumpy ? '#fcd34d' : '#38bdf8'; // amber edge on a bumpy day, even under WET RWY / IFR (0195)
+  hudCtx.strokeStyle = hw.calm ? '#475569' : hw.bumpy || hw.storm ? '#fcd34d' : '#38bdf8'; // amber edge on a bumpy day, even under WET RWY / IFR (0195)
   hudCtx.fillRect(r.x, r.y, r.w, r.h);
   hudCtx.strokeRect(r.x, r.y, r.w, r.h);
   hudCtx.textAlign = 'left';
   hudCtx.font = 'bold 9px monospace';
-  hudCtx.fillStyle = hw.wet || hw.bumpy ? '#fcd34d' : hw.live ? '#6ee7b7' : '#cbd5e1';
+  hudCtx.fillStyle = hw.wet || hw.bumpy || hw.storm ? '#fcd34d' : hw.live ? '#6ee7b7' : '#cbd5e1';
   hudCtx.fillText(hw.source, r.x + 3, r.y + 10);
   const arrow = windArrowDeg(hw.dirDeg, hw.kts, hdgDeg);
   if (arrow !== null) {

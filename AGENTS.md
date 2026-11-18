@@ -665,14 +665,15 @@ src/metar.js        reading a METAR (lazy chunk, fetched with the first report, 
                     today's crosswind pick (pickCrosswindRunway, crosswindMission); metarWetRunway (0108): RA/DZ
                     falling at the field (rawOb's weather groups) → wx.wetRunway → sim.wetRunway, the
                     wind box's amber WET RWY and the coach's "wet" call on a steady final; metarPrecip (0196): what falls
-                    at the field (kind rain/snow, intensity - 0 / none 1 / + 2, ts) → wx.precip
+                    at the field (kind drizzle/rain/snow, the drawn kind's intensity - 0 / none 1 / + 2, ts; BL/DR snow is not falling) → wx.precip
 src/precip.js       rain, snow and thunderstorms (0196, lazy chunk imported by main.js syncPrecip only when the flown field's
                     LIVE report has wx.precip; scenario weather never draws it): one LineSegments draw of ≤ 5,000 streaks seeded
                     in a 40 m box that wraps around the camera in the vertex shader (uniforms only per frame, no allocation),
                     streaked by the drop's velocity relative to the aircraft (sim wind + fall − sim.vel) × a short exposure,
-                    ≤ 1.2 m, none within 5 m of the eye, hidden above the report's ceiling; precipCount (pure) by kind and
+                    ≤ 1.2 m, from the camera's own motion (tower view, replay), none within 5 m of the eye, hidden above the
+                    report's ceiling (else its lowest layer, else 10,000 ft); frozen while paused; precipCount (pure) by kind and
                     intensity. TS: applySky darkens and lowers the sky (overcast 0.9, × 0.45), and the haze flashes once every
-                    8-25 s (flashLevel: 60 ms rise, 0.7 s decay; WCAG 2.3.1). Reduced motion: no streaks, no flashes. The
+                    8-25 s (flashLevel: 120 ms rise, 0.7 s in all; WCAG 2.3.1); a live TS heads the HUD wind box T-STORM in amber (hudLayout.js windReadout). Reduced motion: no streaks, no flashes. The
                     haze in precipitation reads the report's own 10 SM, never thicker (weather.js precipFogSm). ?debug
                     snapshot `precip` {kind, intensity, ts, count, visible, flashes}
 src/lowIfr.js       low-ceiling ILS (0092, lazy chunk loaded with kdfw_35c_low_ifr, the picker's Weather group): a
