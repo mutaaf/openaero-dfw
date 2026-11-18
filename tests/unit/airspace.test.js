@@ -56,6 +56,32 @@ describe('baked Class B file (0197)', () => {
     // Each label sits where the map shows that shelf (the lowest floor there).
     for (const s of air.shelves) expect(shelfAt(air, s.lx, s.lz)).toBe(s);
   });
+
+  it('overlaps only where the lowest floor also has the highest ceiling (so shelfAt names the right top)', () => {
+    // The FAA's Area J encloses A-I; that is safe only while every shelf it encloses reaches J's ceiling.
+    // A re-bake that breaks this must change shelfAt, not this test.
+    const air = prepareAirspace(DATA);
+    const x0 = Math.min(...air.shelves.map((s) => s.x0)), x1 = Math.max(...air.shelves.map((s) => s.x1));
+    const z0 = Math.min(...air.shelves.map((s) => s.z0)), z1 = Math.max(...air.shelves.map((s) => s.z1));
+    let overlaps = 0;
+    for (let i = 0; i < 120; i++) {
+      for (let j = 0; j < 120; j++) {
+        const x = x0 + (x1 - x0) * (i + 0.5) / 120, z = z0 + (z1 - z0) * (j + 0.5) / 120;
+        const here = air.shelves.filter((s) => s.rings.filter((r) => {
+          let c = false;
+          for (let a = 0, b = r.length - 2; a < r.length; b = a, a += 2) {
+            if ((r[b + 1] > z) !== (r[a + 1] > z) && x < r[b] + (z - r[b + 1]) / (r[a + 1] - r[b + 1]) * (r[a] - r[b])) c = !c;
+          }
+          return c;
+        }).length % 2);
+        if (here.length < 2) continue;
+        overlaps++;
+        const low = shelfAt(air, x, z);
+        for (const s of here) expect(low.ceilFt).toBeGreaterThanOrEqual(s.ceilFt);
+      }
+    }
+    expect(overlaps).toBeGreaterThan(0); // J over the inner shelves: the case this guards
+  });
 });
 
 describe('shelfAt / airspaceStatus', () => {
@@ -79,10 +105,13 @@ describe('shelfAt / airspaceStatus', () => {
 
   it('says where the airplane is in plain words', () => {
     const f = at('KADS');
-    expect(airspaceStatus(f, 1800)).toBe('UNDER CLASS B: FLOOR 2,500');
-    expect(airspaceStatus(f, 3000)).toBe('IN CLASS B (2,500-11,000)');
-    expect(airspaceStatus(f, 11500)).toBe('ABOVE CLASS B (TOP 11,000)');
-    expect(airspaceStatus(at('KDFW'), 700)).toBe('IN CLASS B (SFC-11,000)');
+    expect(airspaceStatus(f, 1800)).toBe('UNDER CLASS B: FLOOR 2,500 FT');
+    expect(airspaceStatus(f, 2499)).toBe('UNDER CLASS B: FLOOR 2,500 FT');
+    expect(airspaceStatus(f, 2500)).toBe('IN CLASS B (2,500-11,000 FT)');
+    expect(airspaceStatus(f, 11000)).toBe('IN CLASS B (2,500-11,000 FT)'); // up to and including
+    expect(airspaceStatus(f, 3000)).toBe('IN CLASS B (2,500-11,000 FT)');
+    expect(airspaceStatus(f, 11001)).toBe('ABOVE CLASS B (TOP 11,000 FT)');
+    expect(airspaceStatus(at('KDFW'), 700)).toBe('IN CLASS B (GROUND-11,000 FT)');
     expect(airspaceStatus(null, 2000)).toBe('OUTSIDE CLASS B');
   });
 
@@ -99,7 +128,8 @@ describe('createAirspace draw', () => {
     const noop = () => {};
     return {
       canvas: { width: w, height: h }, texts, get strokes() { return strokes; },
-      beginPath: noop, moveTo: noop, lineTo: noop, closePath: noop,
+      beginPath: noop, moveTo: noop, lineTo: noop, closePath: noop, fillRect: noop, strokeText: noop,
+      measureText: (t) => ({ width: t.length * 5.4 }),
       stroke: () => { strokes++; }, fillText: (t) => texts.push(t),
     };
   }
@@ -108,18 +138,32 @@ describe('createAirspace draw', () => {
     const layer = createAirspace(DATA);
     const ctx = fakeCtx(240, 144);
     const p = sim(...AT.KDFW);
-    layer.draw(ctx, 120, 72, 0.007, { x: p.x, z: p.z }, 1200);
+    layer.draw(ctx, 120, 72, 0.007, { x: p.x, z: p.z });
+    layer.status(ctx, { x: p.x, z: p.z }, 1200);
     expect(ctx.strokes).toBeGreaterThan(0);
     expect(layer.state.drawn).toBe(ctx.strokes);
     expect(ctx.texts).toContain(NOT_FOR_NAV);
-    expect(ctx.texts).toContain('IN CLASS B (SFC-11,000)');
-    expect(layer.state).toMatchObject({ area: 'A', status: 'IN CLASS B (SFC-11,000)', note: NOT_FOR_NAV, frames: 1 });
+    expect(ctx.texts).toContain('IN CLASS B (GROUND-11,000 FT)');
+    expect(layer.state).toMatchObject({ area: 'A', status: 'IN CLASS B (GROUND-11,000 FT)', note: NOT_FOR_NAV, frames: 1 });
+    // Shelves whose baked label is off this small map still get one on their outline.
+    expect(layer.state.labels).toBeGreaterThan(1);
+  });
+
+  it('labels the shelves around Addison and Meacham too (none sat on the map before)', () => {
+    for (const id of ['KADS', 'KFTW']) {
+      const layer = createAirspace(DATA);
+      const ctx = fakeCtx(266, 144);
+      const p = sim(...AT[id]);
+      layer.draw(ctx, 133, 72, 0.007, { x: p.x, z: p.z });
+      expect(layer.state.labels).toBeGreaterThan(0);
+    }
   });
 
   it('draws nothing but the note far outside it', () => {
     const layer = createAirspace(DATA);
     const ctx = fakeCtx(240, 144);
-    layer.draw(ctx, 120, 72, 0.007, { x: 300000, z: 0 }, 3000);
+    layer.draw(ctx, 120, 72, 0.007, { x: 300000, z: 0 });
+    layer.status(ctx, { x: 300000, z: 0 }, 3000);
     expect(ctx.strokes).toBe(0);
     expect(ctx.texts).toEqual(['OUTSIDE CLASS B', NOT_FOR_NAV]);
   });

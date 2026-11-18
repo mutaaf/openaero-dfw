@@ -23,7 +23,7 @@ test('the map draws the Class B around DFW, says where you are and that it is no
   await expect(page.locator('#mapPanel')).toBeVisible();
   await expect.poll(() => snap(page), { timeout: 10_000 }).toMatchObject({ shelves: 15, note: 'NOT FOR NAVIGATION' });
   // The default spawn is a final to DFW: inside the surface area (Area A, surface to 11,000 ft).
-  await expect.poll(async () => (await snap(page)).status, { timeout: 5_000 }).toBe('IN CLASS B (SFC-11,000)');
+  await expect.poll(async () => (await snap(page)).status, { timeout: 5_000 }).toBe('IN CLASS B (GROUND-11,000 FT)');
   const a = await snap(page);
   expect(a.area).toBe('A');
   expect(a.drawn).toBeGreaterThan(0);

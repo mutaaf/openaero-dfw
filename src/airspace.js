@@ -64,30 +64,35 @@ export function shelfAt(air, x, z) {
   return best;
 }
 
-// Where the airplane is against the Class B, in words a kid can act on.
+// Where the airplane is against the Class B, in words a kid can act on. Heights are the altimeter's
+// (above sea level), the number in the ALT box beside the map.
 export function airspaceStatus(shelf, mslFt) {
   if (!shelf) return 'OUTSIDE CLASS B';
-  if (mslFt > shelf.ceilFt) return `ABOVE CLASS B (TOP ${ftText(shelf.ceilFt)})`;
-  if (shelf.floorSfc) return `IN CLASS B (SFC-${ftText(shelf.ceilFt)})`;
-  if (mslFt < shelf.floorFt) return `UNDER CLASS B: FLOOR ${ftText(shelf.floorFt)}`;
-  return `IN CLASS B (${ftText(shelf.floorFt)}-${ftText(shelf.ceilFt)})`;
+  if (mslFt > shelf.ceilFt) return `ABOVE CLASS B (TOP ${ftText(shelf.ceilFt)} FT)`;
+  if (shelf.floorSfc) return `IN CLASS B (GROUND-${ftText(shelf.ceilFt)} FT)`;
+  if (mslFt < shelf.floorFt) return `UNDER CLASS B: FLOOR ${ftText(shelf.floorFt)} FT`;
+  return `IN CLASS B (${ftText(shelf.floorFt)}-${ftText(shelf.ceilFt)} FT)`;
 }
+
+const LABEL_CLEAR_PX = 14; // no shelf label on the ownship chevron
+const STATUS_BOX = 'rgba(9, 14, 26, 0.85)'; // the map's own #090e1a, under the status lines
 
 export function createAirspace(data) {
   const air = prepareAirspace(data);
   // e2e and ?debug read this (openaeroDebug().airspace); the status line is rebuilt only when it changes.
   const state = { shelves: air.shelves.length, drawn: 0, labels: 0, area: null, status: '', note: NOT_FOR_NAV, frames: 0 };
-  let lastShelf, lastBand = NaN;
-  // Under the runways and the ownship: outlines, the labels on screen, then the status and the note.
-  function draw(ctx, cx, cy, scale, pos, mslFt) {
+  let lastShelf, lastBand = NaN, statusW = 0;
+  const inBounds = (lx, ly, w, h, cx, cy) => lx > 16 && lx < w - 16 && ly > 22 && ly < h - 26
+    && Math.abs(lx - cx) + Math.abs(ly - cy) > LABEL_CLEAR_PX;
+  // Under the runways and the ownship: each shelf's outline and its chart label, haloed. A shelf whose baked
+  // label is off the map gets it at its outline's nearest point to the airplane, if that is on the map
+  // (clear of the NAV1 line at the top, the status lines at the bottom and the chevron).
+  function draw(ctx, cx, cy, scale, pos) {
     const w = ctx.canvas.width, h = ctx.canvas.height;
     const vx0 = pos.x - cx / scale, vx1 = pos.x + (w - cx) / scale;
     const vz0 = pos.z - cy / scale, vz1 = pos.z + (h - cy) / scale;
     ctx.strokeStyle = LINE;
     ctx.lineWidth = 1;
-    ctx.font = '8px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = TEXT;
     let drawn = 0, labels = 0;
     for (const s of air.shelves) {
       if (s.x1 < vx0 || s.x0 > vx1 || s.z1 < vz0 || s.z0 > vz1) continue;
@@ -99,26 +104,57 @@ export function createAirspace(data) {
         ctx.closePath();
       }
       ctx.stroke();
-      const lx = cx + (s.lx - pos.x) * scale, ly = cy + (s.lz - pos.z) * scale;
-      // A label only where it is clear of the NAV1 line (top) and the status lines (bottom).
-      if (lx > 16 && lx < w - 16 && ly > 22 && ly < h - 24) { ctx.fillText(s.text, lx, ly); labels++; }
     }
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#090e1a';
+    ctx.fillStyle = TEXT;
+    for (const s of air.shelves) {
+      if (s.x1 < vx0 || s.x0 > vx1 || s.z1 < vz0 || s.z0 > vz1) continue;
+      let lx = cx + (s.lx - pos.x) * scale, ly = cy + (s.lz - pos.z) * scale;
+      if (!inBounds(lx, ly, w, h, cx, cy)) {
+        let bd = Infinity;
+        for (const r of s.rings) {
+          for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+            const ax = r[j] - pos.x, az = r[j + 1] - pos.z, dx = r[i] - r[j], dz = r[i + 1] - r[j + 1];
+            const l2 = dx * dx + dz * dz;
+            const t = l2 ? Math.max(0, Math.min(1, -(ax * dx + az * dz) / l2)) : 0;
+            const px = ax + t * dx, pz = az + t * dz, d = px * px + pz * pz;
+            if (d < bd) { bd = d; lx = cx + px * scale; ly = cy + pz * scale; }
+          }
+        }
+        if (!inBounds(lx, ly, w, h, cx, cy)) continue;
+      }
+      ctx.strokeText(s.text, lx, ly);
+      ctx.fillText(s.text, lx, ly);
+      labels++;
+    }
+    ctx.lineWidth = 1;
+    state.drawn = drawn; state.labels = labels;
+  }
+  // Over everything (main.js calls it last in renderRadar): the status line and NOT FOR NAVIGATION on a dark box.
+  function status(ctx, pos, mslFt) {
+    const h = ctx.canvas.height;
     const shelf = shelfAt(air, pos.x, pos.z);
     const band = !shelf ? 0 : mslFt > shelf.ceilFt ? 1 : !shelf.floorSfc && mslFt < shelf.floorFt ? 2 : 3;
+    ctx.font = '9px monospace';
     if (shelf !== lastShelf || band !== lastBand) {
       lastShelf = shelf; lastBand = band;
       state.area = shelf ? shelf.area : null;
       state.status = airspaceStatus(shelf, mslFt);
+      statusW = Math.max(ctx.measureText(state.status).width, ctx.measureText(NOT_FOR_NAV).width);
     }
+    ctx.fillStyle = STATUS_BOX;
+    ctx.fillRect(0, h - 25, Math.ceil(statusW) + 8, 25);
     ctx.textAlign = 'left';
-    ctx.font = '9px monospace';
     ctx.fillStyle = shelf ? TEXT : NOTE;
     ctx.fillText(state.status, 4, h - 14);
     ctx.fillStyle = NOTE;
     ctx.fillText(NOT_FOR_NAV, 4, h - 4);
-    state.drawn = drawn; state.labels = labels; state.frames++;
+    state.frames++;
   }
-  return { air, state, draw };
+  return { air, state, draw, status };
 }
 
 // Fetch the baked file (same origin) and build the layer. A failure rejects; main.js warns and draws no airspace.

@@ -17,7 +17,7 @@ you stay low near Addison.
 
 ## What
 `scripts/bake-airspace.mjs` (like bake-terrain/bake-stars) turns the FAA Airspace Boundary dataset
-(https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Boundary_Airspace/FeatureServer/0,
+(https://services6.arcgis.com/ssFJjBXIUyZDrSYZ/arcgis/rest/services/Boundary_Airspace/FeatureServer/0 (Builder: ARTCC only; the Class B is in its sibling Class_Airspace layer, see Builder notes),
 public domain, refreshed every 8 weeks) into a small static `public/airspace/dfw-classb-v1.json` of shelf
 polygons with floor/ceiling ft MSL; no runtime fetch. The map draws the shelves as thin outlines labelled
 "floor/ceiling" (e.g. 110/30). First step for the Builder: check the layer's attribute table really carries
@@ -28,7 +28,7 @@ description / TAC and cite it, or set the ticket back to proposed with what was 
 ## Acceptance criteria
 - [x] Baked file under 30 kB gz, loaded lazily with the map, with a `v` and a cited source/date
 - [x] Each shelf's floor/ceiling matches the cited source (unit test over the baked JSON)
-- [x] Map outlines are visible at 390x844 and do not hide the aircraft or runways
+- [ ] ~~Map outlines are visible at 390x844~~ (n/a, see below) and do not hide the aircraft or runways (met on the desktop map)
   (Builder, 2026-11-18: there is no moving map at 390x844. `#mapPanel` is hidden below `lg` and on every
   touch screen (styles.css), so a phone shows no airspace and fetches none (tests/e2e/airspace.spec.js).
   On the desktop map, the outlines draw under the runways and the ownship. A phone map is a ticket of its

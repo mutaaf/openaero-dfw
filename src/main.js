@@ -2490,8 +2490,9 @@ function drawTakeoffCall(cx, cy) {
   hudCtx.fillText(words[sim.takeoffCalloutIdx], cx, top + 18);
 }
 
-let airspace = null, airspaceReq = null;
+let airspace = null, airspaceReq = null, mapShown = true;
 function renderRadar() {
+  if (!mapShown) return; // a hidden panel (clean view, touch, narrow): nothing to draw (0197)
   const w = mapCanvas.width;
   const h = mapCanvas.height;
   mapCtx.clearRect(0, 0, w, h);
@@ -2502,7 +2503,7 @@ function renderRadar() {
 
   mapCtx.fillStyle = '#090e1a';
   mapCtx.fillRect(0, 0, w, h);
-  airspace?.draw(mapCtx, cx, cy, scale, sim.pos, sim.mslFt); // DFW's Class B (0197)
+  airspace?.draw(mapCtx, cx, cy, scale, sim.pos); // DFW's Class B (0197), under the runways
 
   mapCtx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
   mapCtx.beginPath();
@@ -2553,6 +2554,7 @@ function renderRadar() {
   mapCtx.closePath();
   mapCtx.fill();
   mapCtx.restore();
+  airspace?.status(mapCtx, sim.pos, sim.mslFt); // over everything: where you are, NOT FOR NAVIGATION
 }
 
 // Autothrottle: the model's trim throttle for this speed and path, plus corrections.
@@ -2901,7 +2903,8 @@ for (const btn of document.querySelectorAll('#timePicker .btnTime')) {
 // Clean view (desktop): panels folded away, the world fills the screen (H toggles).
 function setCleanView(clean, remember = true) {
   document.body.classList.toggle('view-clean', clean);
-  if (!clean) { setHudMenu(false); sizeMap(); }
+  if (!clean) setHudMenu(false);
+  sizeMap();
   if (remember) { try { saveCleanView(window.localStorage, clean); } catch { /* storage unavailable */ } }
 }
 byId('btnPanelsShow').addEventListener('click', () => setCleanView(false));
@@ -3047,6 +3050,7 @@ function handleResize() {
 // The Class B layer (0197) is a lazy chunk fetched once, only where the map panel is shown (not on touch).
 function sizeMap() {
   const mapRect = mapCanvas.parentElement.getBoundingClientRect();
+  mapShown = mapRect.width > 0;
   mapCanvas.width = Math.max(120, Math.floor(mapRect.width));
   mapCanvas.height = Math.max(80, Math.floor(mapRect.height));
   if (mapRect.width && !airspaceReq) airspaceReq = import('./airspace.js').then((m) => m.loadAirspace()).then((a) => { airspace = a; }).catch(console.warn);
