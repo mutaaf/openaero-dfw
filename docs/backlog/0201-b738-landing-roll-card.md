@@ -1,12 +1,12 @@
 ---
 id: 0201
 title: 737 landing-roll flight card: autobrake and max manual braking stop within Boeing's dry-runway landing distance
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-18
-pr:
+pr: 286
 ---
 
 ## Why
@@ -25,3 +25,19 @@ The cards themselves (headless, `tests/flight/`). No e2e change.
 
 ## Out of scope
 Wet or contaminated runways (wetRunway.test.js), thrust reverser animation, brake fade.
+
+## Builder notes (2026-11-18)
+Read ACAP D6-58325-7 Rev C §3.4.3 p. 3-51 at 300 dpi before writing the cards. That page is
+flaps 30 only, max manual braking (the FAR landing field length, ÷ 0.6 for the airplane's
+distance), and has no autobrake or flaps 40 curves; no other public Boeing chart gives autobrake
+landing distances. So the shipped cards are what the page does show:
+- dry, 65 t, at DFW (607 ft, interpolated between the sea-level 5,690 ft and 2,000 ft 5,965 ft
+  curves): 0.6 × 5,775 ≈ 3,465 ft; the model 3,243 ft (−6%).
+- dry, 2,000 ft, 65 t (3,580 ft; model 3,324) and MLW (3,645 ft; model 3,369).
+- the altitude slope: 2,000 ft adds ~165 ft (model +116, inside ±50%).
+- autobrake (FCOM decelerations, aircraft.js): autobrake 2 stops well past the ACAP distance
+  (model 7,437 ft vs 3,465), MAX between it and the pedals (3,405 vs 3,243).
+Flaps 40 and any autobrake distance target need a cited chart (Boeing QRH/FCOM PI landing
+distance tables are not public); left for the Scout. The model stops 6-7% short of every dry
+point (sea level and 2,000 ft alike): inside ±12%, consistent, worth a look if a source for the
+737's rolling/braking μ turns up.

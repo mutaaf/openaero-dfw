@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { trimThrottle } from '../../src/flightModel.js';
 import { engineThrust, maxClimbThrustN, throttleForThrust } from '../../src/engine.js';
-import { airAt, ISA_P0 } from '../../src/atmosphere.js';
+import { airAt, ISA_P0, tasFromIas } from '../../src/atmosphere.js';
 import { liftCoefficient, dragCoefficient, stallSpeedKts, stallAoaDeg, vrefFor, vrFor, landingFlaps } from '../../src/aero.js';
 import { trimAoaDeg, elevatorForPitch, aileronForBank } from '../../src/autopilot.js';
 import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
@@ -128,12 +128,19 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // 25.125 and AC 25-7D, take no reverse-thrust credit, so the chart has none), in Boeing's configuration: flaps 30 at the fitted Vref30
   // (~150 kt at 65 t), auto ground spoilers. (Before 0057 it flew flaps 25 at 139 kt with the
   // wing still lifting on the rollout, two errors that partly cancelled.)
-  function landFromFifty(massKg) {
+  // elevFt: the runway's pressure altitude (standard day: mslOffsetM, ISA, 29.92). Vref is an
+  // indicated speed, so the airplane flies it at its true airspeed there (still air: TAS = GS).
+  function landFromFifty(massKg, { elevFt = 0, autobrake = 0, manual = true } = {}) {
     const spec = { ...b738, massKg };
     const kts = vrefKts(FLAPS_30, massKg);
     const v = kts * KTS_TO_MPS;
-    const b = makeBody(spec, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_30, throttle: trimThrottle(spec, v, FLAPS_30, -3, true, airAt(15)) });
-    b.vel.set(0, -v * Math.sin(3 * DEG_TO_RAD), -v * Math.cos(3 * DEG_TO_RAD));
+    const elevM = elevFt / M_TO_FT;
+    const air = airAt(elevM + 15);
+    const tas = tasFromIas(v, air.sigma);
+    const b = makeBody(spec, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_30, throttle: trimThrottle(spec, v, FLAPS_30, -3, true, air) });
+    b.mslOffsetM = elevM;
+    b.autobrake = autobrake;
+    b.vel.set(0, -tas * Math.sin(3 * DEG_TO_RAD), -tas * Math.cos(3 * DEG_TO_RAD));
     const pitch0 = trimAoaDeg(spec, v, FLAPS_30) - 3;
     b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
     let touchdown = null, spoilersAt80 = null, spoilers2s = null;
@@ -141,7 +148,7 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
       const { pitchDeg, bankRightDeg } = attitude(x);
       const ft = (x.pos.y - b738.gearHeight) * M_TO_FT;
       let cmd = pitch0;
-      if (touchdown) { cmd = -1; x.throttle = 0; x.brakesOn = true; } // nose down, max braking
+      if (touchdown) { cmd = -1; x.throttle = 0; x.brakesOn = manual; } // nose down, max braking (or the autobrake)
       else if (ft < 30) { cmd = pitch0 + Math.min(3, (30 - ft) * 0.2); x.throttle = 0; } // flare
       x.elevInput = elevatorForPitch(cmd, pitchDeg, x.angVel.x);
       x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
@@ -175,6 +182,53 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // two ±12% points alone would not pin (any positive or even negative slope fits them).
   it('a heavier 737 (MLW vs 65 t) needs ~66 ft more from 50 ft, as ACAP §3.4.3 p. 3-51 slopes (±50%)', () => {
     within(landFromFifty(MLW_KG).ft - landFromFifty(b738.massKg).ft, 0.6 * (5800 - 5690), 0.5);
+  });
+
+  // Field elevation (0201). The same chart, p. 3-51, draws a dry curve for each 2,000 ft of
+  // pressure altitude (standard day). Read off the page image at 300 dpi (grid 200 px per
+  // 1,000 ft, 20 px per 1,000 lb): at 143,300 lb (65 t) sea level 5,695 ft (the 5,690 above) and
+  // 2,000 ft 5,965 ft; at MLW 5,805 and 6,075 ft. DFW's field is 607 ft (airports.js, 18R), so
+  // linear between the two curves: 5,690 + 0.30 × 275 ≈ 5,775 ft, 0.6 × that ≈ 3,465 ft of
+  // airplane from 50 ft. Higher, the same indicated Vref is a faster true (and ground) speed:
+  // +3% at 2,000 ft, ~6% more energy to brake away, which the chart's ~5% shows.
+  const ACAP_SL_65T = 5690, ACAP_2000_65T = 5965, ACAP_2000_MLW = 6075, DFW_FT = 607;
+  const acapAt = (elevFt) => ACAP_SL_65T + (ACAP_2000_65T - ACAP_SL_65T) * elevFt / 2000;
+  for (const { label, elevFt, massKg, chartFt } of [
+    { label: `DFW (${DFW_FT} ft), 65 t`, elevFt: DFW_FT, massKg: b738.massKg, chartFt: acapAt(DFW_FT) },
+    { label: '2,000 ft, 65 t', elevFt: 2000, massKg: b738.massKg, chartFt: ACAP_2000_65T },
+    { label: '2,000 ft, MLW 66,361 kg', elevFt: 2000, massKg: MLW_KG, chartFt: ACAP_2000_MLW },
+  ]) {
+    const target = Math.round(0.6 * chartFt / 10) * 10;
+    it(`lands from 50 ft to a stop in about ${target.toLocaleString('en-US')} ft at ${label}, dry (Boeing ACAP §3.4.3 p. 3-51 × 0.6, ±12%)`, () => {
+      const { ft, touchdown, spoilers2s } = landFromFifty(massKg, { elevFt });
+      console.log(`[b738] 50 ft to stop, ${label}: ${ft.toFixed(0)} ft (chart × 0.6 ${(0.6 * chartFt).toFixed(0)}), touchdown ${touchdown.sinkFpm.toFixed(0)} fpm after ${touchdown.airFt.toFixed(0)} ft`);
+      expect(touchdown.sinkFpm).toBeGreaterThan(-600);
+      expect(touchdown.airFt).toBeGreaterThan(700);
+      expect(spoilers2s).toBe(1);
+      within(ft, 0.6 * chartFt, 0.12);
+    });
+  }
+
+  // The chart's altitude slope at 65 t: 2,000 ft costs 275 ft of field length (5,690 → 5,965),
+  // 165 ft of airplane. Two ±12% points alone would let the model get it backwards (±50%).
+  it('2,000 ft of field elevation adds ~165 ft from 50 ft to a stop, 65 t, as ACAP §3.4.3 p. 3-51 slopes (±50%)', () => {
+    const d = landFromFifty(b738.massKg, { elevFt: 2000 }).ft - landFromFifty(b738.massKg).ft;
+    console.log(`[b738] 2,000 ft vs sea level, 50 ft to stop: +${d.toFixed(0)} ft (chart × 0.6 +${(0.6 * (ACAP_2000_65T - ACAP_SL_65T)).toFixed(0)})`);
+    within(d, 0.6 * (ACAP_2000_65T - ACAP_SL_65T), 0.5);
+  });
+
+  // The autobrake (aircraft.js systems.autobrake, the 737 NG FCOM's 4 / 5 / 7.2 / 14 ft/s²) brakes
+  // to a deceleration, not to the tyres' limit, so the ACAP's distance (max manual braking, the
+  // certified technique) is the shortest stop: autobrake 2 needs much more, MAX less than 2 and
+  // no less than the pedals. No public Boeing chart gives the autobrake distances themselves.
+  it('at DFW, 65 t, dry: autobrake 2 stops well past the ACAP §3.4.3 distance, MAX between it and the pedals', () => {
+    const manual = landFromFifty(b738.massKg, { elevFt: DFW_FT }).ft;
+    const ab2 = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 2, manual: false }).ft;
+    const abMax = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 4, manual: false }).ft;
+    console.log(`[b738] DFW 65 t, 50 ft to stop: manual ${manual.toFixed(0)}, autobrake MAX ${abMax.toFixed(0)}, autobrake 2 ${ab2.toFixed(0)} ft`);
+    expect(ab2).toBeGreaterThan(1.3 * 0.6 * acapAt(DFW_FT));
+    expect(abMax).toBeLessThan(ab2);
+    expect(abMax).toBeGreaterThanOrEqual(manual * 0.97);
   });
 
   // ACAP §3.3.29 (CFM56-7B24/-7B26/-7B27 at 26,000 lb SLST; the model has 2 × 120 kN ≈
