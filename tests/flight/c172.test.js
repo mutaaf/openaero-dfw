@@ -1115,7 +1115,7 @@ const TAIL_AFT_M = 3.297, TAIL_UP_M = 0.884; // c172.xml TAIL vs the main tyres'
 const _tail = new Vector3();
 function fullAftAtVr(flaps, seconds = 8) {
   const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: takeoffTrimAoaDeg(c172, flaps) });
-  let t0 = null, rotQ = 0, lowTailM = Infinity, peakLowDeg = 0;
+  let t0 = null, rotQ = 0, lowTailM = Infinity, peakLowDeg = 0, peakAoaDeg = 0;
   fly(b, c172, 40 + seconds, (x, dt) => {
     if (t0 === null && x.iasKts >= c172.vrKts) t0 = x.t;
     x.elevInput += ((t0 === null ? 0 : -1) - x.elevInput) * Math.min(1, dt * 10);
@@ -1125,13 +1125,14 @@ function fullAftAtVr(flaps, seconds = 8) {
     // The rotation on the runway: the pitch rate until the nose is 12° up (short of the tail).
     if (pitch < 12) rotQ = Math.max(rotQ, x.angVel.x * 180 / Math.PI);
     if (radioAltitudeM(x, c172) < 5 / M_TO_FT) peakLowDeg = Math.max(peakLowDeg, pitch);
+    peakAoaDeg = Math.max(peakAoaDeg, x.aoaDeg);
     if (!noseWheelOn(x) && x.wheelLoads) {
       _tail.set(0, -(c172.gearHeight + c172.gear.strokeM) + TAIL_UP_M, c172.gear.mainZ + TAIL_AFT_M).applyQuaternion(x.quat);
       lowTailM = Math.min(lowTailM, x.pos.y + _tail.y - x.groundY);
     }
     return x.t - t0 >= seconds;
   });
-  return { rotQ, lowTailM, peakLowDeg };
+  return { rotQ, lowTailM, peakLowDeg, peakAoaDeg };
 }
 
 describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
@@ -1179,13 +1180,34 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
       expect(-slow.downQ).toBeLessThan(1.3 * -fine.downQ);
     });
     // Before 0109 both models pitched on past 30° a few feet up (the elevator's linear 36.7° of α);
-    // with the post-stall break (α ~19-20° at most) they peak lower: JSBSim 20.0° / 21.7°, flightModel.js
-    // 24.7° / 25.0° (flaps 0 / 10), pitching on to ~31-33° higher up as the speed bleeds at α ~17°. The
-    // ~20° bound is 0144's estimate, not a source; flightModel.js's 3-5° over JSBSim is ticket 0170.
-    it.fails(`KNOWN GAP (0170): flaps ${flaps * 10}, held: peak pitch under 20° while the wheels are under 5 ft`, () => {
+    // with the post-stall break both peak lower. 0170 measured the rest against JSBSim, same step, and
+    // dropped the old card's "under 20°": that bound was 0144's estimate, and JSBSim itself is 20.0 / 21.7°.
+    // - The angle of attack: flightModel.js overshoots full back stick's ~19° (20.4 / 20.1° at flaps 0 / 10,
+    //   JSBSim 18.9 / 19.1°). JSBSim flies Roskam's Cmα̇ −5.2; flightModel.js has no α-rate damping at
+    //   all (its pitch damping, 0102, is under a third of Roskam's Cmq + Cmα̇ at Vr). Adding Cmα̇ measured
+    //   18.9 / 18.7°, but it re-times the round-out the power-off 180 coach is fitted to: ticket 0202.
+    // - The pitch: the rest of the 3-5° is the flight path, and that part is JSBSim's. Its lift table is
+    //   aero.js's POH stall-speed fit (OAERO), which already holds the elevator's tail download, and it
+    //   adds Roskam's CLδe 0.43 on top (full up: −0.21 CL), so held full back it climbs ~100-200 fpm in
+    //   the first seconds where flightModel.js makes 400-1,000. With CLδe 0 JSBSim peaks at 22.1 / 23.7°,
+    //   flightModel.js with Cmα̇ at 23.4 / 24.4°: ticket 0203.
+    it.fails(`KNOWN GAP (0202): flaps ${flaps * 10}, held: the peak angle of attack within 0.75° of JSBSim's C172 (Roskam's Cmα̇)`, async () => {
       useFdm(null);
-      expect(fullAftAtVr(flaps).peakLowDeg).toBeLessThan(20);
-    });
+      const fm = fullAftAtVr(flaps);
+      useFdm(await nodeJsbsim());
+      const jsb = fullAftAtVr(flaps);
+      useFdm(null);
+      console.log(`[c172] full aft at Vr flaps ${flaps * 10}: peak α ${fm.peakAoaDeg.toFixed(1)}°, JSBSim ${jsb.peakAoaDeg.toFixed(1)}°; peak pitch under 5 ft ${fm.peakLowDeg.toFixed(1)}°, JSBSim ${jsb.peakLowDeg.toFixed(1)}°`);
+      expect(Math.abs(fm.peakAoaDeg - jsb.peakAoaDeg)).toBeLessThanOrEqual(0.75);
+    }, 30000);
+    it.fails(`KNOWN GAP (0202, 0203): flaps ${flaps * 10}, held: peak pitch while the wheels are under 5 ft within 1.5° of JSBSim's C172`, async () => {
+      useFdm(null);
+      const fm = fullAftAtVr(flaps);
+      useFdm(await nodeJsbsim());
+      const jsb = fullAftAtVr(flaps);
+      useFdm(null);
+      expect(Math.abs(fm.peakLowDeg - jsb.peakLowDeg)).toBeLessThanOrEqual(1.5);
+    }, 30000);
   }
 });
 
@@ -1250,7 +1272,7 @@ describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, t
   });
   // Flaps 10 keeps 1.2 Vr (trim.js): Vy's lower nose leaves a held partial pull (touch, gamepad)
   // short of speed and back on the runway (device panel, #177). 0144's tail contact stops the
-  // rotation on the runway, not the climb past 20° a few feet up: 0109 broke the stall, the rest is 0170.
+  // rotation on the runway; 0109 broke the stall; 0170 measured the rest (the full-aft cards above).
   it('logs flaps 10 and the over-rotations (10-12°) it does not card', () => {
     for (const [flaps, pitches] of [[1, [6, 7, 8, 9, 10, 11, 12]], [0, [10, 11, 12]]]) for (const pitchDeg of pitches) {
       const r = handsOffTakeoff(flaps, pitchDeg);
@@ -1260,29 +1282,48 @@ describe('Cessna 172S takeoff trim, hands off after the rotation (flightModel, t
   });
 });
 
-// A held partial pull (touch, gamepad; 0144's criterion, still open): 40-60% of the stick held
-// from Vr until "positive rate" (wheels > 5 ft, > 300 fpm), then let go, on Vy's trim at flaps 10.
-// Measured after 0144: 40% back on the runway, 50-60% a stall warning and back on it (the nose
-// passes 25-32° first). After 0109's post-stall break the pull holds α under ~17.5° and the nose
-// under ~23°, no stall warning, but 40-80% still settle back onto the runway once let go (~57 KIAS
-// at the release, trimmed for 74): not the post-stall pitch, ticket 0170.
-function heldPullTakeoff(pull, flaps) {
-  const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: trimAoaDeg(c172, POH_VY_KTS * KTS_TO_MPS, flaps) });
+// A held partial pull (touch, gamepad; 0144's criterion): 40-100% of the stick held from Vr until
+// "positive rate" (wheels > 5 ft, > 300 fpm), then let go, on Vy's trim at flaps 10. 0144 hoped it would
+// climb away; after 0109's post-stall break it settles back onto the runway with no stall warning, and
+// 0170 measured why: it is let go at 57-64 KIAS, 10-17 kt under the 74 KIAS the trim flies, and the nose
+// drops to find that speed with no height to spare. JSBSim's C172 (Roskam's derivatives) does the same at
+// every pull. So the premise did not hold, and the card is now the agreement: back on the runway in both
+// models, no stall warning in flightModel.js. The POH's way (Sec. 4: climb at 70-80 KIAS) is to hold the
+// attitude until the speed comes up, which the hands-off cards above fly. The game's flaps-10 spawn keeps
+// 1.2 Vr's trim (trim.js), where flightModel.js climbs away from a 50-60% pull.
+function heldPullTakeoff(pull, flaps, trimKts = POH_VY_KTS) {
+  const b = Object.assign(makeBody(c172, { flaps, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: trimAoaDeg(c172, trimKts * KTS_TO_MPS, flaps) });
   const warnKts = stallWarningKts(c172, flaps);
-  let rel = null, warned = false, landed = false;
+  let rel = null, relKts = 0, warned = false, landed = false;
   fly(b, c172, 150, (x, dt) => {
-    if (rel === null && !x.onGround && radioAltitudeM(x, c172) * M_TO_FT > 5 && vsFpm(x) > 300) rel = x.t;
+    if (rel === null && !x.onGround && radioAltitudeM(x, c172) * M_TO_FT > 5 && vsFpm(x) > 300) { rel = x.t; relKts = x.iasKts; }
     x.elevInput += ((rel === null && x.iasKts >= c172.vrKts ? -pull : 0) - x.elevInput) * Math.min(1, dt * 10);
     if (rel !== null) { warned ||= isStallWarning(x.iasKts, warnKts, x.onGround); landed ||= x.onGround; }
   }, (x) => rel !== null && x.t - rel >= 60);
-  return { rel, warned, landed };
+  return { rel, relKts, warned, landed };
 }
-describe('Cessna 172S held partial pull at Vr, flaps 10 on Vy trim (flightModel, ticket 0144)', () => {
-  it.fails('KNOWN GAP (0170): a 40-60% pull held to positive rate, then let go, climbs away without a stall warning', () => {
-    for (const pull of [0.4, 0.5, 0.6]) {
-      const r = heldPullTakeoff(pull, 1);
+describe('Cessna 172S held partial pull at Vr, flaps 10 on Vy trim (ticket 0144, retargeted by 0170)', () => {
+  afterAll(() => useFdm(null));
+  it('a 40-100% pull held to positive rate, then let go 10+ kt under the trim speed, settles back onto the runway, as JSBSim\'s C172 does', async () => {
+    for (const pull of [0.4, 0.6, 0.8, 1]) {
+      useFdm(null);
+      const fm = heldPullTakeoff(pull, 1);
+      useFdm(await nodeJsbsim());
+      const jsb = heldPullTakeoff(pull, 1);
+      useFdm(null);
+      console.log(`[c172] held ${pull * 100}% pull, flaps 10, Vy trim: let go at ${fm.relKts.toFixed(1)} KIAS, warned ${fm.warned}, back on the runway ${fm.landed}; JSBSim at ${jsb.relKts.toFixed(1)} KIAS, back on the runway ${jsb.landed}`);
+      expect(fm.rel).not.toBeNull();
+      expect(POH_VY_KTS - fm.relKts).toBeGreaterThanOrEqual(10);
+      expect(jsb.landed).toBe(true);
+      expect(fm.landed).toBe(true);
+      expect(fm.warned).toBe(false);
+    }
+  }, 60000);
+  it('logs the same pulls on the game\'s flaps-10 takeoff trim (1.2 Vr, trim.js)', () => {
+    for (const pull of [0.4, 0.5, 0.6, 0.8]) {
+      const r = heldPullTakeoff(pull, 1, c172.vrKts * 1.2);
+      console.log(`[c172 flightModel] held ${pull * 100}% pull, flaps 10, 1.2 Vr trim (not carded): let go at ${r.relKts.toFixed(1)} KIAS, warned ${r.warned}, back on the runway ${r.landed}`);
       expect(r.rel).not.toBeNull();
-      expect(r.warned || r.landed).toBe(false);
     }
   });
 });
