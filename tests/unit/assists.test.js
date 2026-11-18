@@ -157,8 +157,8 @@ describe('Kid envelope protection (headless, on the real flight model)', () => {
 });
 
 describe('Kid auto-flare profile per airframe (0101)', () => {
-  it('the 737 flares to its own, quicker sink profile; without one it keeps the Cessna\'s', () => {
-    // At 6 m and 75 m/s: the Cessna's profile (1.2 m/s) and the 737's (2.0 m/s) floor the
+  it('the 737 flares to its own, quicker sink profile; without one the default (the Cessna has its own, gentler)', () => {
+    // At 6 m and 75 m/s: the default profile (1.2 m/s; the Cessna's own 0.18 gives 1.08) and the 737's (2.0 m/s) floor the
     // pitch at their own path + α; a quicker profile asks less nose-up at the same height.
     const s = {
       pitchIn: 0, rollIn: 0, yawIn: 0, pitchDeg: 0, bankRightDeg: 0, pitchRateUp: 0, rollRateRight: 0,
@@ -171,7 +171,12 @@ describe('Kid auto-flare profile per airframe (0101)', () => {
     expect(slow.pitchHoldDeg).toBeCloseTo(deg(1.2), 5);
     expect(quick.pitchHoldDeg).toBeCloseTo(deg(6 * AIRCRAFT_DATABASE.b738.kidFlarePerS), 5);
     expect(quick.pitchHoldDeg).toBeLessThan(slow.pitchHoldDeg);
-    expect(AIRCRAFT_DATABASE.c172.kidFlarePerS).toBeUndefined();
+    // The Cessna has its own since 0202 (Cmα̇ answers the flare later): 0.18, gentler than the default's 0.2.
+    const cessna = createAssistState();
+    shapeControls(assistConfig('kid'), cessna, { ...s, flarePerS: AIRCRAFT_DATABASE.c172.kidFlarePerS }, 1 / 120, {});
+    expect(AIRCRAFT_DATABASE.c172.kidFlarePerS).toBe(0.18);
+    expect(cessna.pitchHoldDeg).toBeCloseTo(deg(6 * 0.18), 5);
+    expect(cessna.pitchHoldDeg).toBeGreaterThan(slow.pitchHoldDeg);
   });
 });
 

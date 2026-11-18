@@ -96,6 +96,7 @@ export function applyUpset(body, u) {
   body.vel.set(0, -Math.sin(a), -Math.cos(a)).applyQuaternion(body.quat).multiplyScalar(u.kts * KTS_TO_MPS * ratio);
   if (body.windVec) body.vel.add(body.windVec);
   body.angVel.set(0, 0, 0);
+  body.aoaPrevRad = null; body.aoaRateF = 0; // a teleport: no α-rate from the old α (flightModel.js Cmα̇, 0202)
   body.throttle = u.throttle;
   body.engineN = u.throttle;
   body.iasKts = u.kts;

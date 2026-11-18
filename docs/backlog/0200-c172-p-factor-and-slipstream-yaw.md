@@ -1,7 +1,7 @@
 ---
 id: 0200
 title: The Cessna needs right rudder in a full-power climb: P-factor and slipstream swirl, from a cited figure
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
@@ -33,3 +33,11 @@ in the air (main.js), so a steady yaw would leave them slipping (#256 met the sa
 
 ## Out of scope
 Spins; the jets.
+
+## Back to proposed (2026-11-18, Builder)
+Still no figure. A web search (NASA NTRS, flight-test reports) for a C172 or similar tractor single's rudder
+deflection or pedal force to hold the ball at full power, or its slipstream yawing moment, found only general
+results: NASA TP-2535-era wind-tunnel notes that thrust raises rudder effectiveness, and that trim changes are
+largest at high power. None gives a number for this airplane, and 0194's run found none either. Promote it
+again when someone has the document and page: e.g. a Cessna/FAA certification flight-test report, a NACA/NASA
+power-effects test of a high-wing tractor single, or a measured pedal force at Vy full power.

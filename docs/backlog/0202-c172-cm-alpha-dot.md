@@ -1,12 +1,12 @@
 ---
 id: 0202
 title: C172 flightModel.js has no α-rate pitch damping: add Roskam's Cmα̇ (−5.2) and re-centre the power-off 180 coach it moves
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-18
-pr:
+pr: 283
 ---
 
 ## Why
@@ -78,3 +78,31 @@ What it breaks (the reason it did not ship in 0170):
 
 ## Test plan
 `npx vitest run tests/flight` (c172, power180, kidFinal, pattern), tests/e2e/power180.spec.js and takeoff.spec.js.
+
+## Shipped (2026-11-18)
+Roskam's Cmα̇ −5.2 in flightModel.js (C172 only, `spec.cmAlphaDot`), α̇ from step to step smoothed over 0.08 s,
+each sample held to ±2 rad/s; `dt > 0` guarded; `aoaPrevRad`/`aoaRateF` initialised on every body (main.js,
+traffic.js, harness.js) and cleared on every teleport (loadScenario, setAircraft, each JSBSim step, upset.js,
+power180.js's hold, deadStick.js debugFinal). Peak α at Vr full aft 18.9 / 18.7° (JSBSim 18.9 / 19.1°): both α
+cards are plain `it`s; the pitch cards stay KNOWN GAP (0203), 23.3 / 24.4° against 20.0 / 21.7°.
+- c̄ is the spec's own S/b (1.473 m), not JSBSim's 4.9 ft (1.494 m, 2.8% more moment). The tail-strike sub-step
+  card is the contact spring sampled at a random phase: with 1.494 m flaps 10 read 7.4 / 12.5 kN at 1/180 / 1/60 s
+  (over its 1.3x), with 1.473 m 7.8 / 6.5; c̄ 1.40-1.55 flip it either way with the same pitch-down rates. The
+  0.08 s smoothing: 0.04-0.25 s all move the α cards < 0.2°.
+- The power-off 180 test pilot's round-out starts at 20 ft (AFH's 10-20 ft; from a ~1,000 fpm flaps 30 glide), not
+  15: from 15 ft main's hit at 0.6 ft and hopped 1.2 ft; with Cmα̇ it never held off (63 KIAS). New card check: no
+  hop. Coach re-centred: FLOAT_M 95 → 101, TURN_FT 170 → 160, Kid's turn TURN_FT − 65 (95 ft, as before). Calm +152,
+  5 kt +152 to +172, 10 kt +28 to +228 ft. Kid e2e 87-168 ft over 5 runs (main 113-173).
+- Kid's Cessna flare profile 0.2 → 0.18 (`kidFlarePerS`): the default touched 4-9 fpm firmer with Cmα̇ (15 kt from
+  070° A 94); 0.18 lands calm at −186 fpm (main −185) and every crosswind case S 95.
+- Left at the window's edges (first-timer panel): 10 kt straight down the runway. Headwind on final (160°/10)
+  lands +28 ft, flaps up at 63 KIAS (main +170); tailwind (340°/10) +228 ft, past the ACS's 200 though inside
+  the card's 250 (main +68). 15 kt (logged): 160° −185, 070° −195, 340° +471 (main −90 / −63 / +311). The coach's
+  legWind under-corrects the turn for the wind on final; a fix belongs in a new ticket, not in this one.
+- Physics panel: the power-off 180 numbers come from the round-out and the coach, not Cmα̇ (off, they land
+  within 4 ft). 160°/10 gets no flaps call and lands flaps up at 63 KIAS, +28 ft: one tuning step (±3 ft of
+  TURN_FT ≈ 25 ft) from failing. The rotation rate fell 37.5 / 38.3 → 32.6 / 33.4°/s (JSBSim 40.7 / 42.7, −8% →
+  −20%, card ±30%); 0203's CLδe question is about the climb, so it may not recover it. Turbulent Kid finals land
+  ~6-16 fpm firmer (gusts now feed α̇); the uncarded 40% pull at 1.2 Vr trim now sounds the stall warning.
+  The tail-strike sub-step card is fragile (spring phase): a peak over a window would make it robust: a
+  follow-up for the Scout.
