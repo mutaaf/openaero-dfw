@@ -1939,10 +1939,13 @@ function integrateSubStep(dt) {
       sim.aileronInput = aileronForBank(bankCmd, bankRightDeg, rollRateRight, rollHoldScale(spec, sim.tasKts * KTS_TO_MPS)) + sim.propAil;
       sim.aileronInput = THREE.MathUtils.clamp(sim.aileronInput, -1, 1);
     };
-    // Fly a flight-path angle over the ground (autopilot.js pitchForPath; capped 9.5° nose-up).
+    // Fly a flight-path angle: pitch = path + current angle of attack (capped 9.5° nose-up: the 737's tail
+    // strikes at ~11°). The glideslope mode flies the path over the ground instead (autopilot.js pitchForPath,
+    // tests/flight/apGlideslope.test.js); the flare and altitude hold keep path + α until a card flies them.
     const pathDeg = Math.atan2(sim.vel.y, Math.max(1, Math.hypot(sim.vel.x, sim.vel.z))) * RAD_TO_DEG;
-    const holdGamma = (gammaDeg) => {
-      sim.elevInput = elevatorForPitch(pitchForPath(gammaDeg, pitchDeg, pathDeg), pitchDeg, pitchRateUp);
+    const holdGamma = (gammaDeg, overGround = false) => {
+      const cmd = overGround ? pitchForPath(gammaDeg, pitchDeg, pathDeg) : Math.min(9.5, gammaDeg + sim.aoaDeg);
+      sim.elevInput = elevatorForPitch(cmd, pitchDeg, pitchRateUp);
     };
 
     updateIasTrend(dt);
@@ -1959,7 +1962,7 @@ function integrateSubStep(dt) {
         if (Math.abs(ap.heightAbovePathM) < 15) {
           sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
         }
-        holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral));
+        holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral), true);
         sim.throttle = autoThrottle(vrefFor(spec, sim.flapsIndex) + 5, -3, dt);
       } else {
         // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
