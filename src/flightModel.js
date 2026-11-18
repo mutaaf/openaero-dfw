@@ -216,8 +216,8 @@ export function stepFlightModel(body, spec, dt) {
   // α-rate pitch damping (Cmα̇, 0202): the downwash reaches the tail late, so a rising α pushes the nose
   // down: M = q·S·c̄·Cmα̇·(c̄/2V)·α̇ (Roskam's C172 −5.2, our JSBSim C172's aero/coefficient/Cmadot; c̄ = S/b).
   // α̇ from step to step, smoothed over 0.08 s: an α differenced at 1/60 s and at 1/180 s then gives the same
-  // damping (unsmoothed, the tail-strike card's 1/60 s peak ran 1.5x its 1/180 s one), and 0.08 s is a tenth
-  // of the short period, so the damping itself is Roskam's. Each sample is held to ±2 rad/s (a wheel's
+  // damping (unsmoothed, the tail-strike card's 1/60 s peak ran 1.5x its 1/180 s one). At the short period
+  // that lag costs some of the damping (0.08 s is ~32° of phase there); 0.04-0.25 s all moved the α cards < 0.2°. Each sample is held to ±2 rad/s (a wheel's
   // bump). Every teleport (a spawn, the upset and power-off 180 set-ups, the dead-stick final, an airframe or
   // FDM switch) clears body.aoaPrevRad and body.aoaRateF, so a jump in α is never read as a rate. dt 0 (a
   // paused step) leaves both as they were: a 0/0 α̇ would be NaN in angVel for good.

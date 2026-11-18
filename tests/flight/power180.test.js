@@ -21,8 +21,9 @@ const end = runwayEnd('KADS', '16');
 const D = { x: Math.sin(end.hdgT * Math.PI / 180), z: -Math.cos(end.hdgT * Math.PI / 180) };
 // The test pilot's round-out starts at 20 ft, the top of the Airplane Flying Handbook's "approximately 10 to 20
 // feet" (FAA-H-8083-3C ch. 9), since the idle flaps 30 glide arrives at ~1,000 fpm. From 15 ft (0189) it could
-// not stop that sink in time: on main it hit at 0.6 ft, hopped 1.2 ft and floated; with Cmα̇ (0202) it does not
-// hop and lands ~170 ft shorter (63 KIAS, 115 fpm): the coach had been fitted to the hop.
+// not stop that sink in time: on main it hit at 0.6 ft, hopped 1.2 ft and floated, and the coach had been fitted
+// to the hop; with Cmα̇ (0202) the hop went and it landed ~170 ft shorter (63 KIAS, 115 fpm). The 20 ft round-out
+// and the re-fitted coach are what set the numbers below: with Cmα̇ off they land within 4 ft of them.
 const ROUND_OUT_FT = 20;
 
 // mode: 'coach' (glide on till it says turn, round to the final, flaps when it asks), 'late' (the

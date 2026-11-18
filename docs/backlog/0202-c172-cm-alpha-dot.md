@@ -99,3 +99,10 @@ cards are plain `it`s; the pitch cards stay KNOWN GAP (0203), 23.3 / 24.4° agai
   lands +28 ft, flaps up at 63 KIAS (main +170); tailwind (340°/10) +228 ft, past the ACS's 200 though inside
   the card's 250 (main +68). 15 kt (logged): 160° −185, 070° −195, 340° +471 (main −90 / −63 / +311). The coach's
   legWind under-corrects the turn for the wind on final; a fix belongs in a new ticket, not in this one.
+- Physics panel: the power-off 180 numbers come from the round-out and the coach, not Cmα̇ (off, they land
+  within 4 ft). 160°/10 gets no flaps call and lands flaps up at 63 KIAS, +28 ft: one tuning step (±3 ft of
+  TURN_FT ≈ 25 ft) from failing. The rotation rate fell 37.5 / 38.3 → 32.6 / 33.4°/s (JSBSim 40.7 / 42.7, −8% →
+  −20%, card ±30%); 0203's CLδe question is about the climb, so it may not recover it. Turbulent Kid finals land
+  ~6-16 fpm firmer (gusts now feed α̇); the uncarded 40% pull at 1.2 Vr trim now sounds the stall warning.
+  The tail-strike sub-step card is fragile (spring phase): a peak over a window would make it robust: a
+  follow-up for the Scout.
