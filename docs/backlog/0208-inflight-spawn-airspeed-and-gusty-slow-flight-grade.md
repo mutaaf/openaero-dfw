@@ -1,7 +1,7 @@
 ---
 id: 0208
 title: Spawn in-air missions at their airspeed through the air, then make the slow-flight band fair on a bumpy day
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity

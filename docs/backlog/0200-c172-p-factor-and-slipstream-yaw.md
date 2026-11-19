@@ -1,7 +1,7 @@
 ---
 id: 0200
 title: The Cessna needs right rudder in a full-power climb: P-factor and slipstream swirl, from a cited figure
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity
