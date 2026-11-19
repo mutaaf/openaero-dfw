@@ -1,7 +1,7 @@
 ---
 id: 0177
 title: "Too high" drill: slip the Cessna down to the numbers
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: content
