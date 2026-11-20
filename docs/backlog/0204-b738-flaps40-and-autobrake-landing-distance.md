@@ -1,7 +1,7 @@
 ---
 id: 0204
 title: 737 landing distance at flaps 40 and on autobrake against a cited Boeing chart
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
