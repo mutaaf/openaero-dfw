@@ -1,7 +1,7 @@
 ---
 id: 0183
 title: Ground effect's induced-drag curve matches PHAK's 1.4 / 23.5 / 47.6% (fix aero.js, re-measure flare and landing cards)
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
@@ -42,3 +42,13 @@ F-16 below 0.100, 737 below 0.028); keep or justify it.
 
 ## Out of scope
 Ground effect on lift and pitching moment.
+
+## Held for the operator (2026-11-20, Builder)
+Two complete implementations are open as drafts and wait on the operator's decision, not on more building:
+- #261 (2026-11-15): PHAK-fitted curve, coaches untouched; Kid's calm landing S 95 -> A 94, the 700 ft
+  turn-back call flips to "land ahead" (gap 0189), the flare stall shake 0.65 -> 0.98 (gap 0190).
+- #277 (2026-11-17, on newer main): a different 3-constant PHAK fit, coaches re-centred (power180 FLOAT_M,
+  engine-out margin 25 -> 15 ft), Kid A 94, the 10 kt power-off 180 and two other coach cards filed as 0198.
+Both are now behind main (merge conflicts). Do not build a third: to unblock, the operator picks one
+(mark it ready for review, close the other) or says which effect to waive; the next Builder then rebases
+the chosen PR on main and re-measures. 0178 (CDbeta) waits on the same decision.
