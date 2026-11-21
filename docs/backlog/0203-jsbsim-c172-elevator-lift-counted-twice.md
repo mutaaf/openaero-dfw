@@ -1,7 +1,7 @@
 ---
 id: 0203
 title: Our JSBSim C172 may count the elevator's lift twice (aero.js's POH-fitted CL table plus Roskam's CLδe)
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
