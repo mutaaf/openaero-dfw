@@ -80,8 +80,8 @@ export const ED_TEXT = {
   edwLevel: 'Hold your new height',
   edwLow: 'Too low: climb back up',
   edwHigh: 'A little high: ease down',
-  edwKidIn: 'Smoke in the cockpit! Let go: the plane goes down fast in a turn',
-  edwKid: 'The plane spirals down at 100 knots: watch the SEA LVL height count down',
+  edwKidIn: 'Smoke! Let go: the plane goes down fast in a turn',
+  edwKid: 'The plane spirals down: watch SEA LVL count down',
   edwKidLevel: 'The plane levels off: down safely',
 };
 Object.assign(DRILL_TEXT, ED_TEXT);
@@ -93,12 +93,12 @@ export function descentWords(targetFt) {
   const t = ftWords(targetFt);
   DRILL_TEXT.edwSmoke = `Smoke in the cockpit! Emergency descent to ${t}: power idle, bank 30-45°, nose down to 95-105 kt`;
   DRILL_TEXT.edwHold = `Hold it: idle, 30-45° of bank, 95-105 kt, down to ${t}`;
-  DRILL_TEXT.edwKid = `The plane spirals down at 100 knots: watch the SEA LVL height count down to ${t}`;
+  DRILL_TEXT.edwKid = `The plane spirals down to ${t}: watch SEA LVL`; // ≤ ~50 characters: 2 lines on a phone held sideways (device panel)
   DRILL_TEXT.edwLevelOff = `Level off at ${t}: wings level, raise the nose, add power`;
   DRILL_TEXT.edwLevel = `Hold ${t}`;
   DRILL_TEXT.edwLow = `Too low: climb back to ${t}`;
   DRILL_TEXT.edwHigh = `A little high: ease down to ${t}`;
-  DRILL_TEXT.edwKidIn = `Smoke in the cockpit! Let go: the plane goes down to ${t} fast, in a turn`;
+  DRILL_TEXT.edwKidIn = `Smoke! Let go: the plane goes down to ${t}`;
   DRILL_TEXT.edwKidLevel = `The plane levels off at ${t}: down safely`;
 }
 
@@ -269,7 +269,7 @@ export function gradeEmergencyDescent(st, kid = false) {
       score: curve(1 - bandShare, [[0.1, 100], [0.2, 85], [0.5, 40], [0.8, 0]]) },
     { key: 'bank', label: 'Time at 30-45° of bank (test)', value: `${Math.round(bankShare * 100)}%`,
       score: curve(1 - bankShare, [[0.1, 100], [0.2, 85], [0.5, 40], [0.8, 0]]) },
-    { key: 'level', label: 'Levelled off (test: ±100 ft)', value: st.phase === 'complete' ? `${Math.round(dev) === 0 ? '' : st.levelSignFt < 0 ? '−' : '+'}${Math.round(dev)} ft at worst` : 'not reached',
+    { key: 'level', label: 'Level-off (test: ±100 ft)', value: st.phase === 'complete' ? `${Math.round(dev) === 0 ? '' : st.levelSignFt < 0 ? '−' : '+'}${Math.round(dev)} ft at worst` : 'not reached',
       score: st.phase === 'complete' ? curve(dev, [[50, 100], [100, 85], [200, 40], [300, 0]]) : 0 },
   ];
   for (const f of factors) f.score = Math.round(f.score);
