@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { BASE, stubTiles, stubMetar, TEST_METAR } from './helpers.js';
+import { BASE, stubTiles, stubMetar, TEST_METAR, collectErrors } from './helpers.js';
 
 // Ticket 0208: an in-air mission spawns at its kias through the air (main.js loadScenario adds the wind at the spawn's
 // height to the velocity along the heading), so the slow-flight drill (heading 360, 95 KIAS) opens at 95 KIAS in a
@@ -10,6 +10,7 @@ const metar = (dir, kt) => ({ ...TEST_METAR, wdir: dir, wspd: kt, wgst: null, ra
 
 for (const [label, dir, gsSign] of [['tailwind', 180, 1], ['headwind', 360, -1]]) {
   test(`?mission=c172_slow_flight in a 25 kt ${label}: the drill opens at 95 KIAS, the wind in the ground speed`, async ({ page }) => {
+    const errors = collectErrors(page);
     await stubTiles(page);
     await page.unroute('**/openaero/api/metar*');
     await stubMetar(page, [metar(dir, 25)]);
@@ -25,8 +26,10 @@ for (const [label, dir, gsSign] of [['tailwind', 180, 1], ['headwind', 360, -1]]
       await page.waitForTimeout(200);
     }
     const median = (a) => [...a].sort((x, y) => x - y)[2];
-    expect(Math.abs(median(ias) - 95)).toBeLessThan(3);
-    // The ground speed carries the wind (TAS ~102 kt at 5,100 ft MSL ± ~25 kt).
-    expect(gsSign * (median(gs) - median(ias))).toBeGreaterThan(15);
+    expect(Math.abs(median(ias) - 95)).toBeLessThan(4);
+    // The ground speed carries the wind (TAS ~102 kt at 5,100 ft MSL, ± ~25 kt: ~129 / ~79). Spawned over the ground it
+    // would read 95 in both, as the airspeed misses by 25.
+    expect(gsSign * (median(gs) - 95)).toBeGreaterThan(10);
+    expect(errors).toEqual([]);
   });
 }

@@ -186,6 +186,28 @@ describe('the band on a bumpy day (0208): graded on the needle\'s average, FAA-S
     flySlow(high, { alt: (t) => (t > 40 && t < 45 ? 5150 : 5000) });
     expect(gradeSlowFlight(high).reason).toMatch(/More power/);
     expect(gradeSlowFlight(high, true).reason).not.toMatch(/nose|power/i);
+    expect(kid.reason).toMatch(/bumps/);
+    expect(pilot.reason).toMatch(/on average/);
+    expect(pilot.factors.find((f) => f.key === 'speed').label).toMatch(/averaged through the bumps/);
+  });
+  it('a calm day never blames the bumps, and Kid gets no stick or power advice on any card', () => {
+    const calm = createSlowFlight();
+    flySlow(calm, { kts: (t) => Math.max(60, 95 - t) });
+    const g = gradeSlowFlight(calm, true);
+    expect(g.reason).toMatch(/Too slow/);
+    expect(g.reason).not.toMatch(/bumps|on average|nose|power/i);
+    expect(g.factors.find((f) => f.key === 'speed').label).not.toMatch(/averaged/);
+    const horn = createSlowFlight();
+    flySlow(horn, { kts: (t) => Math.max(66, 95 - t), aoa: (t) => (t > 40 && t < 42 ? 12 : 6) });
+    expect(horn.warned).toBe(true);
+    expect(gradeSlowFlight(horn, true).reason).not.toMatch(/nose|power/i);
+    const lost = createSlowFlight();
+    flySlow(lost, { alt: (t) => (t > 40 && t < 45 ? 4750 : 5000) });
+    expect(gradeSlowFlight(lost).reason).toMatch(/Add power/);
+    expect(gradeSlowFlight(lost, true).reason).not.toMatch(/nose|power/i);
+    for (const why of ['stall', 'height', 'time']) {
+      expect(gradeSlowFlight({ ...createSlowFlight(), phase: 'failed', why, altSignFt: -600 }, true).reason).not.toMatch(/nose|power|throttle/i);
+    }
   });
 });
 

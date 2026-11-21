@@ -88,7 +88,7 @@ export function slowBandWords(targetKts, gusty = false) {
   DRILL_TEXT.sfwSlow = `Throttle back, raise the nose bit by bit: slow to ${top} kt, hold your height`;
   DRILL_TEXT.sfwTooSlow = `Too slow: under ${t} kt. Lower the nose a little, add power`;
   DRILL_TEXT.sfwFast = `Fast: over ${top} kt. A little less power, nose up a little to stay level`;
-  DRILL_TEXT.sfwHold = gusty ? `Bumpy air: nose steady, keep ${t}-${top} kt (raised for the bumps), level`
+  DRILL_TEXT.sfwHold = gusty ? `Bumpy air: nose steady, keep ${t}-${top} kt (raised for the bumps). Quick dips are OK, staying out is not`
     : `Hold it: ${t}-${top} kt, level, on your heading`;
 }
 
@@ -96,7 +96,7 @@ export function slowBandWords(targetKts, gusty = false) {
 // band), 'holding' (in the band's reach: the timer runs), 'complete' (graded), 'failed' (graded D).
 export const createSlowFlight = () => ({
   phase: 'wait', alt0: 0, hdg0: 0, t: 0, kidKts: 0, holdS: 0, okS: 0, inBandS: 0, targetKts: 0, iasF: 0,
-  iasG: 0, maxAltDevFt: 0, altSignFt: 0, maxHdgDev: 0, underKts: 0, overKts: 0, warnRunS: 0, warnS: 0, warned: false, why: null,
+  iasG: 0, gusty: false, maxAltDevFt: 0, altSignFt: 0, maxHdgDev: 0, underKts: 0, overKts: 0, warnRunS: 0, warnS: 0, warned: false, why: null,
 });
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
@@ -174,6 +174,7 @@ export function slowFlightStep(st, s) {
     return 'holding';
   }
   st.holdS += s.dt;
+  if (s.gustAddKts >= SLOW_GUSTY_KTS) st.gusty = true; // the grade's words say the bumps only on a day that had them
   const inBand = st.iasG >= st.targetKts && st.iasG <= top;
   if (inBand) st.inBandS += s.dt;
   st.underKts = Math.max(st.underKts, st.targetKts - st.iasG);
@@ -288,32 +289,39 @@ export function gradeSlowFlight(st, kid = false) {
       score: curve(alt, [[50, 100], [100, 85], [200, 40], [300, 10], [400, 0]]) },
     { key: 'hdg', label: 'Heading held (test: ±10°)', value: `${Math.round(hdg)}° off at worst`,
       score: curve(hdg, [[5, 100], [10, 85], [20, 40], [30, 0]]) },
-    { key: 'speed', label: `Time at ${Math.round(st.targetKts)}-${Math.round(st.targetKts + SLOW_KTS_OVER)} kt (test: up to 10 kt over, never under)`, value: `${Math.round(share * 100)}%`,
+    { key: 'speed', label: `Time at ${Math.round(st.targetKts)}-${Math.round(st.targetKts + SLOW_KTS_OVER)} kt${st.gusty ? ', averaged through the bumps' : ''} (test: up to 10 kt over, never under)`, value: `${Math.round(share * 100)}%`,
       score: curve(1 - share, [[0.05, 100], [0.1, 85], [0.4, 40], [0.7, 0]]) },
   ];
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
   let reason = null;
   const t = Math.round(st.targetKts), top = t + SLOW_KTS_OVER;
+  // Kid's guide and autothrottle fly the hold: its reasons say what the plane did, not what to do with the stick or the
+  // power, and blame the bumps only on a day that had them (0208).
+  const avg = st.gusty ? ' on average' : '';
+  const kidWhy = (dir) => (st.gusty ? `the bumps ${dir === 'slow' ? 'slowed the plane' : 'sped the plane up'}, not you`
+    : `the plane got too ${dir} (did the stick or the flaps move?)`);
   if (failed) {
     score = Math.min(score, SLOW_LOST_CAP);
-    reason = st.why === 'stall' ? 'Stalled: slow flight lives just above the stall warning. At the first sign (the horn, the buffet, a gust), lower the nose a little and add power.'
+    reason = kid ? (st.why === 'stall' ? 'Stalled: the plane got too slow for its wing.' : st.why === 'height' ? `The plane went over ${SLOW_FAIL_FT} ft off its height.`
+      : 'The plane never slowed down to the band.')
+      : st.why === 'stall' ? 'Stalled: slow flight lives just above the stall warning. At the first sign (the horn, the buffet, a gust), lower the nose a little and add power.'
       : st.why === 'height' ? (st.altSignFt > 0 ? `Gained over ${SLOW_FAIL_FT} ft: ease the nose down a little and take off some power.`
         : st.overKts > 0 ? `Lost over ${SLOW_FAIL_FT} ft with the nose low and the speed up: raise the nose to slow down and stop the sink.`
           : `Lost over ${SLOW_FAIL_FT} ft: as you slow, raise the nose and add power to hold your height.`)
         : `Never slowed down: throttle back and raise the nose until the speed is ${top} kt or less.`;
   } else if (alt > 2 * SLOW_ALT_TOL_FT) {
     score = Math.min(score, SLOW_LOST_CAP);
-    reason = `${st.altSignFt < 0 ? 'Lost' : 'Gained'} ${Math.round(alt)} ft: the test allows 100. ${st.altSignFt < 0 ? 'Add power when you sink' : 'Take off power when you climb'}. Capped at D.`;
+    reason = `${st.altSignFt < 0 ? 'Lost' : 'Gained'} ${Math.round(alt)} ft: the test allows 100.${kid ? '' : ` ${st.altSignFt < 0 ? 'Add power when you sink' : 'Take off power when you climb'}.`} Capped at D.`;
   } else if (st.warned) {
     score = Math.min(score, SLOW_WARN_CAP);
-    reason = 'The stall warning sounded (the horn, or the wing that close to it in a gust): the test asks for none. Fly higher in the band on a gusty day; at the first sign, lower the nose a little and add power. Capped at C.';
+    reason = kid ? 'The stall warning sounded: the test asks for none. Capped at C.'
+      : 'The stall warning sounded (the horn, or the wing that close to it in a gust): the test asks for none. Fly higher in the band on a gusty day; at the first sign, lower the nose a little and add power. Capped at C.';
   } else if (alt > SLOW_ALT_TOL_FT || hdg > SLOW_HDG_TOL_DEG || share < SLOW_BAND_SHARE_B) {
     score = Math.min(score, SLOW_ACS_CAP);
-    // Kid's guide and autothrottle fly the hold: its reasons say what the plane did, not what to do with the stick (0208).
     reason = share < SLOW_BAND_SHARE_B
-      ? (st.underKts >= st.overKts ? `Too slow (down to ${Math.round(t - st.underKts)} kt) for part of the hold: ${kid ? 'the bumps slowed the plane' : 'lower the nose a little'}. No better than a B.`
-        : `Too fast (up to ${Math.round(top + st.overKts)} kt) for part of the hold: ${kid ? 'the bumps sped the plane up' : 'raise the nose a little'}. No better than a B.`)
+      ? (st.underKts >= st.overKts ? `Too slow (down to ${Math.round(t - st.underKts)} kt${avg}) for part of the hold: ${kid ? kidWhy('slow') : 'lower the nose a little'}. No better than a B.`
+        : `Too fast (up to ${Math.round(top + st.overKts)} kt${avg}) for part of the hold: ${kid ? kidWhy('fast') : 'raise the nose a little'}. No better than a B.`)
       : alt > SLOW_ALT_TOL_FT ? `Height went ${Math.round(alt)} ft off: the test allows 100.${kid ? '' : ' More power if you sink, less if you climb.'} No better than a B.`
         : `Heading went ${Math.round(hdg)}° off: the test allows 10. No better than a B.`;
   }
