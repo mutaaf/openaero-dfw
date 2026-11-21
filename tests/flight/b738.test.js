@@ -130,18 +130,18 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // wing still lifting on the rollout, two errors that partly cancelled.)
   // elevFt: the runway's pressure altitude (standard day: mslOffsetM, ISA, 29.92). Vref is an
   // indicated speed, so the airplane flies it at its true airspeed there (still air: TAS = GS).
-  function landFromFifty(massKg, { elevFt = 0, autobrake = 0, manual = true } = {}) {
+  function landFromFifty(massKg, { elevFt = 0, autobrake = 0, manual = true, flaps = FLAPS_30 } = {}) {
     const spec = { ...b738, massKg };
-    const kts = vrefKts(FLAPS_30, massKg);
+    const kts = vrefKts(flaps, massKg);
     const v = kts * KTS_TO_MPS;
     const elevM = elevFt / M_TO_FT;
     const air = airAt(elevM + 15);
     const tas = tasFromIas(v, air.sigma);
-    const b = makeBody(spec, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps: FLAPS_30, throttle: trimThrottle(spec, v, FLAPS_30, -3, true, air) });
+    const b = makeBody(spec, { kts, altM: b738.gearHeight + 50 / M_TO_FT, flaps, throttle: trimThrottle(spec, v, flaps, -3, true, air) });
     b.mslOffsetM = elevM;
     b.autobrake = autobrake;
     b.vel.set(0, -tas * Math.sin(3 * DEG_TO_RAD), -tas * Math.cos(3 * DEG_TO_RAD));
-    const pitch0 = trimAoaDeg(spec, v, FLAPS_30) - 3;
+    const pitch0 = trimAoaDeg(spec, v, flaps) - 3;
     b.quat.setFromAxisAngle({ x: 1, y: 0, z: 0 }, pitch0 * DEG_TO_RAD);
     let touchdown = null, spoilersAt80 = null, spoilers2s = null, autobrakeEngaged = false;
     fly(b, spec, 90, (x) => {
@@ -225,7 +225,8 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // The autobrake (aircraft.js systems.autobrake, the 737 NG FCOM's 4 / 5 / 7.2 / 14 ft/s²) brakes
   // to a deceleration, not to the tyres' limit, so the ACAP's distance (max manual braking, the
   // certified technique) is about the shortest stop: autobrake 2 needs much more, MAX less than 2 and
-  // about what the pedals take (within 3%: MAX's 14 ft/s² is near the tyres' limit). No public Boeing chart gives the autobrake distances themselves.
+  // about what the pedals take (within 3%: MAX's 14 ft/s² is near the tyres' limit). This card is flaps 30; the
+  // autobrake distances themselves are carded at flaps 40 against Boeing's QRH table below (0204).
   it('at DFW, 65 t, dry: autobrake 2 stops well past the ACAP §3.4.3 distance, MAX shorter than 2 and about as short as the pedals', () => {
     const manual = landFromFifty(b738.massKg, { elevFt: DFW_FT }).ft;
     const r2 = landFromFifty(b738.massKg, { elevFt: DFW_FT, autobrake: 2, manual: false });
@@ -243,6 +244,85 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
     expect(abMax).toBeLessThan(ab2);
     expect(abMax).toBeGreaterThanOrEqual(manual * 0.97);
   });
+
+  // Flaps 40 and the autobrake against Boeing's own landing distances (0204). Boeing 737 FCOM,
+  // Performance Inflight - QRH, Advisory Information, "Normal Configuration Landing Distances, Flaps
+  // 40" (737-800WSFP1/CFM56-7B27, FAA, Category C/N brakes), reproduced as Table 1 on p. 19 of the
+  // Ministry of Civil Aviation (India) Report on Accident to Air India Express Boeing 737-800 VT-AXV,
+  // Mangalore, 22 May 2010, §1.6.12.1 (skybrary.aero/sites/default/files/bookshelf/1680.pdf, PDF page
+  // 35; the table is an image, read at 200 dpi). Dry runway, actual (unfactored) distances from 50 ft
+  // (1,000 ft of air distance), 60,000 kg, sea level, standard day, no wind or slope, VREF40 approach
+  // speed; max manual braking with auto speedbrakes. The reference has two-engine detent reverse; this
+  // pilot uses none (like the ACAP cards above), so each row adds its NO REV column:
+  //   braking      REF   NO REV  →  no reverse   per 5,000 kg above   per 1,000 ft (STD)
+  //   MAX MANUAL   2740  +80        2820          +170                 +50
+  //   MAX AUTO     3470  +0         3470          +180                 +70
+  //   AUTOBRAKE 3  4800  +10        4810          +290                 +120
+  //   AUTOBRAKE 2  6130  +180       6310          +410                 +170
+  //   AUTOBRAKE 1  6740  +770       7510          +480                 +200
+  // Flown as landFromFifty does (Vref40 = 1.23 Vs at flaps 40, scaled to the weight; idle and flare
+  // from 30 ft; the autobrake alone, or full pedals), ±12% as the ACAP cards.
+  const QRH40 = {
+    manual: { ab: 0, refFt: 2740 + 80, perWtFt: 170, perKftFt: 50, label: 'max manual braking' },
+    max: { ab: 4, refFt: 3470, perWtFt: 180, perKftFt: 70, label: 'autobrake MAX' },
+    ab3: { ab: 3, refFt: 4800 + 10, perWtFt: 290, perKftFt: 120, label: 'autobrake 3' },
+    ab2: { ab: 2, refFt: 6130 + 180, perWtFt: 410, perKftFt: 170, label: 'autobrake 2' },
+    ab1: { ab: 1, refFt: 6740 + 770, perWtFt: 480, perKftFt: 200, label: 'autobrake 1' },
+  };
+  const QRH_REF_KG = 60000;
+  const qrh40Ft = (row, massKg = QRH_REF_KG, elevFt = 0) => row.refFt + row.perWtFt * (massKg - QRH_REF_KG) / 5000 + row.perKftFt * elevFt / 1000;
+  const land40 = (row, massKg = QRH_REF_KG, elevFt = 0) => landFromFifty(massKg, { flaps: FLAPS_40, elevFt, autobrake: row.ab, manual: row.ab === 0 });
+  const qrh40Card = (row) => () => {
+    const r = land40(row);
+    console.log(`[b738] flaps 40, 60 t, sea level, ${row.label}: ${r.ft.toFixed(0)} ft from 50 ft (QRH, no reverse, ${row.refFt}), touchdown ${r.touchdown.sinkFpm.toFixed(0)} fpm after ${r.touchdown.airFt.toFixed(0)} ft`);
+    expect(r.touchdown.sinkFpm).toBeGreaterThan(-600);
+    expect(r.touchdown.airFt).toBeGreaterThan(700);
+    expect(r.spoilers2s).toBe(1);
+    expect(r.autobrakeEngaged).toBe(row.ab > 0);
+    within(r.ft, qrh40Ft(row), 0.12);
+  };
+  for (const key of ['manual', 'ab3', 'ab2', 'ab1']) {
+    const row = QRH40[key];
+    it(`flaps 40, 60 t, sea level, dry, ${row.label}, no reverse: about ${row.refFt.toLocaleString('en-US')} ft from 50 ft to a stop (Boeing QRH flaps 40 table, VT-AXV report p. 19, ±12%)`, qrh40Card(row));
+  }
+  // Autobrake MAX: the model's flat 14 ft/s² stops in ~2,950 ft, 15% short of the QRH's 3,470 (about
+  // 10 ft/s² averaged over the ground roll, where max manual's 2,820 is ~14.7). Forum copies of the
+  // FCOM say MAX is 14 ft/s² above 80 kt and 12 below, which closes only ~100 ft of it.
+  it.fails('KNOWN GAP (0215): flaps 40, 60 t, sea level, dry, autobrake MAX, no reverse: about 3,470 ft from 50 ft to a stop (Boeing QRH flaps 40 table, VT-AXV report p. 19, ±12%)', qrh40Card(QRH40.max));
+
+  // The table's order: each lower setting brakes softer and rolls further; the pedals stop shortest.
+  it('flaps 40, 60 t: max manual < autobrake MAX < 3 < 2 < 1, as the QRH flaps 40 table orders them', () => {
+    const d = ['manual', 'max', 'ab3', 'ab2', 'ab1'].map((k) => land40(QRH40[k]).ft);
+    console.log(`[b738] flaps 40, 60 t, sea level: manual/MAX/3/2/1 ${d.map((x) => x.toFixed(0)).join(' / ')} ft`);
+    for (let i = 1; i < d.length; i++) expect(d[i]).toBeGreaterThan(d[i - 1]);
+  });
+
+  // The table's slopes for autobrake 2 and 3 (±50%, as the ACAP slope cards): 5,000 kg more costs
+  // +410 / +290 ft, 1,000 ft of field elevation +170 / +120 ft.
+  for (const key of ['ab3', 'ab2']) {
+    const row = QRH40[key];
+    it(`flaps 40, ${row.label}: 65 t adds ~${row.perWtFt} ft and 1,000 ft of elevation ~${row.perKftFt} ft, as the QRH flaps 40 table slopes (±50%)`, () => {
+      const base = land40(row).ft;
+      const dWt = land40(row, 65000).ft - base;
+      const dAlt = land40(row, QRH_REF_KG, 1000).ft - base;
+      console.log(`[b738] flaps 40, ${row.label}: +5,000 kg ${dWt.toFixed(0)} ft (QRH ${row.perWtFt}), +1,000 ft ${dAlt.toFixed(0)} ft (QRH ${row.perKftFt})`);
+      within(dWt, row.perWtFt, 0.5);
+      within(dAlt, row.perKftFt, 0.5);
+    });
+  }
+
+  // The game's own landing: the 737 spawns at 65 t over DFW (607 ft). QRH: 60 t + one 5,000 kg step +
+  // 0.607 × the per-1,000 ft adjustment; autobrake 2 ~6,823 ft, autobrake 3 ~5,173 ft.
+  for (const key of ['ab3', 'ab2']) {
+    const row = QRH40[key];
+    const target = Math.round(qrh40Ft(row, b738.massKg, DFW_FT) / 10) * 10;
+    it(`at DFW (${DFW_FT} ft), 65 t, flaps 40, ${row.label}, no reverse: about ${target.toLocaleString('en-US')} ft from 50 ft to a stop (QRH flaps 40 table, ±12%)`, () => {
+      const r = land40(row, b738.massKg, DFW_FT);
+      console.log(`[b738] DFW 65 t flaps 40 ${row.label}: ${r.ft.toFixed(0)} ft (QRH ${qrh40Ft(row, b738.massKg, DFW_FT).toFixed(0)})`);
+      expect(r.autobrakeEngaged).toBe(true);
+      within(r.ft, qrh40Ft(row, b738.massKg, DFW_FT), 0.12);
+    });
+  }
 
   // ACAP §3.3.29 (CFM56-7B24/-7B26/-7B27 at 26,000 lb SLST; the model has 2 × 120 kN ≈
   // 27,000 lb, 4% more; standard day, zero wind, dry, optimum flap; non-winglet performance,
