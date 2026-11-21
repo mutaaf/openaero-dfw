@@ -1,12 +1,12 @@
 ---
 id: 0209
 title: Emergency descent drill: smoke in the cockpit, get the Cessna down fast without breaking it
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: content
 created: 2026-11-21
-pr:
+pr: 296
 ---
 
 ## Why
