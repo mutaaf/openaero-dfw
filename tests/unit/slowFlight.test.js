@@ -3,7 +3,7 @@ import {
   SLOW_KEY, SLOW_TEXT, SLOW_ACS_CAP, SLOW_WARN_CAP, SLOW_LOST_CAP, SLOW_HOLD_S, SLOW_HOLD_MAX_S, SLOW_FAIL_SLOWING_S,
   SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_KID_DECEL_KTS_S, SLOW_GUST_SHARE,
   createSlowFlight, slowFlightStep, slowSimStep, slowPrompt, slowKidGuide, slowKidKts, gradeSlowFlight, slowBandWords, warnAoaDeg,
-  turbulenceFloorKts, SLOW_TURB_SIGMAS,
+  turbulenceFloorKts, SLOW_TURB_SIGMAS, SLOW_IAS_GUSTY_TAU_S, SLOW_IAS_TAU_S, SLOW_GUSTY_KTS,
 } from '../../src/slowFlight.js';
 import { coachText, DRILL_TEXT } from '../../src/coach.js';
 import { MISSIONS, missionByKey, groupMissions } from '../../src/missions.js';
@@ -138,6 +138,54 @@ describe('slowFlightStep (0164): slow to the band, hold it 45 s', () => {
     const g = gradeSlowFlight(st);
     expect(g.score).toBeLessThanOrEqual(SLOW_ACS_CAP);
     expect(['C', 'D']).toContain(g.grade);
+  });
+});
+
+describe('the band on a bumpy day (0208): graded on the needle\'s average, FAA-S-ACS-6C App. 3 p. 77', () => {
+  // A hold whose speed swings ±9 kt over 10 s around the band's middle (a gust cycle, not the pilot) and one that
+  // sits 4 kt under it (the pilot). gustAdd 5: the band raised 5 kt, 68-78.
+  const swing = (mid) => (t) => (t < 95 - mid ? 95 - t : mid + 9 * Math.sin((t - 95 + mid) * 2 * Math.PI / 10));
+  it('the gust cycle around the band\'s middle stays in the band; in calm air the same swings are out of it', () => {
+    expect(SLOW_IAS_GUSTY_TAU_S).toBeGreaterThan(SLOW_IAS_TAU_S);
+    const gusty = createSlowFlight();
+    flySlow(gusty, { kts: swing(73), gustAdd: 5 });
+    expect(gusty.phase).toBe('complete');
+    expect(gusty.inBandS / gusty.holdS).toBeGreaterThan(0.95);
+    expect(['S', 'A']).toContain(gradeSlowFlight(gusty).grade);
+    // Calm air (no raised band): the same ±9 kt around 68 (63-73) is the pilot's speed, read through the 2 s filter.
+    const calm = createSlowFlight();
+    flySlow(calm, { kts: swing(68), gustAdd: SLOW_GUSTY_KTS / 2 });
+    expect(calm.inBandS / calm.holdS).toBeLessThan(0.9);
+    expect(gradeSlowFlight(calm).grade).not.toMatch(/[SA]/);
+  });
+  it('a steady 4 kt under the raised band is still the pilot\'s: no better than a B, "too slow"', () => {
+    const st = createSlowFlight();
+    flySlow(st, { kts: (t) => Math.max(64, 95 - t), gustAdd: 5 });
+    expect(st.inBandS / st.holdS).toBeLessThan(0.9);
+    const g = gradeSlowFlight(st);
+    expect(g.score).toBeLessThanOrEqual(SLOW_ACS_CAP);
+    expect(g.reason).toMatch(/Too slow/);
+  });
+  it('the average starts at the hold: a slow-down from cruise does not count against its first seconds', () => {
+    const st = createSlowFlight();
+    flySlow(st, { kts: (t) => Math.max(73, 95 - 2 * t), gustAdd: 5 });
+    expect(st.inBandS / st.holdS).toBeGreaterThan(0.95);
+  });
+  it('Kid hands off is told what the plane did, never to move the nose or the power', () => {
+    const st = createSlowFlight();
+    flySlow(st, { kts: (t) => Math.max(64, 95 - t), gustAdd: 5 });
+    const kid = gradeSlowFlight(st, true), pilot = gradeSlowFlight(st);
+    expect(pilot.reason).toMatch(/lower the nose/);
+    expect(kid.reason).toMatch(/Too slow/);
+    expect(kid.reason).not.toMatch(/nose|power/i);
+    const fast = createSlowFlight();
+    flySlow(fast, { kts: (t) => (t < 25 ? Math.max(75, 95 - t) : 82), gustAdd: 5 });
+    expect(gradeSlowFlight(fast, true).reason).toMatch(/Too fast/);
+    expect(gradeSlowFlight(fast, true).reason).not.toMatch(/nose|power/i);
+    const high = createSlowFlight();
+    flySlow(high, { alt: (t) => (t > 40 && t < 45 ? 5150 : 5000) });
+    expect(gradeSlowFlight(high).reason).toMatch(/More power/);
+    expect(gradeSlowFlight(high, true).reason).not.toMatch(/nose|power/i);
   });
 });
 

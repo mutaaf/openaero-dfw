@@ -291,7 +291,9 @@ src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_
                     own: aero.js stallWarningKts for where the flaps are + 5 kt (C172 clean 63-73). Nothing runs until the
                     player starts flying (cockpitEntered && !modalOpen()); the height and heading are the start's. 45 s
                     inside every tolerance ends it (graded anyway at 90 s in the band's reach). The horn held 1 s ≤ C, outside
-                    a tolerance or under 90% in the band ≤ B, more than 200 ft off ≤ D; a stall, 500 ft or 120 s without
+                    a tolerance or under 90% in the band ≤ B (on a day whose METAR raises the band, the share reads the IAS
+                    through a 6 s needle average from the hold's entry, ACS App. 3 p. 77's "momentary" vs "continual" deviation,
+                    0208; Kid's reasons say what the plane did), more than 200 ft off ≤ D; a stall, 500 ft or 120 s without
                     slowing fail (D). Its sfw* words reach coach.js through s.ds. Kid: the guide holds the height and heading
                     (≤ 10° bank) and the autothrottle slows 1 kt/s to the band's middle; main.js zeroes sim.apAt.trim on
                     'holding' (wound up through the slow-down, it sagged the Cessna under the band). Kid/Learner's α
