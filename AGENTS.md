@@ -296,6 +296,18 @@ src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_
                     (≤ 10° bank) and the autothrottle slows 1 kt/s to the band's middle; main.js zeroes sim.apAt.trim on
                     'holding' (wound up through the slow-down, it sagged the Cessna under the band). Kid/Learner's α
                     protection (stall α − 4°) still lets the speed reach the horn. Cards: tests/flight/slowFlight.test.js
+src/emergencyDescent.js emergency descent (0209, lazy chunk loaded with `c172_emergency_descent`, `emergencyDescent: true`): the C172
+                    clean at 100 KIAS, 5,000 ft AGL over Grapevine Lake; once the player starts flying (cockpitEntered && !modalOpen())
+                    "smoke in the cockpit" and a level-off 3,000 ft lower (the start's MSL, rounded to 100 ft; the words name it,
+                    descentWords). FAA-S-ACS-6C Area IX Task A (S4 bank 30-45°, S5 airspeed +0/-10, level off ±100 ft) and
+                    FAA-H-8083-3C ch. 18 (idle, the bank, never past VNE/VFE); the 172S POH has none, so the speed is its VA: band 95-105
+                    KIAS (2 s filter). Graded on the time to the level-off (fail at 240 s; < 1,000 fpm ≤ D), the share of the held descent
+                    (5 s in to 300 ft above) in the band and the bank, and the level-off held 15 s (entered within 100 ft, or the descent
+                    stopped within 500 ft above it). VNE/VFE 0.5 s (aero.js speedLimitKts), +3.8 g, a stall, 300 ft through: failed (D);
+                    a straight dive ≤ C; fast, slow, the bank, power over 0.1, the seat's g (0.5 s filter) under 0.5 or over 2.5 ≤ B.
+                    Its edw* words reach coach.js through s.ds. Kid: the guide banks 40° right, walks the path down for 100 KIAS at
+                    idle (main.js kidIdle), levels off on a 10% lead and the autothrottle holds 95; Kid and Learner get a 47° bank cap
+                    (full stick 40°). Cards: tests/flight/emergencyDescent.test.js
 src/upset.js        unusual-attitude recovery (0174, lazy chunk loaded with its two missions, `upset: 'high' | 'low'`):
                     the C172 spawns level at 100 KIAS, 5,000 ft AGL over Grapevine Lake; 1.5 s after the player starts
                     flying (the sim runs behind the start screen, so never before) the instructor hands it over
@@ -795,6 +807,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-21 (0209): 196.61 kB (the emergency descent's mission entry and blurb, its lazy import and wiring (coach, Kid's guide, idle and bank cap, the snapshot's emergencyDescent), +0.44 kB over 0197's 196.17; emergencyDescent.js is a lazy chunk).
 2026-11-18 (0197): 196.17 kB (the Class B map layer: main.js sizeMap's lazy import of airspace.js and its draw call, the snapshot's airspace, +0.09 kB over main's 196.08; airspace.js is a lazy chunk and its data a same-origin JSON, both fetched only where the map is shown).
 2026-11-18 (0196): 196.08 kB (rain/snow/TS: main.js syncPrecip and its per-frame update call, applySky's storm sky, the wind box's T-STORM, weather.js
 precipFogSm and the snapshot's precip, +0.29 kB over main's 195.79; precip.js is a 1.6 kB lazy chunk fetched only with live precipitation,

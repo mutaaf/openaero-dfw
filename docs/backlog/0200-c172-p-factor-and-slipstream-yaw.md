@@ -1,7 +1,7 @@
 ---
 id: 0200
 title: The Cessna needs right rudder in a full-power climb: P-factor and slipstream swirl, from a cited figure
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
@@ -41,3 +41,8 @@ results: NASA TP-2535-era wind-tunnel notes that thrust raises rudder effectiven
 largest at high power. None gives a number for this airplane, and 0194's run found none either. Promote it
 again when someone has the document and page: e.g. a Cessna/FAA certification flight-test report, a NACA/NASA
 power-effects test of a high-wing tractor single, or a measured pedal force at Vy full power.
+
+## Back to proposed again (2026-11-21, Builder)
+Promoted by #295 with no new source; the 2026-11-18 note above still holds (no cited rudder or pedal figure, no
+power-effects yawing moment for this airplane). Per LESSONS 2026-11-21, a ticket whose Builder note says the source
+is missing is blocked, not ready. Promote it with the document and page in hand.
