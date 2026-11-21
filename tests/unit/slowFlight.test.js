@@ -3,7 +3,7 @@ import {
   SLOW_KEY, SLOW_TEXT, SLOW_ACS_CAP, SLOW_WARN_CAP, SLOW_LOST_CAP, SLOW_HOLD_S, SLOW_HOLD_MAX_S, SLOW_FAIL_SLOWING_S,
   SLOW_TARGET_OVER_WARN_KTS, SLOW_KTS_OVER, SLOW_KID_DECEL_KTS_S, SLOW_GUST_SHARE,
   createSlowFlight, slowFlightStep, slowSimStep, slowPrompt, slowKidGuide, slowKidKts, gradeSlowFlight, slowBandWords, warnAoaDeg,
-  turbulenceFloorKts, SLOW_TURB_SIGMAS, SLOW_IAS_GUSTY_TAU_S, SLOW_IAS_TAU_S, SLOW_GUSTY_KTS,
+  turbulenceFloorKts, SLOW_TURB_SIGMAS, SLOW_IAS_GUSTY_TAU_S, SLOW_IAS_TAU_S, SLOW_GUSTY_KTS, SLOW_UNDER_RUN_S,
 } from '../../src/slowFlight.js';
 import { coachText, DRILL_TEXT } from '../../src/coach.js';
 import { MISSIONS, missionByKey, groupMissions } from '../../src/missions.js';
@@ -157,6 +157,13 @@ describe('the band on a bumpy day (0208): graded on the needle\'s average, FAA-S
     flySlow(calm, { kts: swing(68), gustAdd: SLOW_GUSTY_KTS / 2 });
     expect(calm.inBandS / calm.holdS).toBeLessThan(0.9);
     expect(gradeSlowFlight(calm).grade).not.toMatch(/[SA]/);
+  });
+  it('a pilot\'s own porpoise under the floor is not hidden by the average: ±8 kt over 20 s, the 2 s speed under the band over SLOW_UNDER_RUN_S at a stretch', () => {
+    const st = createSlowFlight();
+    flySlow(st, { kts: (t) => (t < 22 ? 95 - t : 73 + 8 * Math.sin((t - 22) * 2 * Math.PI / 20)), gustAdd: 5 });
+    expect(SLOW_UNDER_RUN_S).toBeLessThanOrEqual(3);
+    expect(st.inBandS / st.holdS).toBeLessThan(0.9);
+    expect(gradeSlowFlight(st).reason).toMatch(/Too slow/);
   });
   it('a steady 4 kt under the raised band is still the pilot\'s: no better than a B, "too slow"', () => {
     const st = createSlowFlight();

@@ -57,3 +57,8 @@ The turbulence model (0195) and the band's floor (0199).
    grades C ("Too fast"), 6 seeds.
 3. Kid's B reasons no longer say "lower the nose" / "more power": they say what the bumps did to the plane. Kid's hands-off
    hold now grades S or A in 25G38 and 25 kt, 12 runs in 12.
+4. Physics panel: the average alone hid a pilot's own porpoise under the −0 edge (±8 kt over 20 s graded S). Now the 2 s
+   speed under the band for over SLOW_UNDER_RUN_S (3 s) at a stretch counts as out of it, whatever the average says (the
+   0209 lesson's structural limit held a moment). The handbook pilot's 18 runs are unchanged; the porpoise, repeated 5-6 s
+   dips and a pilot 1 kt under the band in 25G38 grade B-C "too slow". Kid's 25G38 seed 5 is now a B ("the bumps slowed the
+   plane, not you"): its autothrottle sags ~4 kt under the band for longer than 3 s, a real dip.

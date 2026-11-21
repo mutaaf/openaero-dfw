@@ -200,13 +200,25 @@ describe('C172 slow flight in turbulence (0199)', () => {
       }
     });
   }
-  it('25G38: a pilot who rides the band\'s top (+6 kt over its middle, 0.5 kt over 79) is still too fast (no better than a B), 6 seeds', () => {
+  it('25G38: a pilot who holds 1 kt over the band\'s top (80.5 against 79.5) is still too fast (no better than a B), 6 seeds', () => {
     for (const seed of SEEDS) {
       const r = slowFlight({ wx: { windKts: 25, gustKts: 38 }, seed, overKts: 6 });
       line(`25G38 over seed ${seed}`, r);
       expect(r.st.inBandS / r.st.holdS, `seed ${seed}`).toBeLessThan(0.9);
       expect(r.grade.score, `seed ${seed}`).toBeLessThanOrEqual(SLOW_ACS_CAP);
       expect(r.grade.reason, `seed ${seed}`).toMatch(/Too fast/);
+    }
+  });
+});
+
+// 0208 physics panel: the safety side. A pilot who holds 1 kt under the raised band's floor is too slow on a bumpy day too.
+describe('C172 slow flight under the band in turbulence (0208)', () => {
+  it('25G38: holding 1 kt under the band (68.5 against 69.5), 6 seeds: no better than a B, "too slow"', () => {
+    for (const seed of SEEDS) {
+      const r = slowFlight({ wx: { windKts: 25, gustKts: 38 }, seed, overKts: -SLOW_KTS_OVER / 2 - 1 });
+      line(`25G38 under seed ${seed}`, r);
+      expect(r.grade.score, `seed ${seed}`).toBeLessThanOrEqual(SLOW_ACS_CAP);
+      expect(r.grade.reason, `seed ${seed}`).toMatch(/Too slow|stall warning/);
     }
   });
 });
@@ -239,8 +251,14 @@ describe('C172 slow flight on the assists (0164: main.js applyAssists in the mis
       expect(r.st.phase, `${windKts}G${gustKts} seed ${seed}`).toBe('complete');
       expect(r.maxAoa, `${windKts}G${gustKts} seed ${seed}`).toBeLessThan(stallAoaDeg(c172, 0));
       expect(r.st.warned, `${windKts}G${gustKts} seed ${seed}`).toBe(false);
-      // 0208: hands off, the guide's hold grades A or better (2 of 12 were B, "too slow ... lower the nose", before).
-      expect(['S', 'A'], `${windKts}G${gustKts} seed ${seed}`).toContain(r.grade.grade);
+      // 0208: hands off, the guide's hold grades A or better, or a B whose reason blames the bumps and gives no stick
+      // advice (25G38 seed 5: the autothrottle sags ~4 kt under the band for over SLOW_UNDER_RUN_S, a real dip; before
+      // 0208 it and one more read "too slow ... lower the nose").
+      if (!['S', 'A'].includes(r.grade.grade)) {
+        expect(r.grade.grade, `${windKts}G${gustKts} seed ${seed}`).toBe('B');
+        expect(r.grade.reason, `${windKts}G${gustKts} seed ${seed}`).toMatch(/bumps .*not you/);
+        expect(r.grade.reason, `${windKts}G${gustKts} seed ${seed}`).not.toMatch(/nose|power/i);
+      }
     }
   });
   it('Learner, full back stick at idle in Learner\'s half of the turbulence (0199 panel), 10G30 to 25G38, 10 seeds: the horn, never the stall', () => {

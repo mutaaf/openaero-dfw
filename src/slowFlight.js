@@ -53,6 +53,10 @@ export const SLOW_IAS_TAU_S = 2;
 // (15G25, 25G38, 25 kt, 6 seeds each, the handbook pilot at the band's middle): 2 s graded 6 of 18 B on the speed, 4 s 4,
 // 6 s none (the two B left are 100-103 ft of height). weather.js's gust cycle swings over ~3-17 s.
 export const SLOW_IAS_GUSTY_TAU_S = 6;
+// ... with a limit on the safety side held a moment (LESSONS 0209): the 2 s airspeed under the band this long at a
+// stretch counts as out of it whatever the average says, so a pilot's own 20-30 s porpoise under the −0 edge is not hidden
+// (0208 physics panel: ±8 kt over 20 s graded S on the average alone). A gust's dip under it lasts ~1-2 s.
+export const SLOW_UNDER_RUN_S = 3;
 // The band visibly raised for the gusts or the turbulence (a steady 22 kt's 0.3 kt is not): the hold's bumpy-air words
 // and the needle-averaged grade (SLOW_IAS_GUSTY_TAU_S).
 export const SLOW_GUSTY_KTS = 0.5;
@@ -96,7 +100,7 @@ export function slowBandWords(targetKts, gusty = false) {
 // band), 'holding' (in the band's reach: the timer runs), 'complete' (graded), 'failed' (graded D).
 export const createSlowFlight = () => ({
   phase: 'wait', alt0: 0, hdg0: 0, t: 0, kidKts: 0, holdS: 0, okS: 0, inBandS: 0, targetKts: 0, iasF: 0,
-  iasG: 0, gusty: false, maxAltDevFt: 0, altSignFt: 0, maxHdgDev: 0, underKts: 0, overKts: 0, warnRunS: 0, warnS: 0, warned: false, why: null,
+  iasG: 0, underRunS: 0, gusty: false, maxAltDevFt: 0, altSignFt: 0, maxHdgDev: 0, underKts: 0, overKts: 0, warnRunS: 0, warnS: 0, warned: false, why: null,
 });
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
@@ -170,14 +174,17 @@ export function slowFlightStep(st, s) {
   if (st.phase === 'slowing') {
     if (st.iasF > top) return '';
     st.iasG = st.iasF; // the needle's average starts at the hold, not on the way down from cruise
+    st.underRunS = 0;
     st.phase = 'holding';
     return 'holding';
   }
   st.holdS += s.dt;
   if (s.gustAddKts >= SLOW_GUSTY_KTS) st.gusty = true; // the grade's words say the bumps only on a day that had them
-  const inBand = st.iasG >= st.targetKts && st.iasG <= top;
+  st.underRunS = st.iasF < st.targetKts ? st.underRunS + s.dt : 0;
+  const heldUnder = st.underRunS > SLOW_UNDER_RUN_S;
+  const inBand = st.iasG >= st.targetKts && st.iasG <= top && !heldUnder;
   if (inBand) st.inBandS += s.dt;
-  st.underKts = Math.max(st.underKts, st.targetKts - st.iasG);
+  st.underKts = Math.max(st.underKts, st.targetKts - st.iasG, heldUnder ? st.targetKts - st.iasF : 0);
   st.overKts = Math.max(st.overKts, st.iasG - top);
   if (inBand && Math.abs(altDev) <= SLOW_ALT_TOL_FT && hdgDev <= SLOW_HDG_TOL_DEG) st.okS += s.dt;
   if (st.okS >= SLOW_HOLD_S || st.holdS >= SLOW_HOLD_MAX_S) {
