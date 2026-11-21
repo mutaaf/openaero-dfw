@@ -45,6 +45,21 @@ export const SLOW_FAIL_FT = 500;
 export const SLOW_WARN_S = 1;
 export const SLOW_WARN_TOTAL_S = 2;
 export const SLOW_IAS_TAU_S = 2;
+// On a gusty or turbulent day (the band raised for it) the band's share is graded on the airspeed averaged the way a pilot
+// reads the needle through the bumps (0208): FAA-S-ACS-6C Appendix 3 (p. 77, Area VII Task A) says turbulence may cause
+// momentary deviations and that "unsatisfactory performance would arise from an applicant's continual deviation from
+// the standard"; Appendix 1 (p. 68) names "consistently exceeding tolerances". The coach's words and the slow-down's end
+// still read the 2 s filter; the average starts at the hold's entry. Sized in tests/flight/slowFlight.test.js's 0208 cards
+// (15G25, 25G38, 25 kt, 6 seeds each, the handbook pilot at the band's middle): 2 s graded 6 of 18 B on the speed, 4 s 4,
+// 6 s none (the two B left are 100-103 ft of height). weather.js's gust cycle swings over ~3-17 s.
+export const SLOW_IAS_GUSTY_TAU_S = 6;
+// ... with a limit on the safety side held a moment (LESSONS 0209): the 2 s airspeed under the band this long at a
+// stretch counts as out of it whatever the average says, so a pilot's own 20-30 s porpoise under the −0 edge is not hidden
+// (0208 physics panel: ±8 kt over 20 s graded S on the average alone). A gust's dip under it lasts ~1-2 s.
+export const SLOW_UNDER_RUN_S = 3;
+// The band visibly raised for the gusts or the turbulence (a steady 22 kt's 0.3 kt is not): the hold's bumpy-air words
+// and the needle-averaged grade (SLOW_IAS_GUSTY_TAU_S).
+export const SLOW_GUSTY_KTS = 0.5;
 export const SLOW_PLACE = { name: 'Over Grapevine Lake · 4,500 ft' };
 
 export const SLOW_TEXT = {
@@ -77,7 +92,7 @@ export function slowBandWords(targetKts, gusty = false) {
   DRILL_TEXT.sfwSlow = `Throttle back, raise the nose bit by bit: slow to ${top} kt, hold your height`;
   DRILL_TEXT.sfwTooSlow = `Too slow: under ${t} kt. Lower the nose a little, add power`;
   DRILL_TEXT.sfwFast = `Fast: over ${top} kt. A little less power, nose up a little to stay level`;
-  DRILL_TEXT.sfwHold = gusty ? `Bumpy air: nose steady, keep ${t}-${top} kt (raised for the bumps), level`
+  DRILL_TEXT.sfwHold = gusty ? `Bumpy air: nose steady, keep ${t}-${top} kt (raised for the bumps). Quick dips are OK, staying out is not`
     : `Hold it: ${t}-${top} kt, level, on your heading`;
 }
 
@@ -85,7 +100,7 @@ export function slowBandWords(targetKts, gusty = false) {
 // band), 'holding' (in the band's reach: the timer runs), 'complete' (graded), 'failed' (graded D).
 export const createSlowFlight = () => ({
   phase: 'wait', alt0: 0, hdg0: 0, t: 0, kidKts: 0, holdS: 0, okS: 0, inBandS: 0, targetKts: 0, iasF: 0,
-  maxAltDevFt: 0, altSignFt: 0, maxHdgDev: 0, underKts: 0, overKts: 0, warnRunS: 0, warnS: 0, warned: false, why: null,
+  iasG: 0, underRunS: 0, gusty: false, maxAltDevFt: 0, altSignFt: 0, maxHdgDev: 0, underKts: 0, overKts: 0, warnRunS: 0, warnS: 0, warned: false, why: null,
 });
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
@@ -130,7 +145,7 @@ export function slowFlightStep(st, s) {
   st.targetKts = s.warnKts + SLOW_TARGET_OVER_WARN_KTS + s.gustAddKts;
   if (st.phase === 'wait') {
     // The specified altitude and heading are the ones the player starts from.
-    st.alt0 = s.altFt; st.hdg0 = s.hdgDeg; st.iasF = st.kidKts = s.iasKts;
+    st.alt0 = s.altFt; st.hdg0 = s.hdgDeg; st.iasF = st.iasG = st.kidKts = s.iasKts;
     if (!s.started) return '';
     st.phase = 'slowing';
     return 'slowing';
@@ -139,6 +154,7 @@ export function slowFlightStep(st, s) {
   st.kidKts = Math.max(st.targetKts + SLOW_KTS_OVER / 2, st.kidKts - SLOW_KID_DECEL_KTS_S * s.dt);
   // The airspeed through a ~2 s filter (a METAR gust's spike is not the pilot's speed), as steepTurns.js.
   st.iasF += (s.iasKts - st.iasF) * Math.min(1, s.dt / SLOW_IAS_TAU_S);
+  st.iasG += (s.iasKts - st.iasG) * Math.min(1, s.dt / (s.gustAddKts >= SLOW_GUSTY_KTS ? SLOW_IAS_GUSTY_TAU_S : SLOW_IAS_TAU_S));
   const altDev = s.altFt - st.alt0, hdgDev = Math.abs(wrap180(s.hdgDeg - st.hdg0));
   // The height and heading are held from the start, through the slow-down too (S5).
   if (Math.abs(altDev) > st.maxAltDevFt) { st.maxAltDevFt = Math.abs(altDev); st.altSignFt = altDev; }
@@ -157,14 +173,19 @@ export function slowFlightStep(st, s) {
   const top = st.targetKts + SLOW_KTS_OVER;
   if (st.phase === 'slowing') {
     if (st.iasF > top) return '';
+    st.iasG = st.iasF; // the needle's average starts at the hold, not on the way down from cruise
+    st.underRunS = 0;
     st.phase = 'holding';
     return 'holding';
   }
   st.holdS += s.dt;
-  const inBand = st.iasF >= st.targetKts && st.iasF <= top;
+  if (s.gustAddKts >= SLOW_GUSTY_KTS) st.gusty = true; // the grade's words say the bumps only on a day that had them
+  st.underRunS = st.iasF < st.targetKts ? st.underRunS + s.dt : 0;
+  const heldUnder = st.underRunS > SLOW_UNDER_RUN_S;
+  const inBand = st.iasG >= st.targetKts && st.iasG <= top && !heldUnder;
   if (inBand) st.inBandS += s.dt;
-  st.underKts = Math.max(st.underKts, st.targetKts - st.iasF);
-  st.overKts = Math.max(st.overKts, st.iasF - top);
+  st.underKts = Math.max(st.underKts, st.targetKts - st.iasG, heldUnder ? st.targetKts - st.iasF : 0);
+  st.overKts = Math.max(st.overKts, st.iasG - top);
   if (inBand && Math.abs(altDev) <= SLOW_ALT_TOL_FT && hdgDev <= SLOW_HDG_TOL_DEG) st.okS += s.dt;
   if (st.okS >= SLOW_HOLD_S || st.holdS >= SLOW_HOLD_MAX_S) {
     st.phase = 'complete';
@@ -242,7 +263,7 @@ export function slowSimStep(st, sim, dt, started) {
   _s.stalled = _s.aoaDeg > stallAoaDeg(sim.spec, flaps);
   _s.throttle = sim.throttle ?? 0;
   const ev = slowFlightStep(st, _s);
-  const gusty = _s.gustAddKts >= 0.5; // the band visibly raised (a steady 22 kt's 0.3 kt is not)
+  const gusty = _s.gustAddKts >= SLOW_GUSTY_KTS;
   if (Math.round(st.targetKts) !== wordsKts || gusty !== wordsGusty) { wordsKts = Math.round(st.targetKts); wordsGusty = gusty; slowBandWords(st.targetKts, gusty); wordsRev++; }
   return ev;
 }
@@ -275,32 +296,40 @@ export function gradeSlowFlight(st, kid = false) {
       score: curve(alt, [[50, 100], [100, 85], [200, 40], [300, 10], [400, 0]]) },
     { key: 'hdg', label: 'Heading held (test: ±10°)', value: `${Math.round(hdg)}° off at worst`,
       score: curve(hdg, [[5, 100], [10, 85], [20, 40], [30, 0]]) },
-    { key: 'speed', label: `Time at ${Math.round(st.targetKts)}-${Math.round(st.targetKts + SLOW_KTS_OVER)} kt (test: up to 10 kt over, never under)`, value: `${Math.round(share * 100)}%`,
+    { key: 'speed', label: `Time at ${Math.round(st.targetKts)}-${Math.round(st.targetKts + SLOW_KTS_OVER)} kt${st.gusty ? ', averaged through the bumps' : ''} (test: up to 10 kt over, never under)`, value: `${Math.round(share * 100)}%`,
       score: curve(1 - share, [[0.05, 100], [0.1, 85], [0.4, 40], [0.7, 0]]) },
   ];
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
   let reason = null;
   const t = Math.round(st.targetKts), top = t + SLOW_KTS_OVER;
+  // Kid's guide and autothrottle fly the hold: its reasons say what the plane did, not what to do with the stick or the
+  // power, and blame the bumps only on a day that had them (0208).
+  const avg = st.gusty ? ' on average' : '';
+  const kidWhy = (dir) => (st.gusty ? `the bumps ${dir === 'slow' ? 'slowed the plane' : 'sped the plane up'}, not you`
+    : `the plane got too ${dir} (did the stick or the flaps move?)`);
   if (failed) {
     score = Math.min(score, SLOW_LOST_CAP);
-    reason = st.why === 'stall' ? 'Stalled: slow flight lives just above the stall warning. At the first sign (the horn, the buffet, a gust), lower the nose a little and add power.'
+    reason = kid ? (st.why === 'stall' ? 'Stalled: the plane got too slow for its wing.' : st.why === 'height' ? `The plane went over ${SLOW_FAIL_FT} ft off its height.`
+      : 'The plane never slowed down to the band.')
+      : st.why === 'stall' ? 'Stalled: slow flight lives just above the stall warning. At the first sign (the horn, the buffet, a gust), lower the nose a little and add power.'
       : st.why === 'height' ? (st.altSignFt > 0 ? `Gained over ${SLOW_FAIL_FT} ft: ease the nose down a little and take off some power.`
         : st.overKts > 0 ? `Lost over ${SLOW_FAIL_FT} ft with the nose low and the speed up: raise the nose to slow down and stop the sink.`
           : `Lost over ${SLOW_FAIL_FT} ft: as you slow, raise the nose and add power to hold your height.`)
         : `Never slowed down: throttle back and raise the nose until the speed is ${top} kt or less.`;
   } else if (alt > 2 * SLOW_ALT_TOL_FT) {
     score = Math.min(score, SLOW_LOST_CAP);
-    reason = `${st.altSignFt < 0 ? 'Lost' : 'Gained'} ${Math.round(alt)} ft: the test allows 100. ${st.altSignFt < 0 ? 'Add power when you sink' : 'Take off power when you climb'}. Capped at D.`;
+    reason = `${st.altSignFt < 0 ? 'Lost' : 'Gained'} ${Math.round(alt)} ft: the test allows 100.${kid ? '' : ` ${st.altSignFt < 0 ? 'Add power when you sink' : 'Take off power when you climb'}.`} Capped at D.`;
   } else if (st.warned) {
     score = Math.min(score, SLOW_WARN_CAP);
-    reason = 'The stall warning sounded (the horn, or the wing that close to it in a gust): the test asks for none. Fly higher in the band on a gusty day; at the first sign, lower the nose a little and add power. Capped at C.';
+    reason = kid ? 'The stall warning sounded: the test asks for none. Capped at C.'
+      : 'The stall warning sounded (the horn, or the wing that close to it in a gust): the test asks for none. Fly higher in the band on a gusty day; at the first sign, lower the nose a little and add power. Capped at C.';
   } else if (alt > SLOW_ALT_TOL_FT || hdg > SLOW_HDG_TOL_DEG || share < SLOW_BAND_SHARE_B) {
     score = Math.min(score, SLOW_ACS_CAP);
     reason = share < SLOW_BAND_SHARE_B
-      ? (st.underKts >= st.overKts ? `Too slow (down to ${Math.round(t - st.underKts)} kt) for part of the hold: lower the nose a little. No better than a B.`
-        : `Too fast (up to ${Math.round(top + st.overKts)} kt) for part of the hold: raise the nose a little. No better than a B.`)
-      : alt > SLOW_ALT_TOL_FT ? `Height went ${Math.round(alt)} ft off: the test allows 100. More power if you sink, less if you climb. No better than a B.`
+      ? (st.underKts >= st.overKts ? `Too slow (down to ${Math.round(t - st.underKts)} kt${avg}) for part of the hold: ${kid ? kidWhy('slow') : 'lower the nose a little'}. No better than a B.`
+        : `Too fast (up to ${Math.round(top + st.overKts)} kt${avg}) for part of the hold: ${kid ? kidWhy('fast') : 'raise the nose a little'}. No better than a B.`)
+      : alt > SLOW_ALT_TOL_FT ? `Height went ${Math.round(alt)} ft off: the test allows 100.${kid ? '' : ' More power if you sink, less if you climb.'} No better than a B.`
         : `Heading went ${Math.round(hdg)}° off: the test allows 10. No better than a B.`;
   }
   return { kind: 'slowFlight', title: failed ? 'Slow flight not finished' : 'Slow flight', grade: letterGrade(score), score, factors, reason,
