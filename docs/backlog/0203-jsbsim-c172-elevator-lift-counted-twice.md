@@ -1,12 +1,12 @@
 ---
 id: 0203
 title: Our JSBSim C172 may count the elevator's lift twice (aero.js's POH-fitted CL table plus Roskam's CLδe)
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: authenticity
 created: 2026-11-18
-pr:
+pr: 297
 ---
 
 ## Why
@@ -37,3 +37,22 @@ download double-counted is likely already high.
 
 ## Test plan
 tests/flight/c172.test.js (JSBSim runs), tests/flight/jsbsim*.test.js.
+
+## Builder note (2026-11-21, shipped)
+Chose the first option: CLδe counts only the elevator's deflection beyond the trimmed one. The trimmed elevator is
+the airframe's own pitch law, δe_trim(α) = −(Cmα / Cmδe)·α / eff(α) with Cmde_up's post-stall effectiveness, held at
+the stall's value past it (c172.xml `aero/function/elevator-trim-rad`); flown in idle glides at 55-100 KIAS it matches
+JSBSim's own trimmed elevator within 0.4° to α 13°. The second option (re-fit the table with CLδe in it) is the same
+function: the re-fit is the table plus CLδe·δe_trim(α), so the first keeps the OAERO table untouched and says why.
+
+1 g stall, flown (KCAS, flaps 0 / 10 / 20 / 30; the table's stallSpeedKts 52.96 / 49.95 / 48.88 / 48.00, POH 53 / 50 / – / 48):
+| JSBSim | 0 | 10 | 20 | 30 |
+|---|---|---|---|---|
+| before (CLδe·δe) | 54.85 | 51.46 | 50.17 | 49.11 |
+| CLδe 0 | 53.11 | 50.01 | 48.88 | 47.95 |
+| after (beyond trim) | 53.07 | 49.98 | 48.85 | 47.94 |
+
+Full aft at Vr, peak pitch under 5 ft: JSBSim 20.0 / 21.7° → 21.1 / 22.6° (flightModel.js 23.3 / 24.4°). The rest of
+the gap is real lift flightModel.js does not lose, so the pitch cards are retargeted to 0214. JSBSim's short-field
+lift-off (0165's card) passes: 55.4 → 54.2 kt, roll 996 → 951 ft (POH 960). The power-on stall drill's lazy pilot
+held 12° and climbed out at 56.6 KIAS on JSBSim, under the drill's 57; it now holds 11.5° (still above the 10° cap).

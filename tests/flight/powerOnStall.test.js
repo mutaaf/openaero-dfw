@@ -56,8 +56,9 @@ function spawn() {
   return b;
 }
 
-// pilot: 'correct' | 'held' (full back stick from the stall) | 'lazy' (eases the nose to 12° and
-// lets the power fly it out) | 'yank' (nose down, then full back stick as soon as it flies again) |
+// pilot: 'correct' | 'held' (full back stick from the stall) | 'lazy' (eases the nose only to 11.5° and
+// lets the power fly it out; at 12° both models climbed out at 56.6-57.0 KIAS against the drill's 57, so
+// after 0203's JSBSim lift fix it never completed there: the card is about the nose cap, not that line) | 'yank' (nose down, then full back stick as soon as it flies again) |
 // 'yankOnce' (that yank for 1 s, then the correct recovery) | 'dive' (full forward stick to -30°).
 // rudder: hold the heading with the pedals through the entry (AFH: "adding right rudder").
 function powerOnStall(pilot = 'correct', { rudder = true, pitchDeg = PO_PITCH_DEG } = {}) {
@@ -81,7 +82,7 @@ function powerOnStall(pilot = 'correct', { rudder = true, pitchDeg = PO_PITCH_DE
     x.rudderInput = 0;
     x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z);
     if (pilot === 'held') { x.elevInput = -1; return; }
-    if (pilot === 'lazy') { x.elevInput = elevatorForPitch(12, p, x.angVel.x); return; }
+    if (pilot === 'lazy') { x.elevInput = elevatorForPitch(11.5, p, x.angVel.x); return; }
     if (pilot === 'dive') {
       if (noseDown && p > -30) { x.elevInput = 1; return; }
       noseDown = false;
@@ -153,7 +154,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S power-on st
     expect(r.result.grade).toBe('D');
   });
 
-  it('easing the nose only to 12° and letting the power fly it out is capped at B', () => {
+  it('easing the nose only to 11.5° and letting the power fly it out is capped at B', () => {
     const r = powerOnStall('lazy');
     console.log(`[c172 ${model}] power-on, lazy nose: ${r.st.phase}, nose down to ${r.st.minPitchDeg.toFixed(1)}°, ${r.result.grade} ${r.result.score}, ${r.result.reason}`);
     expect(r.st.phase).toBe('complete');
