@@ -1,7 +1,7 @@
 ---
 id: 0173
 title: The coached 737 takeoff lifts off 3–4 s after Vr, as the FCTM says
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: player-feel
@@ -68,3 +68,7 @@ Ways forward (Scout / operator to choose):
 ## Builder note (2026-11-18)
 Skipped: promoted to ready again (#281) with the findings above still open. A Builder cannot ship it until the
 Scout or operator picks one of the ways forward named above. Back to proposed.
+
+## Builder note (2026-11-21)
+Skipped again: promoted to ready a third time (#295) with none of the ways forward above chosen. Back to
+proposed. Scout: promote it only with a "Way forward chosen" section naming one of the three options.
