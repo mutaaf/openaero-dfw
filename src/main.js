@@ -1043,6 +1043,17 @@ function checkSlowFlight(dt) {
   sim.slowFlight = null;
   drillCard(result, sfLib.SLOW_PLACE);
 }
+// Emergency descent (0209, emergencyDescent.js): timed from when the player starts flying; graded after the level-off (or not).
+let edLib = null;
+let edWordsShown = 0; // emergencyDescent.js descentWordsRev at the last render
+function checkEmergencyDescent(dt) {
+  const ev = sim.emergencyDescent && edLib.descentSimStep(sim.emergencyDescent, sim, dt, cockpitEntered && !modalOpen());
+  if (ev === 'leveling' && sim.assist === 'kid') sim.apAt.trim = 0; // Kid's autothrottle comes back on from idle (as slow flight's hold)
+  if (ev !== 'complete' && ev !== 'failed') return;
+  const result = edLib.gradeEmergencyDescent(sim.emergencyDescent, sim.assist === 'kid');
+  sim.emergencyDescent = null;
+  drillCard(result, edLib.ED_PLACE);
+}
 // Wake turbulence (0115, wake.js): once the player is flying, the jet ahead lands on the same runway (traffic.js
 // spawns it on sim.wake.ready and records its path); the player's wheels are checked against that path.
 let wakeLib = null;
@@ -1100,12 +1111,12 @@ function startDrills(mission) {
   sim.engineOut = null;
   sim.rto = null;
   sim.windshear = null;
-  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = null;
+  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.emergencyDescent = null;
   sim.softField = sim.surfaceMu = null;
   sim.wingLow = null; sim.touchYaw = 0;
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.shortField || mission.softField || mission.wingLow);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.emergencyDescent || mission.shortField || mission.softField || mission.wingLow);
   if (mission.shortField) loadDrill(mission, sfdLib, () => import('./shortField.js'), (lib) => { sfdLib = lib; if (sim.aircraftKey === mission.aircraft) sim.shortField = lib.createShortField(runwayEnd(mission.airport, mission.rwy)); });
   // The wing-low lesson (0188): its wind is currentWeather()'s while it flies (the live METAR's when it suits, else its scenario's).
   if (mission.wingLow) loadDrill(mission, wlLib, () => import('./wingLow.js'), (lib) => { wlLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.wingLow = lib.createWingLow(runwayEnd(mission.airport, mission.rwy)); refreshWeather(); } });
@@ -1113,6 +1124,7 @@ function startDrills(mission) {
   if (mission.wake) loadDrill(mission, wakeLib, () => import('./wake.js'), (lib) => { wakeLib = lib; if (sim.aircraftKey === mission.aircraft) sim.wake = lib.createWake(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
   if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
+  if (mission.emergencyDescent) loadDrill(mission, edLib, () => import('./emergencyDescent.js'), (lib) => { edLib = lib; if (sim.aircraftKey === mission.aircraft) sim.emergencyDescent = lib.createEmergencyDescent(); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
   // The stall drills: powerOnStall.js (0191) is the one chunk, the idle drill its `idle` (stallDrill.js, 0087): the same calls, the
   // power-on drill's plus its coach's powerOnPrompt (one import: each import() adds boot bytes to Vite's preload map).
@@ -1403,7 +1415,7 @@ const wingLowCoachIn = () => {
   coachInput.noseOffDeg = ((-_euler.y * RAD_TO_DEG - sim.wingLow.end.hdgT) % 360 + 540) % 360 - 180;
   return coachInput;
 };
-const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5);
+const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : sim.emergencyDescent ? edLib.ED_KID_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5); // 0209: the bug's ±5 is the 95-105 band
 const lessonFlaps = () => (sim.shortField ? sfdLib.FULL_FLAPS : sim.wingLow ? wlLib.FLAPS : landingFlaps(sim.spec)); // 0188: POH p. 4-34, the minimum flaps
 function updateCoach(dt) {
   let prompt = null;
@@ -1412,7 +1424,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.wake || sim.shortField || sim.wingLow || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.emergencyDescent || sim.wake || sim.shortField || sim.wingLow || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1445,6 +1457,7 @@ function updateCoach(dt) {
       : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
       : sim.upset ? upLib.upsetCoach(sim.upset, coachInput.kid)
       : sim.slowFlight ? sfLib.slowCoach(sim.slowFlight, coachInput.kid)
+      : sim.emergencyDescent ? edLib.descentCoach(sim.emergencyDescent, coachInput.kid)
       : sim.wake ? wakeLib.wakePrompt(sim.wake, coachInput, sim.approach.heightAbovePathM)
       : sim.shortField ? sfdLib.shortFieldPrompt(sim.shortField, coachInput, sim.approach)
       : sim.wingLow ? wlLib.wingLowPrompt(sim.wingLow, wingLowCoachIn())
@@ -1473,6 +1486,7 @@ function updateCoach(dt) {
   const key = caption ? `ap:${caption}` : prompt;
   // A drill's words rewritten under the same key (slow flight's band, 0199) re-render the line.
   if (sim.slowFlight && sfLib && sfLib.slowWordsRev() !== slowWordsShown) { slowWordsShown = sfLib.slowWordsRev(); coachShown = undefined; }
+  if (sim.emergencyDescent && edLib.descentWordsRev() !== edWordsShown) { edWordsShown = edLib.descentWordsRev(); coachShown = undefined; } // 0209: the level-off's height
   if (key === coachShown) return;
   coachShown = key;
   byId('coach').classList.toggle('hidden', key === null);
@@ -1829,6 +1843,7 @@ function step6DofPhysics(dt) {
   checkWindshear(dt);
   checkSteepTurns(dt);
   checkSlowFlight(dt);
+  checkEmergencyDescent(dt);
   checkUpset(dt);
   checkWake(dt);
   if (sim.pattern?.ent && cockpitEntered) patLib.entryStep(sim.pattern, sim); // 0187: how the join was flown (the sim flies on behind the menu: so does this)
@@ -2649,6 +2664,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   // Steep turns (0161): Kid's guide flies the turns, and returns Kid's and Learner's 53° cap (full stick = 45°).
   _assistIn.bankMaxDeg = sim.steepTurns ? stLib.kidGuide(sim.steepTurns, _assistIn) : 0;
+  if (sim.emergencyDescent) _assistIn.bankMaxDeg = edLib.kidGuide(sim.emergencyDescent, _assistIn); // 0209: Kid spirals down; full stick = 40°
   if (sim.slowFlight) sfLib.kidGuide(sim.slowFlight, _assistIn); // slow flight (0164): level, on the heading
   _assistIn.noFloor = sim.engineFailed;
   // On the runway it is lined up on, Kid and Learner hold its centreline with the pedals (0110).
@@ -2676,6 +2692,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     updateIasTrend(dt);
     if (wsEscape) sim.throttle = 1;
     else if (sim.windshear?.phase === 'shear') { /* the outflow's speed gain: keep the power (the trap is to take it off) */ }
+    else if (sim.emergencyDescent && edLib.kidIdle(sim.emergencyDescent)) sim.throttle = 0; // 0209: idle in the descent
     else if (drill && drill.kidThrottle !== null) {
       sim.throttle = drill.kidThrottle; // the stall drill: idle until the stall, then full power
     } else if (departing) {
@@ -2683,7 +2700,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : 0;
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : 0;
       sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, kidGustAddKts(spec, sim.wx)), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
@@ -3181,7 +3198,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.deadStick = null;
   sim.engineOut = null;
   sim.rto = null;
-  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = null;
+  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.emergencyDescent = null;
   sim.softField = sim.surfaceMu = null;
   if (sim.wingLow) { sim.wingLow = null; sim.touchYaw = 0; refreshWeather(); } // 0188: the lesson's wind goes with it
   sim.windshear = null;
@@ -3784,6 +3801,7 @@ window.openaeroDebug = () => {
     steepTurns: sim.steepTurns ? { ...sim.steepTurns } : null,
     upset: sim.upset ? { ...sim.upset } : null,
     slowFlight: sim.slowFlight ? { ...sim.slowFlight } : null,
+    emergencyDescent: sim.emergencyDescent ? { ...sim.emergencyDescent } : null,
     wake: sim.wake && wakeLib.debugSnap(sim.wake), // wake.js
     shortField: sim.shortField && { ...sim.shortField, end: sim.shortField.end.id },
     wingLow: sim.wingLow && wlLib.debugSnap(sim.wingLow), // wingLow.js (0189 paid for the power-off 180's wiring with it)
