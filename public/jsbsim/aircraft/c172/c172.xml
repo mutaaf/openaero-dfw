@@ -209,6 +209,27 @@
       </pow>
     </function>
 
+    <!-- Ticket 0203: CLalpha above is the POH stall-speed fit, flown trimmed, so it already holds the
+         tail's download at the trimmed elevator. CLδe counts only the deflection beyond that one:
+         δe_trim(α) = Cmα·α / (Cmδe · Cmde_up's effectiveness) = −(0.89 / 1.28)·α / eff(α), held at the
+         stall's value past it (no trim exists there). A power-off law: flown, the trimmed elevator matches it within
+         0.4° to α 13° (idle glides 55-120 KIAS, flaps 0 and 30); full power trims 0.3-2.8° nose-down of it.
+         Counting all of it (CLδe·δe) stalled 1.1-1.9 kt fast. A function here, not in the LIFT axis, which
+         would add it to the lift force. -->
+    <function name="aero/function/elevator-trim-rad">
+      <description>The elevator that trims α (Cmα / Cmδe, Cmde_up's effectiveness)</description>
+      <table>
+        <independentVar lookup="row">aero/alpha-rad</independentVar>
+        <tableData>
+          -0.2000   0.1391
+           0.0000   0.0000
+           0.1396  -0.0971
+           0.1745  -0.1264
+           0.2094  -0.1655
+           0.2443  -0.2235
+        </tableData>
+      </table>
+    </function>
     <axis name="LIFT">
       <!-- OAERO: CL = 0.35 + 4.8·α + flap ΔCL [0, .19, .30, .40], stall at 14.1/14.1/13.7/13.3°,
            exponential drop after (the POH stall-speed fit). -->
@@ -247,11 +268,14 @@
         </product>
       </function>
       <function name="aero/coefficient/CLde">
-        <description>Lift due to elevator (ROSK CLδe 0.43; trailing edge down adds lift)</description>
+        <description>Lift due to elevator beyond the trimmed one (ROSK CLδe 0.43; trailing edge down adds lift)</description>
         <product>
           <property>aero/qbar-psf</property>
           <property>metrics/Sw-sqft</property>
-          <property>fcs/elevator-pos-rad</property>
+          <difference>
+            <property>fcs/elevator-pos-rad</property>
+            <property>aero/function/elevator-trim-rad</property>
+          </difference>
           <value>0.43</value>
         </product>
       </function>
