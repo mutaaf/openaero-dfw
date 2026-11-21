@@ -246,12 +246,34 @@
           </table>
         </product>
       </function>
+      <!-- Ticket 0203: CLalpha above is the POH stall-speed fit, flown trimmed, so it already holds the
+           tail's download at the trimmed elevator. CLδe counts only the deflection beyond that one:
+           δe_trim(α) = Cmα·α / (Cmδe · Cmde_up's effectiveness) = −(0.89 / 1.28)·α / eff(α), held at the
+           stall's value past it (no trim exists there). Flown, the trimmed elevator matches it within
+           0.4° to α 13° (idle glides 55-100 KIAS). Counting all of it (CLδe·δe) stalled 1.1-1.7 kt fast. -->
+      <function name="aero/function/elevator-trim-rad">
+        <description>The elevator that trims α (Cmα / Cmδe, Cmde_up's effectiveness)</description>
+        <table>
+          <independentVar lookup="row">aero/alpha-rad</independentVar>
+          <tableData>
+            -0.2000   0.1391
+             0.0000   0.0000
+             0.1396  -0.0971
+             0.1745  -0.1264
+             0.2094  -0.1655
+             0.2443  -0.2235
+          </tableData>
+        </table>
+      </function>
       <function name="aero/coefficient/CLde">
-        <description>Lift due to elevator (ROSK CLδe 0.43; trailing edge down adds lift)</description>
+        <description>Lift due to elevator beyond the trimmed one (ROSK CLδe 0.43; trailing edge down adds lift)</description>
         <product>
           <property>aero/qbar-psf</property>
           <property>metrics/Sw-sqft</property>
-          <property>fcs/elevator-pos-rad</property>
+          <difference>
+            <property>fcs/elevator-pos-rad</property>
+            <property>aero/function/elevator-trim-rad</property>
+          </difference>
           <value>0.43</value>
         </product>
       </function>

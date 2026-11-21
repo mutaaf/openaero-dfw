@@ -1,12 +1,12 @@
 ---
 id: 0165
 title: Make JSBSim's Cessna lift off a short-field takeoff at the POH's 51 KIAS, inside the card's 8% band
-status: proposed
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-06
-pr:
+pr: 297
 ---
 
 ## Why
@@ -36,3 +36,9 @@ with the attitude held, record why and leave the card failing; never widen the b
 ## Out of scope
 Changing the POH figures or the card's tolerances; flightModel.js's takeoff (it passes); any change
 to src/autopilot.js `elevatorForPitch` (Kid's assists and the autopilot fly it).
+
+## Builder note (2026-11-21, shipped with 0203)
+The card passes after 0203's lift fix, the pitch hold unchanged: JSBSim lifts off at 54.2 kt (band edge 55.08) with a
+951 ft roll (POH 960). The cause was the airframe (CLδe counted on the trimmed elevator too), not the harness pilot, so
+criterion 2 (the hold within 0.5°) was not needed to close it; the card left `GAPS.jsbsim` and every other C172 card
+passes on both models.

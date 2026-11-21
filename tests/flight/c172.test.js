@@ -50,9 +50,9 @@ function stallKts(flaps) {
 // Flown at POH Fig. 5-6's climb speed for the altitude: 74 KIAS at sea level, 72 KIAS from 8,000 ft up.
 const rocFpm = (altM, kts = 74) => settle(makeBody(c172, { kts, altM, throttle: 1 }), c172, 10, speedHoldPilot(() => kts), vsFpm, 60);
 
-// JSBSim's known gaps (measured, PR #48; ticket 0165):
-//  - lift-off 55.2 kt (band edge 55.08, so a small fix promotes the card): the 11° hold sags to 10.2° on JSBSim's real tail (elevatorForPitch is
-//    proportional only), so the wing reaches lift-off speed later.
+// JSBSim's short-field lift-off (ticket 0165) was 55.4 kt against the band's 55.08 until 0203: its lift table already
+// held the trimmed elevator's download and Roskam's CLδe took it off again. With CLδe on the deflection beyond trim,
+// 54.2 kt and a 951 ft roll (996 before; POH 960). The 11° hold still sags on JSBSim's tail; that was not the cause.
 //
 // Short-field landing, both models (ticket 0082): the C172's mains at their POH arm, the
 // tyres' friction below the CG (gear.js) and the brakes on the mains, torque-limited (fitted
@@ -63,7 +63,7 @@ const rocFpm = (altM, kts = 74) => settle(makeBody(c172, { kts, altM, throttle: 
 // 2,283 rpm and ~135 hp whatever the throttle, so the first ~3 s were powered. Now ~751 ft.
 const GAPS = {
   flightModel: new Map(),
-  jsbsim: new Map([['takeoff', '0165']]),
+  jsbsim: new Map(),
 };
 
 for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${model})`, () => {
@@ -83,10 +83,18 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     within(stallKts(3), 48, 0.10);
   });
 
-  // The speed tape's red band (0128) is stallSpeedKts: flown, both models stall at it (JSBSim ~1.5 kt
-  // above clean, its own aerodynamics).
+  // The speed tape's red band (0128) is stallSpeedKts: flown, both models stall at it.
   it('stalls within 2 kt of the speed tape\'s red band (stallSpeedKts) at every flap notch', () => {
     for (const flaps of [0, 1, 2, 3]) expect(Math.abs(stallKts(flaps) - stallSpeedKts(c172, flaps))).toBeLessThanOrEqual(2);
+  });
+
+  // Both models fly one lift table, aero.js's fit to the POH stall speeds (OAERO in c172.xml), so flown with
+  // the elevator each takes they stall at the same speed. Ticket 0203: JSBSim added Roskam's CLδe 0.43 on
+  // the whole elevator, though the fit already holds the trimmed elevator's download, and stalled 1.1-1.9 kt
+  // fast (54.85 / 51.46 / 50.17 / 49.11 kt against the table's 52.96 / 49.95 / 48.88 / 48.00). With CLδe on
+  // the deflection beyond trim: 53.07 / 49.98 / 48.85 / 47.94.
+  it('stalls within 0.5 kt of the lift table\'s stall speed (stallSpeedKts) at every flap notch (one lift fit, ticket 0203)', () => {
+    for (const flaps of [0, 1, 2, 3]) expect(Math.abs(stallKts(flaps) - stallSpeedKts(c172, flaps))).toBeLessThanOrEqual(0.5);
   });
 
   // POH short-field technique: flaps 10, full power, rotate nose-high, lift off at 51 KIAS.
@@ -1185,11 +1193,11 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
     // - The angle of attack: before 0202 flightModel.js overshot full back stick's ~19° (20.4 / 20.1° at flaps
     //   0 / 10, JSBSim 18.9 / 19.1°): it had no α-rate damping (its pitch damping, 0102, is under a third of
     //   Roskam's Cmq + Cmα̇ at Vr). With Roskam's Cmα̇ −5.2, as JSBSim flies it (0202): 18.9 / 18.7°.
-    // - The pitch: the rest of the 3-5° is the flight path, and that part is JSBSim's. Its lift table is
-    //   aero.js's POH stall-speed fit (OAERO), which already holds the elevator's tail download, and it
-    //   adds Roskam's CLδe 0.43 on top (full up: −0.21 CL), so held full back it climbs ~100-200 fpm in
-    //   the first seconds where flightModel.js makes 400-1,000. With CLδe 0 JSBSim peaks at 22.1 / 23.7°,
-    //   flightModel.js with Cmα̇ at 23.3 / 24.4° (an upper bound: only the trimmed elevator's share is counted twice): ticket 0203.
+    // - The pitch: the rest of the 3-5° is the flight path. JSBSim's lift table is aero.js's POH stall-speed fit
+    //   (OAERO), which already holds the trimmed elevator's download; until 0203 it added Roskam's CLδe 0.43 on
+    //   the whole elevator (full up: −0.21 CL) and peaked at 20.0 / 21.7°. 0203 counts only the deflection beyond
+    //   trim (−0.11 to −0.18 CL at full up): 21.1 / 22.6°. flightModel.js, 23.3 / 24.4°, has no elevator lift at
+    //   all, so full back stick loses none of the lift it really costs: ticket 0214.
     it(`flaps ${flaps * 10}, held: the peak angle of attack within 0.75° of JSBSim's C172 (Roskam's Cmα̇, 0202)`, async () => {
       useFdm(null);
       const fm = fullAftAtVr(flaps);
@@ -1199,7 +1207,7 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
       console.log(`[c172] full aft at Vr flaps ${flaps * 10}: peak α ${fm.peakAoaDeg.toFixed(1)}°, JSBSim ${jsb.peakAoaDeg.toFixed(1)}°; peak pitch under 5 ft ${fm.peakLowDeg.toFixed(1)}°, JSBSim ${jsb.peakLowDeg.toFixed(1)}°`);
       expect(Math.abs(fm.peakAoaDeg - jsb.peakAoaDeg)).toBeLessThanOrEqual(0.75);
     }, 30000);
-    it.fails(`KNOWN GAP (0203): flaps ${flaps * 10}, held: peak pitch while the wheels are under 5 ft within 1.5° of JSBSim's C172`, async () => {
+    it.fails(`KNOWN GAP (0214): flaps ${flaps * 10}, held: peak pitch while the wheels are under 5 ft within 1.5° of JSBSim's C172`, async () => {
       useFdm(null);
       const fm = fullAftAtVr(flaps);
       useFdm(await nodeJsbsim());
