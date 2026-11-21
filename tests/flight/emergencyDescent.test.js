@@ -16,7 +16,7 @@ import {
 import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { airAt } from '../../src/atmosphere.js';
 import { assistConfig, createAssistState, shapeControls, slewRudder } from '../../src/assists.js';
-import { makeBody, fly, attitude } from './harness.js';
+import { makeBody, fly, attitude, turbulentAir } from './harness.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
 const START_FT = 5500;
@@ -24,19 +24,26 @@ const START_FT = 5500;
 // A test pilot: rolls to `bank` and pitches for `kts` at `throttle` (the speed on the elevator, damped by its trend), or,
 // with vsFpm set, pitches for that vertical speed instead. Levels off on the handbook's 10% lead: wings level, the height
 // on the elevator and 95 kt on the power. Holds the ball with the rudder.
-function descent({ bank = 40, kts = 100, throttle = 0, vsFpm = null, level = true, seconds = 300 } = {}) {
+// wx: a METAR's wind and turbulence (harness.js turbulentAir, main.js updateWind's), settled for 30 s before the start.
+function descent({ bank = 40, kts = 100, throttle = 0, vsFpm = null, level = true, seconds = 300, wx = null, seed = 1 } = {}) {
   const b = makeBody(c172, { kts: 100, altM: START_FT * FT_TO_M, throttle: 0.6 });
   b.spec = c172;
   const st = createEmergencyDescent();
   const prevVel = b.vel.clone(), f = new Vector3(), inv = new Quaternion();
   let bankCmd = 0, rudInt = 0, pc = 2, trend = 0, last = null, thrInt = 0.3, leveling = false, ev = '', maxIas = 0, maxAoa = -9;
+  const air = wx ? turbulentAir(c172, wx, { seed }) : null, startS = wx ? 30 : 0.5;
   const pilot = (x, dt) => {
-    if (st.phase === 'wait') return;
+    air?.(x, dt);
     const { pitchDeg, bankRightDeg } = attitude(x);
     const altFt = x.pos.y * M_TO_FT, vs = x.vel.y * M_TO_FT * 60;
-    if (level && !leveling && altFt - st.targetFt < levelLeadFt(vs) + 50) leveling = true;
     if (last !== null) trend += ((x.iasKts - last) / dt - trend) * Math.min(1, dt / 0.5);
     last = x.iasKts;
+    if (st.phase === 'wait') { // in trim at 100 KIAS until the start
+      x.throttle = 0.6; pc = Math.max(-10, Math.min(15, pc + ((x.iasKts - 100) * 0.15 + trend * 0.9) * dt));
+      x.aileronInput = aileronForBank(0, bankRightDeg, -x.angVel.z); x.elevInput = elevatorForPitch(pc, pitchDeg, x.angVel.x);
+      return;
+    }
+    if (level && !leveling && altFt - st.targetFt < levelLeadFt(vs) + 50) leveling = true;
     let target = bank;
     if (leveling) {
       target = 0;
@@ -62,7 +69,7 @@ function descent({ bank = 40, kts = 100, throttle = 0, vsFpm = null, level = tru
   };
   fly(b, c172, seconds, pilot, (x) => {
     maxIas = Math.max(maxIas, x.iasKts); maxAoa = Math.max(maxAoa, x.aoaDeg);
-    ev = descentSimStep(st, x, 1 / 120, x.t > 0.5);
+    ev = descentSimStep(st, x, 1 / 120, x.t > startS);
     return ev === 'complete' || ev === 'failed';
   });
   return { st, grade: gradeEmergencyDescent(st), maxIas, maxAoa, t: b.t };
@@ -105,6 +112,18 @@ describe('C172 emergency descent (0209, FAA-S-ACS-6C Area IX Task A)', () => {
     expect(r.maxIas).toBeGreaterThan(c172.vneKts);
     expect(r.grade.grade).toBe('D');
     expect(r.grade.reason).toMatch(/163 kt, the never-exceed speed/);
+  });
+  it('on gusty days (15G25, 25G38, six seeds each) the handbook descent still grades A or better: the bumps\' g is not the pilot\'s', () => {
+    for (const [name, wx] of [['15G25', { windDirDeg: 180, windKts: 15, gustKts: 25 }], ['25G38', { windDirDeg: 180, windKts: 25, gustKts: 38 }]]) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const r = descent({ wx, seed, seconds: 360 });
+        line(`${name} s${seed}`, r);
+        expect(r.st.phase).toBe('complete');
+        expect(r.st.minG).toBeGreaterThan(0.4);
+        expect(r.st.maxG).toBeLessThan(2.2);
+        expect(['S', 'A']).toContain(r.grade.grade);
+      }
+    }
   });
   it('wings level at 100 KIAS is a straight dive: capped at C with the bank\'s reason', () => {
     const r = descent({ bank: 0 });
@@ -161,6 +180,7 @@ describe('C172 emergency descent on the assists (0209: main.js applyAssists in t
     expect(r.st.phase).toBe('complete');
     expect(r.st.levelDevFt).toBeLessThanOrEqual(100);
     expect(r.st.bankOkS / r.st.heldS).toBeGreaterThan(0.8);
+    expect(r.st.inBandS / r.st.heldS).toBeGreaterThan(0.9); // its path starts where the descent settles (physics panel)
     expect(r.maxIas).toBeLessThanOrEqual(ED_TARGET_KTS + 3);
     expect(r.st.reachS).toBeLessThan(150);
     expect(['S', 'A']).toContain(r.grade.grade);

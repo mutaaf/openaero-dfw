@@ -118,8 +118,8 @@ describe('gradeEmergencyDescent (0209): the ACS tolerances', () => {
     expect(g.reason).toMatch(/straight dive: bank 30-45°/);
   });
   it('fast (115 kt, over VA), power left in, a hard pull or a push, or a 150 ft miss: each no better than a B', () => {
-    for (const [o, re] of [[{ kts: () => 115 }, /over 105/], [{ throttle: () => 0.5 }, /Power left in/], [{ g: (t) => (t > 30 && t < 32 ? 2.9 : 1.2) }, /Pulled 2\.\d g/],
-      [{ g: (t) => (t > 30 && t < 32 ? 0.2 : 1.2) }, /Pushed to 0\.\d g/], [{ levelFt: 150 }, /150 ft high/], [{ bank: () => 55 }, /outside 30-45°/]]) {
+    for (const [o, re] of [[{ kts: () => 115 }, /Up to 115 kt: the drill's speed is 105 kt/], [{ throttle: () => 0.5 }, /Power left in/], [{ g: (t) => (t > 30 && t < 34 ? 3.2 : 1.2) }, /Pulled 2\.\d g/],
+      [{ g: (t) => (t > 30 && t < 34 ? -0.8 : 1.2) }, /Pushed to -0\.\d g, below zero/], [{ levelFt: 150 }, /150 ft high/], [{ bank: () => 55 }, /outside 30-45°/]]) {
       const st = createEmergencyDescent();
       flyDescent(st, o);
       const g = gradeEmergencyDescent(st);
@@ -127,6 +127,27 @@ describe('gradeEmergencyDescent (0209): the ACS tolerances', () => {
       expect(g.score).toBeLessThanOrEqual(ED_ACS_CAP);
       expect(g.reason).toMatch(re);
     }
+  });
+  it('a bump\'s g (0.3 or 2.4 for half a second) is not the pilot\'s: no cap', () => {
+    const st = createEmergencyDescent();
+    flyDescent(st, { g: (t) => (t > 30 && t < 30.5 ? 0.3 : t > 40 && t < 40.5 ? 2.4 : 1.2) });
+    expect(gradeEmergencyDescent(st).reason).toBeNull();
+  });
+  it('a snatch past +3.8 g for 0.2 s fails: the structural limit is not filtered away', () => {
+    const st = createEmergencyDescent();
+    flyDescent(st, { g: (t) => (t > 30 && t < 30.2 ? 4.5 : 1.2) });
+    expect(st.why).toBe('g');
+  });
+  it('levelled 600 ft high and held there: failed with that reason, not "too slow"', () => {
+    const st = createEmergencyDescent();
+    flyDescent(st, { levelFt: 600 });
+    expect(st.why).toBe('high');
+    expect(gradeEmergencyDescent(st).reason).toMatch(/Levelled off too high: the level-off is 2,500 ft/);
+  });
+  it('the binding cap\'s reason: a D cap wins over a B one, and a score under the cap drops "No better than"', () => {
+    const st = createEmergencyDescent();
+    flyDescent(st, { levelFt: -250, throttle: () => 0.5 });
+    expect(gradeEmergencyDescent(st).reason).toMatch(/under your level-off/);
   });
   it('a 250 ft miss of the level-off is a D', () => {
     const st = createEmergencyDescent();

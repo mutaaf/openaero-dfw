@@ -26,6 +26,7 @@ export const ED_KTS_UNDER = 10;
 // S4's bank.
 export const ED_BANK_MIN_DEG = 30;
 export const ED_BANK_MAX_DEG = 45;
+export const ED_BANK_GRACE_DEG = 1;
 // S5's level-off, held for ED_LEVEL_S once within ED_ALT_TOL_FT on the way down.
 export const ED_ALT_TOL_FT = 100;
 export const ED_LEVEL_S = 15;
@@ -39,10 +40,15 @@ export const ED_FAIL_S = 240;
 export const ED_LOW_FT = 300;
 export const ED_LIMIT_S = 0.5;
 export const ED_G_LIMIT = 3.8;
-// Positive load factors (S4, the handbook's reason for the bank): a push under ED_G_MIN, or a pull past ED_G_PULL, is named.
-export const ED_G_MIN = 0.5;
+// Positive load factors (S4, the handbook's reason for the bank): the seat's g through ED_G_TAU_S under ED_G_MIN (the ACS's
+// "positive", literally) is named, and a pull past ED_G_PULL (the drill's own line, two thirds of the +3.8 g limit: no
+// source gives one). The filter is the METAR's: at 0.5 s the handbook pilot read 0.19-2.54 g in 25G38 with the stick
+// frozen (physics panel); at 2 s every gusty seed stays within 0.6-1.9 g (tests/flight/emergencyDescent.test.js).
+export const ED_G_MIN = 0;
 export const ED_G_PULL = 2.5;
-export const ED_G_TAU_S = 0.5; // the seat's g through a filter: a METAR bump is not the pilot's
+export const ED_G_TAU_S = 2;
+// The structural limit reads the raw seat g held ED_G_LIMIT_S (as ED_LIMIT_S): a snatch past +3.8 g is not filtered away.
+export const ED_G_LIMIT_S = 0.15;
 export const ED_IAS_TAU_S = 2; // as steepTurns.js / slowFlight.js: a gust's spike is not the pilot's speed
 // The grade's descent: the bank and the speed are held from ED_SETTLE_S after the start until ED_LEAD_FT above the
 // level-off (the roll-in and the level-off are not a held descent); power above ED_IDLE for ED_POWER_S is not idle.
@@ -55,6 +61,9 @@ export const ED_WARN_S = 1;
 // (assists.js s.bankMaxDeg: full stick asks for 0.85 of it, 40°: their usual 30° and 45° caps would hold Kid under S4's 30°).
 export const ED_KID_BANK_DEG = 40;
 export const ED_KID_KTS = 100;
+// Kid's path starts where the descent settles (~-9° at idle, 40° and 100 KIAS, flightModel.js): from 0 the integral sagged
+// through 90 kt for 15 s (physics panel).
+export const ED_KID_GAMMA0_DEG = -9;
 export const ED_ASSIST_BANK_DEG = 47;
 export const ED_PLACE = { name: 'Over Grapevine Lake · down 3,000 ft' };
 
@@ -97,7 +106,7 @@ export function descentWords(targetFt) {
 // 100 ft of the level-off: held ED_LEVEL_S), 'complete' (graded), 'failed' (graded D).
 export const createEmergencyDescent = () => ({
   phase: 'wait', alt0: 0, targetFt: 0, t: 0, reachS: 0, levelS: 0, iasF: 0, gF: 1, lastIas: null, iasRate: 0,
-  heldS: 0, stopS: 0, bankOkS: 0, bankLowS: 0, inBandS: 0, overKts: 0, underKts: 0, powerS: 0, limitS: 0, limitKts: 0, flapsOut: false,
+  heldS: 0, stopS: 0, gOverS: 0, bankOkS: 0, bankLowS: 0, inBandS: 0, overKts: 0, underKts: 0, powerS: 0, limitS: 0, limitKts: 0, flapsOut: false,
   maxG: 1, minG: 1, warnRunS: 0, warned: false, levelDevFt: 0, levelSignFt: 0, lowFt: 0, why: null, kidGamma: 0,
 });
 
@@ -112,6 +121,7 @@ export function descentStep(st, s) {
     st.alt0 = s.altFt; st.targetFt = Math.round((s.altFt - ED_DROP_FT) / 100) * 100; st.iasF = s.iasKts; st.gF = s.loadFactor;
     if (!s.started) return '';
     st.phase = 'descending';
+    st.kidGamma = ED_KID_GAMMA0_DEG;
     return 'descending';
   }
   st.t += s.dt;
@@ -119,14 +129,15 @@ export function descentStep(st, s) {
   st.lastIas = s.iasKts;
   st.iasF += (s.iasKts - st.iasF) * Math.min(1, s.dt / ED_IAS_TAU_S);
   st.gF += (s.loadFactor - st.gF) * Math.min(1, s.dt / ED_G_TAU_S);
+  st.gOverS = s.loadFactor > ED_G_LIMIT ? st.gOverS + s.dt : 0;
   st.maxG = Math.max(st.maxG, st.gF); st.minG = Math.min(st.minG, st.gF);
   // The airplane's limits: VNE clean, VFE with the flaps out (the raw IAS, held ED_LIMIT_S).
   st.limitS = s.limitKts && s.iasKts > s.limitKts ? st.limitS + s.dt : 0;
   st.warnRunS = s.iasKts < s.warnKts ? st.warnRunS + s.dt : 0;
   if (st.warnRunS >= ED_WARN_S) st.warned = true;
   const above = s.altFt - st.targetFt;
-  if (s.stalled || st.limitS >= ED_LIMIT_S || st.gF > ED_G_LIMIT || above < -ED_LOW_FT || (st.phase === 'descending' && st.t > ED_FAIL_S)) {
-    st.why = s.stalled ? 'stall' : st.limitS >= ED_LIMIT_S ? 'limit' : st.gF > ED_G_LIMIT ? 'g' : above < -ED_LOW_FT ? 'low' : 'time';
+  if (s.stalled || st.limitS >= ED_LIMIT_S || st.gOverS >= ED_G_LIMIT_S || above < -ED_LOW_FT || (st.phase === 'descending' && st.t > ED_FAIL_S)) {
+    st.why = s.stalled ? 'stall' : st.limitS >= ED_LIMIT_S ? 'limit' : st.gOverS >= ED_G_LIMIT_S ? 'g' : above < -ED_LOW_FT ? 'low' : Math.abs(s.vsFpm) < ED_LEVEL_VS_FPM ? 'high' : 'time';
     if (st.why === 'limit') { st.limitKts = s.limitKts; st.flapsOut = s.flapsOut; }
     st.lowFt = Math.min(st.lowFt, above);
     st.phase = 'failed';
@@ -136,7 +147,7 @@ export function descentStep(st, s) {
     if (st.t > ED_SETTLE_S && above > ED_LEAD_FT) {
       st.heldS += s.dt;
       const bank = Math.abs(s.bankDeg);
-      if (bank >= ED_BANK_MIN_DEG && bank <= ED_BANK_MAX_DEG) st.bankOkS += s.dt;
+      if (bank >= ED_BANK_MIN_DEG && bank <= ED_BANK_MAX_DEG + ED_BANK_GRACE_DEG) st.bankOkS += s.dt; // 45° is inside: a hold rides 45-45.5
       else if (bank < ED_BANK_MIN_DEG) st.bankLowS += s.dt;
       if (st.iasF <= ED_TARGET_KTS && st.iasF >= ED_TARGET_KTS - ED_KTS_UNDER) st.inBandS += s.dt;
       st.overKts = Math.max(st.overKts, st.iasF - ED_TARGET_KTS);
@@ -264,7 +275,9 @@ export function gradeEmergencyDescent(st, kid = false) {
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * WEIGHTS[f.key], 0));
   let reason = null;
-  const cap = (c, why) => { score = Math.min(score, c); reason = reason ?? why; };
+  // The binding cap's reason: the lowest cap wins, the first of equal ones; a cap above the score adds no "no better than".
+  let capAt = Infinity;
+  const cap = (c, why) => { if (c < capAt) { capAt = c; reason = why; } score = Math.min(score, c); };
   if (failed) {
     score = Math.min(score, ED_LOST_CAP);
     reason = st.why === 'stall' ? 'Stalled: in a descent the nose stays down. Lower it, then level off gently.'
@@ -272,21 +285,23 @@ export function gradeEmergencyDescent(st, kid = false) {
         : `Past ${Math.round(st.limitKts)} kt, the never-exceed speed: a structural limit. Idle, bank 30-45° and raise the nose a little to hold 95-105 kt.`)
         : st.why === 'g' ? `Over ${ED_G_LIMIT} g, the Cessna's limit: ease out of a dive, never snatch the stick back.`
           : st.why === 'low' ? `Went ${ED_LOW_FT} ft through your level-off: start levelling ~10% of your descent rate early (2,000 fpm: 200 ft).`
-            : 'Too slow for an emergency: idle, bank 30-45° and lower the nose to 95-105 kt to get down fast.';
+            : st.why === 'high' ? `Levelled off too high: the level-off is ${ftWords(st.targetFt)} (SEA LVL on the altitude tape). Keep going down to it.`
+              : 'Too slow for an emergency: idle, bank 30-45° and lower the nose to 95-105 kt to get down fast.';
   } else {
     if (fpm < ED_SLOW_FPM) cap(ED_LOST_CAP, `${Math.round(fpm / 10) * 10} fpm is a let-down, not an emergency descent: ${bandShare < ED_SHARE_B && st.underKts > 0
       ? `at ${Math.round(ED_TARGET_KTS - ED_KTS_UNDER - st.underKts)} kt the nose was too high. Push it down to 95-105 kt` : 'idle, bank 30-45°, 95-105 kt'}. Capped at D.`);
     if (dev > 2 * ED_ALT_TOL_FT) cap(ED_LOST_CAP, `${st.levelSignFt < 0 ? 'Went' : 'Stayed'} ${Math.round(dev)} ft ${st.levelSignFt < 0 ? 'under' : 'over'} your level-off: the test allows 100. Capped at D.`);
     if (st.warned) cap(ED_WARN_CAP, 'The stall warning sounded: level off with power, not by pulling the speed away. Capped at C.');
     if (st.heldS > 0 && st.bankLowS / st.heldS > 1 - ED_BANK_SHARE_C) cap(ED_WARN_CAP, 'You stayed in a straight dive: bank 30-45° steepens it, keeps the g positive and shows you the clear air under you. Capped at C.');
-    if (st.minG < ED_G_MIN) cap(ED_ACS_CAP, `Pushed to ${st.minG.toFixed(1)} g: roll into the bank and let the nose fall, don't push. No better than a B.`);
+    if (st.minG < ED_G_MIN) cap(ED_ACS_CAP, `Pushed to ${st.minG.toFixed(1)} g, below zero: roll into the bank and let the nose fall, don't push. No better than a B.`);
     if (st.maxG > ED_G_PULL) cap(ED_ACS_CAP, `Pulled ${st.maxG.toFixed(1)} g: ease the nose up, never snatch it. No better than a B.`);
     if (st.powerS > ED_POWER_S) cap(ED_ACS_CAP, 'Power left in: idle, the idling prop is a brake. No better than a B.');
-    if (st.overKts > 0 && bandShare < ED_SHARE_B) cap(ED_ACS_CAP, `Up to ${Math.round(ED_TARGET_KTS + st.overKts)} kt: over 105 (the Cessna's maneuvering speed) the test calls it fast. Ease the nose up. No better than a B.`);
+    if (st.overKts > 0 && bandShare < ED_SHARE_B) cap(ED_ACS_CAP, `Up to ${Math.round(ED_TARGET_KTS + st.overKts)} kt: the drill's speed is 105 kt (the Cessna's maneuvering speed, for bumpy air and a fire-weakened airframe) and the test allows +0. Ease the nose up. No better than a B.`);
     if (bandShare < ED_SHARE_B) cap(ED_ACS_CAP, `Slow (down to ${Math.round(ED_TARGET_KTS - ED_KTS_UNDER - st.underKts)} kt) for part of it: lower the nose to 95-105 kt. No better than a B.`);
     if (bankShare < ED_SHARE_B) cap(ED_ACS_CAP, 'Bank outside 30-45° for part of it: no better than a B.');
     if (dev > ED_ALT_TOL_FT) cap(ED_ACS_CAP, `Levelled off ${Math.round(dev)} ft ${st.levelSignFt < 0 ? 'low' : 'high'}: the test allows 100. No better than a B.`);
   }
+  if (!failed && reason && score < capAt) reason = reason.replace(/ (No better than a B|Capped at [CD])\.$/, '');
   return { kind: 'emergencyDescent', title: failed ? 'Emergency descent not finished' : 'Emergency descent', grade: letterGrade(score), score, factors, reason,
     note: kid && !failed ? ED_KID_NOTE : null };
 }

@@ -303,9 +303,11 @@ src/emergencyDescent.js emergency descent (0209, lazy chunk loaded with `c172_em
                     FAA-H-8083-3C ch. 18 (idle, the bank, never past VNE/VFE); the 172S POH has none, so the speed is its VA: band 95-105
                     KIAS (2 s filter). Graded on the time to the level-off (fail at 240 s; < 1,000 fpm ≤ D), the share of the held descent
                     (5 s in to 300 ft above) in the band and the bank, and the level-off held 15 s (entered within 100 ft, or the descent
-                    stopped within 500 ft above it). VNE/VFE 0.5 s (aero.js speedLimitKts), +3.8 g, a stall, 300 ft through: failed (D);
-                    a straight dive ≤ C; fast, slow, the bank, power over 0.1, the seat's g (0.5 s filter) under 0.5 or over 2.5 ≤ B.
-                    Its edw* words reach coach.js through s.ds. Kid: the guide banks 40° right, walks the path down for 100 KIAS at
+                    stopped within 500 ft above it; the hold counts only under 300 fpm). VNE/VFE 0.5 s (aero.js speedLimitKts), the raw seat g
+                    past +3.8 for 0.15 s, a stall, 300 ft through, levelled > 500 ft high or 240 s: failed (D); a straight dive ≤ C; fast,
+                    slow, the bank (45° + 1° grace), power over 0.1, the seat's g through a 2 s filter (METAR bumps: 0.6-1.9 g in 25G38)
+                    under 0 or over 2.5 ≤ B. The HUD speed bug (coachKts) is 100 ± 5 in the drill.
+                    Its edw* words reach coach.js through s.ds. Kid: the guide banks 40° right, walks the path (from -9°) down for 100 KIAS at
                     idle (main.js kidIdle), levels off on a 10% lead and the autothrottle holds 95; Kid and Learner get a 47° bank cap
                     (full stick 40°). Cards: tests/flight/emergencyDescent.test.js
 src/upset.js        unusual-attitude recovery (0174, lazy chunk loaded with its two missions, `upset: 'high' | 'low'`):
