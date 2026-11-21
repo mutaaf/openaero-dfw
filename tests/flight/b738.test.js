@@ -225,7 +225,7 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   // The autobrake (aircraft.js systems.autobrake, the 737 NG FCOM's 4 / 5 / 7.2 / 14 ft/s²) brakes
   // to a deceleration, not to the tyres' limit, so the ACAP's distance (max manual braking, the
   // certified technique) is about the shortest stop: autobrake 2 needs much more, MAX less than 2 and
-  // about what the pedals take (within 3%: MAX's 14 ft/s² is near the tyres' limit). This card is flaps 30; the
+  // about what the pedals take (a few % longer: MAX's 14 ft/s² is near the tyres' limit). This card is flaps 30; the
   // autobrake distances themselves are carded at flaps 40 against Boeing's QRH table below (0204).
   it('at DFW, 65 t, dry: autobrake 2 stops well past the ACAP §3.4.3 distance, MAX shorter than 2 and about as short as the pedals', () => {
     const manual = landFromFifty(b738.massKg, { elevFt: DFW_FT }).ft;
@@ -261,7 +261,10 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   //   AUTOBRAKE 2  6130  +180       6310          +410                 +170
   //   AUTOBRAKE 1  6740  +770       7510          +480                 +200
   // Flown as landFromFifty does (Vref40 = 1.23 Vs at flaps 40, scaled to the weight; idle and flare
-  // from 30 ft; the autobrake alone, or full pedals), ±12% as the ACAP cards.
+  // from 30 ft; the autobrake alone, or full pedals), ±12% as the ACAP cards. The autobrake rows land
+  // 3-5% short, all the same way, with ~1,100 ft in the air against the QRH's 1,000: the ground roll is the
+  // short part (the brakes' onset, 0215's first suspect). They pin the FCOM decelerations and Vref40 more
+  // than the drag; max manual (+1%) is the row that tests the tyres and the spoilers.
   const QRH40 = {
     manual: { ab: 0, refFt: 2740 + 80, perWtFt: 170, perKftFt: 50, label: 'max manual braking' },
     max: { ab: 4, refFt: 3470, perWtFt: 180, perKftFt: 70, label: 'autobrake MAX' },
@@ -272,23 +275,25 @@ describe('Boeing 737-800 vs Boeing airport data', () => {
   const QRH_REF_KG = 60000;
   const qrh40Ft = (row, massKg = QRH_REF_KG, elevFt = 0) => row.refFt + row.perWtFt * (massKg - QRH_REF_KG) / 5000 + row.perKftFt * elevFt / 1000;
   const land40 = (row, massKg = QRH_REF_KG, elevFt = 0) => landFromFifty(massKg, { flaps: FLAPS_40, elevFt, autobrake: row.ab, manual: row.ab === 0 });
-  const qrh40Card = (row) => () => {
+  const qrh40Card = (row, tol = 0.12) => () => {
     const r = land40(row);
     console.log(`[b738] flaps 40, 60 t, sea level, ${row.label}: ${r.ft.toFixed(0)} ft from 50 ft (QRH, no reverse, ${row.refFt}), touchdown ${r.touchdown.sinkFpm.toFixed(0)} fpm after ${r.touchdown.airFt.toFixed(0)} ft`);
     expect(r.touchdown.sinkFpm).toBeGreaterThan(-600);
-    expect(r.touchdown.airFt).toBeGreaterThan(700);
-    expect(r.spoilers2s).toBe(1);
+    within(r.touchdown.airFt, 1000, 0.15); // the QRH's 1,000 ft of air distance
+    expect(r.spoilers2s).toBe(1); // auto speedbrakes: out within 2 s and still out at 80 kt
+    expect(r.spoilersAt80).toBe(1);
     expect(r.autobrakeEngaged).toBe(row.ab > 0);
-    within(r.ft, qrh40Ft(row), 0.12);
+    within(r.ft, qrh40Ft(row), tol);
   };
   for (const key of ['manual', 'ab3', 'ab2', 'ab1']) {
     const row = QRH40[key];
     it(`flaps 40, 60 t, sea level, dry, ${row.label}, no reverse: about ${row.refFt.toLocaleString('en-US')} ft from 50 ft to a stop (Boeing QRH flaps 40 table, VT-AXV report p. 19, ±12%)`, qrh40Card(row));
   }
   // Autobrake MAX: the model's flat 14 ft/s² stops in ~2,950 ft, 15% short of the QRH's 3,470 (about
-  // 10 ft/s² averaged over the ground roll, where max manual's 2,820 is ~14.7). Forum copies of the
-  // FCOM say MAX is 14 ft/s² above 80 kt and 12 below, which closes only ~100 ft of it.
-  it.fails('KNOWN GAP (0215): flaps 40, 60 t, sea level, dry, autobrake MAX, no reverse: about 3,470 ft from 50 ft to a stop (Boeing QRH flaps 40 table, VT-AXV report p. 19, ±12%)', qrh40Card(QRH40.max));
+  // 10.5 ft/s² averaged over the ground roll, where max manual's 2,820 is ~14.3). Forum copies of the
+  // FCOM say MAX is 14 ft/s² above 80 kt and 12 below, which closes only ~100 ft of it. ±5%, as close as the
+  // other rows land, so a partial fix that only scrapes into ±12% (from 3,054 ft) does not close the gap.
+  it.fails('KNOWN GAP (0215): flaps 40, 60 t, sea level, dry, autobrake MAX, no reverse: about 3,470 ft from 50 ft to a stop (Boeing QRH flaps 40 table, VT-AXV report p. 19, ±5%)', qrh40Card(QRH40.max, 0.05));
 
   // The table's order: each lower setting brakes softer and rolls further; the pedals stop shortest.
   it('flaps 40, 60 t: max manual < autobrake MAX < 3 < 2 < 1, as the QRH flaps 40 table orders them', () => {
