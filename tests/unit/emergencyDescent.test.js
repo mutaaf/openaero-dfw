@@ -74,6 +74,13 @@ describe('descentStep (0209): down 3,000 ft, level off, hold it', () => {
     f.flapsOut = true; // as descentSimStep's flapsOut would set it
     expect(gradeEmergencyDescent(f).reason).toMatch(/flaps' 85 kt/);
   });
+  it('still sinking at a let-down\'s rate through the level-off is not a level-off: the hold waits, and it goes through (panel)', () => {
+    const st = createEmergencyDescent();
+    flyDescent(st, { fpm: 900, leadFt: -1000 });
+    expect(st.phase).toBe('failed');
+    expect(st.why).toBe('low');
+    expect(st.levelS).toBe(0);
+  });
   it('a gust through the limit for less than half a second is not a fail', () => {
     const st = createEmergencyDescent();
     flyDescent(st, { kts: (t) => (t > 20 && t < 20.35 ? 170 : 100) });
@@ -152,7 +159,10 @@ describe('the coach and Kid\'s guide (0209)', () => {
     expect(descentPrompt(at('descending'), s({ altFt: 2750 }), false)).toBe('edwLevelOff'); // 1,800 fpm: a 180 ft lead + 100
     expect(coachText('edwLevelOff')).toMatch(/Level off at 2,500 ft/);
     expect(descentPrompt(at('leveling'), s({ altFt: 2420 }), false)).toBe('edwLow');
-    expect(descentPrompt(at('leveling'), s({ altFt: 2510 }), false)).toBe('edwLevel');
+    expect(descentPrompt(at('leveling'), s({ altFt: 2560, vsFpm: -1000 }), false)).toBe('edwLevelOff'); // still diving: not "a little high"
+    expect(descentPrompt(at('leveling'), s({ altFt: 2560, vsFpm: 0 }), false)).toBe('edwHigh');
+    expect(coachText('edwHold')).toMatch(/95-105 kt, down to 2,500 ft/);
+    expect(descentPrompt(at('leveling'), s({ altFt: 2510, vsFpm: 0 }), false)).toBe('edwLevel');
     expect(descentPrompt(at('complete'), s(), false)).toBeNull();
     for (const k of Object.keys(ED_TEXT)) expect(coachText(k)).toBeTruthy();
   });

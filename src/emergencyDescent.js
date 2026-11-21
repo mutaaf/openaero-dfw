@@ -56,14 +56,14 @@ export const ED_WARN_S = 1;
 export const ED_KID_BANK_DEG = 40;
 export const ED_KID_KTS = 100;
 export const ED_ASSIST_BANK_DEG = 47;
-export const ED_PLACE = { name: 'Over Grapevine Lake · 5,000 ft' };
+export const ED_PLACE = { name: 'Over Grapevine Lake · down 3,000 ft' };
 
 export const ED_TEXT = {
-  edwSmoke: 'Smoke in the cockpit! Emergency descent: power idle, bank 30-45°, nose down to 105 kt',
+  edwSmoke: 'Smoke in the cockpit! Emergency descent: power idle, bank 30-45°, nose down to 95-105 kt',
   edwIdle: 'Power to idle: the idling prop is a brake',
   edwBank: 'Bank 30-45°: the turn steepens the descent and you see what\'s below',
   edwSteep: 'Too steep: 45° of bank at most',
-  edwNoseDown: 'Nose down: let the speed build to 105 kt',
+  edwNoseDown: 'Nose down: push the stick forward a little until the speed is 95-105 kt',
   edwFast: 'Too fast: over 105 kt. Ease the nose up a little',
   edwPull: 'Gently: don\'t pull hard, ease the nose up',
   edwHold: 'Hold it: idle, 30-45° of bank, 95-105 kt',
@@ -72,7 +72,7 @@ export const ED_TEXT = {
   edwLow: 'Too low: climb back up',
   edwHigh: 'A little high: ease down',
   edwKidIn: 'Smoke in the cockpit! Let go: the plane goes down fast in a turn',
-  edwKid: 'The plane spirals down at 100 knots: watch the height unwind',
+  edwKid: 'The plane spirals down at 100 knots: watch the SEA LVL height count down',
   edwKidLevel: 'The plane levels off: down safely',
 };
 Object.assign(DRILL_TEXT, ED_TEXT);
@@ -82,7 +82,9 @@ Object.assign(RANK, { edwSmoke: 2, edwIdle: 2, edwPull: 2, edwBank: 1, edwSteep:
 const ftWords = (ft) => `${Math.round(ft).toLocaleString('en-US')} ft`;
 export function descentWords(targetFt) {
   const t = ftWords(targetFt);
-  DRILL_TEXT.edwSmoke = `Smoke in the cockpit! Emergency descent to ${t}: power idle, bank 30-45°, nose down to 105 kt`;
+  DRILL_TEXT.edwSmoke = `Smoke in the cockpit! Emergency descent to ${t}: power idle, bank 30-45°, nose down to 95-105 kt`;
+  DRILL_TEXT.edwHold = `Hold it: idle, 30-45° of bank, 95-105 kt, down to ${t}`;
+  DRILL_TEXT.edwKid = `The plane spirals down at 100 knots: watch the SEA LVL height count down to ${t}`;
   DRILL_TEXT.edwLevelOff = `Level off at ${t}: wings level, raise the nose, add power`;
   DRILL_TEXT.edwLevel = `Hold ${t}`;
   DRILL_TEXT.edwLow = `Too low: climb back to ${t}`;
@@ -148,7 +150,8 @@ export function descentStep(st, s) {
     st.phase = 'leveling'; st.reachS = st.t;
     return 'leveling';
   }
-  st.levelS += s.dt;
+  // The hold counts only while level (S5: levelled off, not still sinking through it at a let-down's rate).
+  if (Math.abs(s.vsFpm) < ED_LEVEL_VS_FPM) st.levelS += s.dt;
   // The level-off (S5): any height under it, and over it once the round-out has had ED_ROUND_S (the 100 ft it is entered at
   // is the descent's, not a miss).
   if ((above < 0 || st.levelS > ED_ROUND_S) && Math.abs(above) > st.levelDevFt) { st.levelDevFt = Math.abs(above); st.levelSignFt = above; }
@@ -169,7 +172,7 @@ export function descentPrompt(st, s, kid) {
   if (kid) return st.phase === 'wait' || st.t < 4 ? 'edwKidIn' : leveling ? 'edwKidLevel' : 'edwKid';
   if (st.phase === 'wait' || st.t < 4) return 'edwSmoke';
   if (st.gF > ED_G_PULL - 0.3) return 'edwPull';
-  if (st.phase === 'leveling') return above < -ED_ALT_TOL_FT / 2 ? 'edwLow' : above > ED_ALT_TOL_FT / 2 ? 'edwHigh' : 'edwLevel';
+  if (st.phase === 'leveling') return above < -ED_ALT_TOL_FT / 2 ? 'edwLow' : above > 0 && s.vsFpm < -ED_LEVEL_VS_FPM ? 'edwLevelOff' : above > ED_ALT_TOL_FT / 2 ? 'edwHigh' : 'edwLevel';
   if (leveling) return 'edwLevelOff';
   if (s.throttle > ED_IDLE) return 'edwIdle';
   const bank = Math.abs(s.bankDeg);
@@ -266,12 +269,13 @@ export function gradeEmergencyDescent(st, kid = false) {
     score = Math.min(score, ED_LOST_CAP);
     reason = st.why === 'stall' ? 'Stalled: in a descent the nose stays down. Lower it, then level off gently.'
       : st.why === 'limit' ? (st.flapsOut ? `Past the flaps' ${Math.round(st.limitKts)} kt limit: flaps up for the descent, or keep it slower.`
-        : `Past ${Math.round(st.limitKts)} kt, the never-exceed speed: a structural limit. Idle, bank 30-45° and the nose up a little hold 105.`)
+        : `Past ${Math.round(st.limitKts)} kt, the never-exceed speed: a structural limit. Idle, bank 30-45° and raise the nose a little to hold 95-105 kt.`)
         : st.why === 'g' ? `Over ${ED_G_LIMIT} g, the Cessna's limit: ease out of a dive, never snatch the stick back.`
           : st.why === 'low' ? `Went ${ED_LOW_FT} ft through your level-off: start levelling ~10% of your descent rate early (2,000 fpm: 200 ft).`
-            : 'Too slow for an emergency: idle, bank 30-45° and lower the nose to 105 kt to get down fast.';
+            : 'Too slow for an emergency: idle, bank 30-45° and lower the nose to 95-105 kt to get down fast.';
   } else {
-    if (fpm < ED_SLOW_FPM) cap(ED_LOST_CAP, `${Math.round(fpm / 10) * 10} fpm is a let-down, not an emergency descent: idle, bank 30-45°, 105 kt. Capped at D.`);
+    if (fpm < ED_SLOW_FPM) cap(ED_LOST_CAP, `${Math.round(fpm / 10) * 10} fpm is a let-down, not an emergency descent: ${bandShare < ED_SHARE_B && st.underKts > 0
+      ? `at ${Math.round(ED_TARGET_KTS - ED_KTS_UNDER - st.underKts)} kt the nose was too high. Push it down to 95-105 kt` : 'idle, bank 30-45°, 95-105 kt'}. Capped at D.`);
     if (dev > 2 * ED_ALT_TOL_FT) cap(ED_LOST_CAP, `${st.levelSignFt < 0 ? 'Went' : 'Stayed'} ${Math.round(dev)} ft ${st.levelSignFt < 0 ? 'under' : 'over'} your level-off: the test allows 100. Capped at D.`);
     if (st.warned) cap(ED_WARN_CAP, 'The stall warning sounded: level off with power, not by pulling the speed away. Capped at C.');
     if (st.heldS > 0 && st.bankLowS / st.heldS > 1 - ED_BANK_SHARE_C) cap(ED_WARN_CAP, 'You stayed in a straight dive: bank 30-45° steepens it, keeps the g positive and shows you the clear air under you. Capped at C.');

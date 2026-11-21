@@ -1415,7 +1415,7 @@ const wingLowCoachIn = () => {
   coachInput.noseOffDeg = ((-_euler.y * RAD_TO_DEG - sim.wingLow.end.hdgT) % 360 + 540) % 360 - 180;
   return coachInput;
 };
-const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5);
+const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : sim.emergencyDescent ? edLib.ED_KID_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5); // 0209: the bug's ±5 is the 95-105 band
 const lessonFlaps = () => (sim.shortField ? sfdLib.FULL_FLAPS : sim.wingLow ? wlLib.FLAPS : landingFlaps(sim.spec)); // 0188: POH p. 4-34, the minimum flaps
 function updateCoach(dt) {
   let prompt = null;
