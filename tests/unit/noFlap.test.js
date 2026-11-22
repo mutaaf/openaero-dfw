@@ -87,8 +87,31 @@ describe('the approach band, the float and the stop', () => {
     expect(flown({ kts: 85 }).fastOut).toBe(true);
   });
 
-  it('a gusty day widens the top by half the gust spread', () => {
+  it('a gusty day widens the top by half the gust spread (not all of it)', () => {
     expect(flown({ kts: 85, wx: { windKts: 10, gustKts: 22 } }).fastOut).toBe(false);
+    const nf = flown({ kts: 89, wx: { windKts: 10, gustKts: 22 } });
+    expect(nf.fastOut).toBe(true);
+    expect(nf.bandTop).toBe(86);
+    expect(noFlapResult(grade(330), nf).reason).toMatch(/^Over 86 kt/);
+  });
+
+  it('under 50 ft and climbing are not the approach', () => {
+    const nf = createNoFlap(END);
+    const s = { alongM: -100, crossM: 0, aglFt: 40, vsFpm: -300, iasKts: 58, onGround: false, gsKts: 58, wx: null };
+    for (let t = 0; t < 5; t += 0.1) noFlapStep(nf, s, 0.1);
+    Object.assign(s, { aglFt: 300, vsFpm: 500 });
+    for (let t = 0; t < 5; t += 0.1) noFlapStep(nf, s, 0.1);
+    expect(nf.slowOut).toBe(false);
+  });
+
+  it('stopped past the end of the runway rolling fast is a run-off (the displaced threshold counts)', () => {
+    const nf = createNoFlap(END);
+    const lda = END.lengthM - END.displacedM;
+    expect(END.displacedM).toBeGreaterThan(100);
+    noFlapStep(nf, { alongM: 300, crossM: 0, aglFt: 0, vsFpm: -100, iasKts: 60, onGround: true, gsKts: 60, wx: null }, 0.1);
+    noFlapStep(nf, { alongM: lda + 20, crossM: 0, aglFt: 0, vsFpm: 0, iasKts: 30, onGround: true, gsKts: 30, wx: null }, 0.1);
+    expect(nf.stopped).toBe(true);
+    expect(nf.off).toBe(true);
   });
 
   it('a go-around past 600 ft starts the next approach fresh', () => {
@@ -101,18 +124,18 @@ describe('the approach band, the float and the stop', () => {
 });
 
 describe('the grade', () => {
-  it('the zone never penalises the float: full marks to 750 m, where landing.js\'s ends at 600', () => {
-    expect(ZONE_PTS[2][0]).toBe(ZONE_FULL_M[1] + 150);
-    for (const tdM of [150, 330, 500, 650, 750]) {
+  it('the zone never penalises the float: full marks to 650 m, where landing.js\'s ends at 600', () => {
+    expect(ZONE_PTS[2][0]).toBe(ZONE_FULL_M[1] + 50);
+    for (const tdM of [150, 330, 500, 620, 650]) {
       const r = noFlapResult(grade(Math.min(tdM, 600)), flown({ tdM }));
       expect(r.factors.find((f) => f.key === 'zone').score).toBe(100);
     }
-    expect(grade(700).factors.find((f) => f.key === 'zone').score).toBeLessThan(100); // the plain grade would have
+    expect(grade(640).factors.find((f) => f.key === 'zone').score).toBeLessThan(100); // the plain grade would have
   });
 
   it('flown at 70 and floated in: A or S, the done note, the roll beside a flaps-30 roll', () => {
-    const nf = flown({ tdM: 700 });
-    const r = noFlapResult(grade(700), nf);
+    const nf = flown({ tdM: 640 });
+    const r = noFlapResult(grade(640), nf);
     expect(['S', 'A']).toContain(r.grade);
     expect(r.note).toBe(DONE_NOTE);
     expect(r.reason).toBeNull();
@@ -120,7 +143,7 @@ describe('the grade', () => {
     expect(roll.value).toMatch(/^7\d\d ft \(flaps 30 est\. ≈ 6\d\d, \+2\d%\)$/);
     expect(r.refFt).toBeLessThan(r.rollFt);
     expect(r.noFlap).toBe(true);
-    expect(r.zoneM).toEqual([150, 750]);
+    expect(r.zoneM).toEqual([150, 650]);
     expect(r.factors[0].key).toBe('zone');
   });
 
@@ -154,10 +177,10 @@ describe('the grade', () => {
     const wx = { windDirDeg: END.hdgT + 180, windKts: 10 };
     expect(headwindKts(wx, END.hdgT)).toBeCloseTo(-10, 5);
     expect(tailFactor(-10)).toBeCloseTo(1.5, 5);
-    const nf = flown({ wx, tdM: 1000 });
+    const nf = flown({ wx, tdM: 950 });
     expect(nf.headKts).toBeCloseTo(-10, 5);
     expect(noFlapResult(grade(600), nf).factors.find((f) => f.key === 'zone').score).toBe(100);
-    expect(noFlapResult(grade(600), nf).zoneM[1]).toBeCloseTo(750 * 1.5, 5);
+    expect(noFlapResult(grade(600), nf).zoneM[1]).toBeCloseTo(650 * 1.5, 5);
     const c = createNoFlap(END);
     noFlapStep(c, { alongM: -6000, crossM: 0, aglFt: 1200, vsFpm: -350, iasKts: 70, onGround: false, gsKts: 80, wx }, 0.1);
     noFlapStep(c, { alongM: -6000, crossM: 0, aglFt: 1200, vsFpm: -350, iasKts: 70, onGround: false, gsKts: 80, wx }, SAY_S);
@@ -166,9 +189,20 @@ describe('the grade', () => {
 
   it('off the runway rolling: D; a bounce keeps its cap; a crash stays a crash', () => {
     expect(noFlapResult(grade(330), flown({ off: true })).grade).toBe('D');
-    expect(noFlapResult(capBounced(grade(330), 1), flown()).score).toBeLessThanOrEqual(CAP_C);
+    expect(noFlapResult(capBounced(grade(600), 1), flown({ tdM: 640 })).score).toBeLessThanOrEqual(CAP_C); // the rescore would raise it
+    const short = grade(-20);
+    expect(short.grade).toBe('D');
+    expect(noFlapResult(short, flown({ tdM: -20 })).grade).toBe('D');
     const crash = grade(330, { vsFpm: -900 });
     expect(noFlapResult(crash, flown())).toBe(crash);
+  });
+
+  it('the touchdown speed is scored against the flaps-up stall: near it full marks, slow or fast less', () => {
+    const at = (kts) => noFlapResult(grade(330), flown({ tdKts: kts })).factors.find((f) => f.key === 'speed').score;
+    expect(at(60)).toBe(100);
+    expect(at(46)).toBe(40);
+    expect(at(80)).toBeLessThan(60);
+    expect(noFlapResult(grade(330), flown({ tdKts: 80 })).score).toBeLessThan(noFlapResult(grade(330), flown({ tdKts: 60 })).score);
   });
 
   it('the flaps-30 roll: the same braking from the same margin over the flaps-30 stall (calm: (48/53)² of the roll)', () => {
@@ -187,9 +221,12 @@ describe('the coach', () => {
     expect(noFlapPrompt(nf, { aglFt: 1200, iasKts: 70, kid: true })).toBe('nfKid');
     noFlapStep(nf, s, SAY_S);
     expect(noFlapPrompt(nf, { aglFt: 1200, iasKts: 70 })).toBeNull();
+    expect(noFlapPrompt(nf, { aglFt: 400, iasKts: 61 })).toBeNull(); // a dip: not called until it lasts
+    Object.assign(s, { aglFt: 400, iasKts: 61, alongM: -2300 });
+    noFlapStep(nf, s, 1.1);
     expect(noFlapPrompt(nf, { aglFt: 400, iasKts: 61 })).toBe('nfSlow');
     expect(noFlapPrompt(nf, { aglFt: 400, iasKts: 68 })).toBeNull();
-    Object.assign(s, { alongM: 100, aglFt: 3 });
+    Object.assign(s, { alongM: 100, aglFt: 3, iasKts: 64 });
     noFlapStep(nf, s, 2.5);
     expect(noFlapPrompt(nf, { aglFt: 3, iasKts: 64 })).toBe('nfFloat');
   });

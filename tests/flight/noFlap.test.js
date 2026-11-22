@@ -133,5 +133,10 @@ describe('Cessna 172S no-flap landing lesson (0210) at Addison 16', () => {
     const r = run({ brakeS: null });
     expect(r.nf.off).toBe(false);
     expect(r.totalFt).toBeLessThan(6224);
+    // The card's estimate is rough with no brakes: it over-reads the flaps-30 roll flown by ~20% (labelled "est.").
+    const r30 = run({ flaps: 3, kts: 61, brakeS: null });
+    const est = flaps30RollFt(r.rollFt, r.nf.tdKts, r.nf.tdGsKts);
+    expect(est / r30.rollFt).toBeGreaterThan(1);
+    expect(est / r30.rollFt).toBeLessThan(1.3);
   });
 });

@@ -1089,9 +1089,11 @@ function checkShortField(dt) {
 }
 // No-flap landing (0210, noFlap.js): the approach speed below 500 ft, the float, the touchdown and the stop (_sfIn's fields).
 let nfLib = null;
+// The lever is stuck while the lesson flies, and before its chunk arrives (an aircraft switch away and back ends it).
+const flapsStuck = () => !!sim.noFlap || (!!sim.loadedMission?.noFlap && !nfLib && sim.aircraftKey === sim.loadedMission.aircraft);
 function checkNoFlap(dt) {
   const f = sim.noFlap;
-  if (!f || !cockpitEntered || modalOpen()) return;
+  if (!f || (f.stopped && sim.onGround) || !cockpitEntered || modalOpen()) return; // after the graded stop, until it flies again
   const g = f.end === sim.activeEnd ? sim.approach : approachGeometry(f.end, sim.pos);
   const s = _sfIn;
   s.alongM = -g.distM; s.crossM = g.crossM; s.aglFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT; s.vsFpm = sim.vsiFpm; s.iasKts = sim.iasKts;
@@ -2702,7 +2704,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     _assistCfg.gearDown = sim.gearDown; _assistCfg.flapsIndex = sim.flapsIndex;
     autoConfigure(spec, sim, _assistCfg);
     if (sim.shortField && _assistCfg.flapsIndex >= landingFlaps(spec)) _assistCfg.flapsIndex = sfdLib.FULL_FLAPS; // 0181: the POH's 30°
-    if (sim.loadedMission?.noFlap && sim.aircraftKey === sim.loadedMission.aircraft) _assistCfg.flapsIndex = 0; // 0210: the lever is stuck
+    if (flapsStuck()) _assistCfg.flapsIndex = 0; // 0210: the lever is stuck
     sim.gearDown = _assistCfg.gearDown; sim.flapsIndex = _assistCfg.flapsIndex;
   }
   if (cfg.autoThrottle) {
@@ -3421,7 +3423,7 @@ byId('btnGear').addEventListener('click', () => {
 // The flap lever cycles down a notch (wrapping to up); in the drill's missed approach (0047)
 // it comes up a notch, the one direction a go-around needs.
 function moveFlapLever() {
-  if (sim.loadedMission?.noFlap && sim.aircraftKey === sim.loadedMission.aircraft) { showToast('Flaps stuck at 0° for this lesson'); return; } // 0210
+  if (flapsStuck()) { if (byId('toast').classList.contains('hidden')) showToast('Flaps stuck at 0° for this lesson'); return; } // 0210: once, not per key repeat
   if (goAroundActive() || sim.stallDrill?.flapsUp) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1); // the power-on stall's climb-away (0191) too
   else sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 }
@@ -3634,7 +3636,7 @@ window.addEventListener('keydown', e => {
   // "?" first: on AZERTY it is Shift + the M key (0171 panel), which must not also fly by mouse.
   if (e.key === '?') { if (!e.repeat) showControls(); }
   else if (code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
-  else if (code === 'KeyF') { moveFlapLever(); }
+  else if (code === 'KeyF') { if (!e.repeat || !flapsStuck()) moveFlapLever(); }
   else if (code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (code === 'KeyK') { byId('btnAutobrake').click(); }
   else if (code === 'KeyR') { byId('btnReverse').click(); }

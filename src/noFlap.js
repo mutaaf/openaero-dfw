@@ -5,8 +5,9 @@
 //  - FAA Airplane Flying Handbook (FAA-H-8083-3C) ch. 9, p. 9-1, "Use of Flaps": flaps permit "lower approach and landing
 //    speeds", "a steeper descent angle", "a lower pitch" and reduce "the length of the landing roll"; p. 9-3: "use the
 //    manufacturer's recommended airspeed"; p. 9-8: "The pitch attitude of the airplane in a full-flap approach is
-//    considerably lower than in a no-flap approach"; p. 9-3: reach the touchdown point "at an airspeed that results in
-//    minimum floating", and p. 9-23 "higher approach speeds may result in excessive float in ground effect".
+//    considerably lower than in a no-flap approach"; p. 9-3: land "in the center of the first third of the runway"; p. 9-4:
+//    reach the touchdown point "at an airspeed that results in minimum floating"; p. 9-24 (soft field, of the short-field
+//    speeds): "higher approach speeds may result in excessive float in ground effect".
 //  - FAA-S-ACS-6C (Private Pilot Airplane ACS, Nov 2023) Area IV Task B, S7: the recommended approach speed "+10/-5
 //    knots, with gust factor applied".
 //  - The ticket's flying notes (cfinotebook.net, flyingmag.com) put the extra distance near 50%; the manual gives none.
@@ -19,7 +20,7 @@
 // tests/unit/noFlap.test.js.
 import { curve, letterGrade } from './landing.js';
 import { DRILL_TEXT, RANK } from './coach.js';
-// Only symbols main.js already imports: a lazy chunk importing one it doesn't grows the boot chunk's exports.
+// Only boot symbols another lazy chunk (shortField.js) already imports: a new one would grow the boot chunk's exports.
 import { M_TO_FT } from './constants.js';
 
 export const NO_FLAP_KEY = 'kads_16_no_flap';
@@ -27,7 +28,7 @@ export const NO_FLAP_KEY = 'kads_16_no_flap';
 export const STUCK_FLAPS = 0;
 // POH Section 4: 65-75 KIAS flaps up; the middle.
 export const APPROACH_KTS = 70;
-// ACS S7: +10/-5 knots (the upper bound plus half the METAR's gust spread, AFH ch. 9: "one-half the gust factor").
+// ACS S7: +10/-5 knots (the upper bound plus half the METAR's gust spread, AFH ch. 9 p. 9-21: "one-half the gust factor").
 export const BAND_LOW_KTS = 5;
 export const BAND_HIGH_KTS = 10;
 // The band is checked from 500 ft down to 50 ft (the threshold's height on the PAPI's path, ~47 ft).
@@ -36,9 +37,9 @@ export const BAND_FLOOR_FT = 50;
 // Outside the band this long in one go counts (a gust's spike is not the pilot's).
 export const BAND_S = 2;
 // The touchdown zone, metres past the threshold: landing.js's full marks (150-600 m) with the float allowed for, its
-// far edge FLOAT_M further (~500 ft: the game's no-flap touchdown is ~165 ft past the flaps-30 one with the same flare,
-// a held-off float more). A game tolerance, not a handbook figure.
-export const FLOAT_M = 150;
+// far edge FLOAT_M further: the game's no-flap touchdown is ~165 ft (50 m) past the flaps-30 one with the same flare
+// (tests/flight/noFlap.test.js). 650 m is about the first third of Addison 16's 6,224 ft (632 m), AFH p. 9-3's aim.
+export const FLOAT_M = 50;
 export const ZONE_PTS = [[0, 70], [150, 100], [600 + FLOAT_M, 100], [900 + FLOAT_M, 40], [1500 + FLOAT_M, 20]];
 // The flaps-up and flaps-30 stalls (aero.js stallSpeedKts(c172, 0) and (c172, 3), the POH's Fig. 5-3 calibrated:
 // tests/unit/noFlap.test.js pins them). The touchdown speed is scored against the flaps-up stall: full marks to ~1.25 of it.
@@ -60,7 +61,7 @@ const ZONE_W = 0.2, SPEED_W = 0.1;
 export const NF_TEXT = {
   nfBrief: 'No flaps: the lever is stuck at 0°. Fly 70 knots, PAPI two white, two red. It will float: hold it off, don\'t force it down',
   nfTail: 'Tailwind today: you will float and roll even further. Hold 70, no faster, and brake once the wheels are down',
-  nfKid: 'No flaps today: your plane lands faster. It floats a long way, then tap BRAKES',
+  nfKid: 'No flaps today: your plane lands faster. It floats further, then tap BRAKES',
   nfSlow: 'Too slow for no flaps: power up to 70, nose down a touch',
   nfFloat: 'Long float: hold it just off the runway, let it settle. Don\'t push it down',
 };
@@ -121,7 +122,8 @@ export function noFlapPrompt(nf, s) {
   if (s.kid) return nf.t - nf.readyT < SAY_S ? 'nfKid' : null;
   if (nf.floatS > 2) return 'nfFloat';
   if (s.aglFt < 30) return null; // the landing coach's idle and flare
-  if (s.aglFt < BAND_TOP_FT && s.aglFt > BAND_FLOOR_FT && s.iasKts < APPROACH_KTS - BAND_LOW_KTS) return 'nfSlow';
+  // Slow for a second at a stretch (the band's own clock): a gust's dip is not called.
+  if (s.aglFt < BAND_TOP_FT && s.aglFt > BAND_FLOOR_FT && s.iasKts < APPROACH_KTS - BAND_LOW_KTS && nf.outS >= 1) return 'nfSlow';
   if (nf.t - nf.readyT < SAY_S) return 'nfBrief';
   return nf.headKts < -TAIL_SAY_KTS && nf.t - nf.readyT < 2 * SAY_S ? 'nfTail' : null;
 }
@@ -136,9 +138,12 @@ export const TAIL_SAY_KTS = 2;
 export const tailFactor = (headKts) => 1 + 0.1 * Math.min(10, Math.max(0, -headKts)) / 2;
 export const zonePts = (headKts) => { const k = tailFactor(headKts); return ZONE_PTS.map(([m, v], i) => [i < 2 ? m : m * k, v]); };
 
-// The roll a flaps-30 landing would have from the same final with the same braking: the touchdown at the same margin
-// over the flaps-30 stall as this one's over the flaps-up stall (the ground speed less the indicated difference), the
-// roll scaled by the ground speed squared (a constant deceleration). ft; pure. tests/flight/noFlap.test.js flies both.
+// An estimate of the roll a flaps-30 landing would have from the same final with the same braking: the touchdown at the
+// same ratio over the flaps-30 stall as this one's over the flaps-up stall (the ground speed less the indicated
+// difference), the roll scaled by the ground speed squared (a constant deceleration). Rough, and labelled "est." on the
+// card: flown (tests/flight/noFlap.test.js) the flaps-30 pilot touches down a little slower than that ratio (55 kt, not
+// 58) and its roll falls off slower than v² (its flaps hold weight off the wheels): the two cancel within 15% with the
+// brakes on; with no brakes it over-reads by ~20%. ft; pure.
 export function flaps30RollFt(rollFt, tdKts, tdGsKts) {
   const refGs = Math.max(1, tdGsKts - tdKts * (1 - STALL_30_KTS / STALL_UP_KTS));
   return rollFt * (refGs / Math.max(1, tdGsKts)) ** 2;
@@ -146,7 +151,7 @@ export function flaps30RollFt(rollFt, tdKts, tdGsKts) {
 
 const fmt = (ftv) => Math.round(ftv).toLocaleString('en-US');
 export const DONE_NOTE = 'No flaps: 65-75 knots all the way down, touched down in the zone.';
-export const DONE_NOTE_KID = 'No flaps: a fast landing and a long float, down in the zone.';
+export const DONE_NOTE_KID = 'No flaps: a faster landing and a longer float, down in the zone.';
 
 // The landing's grade (landing.js gradeLanding, after any bounce cap) with the lesson's rules, once the airplane has
 // stopped (nf.stopped). The touchdown zone is rescored on the widened zone and the speed against the flaps-up stall;
