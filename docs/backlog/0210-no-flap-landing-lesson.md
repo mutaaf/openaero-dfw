@@ -1,12 +1,12 @@
 ---
 id: 0210
 title: No-flap landing lesson: a flatter, faster final and a longer float, with the right words
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-21
-pr:
+pr: 302
 ---
 
 ## Why

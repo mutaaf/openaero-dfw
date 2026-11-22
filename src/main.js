@@ -153,6 +153,7 @@ const sim = {
   stallDrill: null,
   wake: null, // the wake-turbulence lesson (0115, wake.js): its state on that mission, the jet ahead's path (traffic.js)
   shortField: null, // the short-field landing lesson (0181, shortField.js): its approach, touchdown and roll
+  noFlap: null, // the no-flap landing lesson (0210, noFlap.js): its approach speed, float and roll
   wingLow: null, // the wing-low crosswind lesson (0188, wingLow.js): its wind, its touchdown
   touchYaw: 0, // the touch pedals (0188): shown on the wing-low lesson, -1..1 (+ = right)
   // Dead-stick challenge (0036, deadStick.js): its state on that mission, and the dead engine
@@ -1086,6 +1087,19 @@ function checkShortField(dt) {
   s.onGround = sim.onGround; s.gsKts = sim.gsKts; s.braking = sim.brakesOn || sim.autobrakeActive; s.wx = sim.wx;
   sfdLib.shortFieldStep(f, s, dt);
 }
+// No-flap landing (0210, noFlap.js): the approach speed below 500 ft, the float, the touchdown and the stop (_sfIn's fields).
+let nfLib = null;
+// The lever is stuck while the lesson flies, and before its chunk arrives (an aircraft switch away and back ends it).
+const flapsStuck = () => !!sim.noFlap || (!!sim.loadedMission?.noFlap && !nfLib && sim.aircraftKey === sim.loadedMission.aircraft);
+function checkNoFlap(dt) {
+  const f = sim.noFlap;
+  if (!f || (f.stopped && sim.onGround) || !cockpitEntered || modalOpen()) return; // after the graded stop, until it flies again
+  const g = f.end === sim.activeEnd ? sim.approach : approachGeometry(f.end, sim.pos);
+  const s = _sfIn;
+  s.alongM = -g.distM; s.crossM = g.crossM; s.aglFt = (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT; s.vsFpm = sim.vsiFpm; s.iasKts = sim.iasKts;
+  s.onGround = sim.onGround; s.gsKts = sim.gsKts; s.wx = sim.wx;
+  nfLib.noFlapStep(f, s, dt);
+}
 // Wing-low crosswind landing (0188, wingLow.js): the touchdown's bank into the wind, the nose against the runway, the first main.
 let wlLib = null;
 const _wlIn = { aglFt: 0, onGround: false, bankRightDeg: 0, noseHdgT: 0, pitchDeg: 0, loads: null, driftKts: 0 };
@@ -1111,13 +1125,14 @@ function startDrills(mission) {
   sim.engineOut = null;
   sim.rto = null;
   sim.windshear = null;
-  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.emergencyDescent = null;
+  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.noFlap = sim.emergencyDescent = null;
   sim.softField = sim.surfaceMu = null;
   sim.wingLow = null; sim.touchYaw = 0;
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.emergencyDescent || mission.shortField || mission.softField || mission.wingLow);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.emergencyDescent || mission.shortField || mission.noFlap || mission.softField || mission.wingLow);
   if (mission.shortField) loadDrill(mission, sfdLib, () => import('./shortField.js'), (lib) => { sfdLib = lib; if (sim.aircraftKey === mission.aircraft) sim.shortField = lib.createShortField(runwayEnd(mission.airport, mission.rwy)); });
+  if (mission.noFlap) loadDrill(mission, nfLib, () => import('./noFlap.js'), (lib) => { nfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.noFlap = lib.createNoFlap(runwayEnd(mission.airport, mission.rwy)); });
   // The wing-low lesson (0188): its wind is currentWeather()'s while it flies (the live METAR's when it suits, else its scenario's).
   if (mission.wingLow) loadDrill(mission, wlLib, () => import('./wingLow.js'), (lib) => { wlLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.wingLow = lib.createWingLow(runwayEnd(mission.airport, mission.rwy)); refreshWeather(); } });
   if (mission.softField) loadDrill(mission, sfoLib, () => import('./softField.js'), (lib) => { sfoLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.softField = lib.createSoftField(runwayEnd(mission.airport, mission.rwy)); sim.surfaceMu = lib.SURFACE_MU; } });
@@ -1172,12 +1187,13 @@ function checkBounce(dt) {
     sim.lastLanding = null; // a go-around (or a balloon away), not a landing
     resetCoach();
     if (bounce.bounces && sim.throttle > 0.9) showToast('Going around after the bounce: good call');
-  } else if (bounce.settled && !(sim.shortField && !sim.shortField.stopped)) { // the short-field lesson (0181) is graded at the stop
+  } else if (bounce.settled && !(sim.shortField && !sim.shortField.stopped) && !(sim.noFlap && !sim.noFlap.stopped)) { // the short-field (0181) and no-flap (0210) lessons are graded at the stop
     const p = pendingLanding;
     pendingLanding = null;
     let r = capBounced(p.result, bounce.bounces);
     const f = sim.shortField;
     if (f?.end.id === p.end.id) r = sfdLib.shortFieldResult(r, f, sfdLib.pohRollFt(f.end.elevFt, sim.wx.altimInHg, sim.wx.tempC ?? 15, sfdLib.headwindKts(sim.wx, f.end.hdgT)), sim.assist === 'kid');
+    if (sim.noFlap?.end.id === p.end.id) r = nfLib.noFlapResult(r, sim.noFlap, sim.assist === 'kid');
     finishLanding(r, p.end, p.gate, p.bestKey);
   }
 }
@@ -1415,8 +1431,8 @@ const wingLowCoachIn = () => {
   coachInput.noseOffDeg = ((-_euler.y * RAD_TO_DEG - sim.wingLow.end.hdgT) % 360 + 540) % 360 - 180;
   return coachInput;
 };
-const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : sim.emergencyDescent ? edLib.ED_KID_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5); // 0209: the bug's ±5 is the 95-105 band
-const lessonFlaps = () => (sim.shortField ? sfdLib.FULL_FLAPS : sim.wingLow ? wlLib.FLAPS : landingFlaps(sim.spec)); // 0188: POH p. 4-34, the minimum flaps
+const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : sim.noFlap ? nfLib.APPROACH_KTS : sim.emergencyDescent ? edLib.ED_KID_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5); // 0209: the bug's ±5 is the 95-105 band
+const lessonFlaps = () => (sim.noFlap ? nfLib.STUCK_FLAPS : sim.shortField ? sfdLib.FULL_FLAPS : sim.wingLow ? wlLib.FLAPS : landingFlaps(sim.spec)); // 0188: POH p. 4-34, the minimum flaps
 function updateCoach(dt) {
   let prompt = null;
   // Every final is coached (0073), and any approach the player takes over from the autopilot.
@@ -1424,7 +1440,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.emergencyDescent || sim.wake || sim.shortField || sim.wingLow || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.emergencyDescent || sim.wake || sim.shortField || sim.noFlap || sim.wingLow || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1460,6 +1476,7 @@ function updateCoach(dt) {
       : sim.emergencyDescent ? edLib.descentCoach(sim.emergencyDescent, coachInput.kid)
       : sim.wake ? wakeLib.wakePrompt(sim.wake, coachInput, sim.approach.heightAbovePathM)
       : sim.shortField ? sfdLib.shortFieldPrompt(sim.shortField, coachInput, sim.approach)
+      : sim.noFlap ? nfLib.noFlapPrompt(sim.noFlap, coachInput)
       : sim.wingLow ? wlLib.wingLowPrompt(sim.wingLow, wingLowCoachIn())
       : sim.softField ? sfoLib.softFieldPrompt(sim.softField, sim, _euler.x * RAD_TO_DEG)
       : sim.dh ? ifrLib.dhPrompt(sim.dh, sim, coachInput.kid)
@@ -1848,6 +1865,7 @@ function step6DofPhysics(dt) {
   checkWake(dt);
   if (sim.pattern?.ent && cockpitEntered) patLib.entryStep(sim.pattern, sim); // 0187: how the join was flown (the sim flies on behind the menu: so does this)
   checkShortField(dt);
+  checkNoFlap(dt);
   checkWingLow(dt);
   checkSoftField(dt);
   if (sim.dh) { // the low-ceiling ILS (0092): its decision height, and the cloud the camera is in
@@ -2686,6 +2704,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     _assistCfg.gearDown = sim.gearDown; _assistCfg.flapsIndex = sim.flapsIndex;
     autoConfigure(spec, sim, _assistCfg);
     if (sim.shortField && _assistCfg.flapsIndex >= landingFlaps(spec)) _assistCfg.flapsIndex = sfdLib.FULL_FLAPS; // 0181: the POH's 30°
+    if (flapsStuck()) _assistCfg.flapsIndex = 0; // 0210: the lever is stuck
     sim.gearDown = _assistCfg.gearDown; sim.flapsIndex = _assistCfg.flapsIndex;
   }
   if (cfg.autoThrottle) {
@@ -2700,7 +2719,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : 0;
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : sim.noFlap ? nfLib.APPROACH_KTS + kidGustAddKts(spec, sim.wx) : 0;
       sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, kidGustAddKts(spec, sim.wx)), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
@@ -3198,7 +3217,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.deadStick = null;
   sim.engineOut = null;
   sim.rto = null;
-  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.emergencyDescent = null;
+  sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.noFlap = sim.emergencyDescent = null;
   sim.softField = sim.surfaceMu = null;
   if (sim.wingLow) { sim.wingLow = null; sim.touchYaw = 0; refreshWeather(); } // 0188: the lesson's wind goes with it
   sim.windshear = null;
@@ -3404,6 +3423,7 @@ byId('btnGear').addEventListener('click', () => {
 // The flap lever cycles down a notch (wrapping to up); in the drill's missed approach (0047)
 // it comes up a notch, the one direction a go-around needs.
 function moveFlapLever() {
+  if (flapsStuck()) { if (byId('toast').classList.contains('hidden')) showToast('Flaps stuck at 0° for this lesson'); return; } // 0210: once, not per key repeat
   if (goAroundActive() || sim.stallDrill?.flapsUp) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1); // the power-on stall's climb-away (0191) too
   else sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 }
@@ -3616,7 +3636,7 @@ window.addEventListener('keydown', e => {
   // "?" first: on AZERTY it is Shift + the M key (0171 panel), which must not also fly by mouse.
   if (e.key === '?') { if (!e.repeat) showControls(); }
   else if (code === 'KeyG') { if (!sim.onGround && !sim.spec.fixedGear) sim.gearDown = !sim.gearDown; }
-  else if (code === 'KeyF') { moveFlapLever(); }
+  else if (code === 'KeyF') { if (!e.repeat || !flapsStuck()) moveFlapLever(); }
   else if (code === 'KeyB') { sim.brakesOn = !sim.brakesOn; }
   else if (code === 'KeyK') { byId('btnAutobrake').click(); }
   else if (code === 'KeyR') { byId('btnReverse').click(); }
@@ -3804,6 +3824,7 @@ window.openaeroDebug = () => {
     emergencyDescent: sim.emergencyDescent ? { ...sim.emergencyDescent } : null,
     wake: sim.wake && wakeLib.debugSnap(sim.wake), // wake.js
     shortField: sim.shortField && { ...sim.shortField, end: sim.shortField.end.id },
+    noFlap: sim.noFlap && nfLib.debugSnap(sim.noFlap),
     wingLow: sim.wingLow && wlLib.debugSnap(sim.wingLow), // wingLow.js (0189 paid for the power-off 180's wiring with it)
     touchYaw: sim.touchYaw,
     softField: sim.softField && { ...sim.softField, end: sim.softField.end.id },
