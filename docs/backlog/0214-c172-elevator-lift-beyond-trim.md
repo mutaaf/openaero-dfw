@@ -1,7 +1,7 @@
 ---
 id: 0214
 title: flightModel.js's Cessna loses the lift that elevator past trim really costs (Roskam's CLδe, as JSBSim since 0203)
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
