@@ -119,7 +119,7 @@ describe('Cessna 172S no-flap landing lesson (0210) at Addison 16', () => {
   it('the card\'s flaps-30 roll (the same braking from the flaps-30 stall\'s margin) is within 15% of the flaps-30 landing flown', () => {
     const est = flaps30RollFt(noFlap.rollFt, noFlap.nf.tdKts, noFlap.nf.tdGsKts);
     expect(Math.abs(est / flaps30.rollFt - 1)).toBeLessThan(0.15);
-    expect(noFlap.result.factors.find((f) => f.key === 'roll').value).toMatch(/flaps 30 ≈/);
+    expect(noFlap.result.factors.find((f) => f.key === 'roll').value).toMatch(/flaps 30 est\. ≈/);
   });
 
   it('flown at the flaps-30 speed with the flaps up (61): nose high, too slow for no flaps, best grade C', () => {

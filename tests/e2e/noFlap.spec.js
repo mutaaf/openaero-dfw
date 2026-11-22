@@ -23,7 +23,7 @@ test('?mission=kads_16_no_flap: in Drills, flaps 0 at 70, the briefing, and the 
   expect(Math.abs(spawn.iasKts - 70)).toBeLessThan(5);
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText(/No flaps: the lever is stuck at 0\. Hold 70 knots/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/No flaps: the lever is stuck at 0°\. Fly 70 knots/, { timeout: 10_000 });
   for (let i = 0; i < 3; i++) await page.keyboard.press('KeyF');
   await page.locator('#btnFlaps').dispatchEvent('click'); // the HUD's FLAPS button too
   await expect(page.locator('#toast')).toContainText('Flaps stuck at 0° for this lesson');
@@ -51,8 +51,8 @@ test('Kid on a short final of the lesson: flaps stay 0, the card comes at the st
   const done = await snap(page);
   expect(done.noFlap.stopped).toBe(true);
   expect(done.noFlap.off).toBe(false);
-  await expect(page.locator('#resultsFactors')).toContainText(/Landing roll\s*[\d,]+ ft \(flaps 30 ≈ [\d,]+/);
-  await expect(page.locator('#resultsFactors')).toContainText(/Touchdown zone\s*[\d,]+ ft past threshold \(float allowed\)/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Landing roll\s*[\d,]+ ft \(flaps 30 est\. ≈ [\d,]+/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Touchdown zone\s*[\d,]+ ft past threshold \(full marks to [\d,]+\)/);
   await page.screenshot({ path: test.info().outputPath('no-flap-card-1280.png') });
   expect(errors).toEqual([]);
 });

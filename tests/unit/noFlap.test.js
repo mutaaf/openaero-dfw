@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createNoFlap, noFlapStep, noFlapPrompt, noFlapResult, flaps30RollFt, APPROACH_KTS, BAND_LOW_KTS, BAND_HIGH_KTS, STUCK_FLAPS,
-  STALL_UP_KTS, STALL_30_KTS, ZONE_PTS, CAP_B, CAP_C, DONE_NOTE, SAY_S, NO_FLAP_KEY, NF_TEXT,
+  STALL_UP_KTS, STALL_30_KTS, ZONE_PTS, CAP_B, CAP_C, DONE_NOTE, DONE_NOTE_KID, SAY_S, headwindKts, tailFactor, NO_FLAP_KEY, NF_TEXT,
 } from '../../src/noFlap.js';
 import { gradeLanding, capBounced, ZONE_FULL_M } from '../../src/landing.js';
 import { stallSpeedKts } from '../../src/aero.js';
@@ -117,7 +117,7 @@ describe('the grade', () => {
     expect(r.note).toBe(DONE_NOTE);
     expect(r.reason).toBeNull();
     const roll = r.factors.find((f) => f.key === 'roll');
-    expect(roll.value).toMatch(/^7\d\d ft \(flaps 30 ≈ 6\d\d, \+2\d%\)$/);
+    expect(roll.value).toMatch(/^7\d\d ft \(flaps 30 est\. ≈ 6\d\d, \+2\d%\)$/);
     expect(r.refFt).toBeLessThan(r.rollFt);
     expect(r.noFlap).toBe(true);
     expect(r.zoneM).toEqual([150, 750]);
@@ -137,9 +137,31 @@ describe('the grade', () => {
     expect(r.reason).toMatch(/longer float/);
   });
 
-  it('on Kid the autothrottle flies the speed: no speed cap', () => {
+  it('on Kid the autothrottle flies the speed: no speed cap, Kid\'s own note and tips', () => {
     const r = noFlapResult(grade(330), flown({ kts: 61 }), true);
     expect(r.reason).toBeNull();
+    expect(r.note).toBe(DONE_NOTE_KID);
+    expect(noFlapResult(grade(330, { vsFpm: -350 }), flown(), true).tip).toMatch(/Kid level flares for you/);
+  });
+
+  it('no done note when the touchdown lost zone points', () => {
+    const r = noFlapResult(grade(600), flown({ tdM: 1000 }));
+    expect(r.factors.find((f) => f.key === 'zone').score).toBeLessThan(100);
+    expect(r.note).not.toBe(DONE_NOTE);
+  });
+
+  it('a 10 kt tailwind: the coach says so after the briefing, and the zone\'s far edge stretches 50% (POH Fig. 5-11 note 2)', () => {
+    const wx = { windDirDeg: END.hdgT + 180, windKts: 10 };
+    expect(headwindKts(wx, END.hdgT)).toBeCloseTo(-10, 5);
+    expect(tailFactor(-10)).toBeCloseTo(1.5, 5);
+    const nf = flown({ wx, tdM: 1000 });
+    expect(nf.headKts).toBeCloseTo(-10, 5);
+    expect(noFlapResult(grade(600), nf).factors.find((f) => f.key === 'zone').score).toBe(100);
+    expect(noFlapResult(grade(600), nf).zoneM[1]).toBeCloseTo(750 * 1.5, 5);
+    const c = createNoFlap(END);
+    noFlapStep(c, { alongM: -6000, crossM: 0, aglFt: 1200, vsFpm: -350, iasKts: 70, onGround: false, gsKts: 80, wx }, 0.1);
+    noFlapStep(c, { alongM: -6000, crossM: 0, aglFt: 1200, vsFpm: -350, iasKts: 70, onGround: false, gsKts: 80, wx }, SAY_S);
+    expect(noFlapPrompt(c, { aglFt: 1200, iasKts: 70 })).toBe('nfTail');
   });
 
   it('off the runway rolling: D; a bounce keeps its cap; a crash stays a crash', () => {

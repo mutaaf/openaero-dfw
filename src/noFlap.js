@@ -58,9 +58,10 @@ export const SAY_S = 8;
 const ZONE_W = 0.2, SPEED_W = 0.1;
 
 export const NF_TEXT = {
-  nfBrief: 'No flaps: the lever is stuck at 0. Hold 70 knots on the PAPI; expect a long float, don\'t force it down',
+  nfBrief: 'No flaps: the lever is stuck at 0°. Fly 70 knots, PAPI two white, two red. It will float: hold it off, don\'t force it down',
+  nfTail: 'Tailwind today: you will float and roll even further. Hold 70, no faster, and brake once the wheels are down',
   nfKid: 'No flaps today: your plane lands faster. It floats a long way, then tap BRAKES',
-  nfSlow: 'Too slow for no flaps: nose down a touch, power up to 70',
+  nfSlow: 'Too slow for no flaps: power up to 70, nose down a touch',
   nfFloat: 'Long float: hold it just off the runway, let it settle. Don\'t push it down',
 };
 Object.assign(DRILL_TEXT, NF_TEXT);
@@ -69,7 +70,7 @@ Object.assign(RANK, { nfSlow: 2, nfFloat: 3 });
 
 // end: the lesson's runway end (airports.js runwayEnd). Allocates (a mission load, not a frame).
 export const createNoFlap = (end) => ({
-  end, t: 0, readyT: null, again: false, below500: false, outS: 0, slowOut: false, fastOut: false, minKts: Infinity, maxKts: 0,
+  end, t: 0, readyT: null, headKts: 0, bandTop: APPROACH_KTS + BAND_HIGH_KTS, again: false, below500: false, outS: 0, slowOut: false, fastOut: false, minKts: Infinity, maxKts: 0,
   floatS: 0, tdM: null, tdT: null, tdKts: null, tdGsKts: null, stopped: false, off: false, stopM: null,
 });
 
@@ -77,7 +78,7 @@ export const createNoFlap = (end) => ({
 // along the centreline, - before it), crossM, aglFt (wheels), vsFpm, iasKts, onGround, gsKts, wx (weather.js: the gust
 // for the band) }. Mutates nf, allocates nothing.
 export function noFlapStep(nf, s, dt) {
-  if (nf.readyT === null) nf.readyT = nf.t;
+  if (nf.readyT === null) { nf.readyT = nf.t; nf.headKts = headwindKts(s.wx, nf.end.hdgT); }
   nf.t += dt;
   // Airborne again past 50 ft after a touchdown (a go-around, or after the graded stop): the next landing is its own.
   if (nf.tdM !== null && !s.onGround && s.aglFt > 50) {
@@ -102,7 +103,7 @@ export function noFlapStep(nf, s, dt) {
     if (s.iasKts > nf.maxKts) nf.maxKts = s.iasKts;
     const slow = s.iasKts < APPROACH_KTS - BAND_LOW_KTS, fast = s.iasKts > APPROACH_KTS + BAND_HIGH_KTS + gust;
     nf.outS = slow || fast ? nf.outS + dt : 0;
-    if (nf.outS >= BAND_S) { if (slow) nf.slowOut = true; else nf.fastOut = true; }
+    if (nf.outS >= BAND_S) { if (slow) nf.slowOut = true; else { nf.fastOut = true; nf.bandTop = APPROACH_KTS + BAND_HIGH_KTS + gust; } }
     return nf;
   }
   const lda = nf.end.lengthM - nf.end.displacedM;
@@ -121,8 +122,19 @@ export function noFlapPrompt(nf, s) {
   if (nf.floatS > 2) return 'nfFloat';
   if (s.aglFt < 30) return null; // the landing coach's idle and flare
   if (s.aglFt < BAND_TOP_FT && s.aglFt > BAND_FLOOR_FT && s.iasKts < APPROACH_KTS - BAND_LOW_KTS) return 'nfSlow';
-  return nf.t - nf.readyT < SAY_S ? 'nfBrief' : null;
+  if (nf.t - nf.readyT < SAY_S) return 'nfBrief';
+  return nf.headKts < -TAIL_SAY_KTS && nf.t - nf.readyT < 2 * SAY_S ? 'nfTail' : null;
 }
+
+// The METAR's steady wind along the runway (kt, + = headwind; shortField.js headwindKts's rule, inlined: importing it would
+// fetch that chunk). A variable wind is none along the runway.
+export const headwindKts = (wx, hdgT) => (wx?.windKts && wx.windDirDeg != null ? wx.windKts * Math.cos((wx.windDirDeg - hdgT) * Math.PI / 180) : 0);
+// A tailwind over this (kt) is said after the briefing.
+export const TAIL_SAY_KTS = 2;
+// POH Fig. 5-11 note 2 (the C172's landing chart): +10% per 2 kt of tailwind, to 10 kt (shortField.js tailFactor). The
+// zone's far edge stretches by it: the float the tailwind causes is not the pilot's.
+export const tailFactor = (headKts) => 1 + 0.1 * Math.min(10, Math.max(0, -headKts)) / 2;
+export const zonePts = (headKts) => { const k = tailFactor(headKts); return ZONE_PTS.map(([m, v], i) => [i < 2 ? m : m * k, v]); };
 
 // The roll a flaps-30 landing would have from the same final with the same braking: the touchdown at the same margin
 // over the flaps-30 stall as this one's over the flaps-up stall (the ground speed less the indicated difference), the
@@ -133,7 +145,8 @@ export function flaps30RollFt(rollFt, tdKts, tdGsKts) {
 }
 
 const fmt = (ftv) => Math.round(ftv).toLocaleString('en-US');
-export const DONE_NOTE = 'No flaps: held 70, let it float, landed in the zone.';
+export const DONE_NOTE = 'No flaps: 65-75 knots all the way down, touched down in the zone.';
+export const DONE_NOTE_KID = 'No flaps: a fast landing and a long float, down in the zone.';
 
 // The landing's grade (landing.js gradeLanding, after any bounce cap) with the lesson's rules, once the airplane has
 // stopped (nf.stopped). The touchdown zone is rescored on the widened zone and the speed against the flaps-up stall;
@@ -143,22 +156,23 @@ export function noFlapResult(result, nf, kid = false) {
   if (result.grade === 'CRASH' || nf.tdM === null) return result;
   const rollFt = Math.max(0, (nf.stopM - nf.tdM) * M_TO_FT);
   const refFt = flaps30RollFt(rollFt, nf.tdKts, nf.tdGsKts);
+  const pts = zonePts(nf.headKts);
   const zone = {
     key: 'zone', label: 'Touchdown zone',
-    value: nf.tdM < 0 ? `${fmt(-nf.tdM * M_TO_FT)} ft short` : `${fmt(nf.tdM * M_TO_FT)} ft past threshold (float allowed)`,
-    score: Math.round(nf.tdM < 0 ? 0 : curve(nf.tdM, ZONE_PTS)),
+    value: nf.tdM < 0 ? `${fmt(-nf.tdM * M_TO_FT)} ft short` : `${fmt(nf.tdM * M_TO_FT)} ft past threshold (full marks to ${fmt(pts[2][0] * M_TO_FT)})`,
+    score: Math.round(nf.tdM < 0 ? 0 : curve(nf.tdM, pts)),
   };
-  const speed = { key: 'speed', label: 'Touchdown speed', value: `${Math.round(nf.tdKts)} kt (flaps-up stall ${STALL_UP_KTS})`, score: Math.round(curve(nf.tdKts, TD_PTS)) };
+  const speed = { key: 'speed', label: 'Touchdown speed', value: `${Math.round(nf.tdKts)} kt (flaps-up stall ${STALL_UP_KTS} KCAS)`, score: Math.round(curve(nf.tdKts, TD_PTS)) };
   const pct = refFt > 0 ? Math.round((rollFt / refFt - 1) * 100) : 0;
-  const roll = { key: 'roll', label: 'Landing roll', value: `${fmt(rollFt)} ft (flaps 30 ≈ ${fmt(refFt)}${pct > 0 ? `, +${pct}%` : ''})`, score: 100 };
+  const roll = { key: 'roll', label: 'Landing roll', value: `${fmt(rollFt)} ft (flaps 30 est. ≈ ${fmt(refFt)}${pct > 0 ? `, +${pct}%` : ''})`, score: 100 };
   const old = (k) => result.factors.find((f) => f.key === k)?.score ?? 0;
   let score = Math.round(result.score + (zone.score - old('zone')) * ZONE_W + (speed.score - old('speed')) * SPEED_W);
   const keepD = result.grade === 'D' && result.reason;
   const caps = [];
   const d = nf.off && !keepD ? 'Ran off the runway before stopping.' : null;
   if (result.bounces) caps.push([null, result.bounces > 1 ? 54 : CAP_C]); // landing.js capBounced's cap survives the rescore
-  if (!kid && nf.slowOut) caps.push([`Too slow for no flaps: under ${APPROACH_KTS - BAND_LOW_KTS} kt below 500 ft (${Math.round(nf.minKts)}). Without flaps the wing needs 65-75 (the handbook's): best grade C.`, CAP_C]);
-  else if (!kid && nf.fastOut) caps.push([`Over ${APPROACH_KTS + BAND_HIGH_KTS} kt below 500 ft (${Math.round(nf.maxKts)}): a longer float. Best grade B.`, CAP_B]);
+  if (!kid && nf.slowOut) caps.push([`Too slow for no flaps: under ${APPROACH_KTS - BAND_LOW_KTS} kt below 500 ft (${Math.round(nf.minKts)}). The POH's flaps-up approach speed is 65-75: best grade C.`, CAP_C]);
+  else if (!kid && nf.fastOut) caps.push([`Over ${Math.round(nf.bandTop)} kt below 500 ft (${Math.round(nf.maxKts)}): a longer float. Best grade B.`, CAP_B]);
   for (const [, cap] of caps) score = Math.min(score, cap);
   const reasons = [d, ...caps.map(([t]) => t), result.reason].filter(Boolean);
   const factors = [zone, roll, speed, ...result.factors.filter((f) => f.key !== 'zone' && f.key !== 'speed')];
@@ -169,21 +183,21 @@ export function noFlapResult(result, nf, kid = false) {
     grade: keepD || d ? 'D' : letterGrade(score),
     reason: reasons.join(' ') || null,
     noFlap: true, // results.js: the note shows beside the gate's verdict
-    note: reasons.length ? result.note ?? null : DONE_NOTE,
+    note: reasons.length || zone.score < 100 ? result.note ?? null : kid ? DONE_NOTE_KID : DONE_NOTE,
     rollFt, refFt,
-    zoneM: [ZONE_PTS[1][0], ZONE_PTS[2][0]], // the card's runway strip shades these full marks (touchdownStrip.js)
+    zoneM: [pts[1][0], pts[2][0]], // the card's runway strip shades these full marks (touchdownStrip.js)
     tip: noFlapTip(nf, factors, kid, keepD || d),
   };
 }
 
 // The card's "Next time" line (landingTip.js hands this lesson's over).
 export function noFlapTip(nf, factors, kid, isD) {
-  if (nf.off) return 'Brakes on once the nose wheel is down, and steer with the pedals: no flaps means a longer roll.';
+  if (nf.off) return kid ? 'Tap BRAKES as soon as the wheels are down: no flaps means a longer roll.' : 'Brakes on once the nose wheel is down, and steer with the pedals: no flaps means a longer roll.';
   if (isD) return null; // short of or beside the runway: the reason says it
   if (!kid && nf.slowOut) return 'Hold 70 knots without flaps (65-75): the flaps-30 speeds leave the nose high and the wing near the stall.';
   if (!kid && nf.fastOut) return 'Ease the power back to hold 70 knots: every extra knot is more float.';
   const rate = factors.find((f) => f.key === 'rate');
-  if (rate && rate.score < 100) return `Touched down at ${rate.value}: let it float and settle, don't push it down.`;
+  if (rate && rate.score < 100) return kid ? 'Let go of the stick on short final: Kid level flares for you, then tap BRAKES.' : `Touched down at ${rate.value}: hold it off and let it settle, don't push it down.`;
   return null;
 }
 

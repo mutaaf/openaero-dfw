@@ -29,7 +29,7 @@ test('phone, Kid: the no-flap lesson\'s lever is stuck on touch, and the landing
   await page.locator('#touchBrakes').tap();
   const card = page.locator('#resultsCard');
   await expect(card).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator('#resultsFactors')).toContainText(/Landing roll\s*[\d,]+ ft \(flaps 30 ≈ [\d,]+/);
+  await expect(page.locator('#resultsFactors')).toContainText(/Landing roll\s*[\d,]+ ft \(flaps 30 est\. ≈ [\d,]+/);
   const box = await card.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
