@@ -40,7 +40,7 @@ export function showResults(sim, result, best, end, gate) {
       : `Unstabilized at ${gate.gateHeight} ft ✗ ${gate.failing.join(', ')}`;
     // The drill flown back to stable: landing was the right call (0047).
     if (gate.stable && sim.goAround) gateEl.textContent += ' You fixed it: landing was right';
-    if ((result.wake || result.shortField || result.entry || result.wingLow) && result.note) gateEl.textContent += ` · ${result.note}`; // the wake (0115), short-field (0181) and pattern-entry (0187) and wing-low (0188) lessons' verdicts beside the gate's
+    if ((result.wake || result.shortField || result.noFlap || result.entry || result.wingLow) && result.note) gateEl.textContent += ` · ${result.note}`; // the wake (0115), short-field (0181) and pattern-entry (0187) and wing-low (0188) lessons' verdicts beside the gate's
     gateEl.classList.toggle('text-emerald-300', gate.stable); // over the amber default (later in the CSS)
   } else if (result.note) {
     gateEl.textContent = `${result.note} ✓`;
