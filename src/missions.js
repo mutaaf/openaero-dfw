@@ -59,6 +59,8 @@ export const MISSIONS = [
   // POH normal takeoff (flaps 0°) from the start of the pavement (16's displaced 979 ft is usable for it).
   // Short-field landing (0181, shortField.js): the POH's technique to Addison 16's numbers, graded against Fig. 5-11's roll.
   { key: 'kads_16_short_field', label: 'KADS Short-Field Landing (Cessna)', blurb: 'Addison 16 the Cessna handbook\'s way: 3 NM out at 70 knots, flaps up. Full flaps, 61 knots on the PAPI, idle at the runway\'s edge, touch down before the big white blocks (1,000 ft) and brake at once. Your roll is graded against the handbook\'s.', kind: 'final', airport: 'KADS', rwy: '16', distNm: 3, aircraft: 'c172', kias: 70, flaps: 0, shortField: true, group: 'drills' },
+  // No-flap landing (0210, noFlap.js): the flap lever stuck at 0°; POH Section 4's flaps-up 65-75 KIAS, a flatter, faster final and a longer float.
+  { key: 'kads_16_no_flap', label: 'KADS No-Flap Landing (Cessna)', blurb: 'Addison 16 with the flaps stuck up: the lever won\'t move. 4 NM out: hold 70 knots on the PAPI (the handbook\'s 65-75 without flaps). The nose sits higher, the plane floats a long way: let it, don\'t force it down, then brake. Your roll is shown against a flaps-30 landing.', kind: 'final', airport: 'KADS', rwy: '16', distNm: 4, aircraft: 'c172', kias: 70, flaps: 0, noFlap: true, group: 'drills' },
   // Wing-low crosswind landing (0188, wingLow.js): AFH ch. 9 (pp. 9-15 to 9-17), the upwind wheel first; Addison's METAR when it blows across, else a scenario wind.
   { key: 'kads_crosswind_wing_low', label: 'KADS Crosswind Landing, Wing-Low (Cessna)', blurb: 'Addison 16 with the wind blowing across it: Addison\'s live wind when it blows 5-15 knots across 16 without a tailwind, else 12 knots from the right. The handbook\'s wing-low way: rudder to point the nose down the runway, lower the wing into the wind just enough to stop the drift, keep it down through the flare and touch down on the upwind wheel first. On a touch screen (Learner and Pilot) the RUD buttons under your left thumb are the pedals.', kind: 'final', airport: 'KADS', rwy: '16', distNm: 2, aircraft: 'c172', kias: 70, flaps: 1, wingLow: true, group: 'drills' },
   // Soft-field takeoff (0182, softField.js): flaps 10, the stick back through the roll on a soft surface's drag (a game surface).
@@ -104,7 +106,7 @@ export const CROSSWIND_KEY = 'crosswind_today';
 // The start screen's mission picker (ticket 0029) is generated from MISSIONS: the recommended
 // first flight on top, then one group per airport in this order (an airport not listed here
 // gets its own group after them), then the weather missions (`group: 'weather'`, 0092), then the drills flown away from an
-// airport (and `group: 'drills'`, 0181's short-field and 0182's soft-field lessons), then the tours. Every key appears once; empty groups drop.
+// airport (and `group: 'drills'`, 0181's short-field, 0182's soft-field and 0210's no-flap lessons), then the tours. Every key appears once; empty groups drop.
 export const RECOMMENDED_KEY = 'kdfw_35c_final';
 const AIRPORT_ORDER = ['KDFW', 'KDAL', 'KADS', 'KAFW', 'KFTW', 'KGKY'];
 

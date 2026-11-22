@@ -323,6 +323,14 @@ src/upset.js        unusual-attitude recovery (0174, lazy chunk loaded with its 
                     itself). "Hands off" and a pull in the bank (named) read the player's own stick (main.js
                     sim.pitchIn / rollIn), never the assists' output. Its ua* words reach coach.js through s.ds.
                     Cards: tests/flight/upset.test.js
+src/noFlap.js       no-flap landing lesson (0210, lazy chunk loaded with `kads_16_no_flap`, `noFlap: true`, Drills group): the C172 on
+                    a 4 NM final to KADS 16 with the flap lever stuck at 0 (main.js moveFlapLever refuses it with a toast; Kid's
+                    autoConfigure flaps are held at 0). The coach's target is 70 KIAS (POH Section 4 NORMAL LANDING: 65-75 flaps up),
+                    band 65-80 (ACS +10/-5, half the gust) from 500 to 50 ft: under it "too slow for no flaps" caps C, over it B. Graded
+                    at the stop (as the short field): the zone's full marks run 150 m further (to 750 m: the float), the touchdown speed
+                    against the flaps-up stall (53 KCAS), and a "Landing roll" row beside flaps30RollFt (the same braking from the same
+                    margin over the flaps-30 stall, (48/53)^2 in calm air; flown against a real flaps-30 landing within 15%).
+                    Cards: tests/flight/noFlap.test.js (AFH ch. 9: a higher nose, a later, faster touchdown, a longer roll)
 src/shortField.js   short-field landing lesson (0181, lazy chunk loaded with `kads_16_short_field`, `shortField: true`, in the Drills group
                     though it flies at Addison): the C172 on a 3 NM final to KADS 16, flaps up at 70 KIAS (POH Section 4's checklist:
                     65-75 flaps up, FULL DOWN 30°, 61 KIAS until the flare, idle after the obstacle, heavy braking). Flown on the PAPI's
@@ -811,6 +819,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-22 (0210): 197.02 kB (the no-flap lesson's mission entry and blurb, its lazy import and wiring (the stuck lever's toast, the coach target, Kid's flaps and speed, the stop-hold and grade hooks, the snapshot's noFlap), +0.41 kB over 0209's 196.61; noFlap.js is a lazy chunk).
 2026-11-21 (0209): 196.61 kB (the emergency descent's mission entry and blurb, its lazy import and wiring (coach, Kid's guide, idle and bank cap, the snapshot's emergencyDescent), +0.44 kB over 0197's 196.17; emergencyDescent.js is a lazy chunk).
 2026-11-18 (0197): 196.17 kB (the Class B map layer: main.js sizeMap's lazy import of airspace.js and its draw call, the snapshot's airspace, +0.09 kB over main's 196.08; airspace.js is a lazy chunk and its data a same-origin JSON, both fetched only where the map is shown).
 2026-11-18 (0196): 196.08 kB (rain/snow/TS: main.js syncPrecip and its per-frame update call, applySky's storm sky, the wind box's T-STORM, weather.js
