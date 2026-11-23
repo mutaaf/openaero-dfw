@@ -1,7 +1,7 @@
 ---
 id: 0211
 title: Turns around a point: hold a constant-radius circle in a wind, graded on the radius
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: content
