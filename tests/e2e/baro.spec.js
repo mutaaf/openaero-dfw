@@ -40,10 +40,10 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
         if (r) expect(overlaps(box, r), `altimeter box vs ${id}`).toBe(false);
       }
       const cx = v.width / 2, cy = v.height / 2;
-      const wb = d.hudWind.box;
+      const wb = d.hudWind.box, k = d.hudTapes.scale; // the tablet HUD's scale (0218): 1 on a phone and desktop
       for (const [name, r] of [
-        ['speed tape', { x: cx - 191, y: cy - 90, width: 60, height: 180 }],
-        ['altitude tape', { x: cx + 130, y: cy - 90, width: 64, height: 180 }],
+        ['speed tape', { x: cx - 191 * k, y: cy - 90 * k, width: 60 * k, height: 180 * k }],
+        ['altitude tape', { x: cx + 130 * k, y: cy - 90 * k, width: 64 * k, height: 180 * k }],
         ['wind box', { x: wb.x, y: wb.y, width: wb.w, height: wb.h }],
       ]) expect(overlaps(box, r), `altimeter box vs ${name}`).toBe(false);
       const top = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id, [box.x + box.width / 2, box.y + box.height / 2]);

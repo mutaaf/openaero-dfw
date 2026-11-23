@@ -107,7 +107,7 @@ for (const d of DEVICES) {
       if (d.width < 600 || d.height < 600) expect(k, 'a phone keeps the phone HUD').toBe(1);
       if (d.width >= 820 && d.height >= 820) expect(k, 'a tablet HUD is at least 1.3x').toBeGreaterThanOrEqual(1.3);
       if (d.width >= 1024 && d.height >= 1024) expect(k).toBe(1.5);
-      boxes.push(['TRK box', { x: cx - 52 * k, y: k * Math.max(cy / k - 145, 72 / k), width: 104 * k, height: 24 * k }]);
+      boxes.push(['TRK box', { x: cx - 52 * k, y: k * Math.max(cy / k - 145, 72), width: 104 * k, height: 24 * k }]);
       // Alerts take the coach's slot on purpose (GPWS over stall over coach).
       const sharesSlot = (a, b) => [a, b].every((id) => id === '#coach' || ALERTS.includes(id));
       for (let i = 0; i < boxes.length; i++) {

@@ -855,7 +855,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-23 (0218): 198.16 kB (the tablet HUD scale: hudLayout.js hudScale, renderHud's setTransform and the screen-px ?debug boxes (hudPx), the coach slot's scale, +0.24 kB over 0211's 197.92).
+2026-11-23 (0218): 198.18 kB (the tablet HUD scale: hudLayout.js hudScale, renderHud's setTransform and the screen-px ?debug boxes (hudPx), the coach slot's scale, +0.26 kB over 0211's 197.92).
 2026-11-23 (0211): 197.92 kB (the turns-around-a-point mission's entry and blurb, its lazy import and wiring (the pole, its wind, coach, Kid's guide and cap, no auto flaps, the HUD's pole readout call, the snapshot's aroundPoint), +0.61 kB over 0217's 197.31; aroundPoint.js is a lazy chunk, trackPlot.js rides in results.js's).
 2026-11-23 (0217): 197.31 kB (the tapes' edges from the width on phones under 390 px: hudLayout.js speedTapeX/altTapeX, altCaptionRect's altX and the snapshot's hudTapes, +0.22 kB over 0210's 197.09).
 2026-11-22 (0210): 197.09 kB (the no-flap lesson's mission entry and blurb, its lazy import and wiring (the stuck lever's toast, the coach target, Kid's flaps and speed, the stop-hold and grade hooks, the snapshot's noFlap), +0.48 kB over 0209's 196.61; noFlap.js is a lazy chunk).
