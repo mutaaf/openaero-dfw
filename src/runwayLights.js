@@ -24,8 +24,28 @@ import { nightUniforms } from './nightGround.js'; // landingLight.js imports it 
 export function createLandingLight(sim, root, heightAt) {
   const light = landingLight(sim, root, heightAt);
   let shadow = null;
-  light.group.addEventListener('added', () => { shadow ??= createShadow(light.group.parent, sim, root, heightAt); });
+  light.group.addEventListener('added', () => {
+    shadow ??= createShadow(light.group.parent, sim, root, heightAt);
+    watchStart(light.group.parent, sim, heightAt);
+  });
   return light;
+}
+
+// The Rapier world (0043): its own lazy chunk (Rapier's glue and ~1.2 MB gz of wasm), fetched once the
+// player has started flying (the start screen closed), never at boot or behind the first start screen.
+let worldWatched = false;
+function watchStart(scene, sim, heightAt) {
+  if (worldWatched) return;
+  worldWatched = true;
+  const startScreen = globalThis.document?.getElementById('onboardingModal'); // none in Node tests: never loads
+  const before = scene.onBeforeRender;
+  let loading = false;
+  scene.onBeforeRender = function (renderer, sc, camera, target) {
+    before.call(this, renderer, sc, camera, target);
+    if (loading || !startScreen?.classList.contains('hidden')) return;
+    loading = true;
+    import('./world/worldScene.js').then((m) => m.createWorldScene(scene, sim, heightAt)).catch(console.warn);
+  };
 }
 
 export function createTouchdownFeel(sim, root, audio, reducedMotion) {

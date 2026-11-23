@@ -47,10 +47,23 @@ const creditsPage = {
   },
 };
 
+// Rapier (0043): its glue imports the .wasm as an ES module (`./rapier_wasm3d` → `import * as wasm from
+// "./rapier_wasm3d_bg.wasm"`), which neither Vite nor Node loads. Its own import of that file resolves to
+// src/world/rapierRaw.js (the same bindings, no .wasm import); physicsWorld.js initRapier instantiates the wasm.
+const rapierRaw = fileURLToPath(new URL('./src/world/rapierRaw.js', import.meta.url));
+const rapierWasm = {
+  name: 'rapier-wasm',
+  enforce: 'pre',
+  resolveId(source, importer) {
+    if (/^\.\/rapier_wasm3d(\.js)?$/.test(source) && importer?.includes('@dimforge/rapier3d')) return rapierRaw;
+    return null;
+  },
+};
+
 // Served at https://mutaafaziz.com/openaero/ — the base path is an invariant (AGENTS.md §3.2).
 export default defineConfig({
   base: '/openaero/',
-  plugins: [noAnalyticsHeaders, creditsPage],
+  plugins: [rapierWasm, noAnalyticsHeaders, creditsPage],
   // Boot budget (0084): three's prebuilt bundle is one module, so everything any lazy chunk
   // (glTF, 3D tiles) uses from it landed in the boot chunk. Its source is per-file and side-effect
   // free: the same single copy of three, but the bundler can leave the lazy chunks' classes in them.
@@ -75,5 +88,7 @@ export default defineConfig({
     // The known-gap ledger (0160): records every it.fails card for scripts/check-gaps.mjs.
     reporters: ['default', './scripts/gap-reporter.mjs'],
     environment: 'node',
+    // Rapier runs in Node through the same resolve hook (rapierWasm above), so Vitest must transform it, not externalise it.
+    server: { deps: { inline: [/@dimforge\/rapier3d/] } },
   },
 });

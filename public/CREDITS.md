@@ -14,6 +14,14 @@
   App. B), the Lycoming type certificate data and NACA TR-640. They are MIT, like the rest of
   the repository, and are not derived from the GPL aircraft that ship with JSBSim.
 
+## Rapier physics (the ground vehicles)
+
+- **Rapier** (`@dimforge/rapier3d` 0.21.0, https://rapier.rs, https://github.com/dimforge/rapier),
+  © Sébastien Crozet (Dimforge) and the Rapier contributors, licensed under the **Apache License 2.0**
+  (https://www.apache.org/licenses/LICENSE-2.0). The rigid-body engine that drives the tow tractor at
+  KDFW. Loaded as a separate WebAssembly file (`assets/rapier_wasm3d_bg-*.wasm`) and its JavaScript
+  bindings, unmodified, only after you start flying.
+
 ## Aircraft models
 
 - **Twin-jet** (`models/twinjet-v1.glb`, drawn for the 737-800): "jet airplane" by
