@@ -71,7 +71,7 @@ input[type=range] { accent-color: #38bdf8; }
   text-align: right;
   text-decoration: none;
 }
-.imagery-credit a { color: inherit; text-decoration: none; }
+.imagery-credit a { color: inherit; text-decoration: none; white-space: nowrap; }
 .imagery-credit a:hover { color: #e2e8f0; }
 /* Google's attribution rules: logo 16–19 px tall with clear space; data providers in a line. */
 .imagery-credit .google-logo { display: inline-block; height: 16px; width: auto; margin: 10px 10px 5px 10px; vertical-align: bottom; }
@@ -86,8 +86,30 @@ input[type=range] { accent-color: #38bdf8; }
   bottom: max(1px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   text-align: center;
-  white-space: nowrap;
-  pointer-events: auto;
+  /* One line from 430 px; under that, two (below), whole inside the screen, never off both
+     edges (0216: the line is ~378 px in CI's font, more in iOS's). */
+  width: max-content;
+  max-width: calc(100vw - 8px);
+  white-space: normal;
+  /* Only the links take a tap: the box (Google's logo clear space above all) stands over the
+     touch deck's bottom edge, where a thumb on the throttle or stick must still land (0216). */
+  pointer-events: none;
+}
+.imagery-credit a { pointer-events: auto; }
+/* Google's data providers stay one line; on a narrow screen the logo goes above it (0216). */
+#txtGoogleData { display: inline-block; white-space: nowrap; }
+
+/* The touch deck stands on the credit's line: it pads the same inset plus 0.75rem. Under 430 px
+   (every phone held upright) the free credit is always two lines, one credit each, whatever the
+   font: at 390 px one line had <1% to spare in CI's font and wraps in a wider one. The deck
+   stands 10 px higher to clear the ~20 px, and the throttle is 10 px shorter so the THR chip
+   over it stays clear of the SPD bug readout (0216). */
+#touchDeck { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }
+@media (max-width: 429.98px) {
+  #creditsFree a { display: block; }
+  #creditsFree .credit-sep { display: none; }
+  #touchDeck { padding-bottom: calc(1.375rem + env(safe-area-inset-bottom)); }
+  #touchThrottle { height: 10.375rem; }
 }
 
 /* Start screen inside the safe area: installed fullscreen (0086) the page runs under the
