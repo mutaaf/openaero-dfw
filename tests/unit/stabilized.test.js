@@ -34,6 +34,19 @@ describe('stabilizedGate (0020)', () => {
     }
   });
 
+  // 0219: the bug's gust additive (half the gust factor) raises the FAST limit with it; SLOW stays at Vref (FSF ALAR:
+  // never below Vref), so a lull under the raised bug is not graded slow. No additive: the band is unchanged.
+  it('on a gusty day the FAST limit rises with the bug; the Vref floor does not move', () => {
+    const C = { ...GOOD, vref: 62, iasKt: 73.5, vsFpm: -450, gustAddKts: 6.5 }; // the Cessna on its 25G38 bug
+    expect(stabilizedGate(C).stable).toBe(true);
+    expect(stabilizedGate({ ...C, iasKt: 88.5 }).stable).toBe(true); // Vref + 20 + 6.5
+    expect(stabilizedGate({ ...C, iasKt: 89 }).failing).toEqual(['FAST']);
+    expect(stabilizedGate({ ...C, iasKt: 62 }).stable).toBe(true);
+    expect(stabilizedGate({ ...C, iasKt: 61.5 }).failing).toEqual(['SLOW']);
+    expect(stabilizedGate({ ...C, iasKt: 83, gustAddKts: 0 }).failing).toEqual(['FAST']);
+    expect(stabilizedGate({ ...C, iasKt: 83, gustAddKts: undefined }).failing).toEqual(['FAST']);
+  });
+
   it('gates at 500 ft in VMC and 1,000 ft in IMC', () => {
     expect(GATE_VMC_FT).toBe(500);
     expect(GATE_IMC_FT).toBe(1000);

@@ -245,7 +245,7 @@ export function ilsDots(devM, distM, dotDeg) {
 export function stabilizedGate(g) {
   const failing = [];
   if (g.iasKt < g.vref) failing.push('SLOW');
-  else if (g.iasKt > g.vref + 20) failing.push('FAST');
+  else if (g.iasKt > g.vref + 20 + (g.gustAddKts ?? 0)) failing.push('FAST'); // 0219: the bug's gust additive raises the top, never the Vref floor
   if (-g.vsFpm > 1000) failing.push('SINK');
   if (!g.gearDown) failing.push('GEAR');
   if (!g.flapsOk) failing.push('FLAPS');
