@@ -1,12 +1,12 @@
 ---
 id: 0219
 title: The Cessna's speed bug and coach target add half the gust factor on a gusty day
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: authenticity
 created: 2026-11-23
-pr:
+pr: 314
 ---
 
 ## Why

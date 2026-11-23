@@ -105,7 +105,7 @@ export function stallTarget(s) {
 
 // s: { aglFt, vsiFpm, papiWhite (0..4, null = no runway ahead), throttle (0..1),
 //      onGround, autopilot, kid (Kid assist level: the airplane flies power and flare),
-//      optional: iasKts, targetKts (Vref + 5), locDots (+ = right of the centreline),
+//      optional: iasKts, targetKts (Vref + 5, + gustAddKts on a gusty day), gustAddKts (0219), locDots (+ = right of the centreline),
 //      gearLocked, flapsLanding, flareFt (default 50), idleFt (default 30), driftDeg,
 //      goAround (the go-around drill's missed approach: goAroundTarget), stall (the stall
 //      drill's phase: stallTarget), ds (the dead-stick challenge's or the traffic pattern's
@@ -126,7 +126,7 @@ export function coachTarget(s) {
   if (s.flapsLanding === false && s.aglFt < 1500) return 'flaps';
   if (s.aglFt < 1000 && s.vsiFpm < -1200) return 'sink';
   const fast = s.targetKts ? s.iasKts - s.targetKts : 0;
-  if (fast < -5) return 'slow';
+  if (fast < -5 - (s.gustAddKts ?? 0)) return 'slow'; // a gust's lull below the raised bug is not slow until Vref + 0 (0219)
   if (Math.abs(s.locDots ?? 0) > 0.6) return s.locDots > 0 ? 'offRight' : 'offLeft';
   if (s.papiWhite >= 3) return 'high';
   if (s.papiWhite <= 1) return 'low';

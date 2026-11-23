@@ -15,6 +15,13 @@ async function fly(page, metars) {
   await expect(page.locator('#onboardingModal')).toBeHidden();
 }
 
+// The aircraft picker (in the ☰ Menu sheet on a phone), switched as its change handler sees it.
+const pickCessna = (page) => page.evaluate(() => {
+  const sel = document.getElementById('selAircraft');
+  sel.value = 'c172';
+  sel.dispatchEvent(new Event('change'));
+});
+
 // The vertical gust (openaeroDebug().windUpMps) over ~2 s of the default final: its spread and largest size.
 const sampleUp = (page) => page.evaluate(() => new Promise((done) => {
   const xs = [];
@@ -53,6 +60,20 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
       expect(errors).toEqual([]);
     });
 
+    // Ticket 0219: the Cessna's speed bug (and the coach's target, the gate's FAST limit) adds half the gust factor:
+    // 20G40 is 10 kt on its Vref 62 + 5. The 737 (the default final) keeps Vref + 5; the calm stub keeps the Cessna's 67.
+    test('the speed bug adds half the gust factor on a gusty day for the Cessna, not the 737', async ({ page }) => {
+      const errors = collectErrors(page);
+      await fly(page, [GUSTY]);
+      await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).wxLive, { timeout: 10_000 }).toBe(true);
+      const jet = (await page.evaluate(() => window.openaeroDebug())).speedBug;
+      expect(jet.gustAddKts).toBe(0);
+      await pickCessna(page);
+      await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).speedBug, { timeout: 10_000 }).toEqual({ kts: 77, gustAddKts: 10 });
+      await page.screenshot({ path: `test-results/speed-bug-gusty-${v.width}.png` });
+      expect(errors).toEqual([]);
+    });
+
     test('a smooth day (the default 5 kt stub) shows no BUMPY', async ({ page }) => {
       const errors = collectErrors(page);
       await fly(page, [TEST_METAR]);
@@ -60,6 +81,8 @@ for (const v of [{ width: 1280, height: 720, touch: false }, { width: 390, heigh
       await page.waitForTimeout(1500); // the ribbon repaints once a second
       await expect(page.locator('#wxBumpy')).toBeHidden();
       expect((await page.evaluate(() => window.openaeroDebug())).hudWind.source).toBe('METAR WIND');
+      await pickCessna(page);
+      await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).speedBug, { timeout: 10_000 }).toEqual({ kts: 67, gustAddKts: 0 }); // 0219: no gusts, Vref + 5
       expect(errors).toEqual([]);
     });
   });

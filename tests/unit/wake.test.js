@@ -113,6 +113,14 @@ describe('the coach\'s words', () => {
     expect(wakePrompt(w, S({ papiWhite: 4 }), kidLiftM(w) + 20)).toBeNull();
     expect(wakePrompt(w, S({ papiWhite: 3, kid: true }), 10)).toBeNull();
   });
+  it('on a gusty day a lull under the raised bug keeps the lesson\'s words until Vref, where the coach says slow (0219)', () => {
+    const w = flown();
+    w.tdAlongM = null;
+    after(w, 2 * SAY_S);
+    const G = { papiWhite: 3, targetKts: 73.5, gustAddKts: 6.5 }; // the Cessna's Vref 62 + 5 + 6.5 in 25G38
+    for (const ias of [73.5, 68, 63, 62]) expect(wakePrompt(w, S({ ...G, iasKts: ias }), 10), `${ias} kt`).toBe('wkHigh');
+    expect(wakePrompt(w, S({ ...G, iasKts: 61.5 }), 10)).toBeNull();
+  });
   it('a safety prompt wins over the lesson\'s words: slow, sinking fast, flaps, off the centreline (first-timer panel)', () => {
     const w = flown();
     after(w, 2 * SAY_S);

@@ -3,7 +3,7 @@ import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { stallAoaDeg, landingFlaps } from '../../src/aero.js';
 import {
   ASSIST_KEY, ASSIST_CONFIG, DEFAULT_ASSIST, assistConfig, createAssistState, shapeControls,
-  autoConfigure, groundSteerRudder, kidTargetKts, kidLocalizerBankDeg, kidFinalGuide, airGammaDeg, headwindPathRatio, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, groundSteerRudder, kidTargetKts, kidGustAddKts, gustAddKts, bugKts, kidLocalizerBankDeg, kidFinalGuide, airGammaDeg, headwindPathRatio, updateDeparture, resetAssistState, assistBestKey, loadAssist, saveAssist,
 } from '../../src/assists.js';
 import { makeBody, fly, attitude } from '../flight/harness.js';
 import { dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
@@ -448,6 +448,36 @@ describe('Kid automatic gear and flaps', () => {
     expect(kidTargetKts(b738, 3)).toBe(155);
     expect(kidTargetKts(b738, 4)).toBe(146); // flaps 40: its own Vref 141 + 5
     expect(kidTargetKts(c172, 0)).toBe(92);
+  });
+});
+
+// Ticket 0219: the speed bug and the coach's target add half the gust factor (AFH FAA-H-8083-3C ch. 9), as Kid's
+// autothrottle does (0195): the piston Cessna with flaps out only; calm and steady wind unchanged; the jets unchanged.
+describe('the speed bug adds half the gust factor on a gusty day (0219)', () => {
+  const b738 = AIRCRAFT_DATABASE.b738, c172 = AIRCRAFT_DATABASE.c172, f16 = AIRCRAFT_DATABASE.f16;
+  const G = { windDirDeg: 160, windKts: 25, gustKts: 38 };
+  it('the Cessna in 25G38 with flaps out: Vref + 5 + 6.5', () => {
+    expect(bugKts(c172, 2, G)).toBe(c172.vrefKts + 5 + 6.5);
+    expect(bugKts(c172, 1, G)).toBe(c172.vrefKts + 5 + 6.5);
+    expect(bugKts(c172, 2, G)).toBe(kidTargetKts(c172, 2, kidGustAddKts(c172, G))); // the bug is the speed Kid flies
+  });
+  it('calm, steady wind, or no weather: Vref + 5, as before', () => {
+    for (const wx of [null, undefined, { windDirDeg: 0, windKts: 0, gustKts: 0 }, { windDirDeg: 160, windKts: 25, gustKts: 25 }, { windDirDeg: 160, windKts: 25, gustKts: 0 }]) {
+      expect(bugKts(c172, 2, wx)).toBe(c172.vrefKts + 5);
+    }
+  });
+  it('flaps up: no additive (the approach is flown with flaps out)', () => {
+    expect(bugKts(c172, 0, G)).toBe(c172.vrefKts + 5);
+  });
+  it('the 737 and the F-16 keep Vref + 5 on any day (their method needs its own card)', () => {
+    for (const spec of [b738, f16]) for (let f = 0; f < (spec.flapAngles?.length ?? 1); f++) {
+      expect(gustAddKts(spec, G)).toBe(0);
+      expect(bugKts(spec, f, G)).toBe(bugKts(spec, f, null));
+    }
+    expect(bugKts(b738, 3, G)).toBe(155);
+  });
+  it('kidGustAddKts is the same rule under its old name', () => {
+    expect(kidGustAddKts).toBe(gustAddKts);
   });
 });
 

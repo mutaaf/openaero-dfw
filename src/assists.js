@@ -285,7 +285,11 @@ export function autoConfigure(spec, s, cfgOut) {
 // (FAA-H-8083-3C ch. 9: "one-half the gust factor"), so a lull on the flare doesn't drop it short (0195). The
 // Handbook is the light airplane's, so the piston Cessna only: the 737's Kid flare landed at -900 fpm with +4 kt.
 export const kidTargetKts = (spec, flapsIndex, gustAddKts = 0) => (flapsIndex > 0 ? vrefFor(spec, flapsIndex) + 5 + gustAddKts : spec.vrefKts + 30);
-export const kidGustAddKts = (spec, wx) => (spec.engine?.type === 'piston-prop' && wx && wx.gustKts > wx.windKts ? (wx.gustKts - wx.windKts) / 2 : 0);
+export const gustAddKts = (spec, wx) => (spec.engine?.type === 'piston-prop' && wx && wx.gustKts > wx.windKts ? (wx.gustKts - wx.windKts) / 2 : 0);
+export const kidGustAddKts = gustAddKts;
+// The speed bug and the coach's target on a final (main.js coachKts, 0219): Vref + 5 for the flaps set, plus half the gust
+// factor with flaps out (gustAddKts: the AFH's, the light piston airplane's only), the speed Kid's autothrottle flies.
+export const bugKts = (spec, flapsIndex, wx) => vrefFor(spec, flapsIndex) + 5 + (flapsIndex > 0 ? gustAddKts(spec, wx) : 0);
 
 // Personal bests are kept per level; Pilot keeps the mission's own key (save-data compatible).
 export const assistBestKey = (key, level) => (level === 'pilot' || !isAssistLevel(level) ? key : `${key}@${level}`);

@@ -39,7 +39,7 @@ import {
 } from './aero.js';
 import {
   ASSIST_LEVELS, DEFAULT_ASSIST, assistConfig, createAssistState, resetAssistState, shapeControls, slewRudder,
-  autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide, headwindPathRatio, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
+  autoConfigure, kidTargetKts, gustAddKts, bugKts, kidFinalGuide, headwindPathRatio, updateDeparture, KID_CLIMB_GAMMA_DEG, assistBestKey, loadAssist, saveAssist,
   groundSteerRudder,
 } from './assists.js';
 import { keys, pilotTargets, stickFromPoint, combineTargets, throttleFromPoint, trimDirection, touchGroundRudder, tillerShare, keyCode } from './input.js';
@@ -857,7 +857,7 @@ function checkStabilizedGate() {
   if (step === 'reset') sim.gate = null;
   if (step !== 'evaluate') return;
   const gate = sim.gate = stabilizedGate({
-    iasKt: sim.iasKts, vref: sim.shortField ? sfdLib.GATE_VREF : vrefFor(sim.spec, sim.flapsIndex), vsFpm: sim.gateVsFpm ?? sim.vsiFpm, gearDown: gearLocked(sim),
+    iasKt: sim.iasKts, vref: sim.shortField ? sfdLib.GATE_VREF : vrefFor(sim.spec, sim.flapsIndex), gustAddKts: coachGustKts(), vsFpm: sim.gateVsFpm ?? sim.vsiFpm, gearDown: gearLocked(sim),
     // The two landing notches (737: 30°/40°, 172: 20°/30°), set and there (not in transit).
     flapsOk: flapsLanding(lessonFlaps()), // 0181: the short-field lesson's 30°
     // The wake lesson (0115): above the 3° path up to a path past the jet's touchdown point is on path (wake.js).
@@ -939,7 +939,8 @@ function startGoAroundDrill(mission) {
     sim.goAround = lib.createGoAround();
     sim.goAround.end = runwayEnd(mission.airport, mission.rwy);
     // Kid's autothrottle holds the drill's fast approach speed down to the gate (the hands-
-    // off guide still flies the path), so the gate calls it and Kid sees the go-around.
+    // off guide still flies the path), so the gate calls it and Kid sees the go-around. On a gusty day applyAssists adds
+    // the bug's gust share (0219), as the gate's FAST limit does: the drill stays fastKts over the raised bug.
     sim.goAround.holdKts = sim.spec.vrefKts + 5 + (mission.fastKts ?? 0);
   });
 }
@@ -1441,7 +1442,7 @@ function updateTutor(dt) {
   tutorInput.crossM = sim.approach.crossM;
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
-  tutorInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
+  tutorInput.targetKts = bugKts(sim.spec, sim.flapsIndex, sim.wx);
   tutorLib.stepTutor(tutor, tutorInput, dt);
   return tutor.caption;
 }
@@ -1451,7 +1452,8 @@ const wingLowCoachIn = () => {
   coachInput.noseOffDeg = ((-_euler.y * RAD_TO_DEG - sim.wingLow.end.hdgT) % 360 + 540) % 360 - 180;
   return coachInput;
 };
-const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : sim.noFlap ? nfLib.APPROACH_KTS : sim.emergencyDescent ? edLib.ED_KID_KTS : vrefFor(sim.spec, sim.flapsIndex) + 5); // 0209: the bug's ±5 is the 95-105 band
+const coachKts = () => (sim.shortField ? sfdLib.APPROACH_KTS : sim.noFlap ? nfLib.APPROACH_KTS : sim.emergencyDescent ? edLib.ED_KID_KTS : bugKts(sim.spec, sim.flapsIndex, sim.wx)); // 0209: the bug's ±5 is the 95-105 band; 0219: + half the gust factor
+const coachGustKts = () => (sim.shortField || sim.noFlap || sim.emergencyDescent || !(sim.flapsIndex > 0) ? 0 : gustAddKts(sim.spec, sim.wx)); // the bug's gust share (0219)
 const lessonFlaps = () => (sim.noFlap ? nfLib.STUCK_FLAPS : sim.shortField ? sfdLib.FULL_FLAPS : sim.wingLow ? wlLib.FLAPS : landingFlaps(sim.spec)); // 0188: POH p. 4-34, the minimum flaps
 function updateCoach(dt) {
   let prompt = null;
@@ -1470,7 +1472,7 @@ function updateCoach(dt) {
     coachInput.autopilot = sim.apMaster || sim.apApproach;
     coachInput.kid = sim.assist === 'kid';
     coachInput.iasKts = sim.iasKts;
-    coachInput.targetKts = coachKts(); // 0181: the POH's short-field 61 (its slow and fast: the ACS band)
+    coachInput.targetKts = coachKts(); coachInput.gustAddKts = coachGustKts(); // 0181: the POH's short-field 61 (its slow and fast: the ACS band)
     // Localizer dots on the HUD bar's and the gate's antenna (0123).
     coachInput.locDots = sim.activeEnd ? ilsDots(sim.approach.crossM, Math.max(0, sim.approach.distM) + locPastThresholdM(sim.activeEnd), LOC_DOT_DEG) : 0;
     coachInput.gearLocked = gearLocked(sim);
@@ -1536,7 +1538,7 @@ function updateCoach(dt) {
   skip.textContent = caption ? 'Hide' : 'Skip';
   skip.setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
   if (caption) {
-    tutorVals.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
+    tutorVals.targetKts = Math.round(bugKts(sim.spec, sim.flapsIndex, sim.wx));
     tutorVals.hdgDeg = magHeadingText(sim.targetHdgDeg);
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
     const text = tutorLib.TUTOR_TEXT[caption](tutorVals);
@@ -2031,7 +2033,7 @@ function integrateSubStep(dt) {
           sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
         }
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral), true);
-        sim.throttle = autoThrottle(vrefFor(spec, sim.flapsIndex) + 5, -3, dt);
+        sim.throttle = autoThrottle(bugKts(spec, sim.flapsIndex, sim.wx), -3, dt); // the bug: + half the gust factor (0219)
       } else {
         // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
         holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
@@ -2458,15 +2460,15 @@ function hudProject(p, w, h) {
   return _hudXY;
 }
 
-// Target speed (Vref + 5; the short-field lesson's 61) on the speed tape (0073): a magenta bug and its band, Vref to
-// Vref + 10, the speeds a stable approach lives in; the bug parks at the tape's end when off scale.
+// Target speed (Vref + 5, + half the gust factor on a gusty day (0219); the short-field lesson's 61) on the speed tape (0073): a magenta bug and its band, Vref to
+// the bug + 5, the speeds a stable approach lives in; the bug parks at the tape's end when off scale.
 function drawSpeedBug(x, y) {
   const target = coachKts(); // the coach's target: 0181's short field flies the POH's 61
   const off = (target - sim.iasKts) * 2;
   const by = y - THREE.MathUtils.clamp(off, -88, 88);
   hudCtx.fillStyle = 'rgba(16, 185, 129, 0.35)';
   const top = THREE.MathUtils.clamp(y - (target + 5 - sim.iasKts) * 2, y - 90, y + 90);
-  const bot = THREE.MathUtils.clamp(y - (target - 5 - sim.iasKts) * 2, y - 90, y + 90);
+  const bot = THREE.MathUtils.clamp(y - (target - 5 - coachGustKts() - sim.iasKts) * 2, y - 90, y + 90); // 0219: on a gusty day down to Vref, the coach's slow
   hudCtx.fillRect(x - 3, top, 3, bot - top);
   hudCtx.fillStyle = '#e879f9';
   hudCtx.beginPath();
@@ -2757,8 +2759,8 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns || sim.aroundPoint ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : sim.noFlap ? nfLib.APPROACH_KTS + kidGustAddKts(spec, sim.wx) : 0;
-      sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, kidGustAddKts(spec, sim.wx)), gammaDeg, dt);
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts + coachGustKts() : sim.steepTurns || sim.aroundPoint ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), gustAddKts(spec, sim.wx)) : sim.noFlap ? nfLib.APPROACH_KTS + gustAddKts(spec, sim.wx) : 0;
+      sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, gustAddKts(spec, sim.wx)), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
     }
@@ -3808,6 +3810,7 @@ window.openaeroDebug = () => {
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
     hudTapes: { ...hudTapes }, // the tapes' inner edges (0217), canvas px
+    speedBug: { kts: coachKts(), gustAddKts: coachGustKts() }, // the bug and its gust share (0219)
     hudAltCaption: hudPx(_altCap), // the altitude tape's MSL / SEA LVL tab (0132, 0140), canvas px
     headingDeg: hdg,
     pitchDeg: _euler.x * RAD_TO_DEG,

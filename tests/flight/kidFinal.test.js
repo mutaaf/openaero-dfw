@@ -11,10 +11,11 @@ import { M_TO_FT, KTS_TO_MPS, DEG_TO_RAD } from '../../src/constants.js';
 import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { driftAngleDeg, gradeLanding } from '../../src/landing.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
-import { stallAoaDeg, landingFlaps } from '../../src/aero.js';
+import { stallAoaDeg, landingFlaps, stabilizedGate, gateVsStep, vrefFor } from '../../src/aero.js';
 import { autothrottleCommand, trimAoaDeg } from '../../src/autopilot.js';
 import { runwayEnd, approachGeometry, approachSpawn, papiWhite } from '../../src/airports.js';
-import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidGustAddKts, kidFinalGuide, headwindPathRatio } from '../../src/assists.js';
+import { assistConfig, createAssistState, shapeControls, slewRudder, autoConfigure, kidTargetKts, kidGustAddKts, bugKts, kidFinalGuide, headwindPathRatio } from '../../src/assists.js';
+import { coachTarget } from '../../src/coach.js';
 import { missionByKey } from '../../src/missions.js';
 import { kidLiftM, wakeResult, createWake, DONE_NOTE } from '../../src/wake.js';
 import { SHORT_FIELD_KEY, kidKts as sfKidKts, kidLiftM as sfKidLiftM, LONG_M as SF_LONG_M, FULL_FLAPS as SF_FULL_FLAPS } from '../../src/shortField.js';
@@ -33,7 +34,8 @@ const _e = new Euler(0, 0, 0, 'YXZ');
 // A mission with its own spawn speed and flaps (`kias`, `flaps`: the short-field lesson, 0181) spawns at them, as main.js
 // loadScenario does; drillKts(flapsFull) is its autothrottle target (main.js applyAssists drillKts; 0: Kid's own) and
 // fullFlaps the notch Kid's auto-flaps go to past the landing flaps (main.js applyAssists: the lesson's 30°).
-function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gustAddKts = 0 } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1, lift = null, drillKts = null, fullFlaps = null) {
+// bug: { kts(flapsIndex), gustAddKts }: the speed bug the coach and gate read (0219); the result's gate and speedCalls grade it.
+function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gustAddKts = 0, bug = null } = {}, over = null, stick = null, rollS = 0, learnerBelowM = 0, every = 1, lift = null, drillKts = null, fullFlaps = null) {
   const spec = AIRCRAFT_DATABASE[acKey];
   const m = missionByKey(missionKey);
   const end = { ...runwayEnd(m.airport, m.rwy), thrY: 0 };
@@ -63,6 +65,11 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gust
   const ast = createAssistState();
   const s = {}, out = {}, conf = { gearDown: true, flapsIndex: spawnFlaps }, at = { trim: 0 };
   let prevIas = null, iasRate = 0, lastVs = 0, td = null, thrFt = null, minVs = 0;
+  // 0219: the 500 ft gate's speed and lagged sink (main.js checkStabilizedGate) and the seconds the coach's speed
+  // bands (coach.js coachTarget, the bug and its gust share as main.js passes them) would call slow or fast, 1,000-100 ft.
+  let gateVs = null, gate = null;
+  const speedCalls = { slowS: 0, fastS: 0, oldSlowS: 0, oldFastS: 0, minIas: Infinity, maxIas: 0 };
+  const cs = { aglFt: 0, vsiFpm: -500, papiWhite: 2, throttle: 0.5, onGround: false, autopilot: false, kid: false, iasKts: 0, targetKts: 0, gustAddKts: 0, locDots: 0, gearLocked: true, flapsLanding: true, driftDeg: 0 };
   const roll = { maxNoseOff3sDeg: 0, maxCrossM: 0, yawSq: 0, n: 0, rudFlips: 0 };
   const bank = { maxDeg: 0, flips: 0, lastP: 0 };
   let step = 0, lastRud = 0, lastStep = 0;
@@ -75,6 +82,21 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gust
     if (thrFt === null && ap.distM <= 0) thrFt = wheelM * M_TO_FT;
     if (wheelM * M_TO_FT > 200 && ap.distM > 0) papi[papiWhite(end, x.pos, ap.distM)]++;
     minVs = Math.min(minVs, x.vel.y);
+    gateVs = gateVsStep(gateVs, x.vel.y * M_TO_FT * 60, dt);
+    if (bug && !x.onGround) {
+      const ft = wheelM * M_TO_FT;
+      if (!gate && ft < 500) gate = { ...stabilizedGate({ iasKt: x.iasKts, vref: vrefFor(spec, x.flapsIndex), gustAddKts: bug.gustAddKts, vsFpm: gateVs, gearDown: true, flapsOk: true, glideDevDots: 0, locDevDots: 0, vmc: true }), iasKt: x.iasKts, vsFpm: gateVs };
+      if (ft < 1000 && ft > 100) {
+        Object.assign(cs, { aglFt: ft, iasKts: x.iasKts, targetKts: bug.kts(x.flapsIndex), gustAddKts: bug.gustAddKts });
+        const c = coachTarget(cs);
+        if (c === 'slow') speedCalls.slowS += dt; else if (c === 'fast') speedCalls.fastS += dt;
+        // The same moment under the old bands (Vref + 5, no gust share): what the coach said before 0219.
+        cs.targetKts = vrefFor(spec, x.flapsIndex) + 5; cs.gustAddKts = 0;
+        const o = coachTarget(cs);
+        if (o === 'slow') speedCalls.oldSlowS += dt; else if (o === 'fast') speedCalls.oldFastS += dt;
+        speedCalls.minIas = Math.min(speedCalls.minIas, x.iasKts); speedCalls.maxIas = Math.max(speedCalls.maxIas, x.iasKts);
+      }
+    }
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
     const noseDeg = -_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI;
@@ -136,7 +158,7 @@ function flyKidFinal(acKey, missionKey, { fromDeg = 0, kts = 0, air = null, gust
       driftDeg: driftAngleDeg(-_e.setFromQuaternion(x.quat, 'YXZ').y * 180 / Math.PI, x.vel.x, x.vel.z), bankDeg: attitude(x).bankRightDeg, pitchDeg: attitude(x).pitchDeg, widthM: end.widthM };
     return rollS <= 0;
   });
-  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi, roll, bank };
+  return { td, thrFt, minVsFpm: minVs * M_TO_FT * 60, papi, roll, bank, gate, speedCalls };
 }
 
 const log = (ac, key, name, { td, thrFt }) => console.log(`[${ac} kid final] ${key} ${name}: threshold ${thrFt?.toFixed(0)} ft; touchdown ${td && td.pastThrM.toFixed(0)} m past, ${td && td.crossM.toFixed(1)} m off, ${td && td.vsFpm.toFixed(0)} fpm, ${td && td.iasKts.toFixed(0)} KIAS, drift ${td && td.driftDeg.toFixed(1)}°, bank ${td && td.bankDeg.toFixed(1)}°, ${td && td.t.toFixed(0)} s`);
@@ -461,6 +483,59 @@ describe('Kid hands off on a turbulent 25G38 day still lands C or better (ticket
         expect(Math.abs(r.td.crossM)).toBeLessThan(8);
       }, 30000);
     }
+  }
+});
+
+// Ticket 0219: the speed bug adds half the gust factor (AFH FAA-H-8083-3C ch. 9), the speed Kid's autothrottle already flies.
+// A pilot flying that bug (the harness's guide and autothrottle on it) down the Cessna's 3° final into Addison 16 in 25G38
+// at a Pilot's (full) share of the turbulence, ten seeds. At the 500 ft gate (its FAST limit raised by the same share, its
+// Vref floor not): no SLOW, FAST or SINK. The coach's speed calls from 1,000 to 100 ft are counted on the same flight
+// under the new bands (slow below Vref, fast above the bug + 10) and the old (Vref + 5's: slow below Vref, fast above
+// Vref + 15): "fast" all but goes and the "slow" floor is still Vref (the same seconds as before). Full turbulence still
+// drops the raw IAS under Vref on some seeds (seeds 5, 7, 8: ~25 s each, down to 48-53 kt): slow by either band, and the
+// coach (which reads the raw IAS, as before) says so.
+describe('a pilot on the gusty-day speed bug is stabilized and not told "fast" (ticket 0219)', () => {
+  const spec = AIRCRAFT_DATABASE.c172, wx = { windDirDeg: 160, windKts: 25, gustKts: 38 };
+  const bug = { kts: (f) => bugKts(spec, f, wx), gustAddKts: kidGustAddKts(spec, wx) };
+  const tot = { fastS: 0, oldFastS: 0 };
+  for (let seed = 1; seed <= 10; seed++) {
+    it(`kads_16_final, 25G38, Pilot turbulence, seed ${seed}: the 500 ft gate passes speed and sink; the slow floor is still Vref`, () => {
+      const r = flyKidFinal('c172', 'kads_16_final', { fromDeg: 160, kts: 25, bug, air: turbulentAir(spec, wx, { seed, level: 'pilot' }) },
+        null, null, 0, 0, 1, null, (full) => (full ? bug.kts(landingFlaps(spec)) : 0));
+      const sc = r.speedCalls;
+      console.log(`[0219 bug] seed ${seed}: gate ${r.gate?.failing.join(',') || 'stable'} at ${r.gate?.iasKt.toFixed(1)} kt ${r.gate?.vsFpm.toFixed(0)} fpm; IAS ${sc.minIas.toFixed(1)}-${sc.maxIas.toFixed(1)}; slow ${sc.slowS.toFixed(1)} s (old ${sc.oldSlowS.toFixed(1)}), fast ${sc.fastS.toFixed(1)} s (old ${sc.oldFastS.toFixed(1)})`);
+      expect(bug.kts(landingFlaps(spec))).toBe(spec.vrefKts + 5 + 6.5);
+      expect(r.td).not.toBeNull();
+      expect(r.gate).not.toBeNull();
+      for (const f of ['SLOW', 'FAST', 'SINK']) expect(r.gate.failing).not.toContain(f);
+      expect(sc.slowS).toBeCloseTo(sc.oldSlowS, 6);
+      expect(sc.fastS).toBeLessThan(Math.max(1, sc.oldFastS / 2));
+      tot.fastS += sc.fastS; tot.oldFastS += sc.oldFastS;
+    }, 30000);
+  }
+  it('over the ten seeds the "fast" nag on the AFH speed is cut by at least 80%', () => {
+    console.log(`[0219 bug] fast over 10 seeds: ${tot.fastS.toFixed(1)} s (old bands ${tot.oldFastS.toFixed(1)} s)`);
+    expect(tot.oldFastS).toBeGreaterThan(100);
+    expect(tot.fastS).toBeLessThan(tot.oldFastS * 0.2);
+  });
+});
+
+// 0219 (physics panel): the go-around drill (0047) flown in the Cessna on Kid: its autothrottle holds Vref + 5 + fastKts so the
+// gate calls FAST. The gate's FAST limit now rises by the bug's gust share, so main.js applyAssists adds the same share to the
+// drill's hold. Without it, 15G25 called FAST on 0 of 10 seeds (it had on 10 of 10): Kid landed instead of going around.
+describe('the go-around drill still trips FAST for the Cessna on a gusty day (ticket 0219)', () => {
+  const spec = AIRCRAFT_DATABASE.c172, m = missionByKey('go_around_drill');
+  for (const [k, g] of [[15, 25], [10, 22], [25, 38]]) {
+    it(`go_around_drill, ${k}G${g} from 350°, Kid turbulence, seeds 1-5: the 500 ft gate fails FAST`, () => {
+      const wx = { windDirDeg: 350, windKts: k, gustKts: g }, add = kidGustAddKts(spec, wx);
+      const hold = spec.vrefKts + 5 + m.fastKts + add; // main.js: sim.goAround.holdKts + coachGustKts()
+      for (let seed = 1; seed <= 5; seed++) {
+        const r = flyKidFinal('c172', 'go_around_drill', { fromDeg: 350, kts: k, bug: { kts: (f) => bugKts(spec, f, wx), gustAddKts: add }, air: turbulentAir(spec, wx, { seed, level: 'kid' }) },
+          null, null, 0, 0, 1, null, () => hold);
+        console.log(`[0219 go-around] ${k}G${g} seed ${seed}: gate ${r.gate?.failing.join(',') || 'stable'} at ${r.gate?.iasKt.toFixed(1)} kt (FAST over ${(spec.vrefKts + 20 + add).toFixed(1)})`);
+        expect(r.gate?.failing).toContain('FAST');
+      }
+    }, 60000);
   }
 });
 

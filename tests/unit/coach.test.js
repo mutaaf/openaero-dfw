@@ -170,6 +170,21 @@ describe('landing coach (0073)', () => {
     expect(coachTarget({ ...full, iasKts: 170 })).toBe('fast');
     expect(coachTarget({ ...full, iasKts: 162 })).toBe('papi');
   });
+  // 0219: on a gusty day the bug (targetKts) carries half the gust factor; a lull below it is not "slow" until Vref
+  // (the gate's floor), and a peak above it is not "fast" until 10 kt over the raised bug.
+  it('on a gusty day (gustAddKts 6.5) a pilot on the raised bug hears neither slow nor fast through the gusts', () => {
+    const g = { ...full, iasKts: 73.5, targetKts: 73.5, gustAddKts: 6.5 }; // the Cessna's Vref 62 + 5 + 6.5 in 25G38
+    for (const ias of [62.5, 66, 73.5, 80, 83]) expect(coachTarget({ ...g, iasKts: ias })).toBe('papi');
+    expect(coachTarget({ ...g, iasKts: 61.5 })).toBe('slow'); // below Vref
+    expect(coachTarget({ ...g, iasKts: 84 })).toBe('fast');
+  });
+  it('without gustAddKts the bands are unchanged: slow under target - 5, fast over target + 10', () => {
+    const c = { ...full, iasKts: 67, targetKts: 67 };
+    expect(coachTarget({ ...c, iasKts: 61.5 })).toBe('slow');
+    expect(coachTarget({ ...c, iasKts: 62 })).toBe('papi');
+    expect(coachTarget({ ...c, iasKts: 77.5 })).toBe('fast');
+    expect(coachTarget({ ...c, iasKts: 77, gustAddKts: 0 })).toBe('papi');
+  });
   it('says which way back to the centreline', () => {
     expect(coachTarget({ ...full, locDots: 1 })).toBe('offRight');
     expect(coachTarget({ ...full, locDots: -1 })).toBe('offLeft');
