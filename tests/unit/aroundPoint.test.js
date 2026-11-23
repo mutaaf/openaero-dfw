@@ -154,6 +154,14 @@ describe('turns around a point (0211): the steps', () => {
     expect(g.grade).toBe('D');
     expect(g.title).toMatch(/not finished/);
   });
+  it('never banked round the pole: the card says so, not "the wind" (panel)', () => {
+    const st = createAroundPoint(MISSION);
+    let z = st.pz + 926, ev = '';
+    for (let i = 0; i < 5000 && st.phase !== 'failed'; i++) { ev = aroundStep(st, { dt: DT, x: st.px + R, z, vx: 0, vz: -46, wx: 0, wz: -6, altFt: 1700, iasKts: 90, bankDeg: 0, stalled: false }); z -= 4.6; }
+    expect(ev).toBe('failed');
+    expect(st.why).toBe('drift');
+    expect(gradeAroundPoint(st).reason).toMatch(/flew away from the pole: bank left/);
+  });
   it('passing the pole far off (never within two radii) fails as missed', () => {
     const st = createAroundPoint(MISSION);
     let z = st.pz + 926, ev = '';
@@ -190,6 +198,33 @@ describe('turns around a point (0211): the coach and Kid\'s guide', () => {
     expect(at(R, 0, 0)).toBe('tptHold');
     expect(aroundPrompt(st, onCircle(st, 0, R, { bankDeg: -50 }), false)).toBe('tptSteep');
     expect(aroundPrompt(st, onCircle(st, 0, R, { altFt: 1700 - 80 }), false)).toBe('tptLow');
+  });
+  it('level or banked the wrong way round the circle: which way to roll first (panel: "steepen the bank" at 0° made it worse)', () => {
+    const st = live();
+    flyLesson(st, { maxS: 30 });
+    st.d = R + 60; // wide too: the direction still comes first
+    expect(aroundPrompt(st, onCircle(st, 0, R + 60, { bankDeg: 0 }), false)).toBe('tptToL');
+    expect(aroundPrompt(st, onCircle(st, 0, R + 60, { bankDeg: 20 }), false)).toBe('tptToL');
+    expect(aroundPrompt(st, onCircle(st, 0, R + 60, { bankDeg: -25 }), false)).toBe('tptWide');
+  });
+  it('10 kt slow in the bank outranks the height words; far off the circle outranks them too (panel)', () => {
+    const st = live();
+    flyLesson(st, { maxS: 30 });
+    st.d = R; st.iasF = 78;
+    expect(aroundPrompt(st, onCircle(st, 0, R, { altFt: 1600 }), false)).toBe('tptSlow');
+    st.iasF = 90; st.d = R + 120;
+    expect(aroundPrompt(st, onCircle(st, 0, R + 120, { altFt: 1600 }), false)).toBe('tptWide');
+    st.d = R;
+    expect(aroundPrompt(st, onCircle(st, 0, R, { altFt: 1600 }), false)).toBe('tptLow');
+  });
+  it('the pole\'s side is set once on the entry, not re-derived from a turning track (panel)', () => {
+    const st = live();
+    aroundStep(st, { dt: DT, x: st.px + R, z: st.pz + 900, vx: 0, vz: -46, wx: 0, wz: 0, altFt: 1700, iasKts: 90, bankDeg: 0, stalled: false });
+    expect(st.side).toBe(-1);
+    // Turned hard left early, the track now points west of the pole: still the left.
+    aroundStep(st, { dt: DT, x: st.px + R, z: st.pz + 800, vx: -46, vz: 0, wx: 0, wz: 0, altFt: 1700, iasKts: 90, bankDeg: -30, stalled: false });
+    expect(st.side).toBe(-1);
+    expect(aroundPrompt(st, {}, false)).toMatch(/L$/);
   });
   it('nothing to say before the player is flying, or once graded', () => {
     const st = createAroundPoint(MISSION);

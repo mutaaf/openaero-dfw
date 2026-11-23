@@ -53,6 +53,8 @@ export const AROUND_TEXT = {
   tptFlyOnR: 'Fly on, level: the lit pole is ahead on your right. Wait until it is off your right wingtip',
   tptRollL: 'Pole abeam: roll left now, steep: you are downwind, fastest over the ground',
   tptRollR: 'Pole abeam: roll right now, steep: you are downwind, fastest over the ground',
+  tptToL: 'Roll left: circle the pole, it is on your left',
+  tptToR: 'Roll right: circle the pole, it is on your right',
   tptWide: 'Drifting wide of the circle: steepen the bank',
   tptClose: 'Too close to the pole: shallower bank',
   tptDown: 'Wind behind you: fastest over the ground, so the steepest bank',
@@ -67,7 +69,7 @@ export const AROUND_TEXT = {
   tptKid: 'Watch the wing: steep with the wind behind, shallow into it, and the circle stays round',
 };
 Object.assign(DRILL_TEXT, AROUND_TEXT);
-Object.assign(RANK, { tptFlyOnL: 1, tptFlyOnR: 1, tptRollL: 2, tptRollR: 2, tptWide: 1, tptClose: 1, tptDown: 1, tptUp: 1, tptHold: 1,
+Object.assign(RANK, { tptFlyOnL: 1, tptFlyOnR: 1, tptRollL: 2, tptRollR: 2, tptToL: 2, tptToR: 2, tptWide: 1, tptClose: 1, tptDown: 1, tptUp: 1, tptHold: 1,
   tptLow: 1, tptHigh: 1, tptSlow: 1, tptFast: 1, tptSteep: 2, tptKidIn: 1, tptKid: 1 });
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
@@ -83,7 +85,7 @@ export function createAroundPoint(m) {
     t: 0, ct: 0, swept: 0, lastAng: null, side: 0, d: 0, along: 0,
     alt0: null, kts0: m.kias, iasF: m.kias, // graded against the lesson's 90 KIAS and the height flying started at (panel: not the abeam instant's)
     maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, maxBankDeg: 0, steepS: 0,
-    w: 0, sum: 0, sumSq: 0, why: null,
+    w: 0, sum: 0, sumSq: 0, why: null, awayS: 0,
     track: new Float32Array(2 * TRACK_MAX), trackN: 0, trackStart: -1, trackT: 0,
   };
   return last;
@@ -118,7 +120,7 @@ export function aroundStep(st, s) {
   if (st.phase === 'entry') {
     // Which side the pole is on (+ right, − left): the ground track crossed with the line to it.
     const cr = rx * s.vz - rz * s.vx;
-    if (Math.abs(cr) > 1) st.side = cr > 0 ? 1 : -1;
+    if (!st.side && Math.abs(cr) > 1) st.side = cr > 0 ? 1 : -1; // set once (panel: re-derived, an early roll flipped it)
     // The height to hold: where the player started flying (the spawn's 1,000 ft AGL). The speed is the lesson's (kts0).
     if (st.alt0 === null) st.alt0 = s.altFt;
     st.iasF = s.iasKts;
@@ -145,6 +147,7 @@ export function aroundStep(st, s) {
   const bank = Math.abs(s.bankDeg);
   st.maxBankDeg = Math.max(st.maxBankDeg, bank);
   if (bank > MAX_BANK_DEG + 2) st.steepS += s.dt;
+  if (s.bankDeg * st.side < 10) st.awayS += s.dt; // not banked round the pole (level, or the wrong way)
   if (s.stalled || d > LOST_RADII * st.R || st.maxAltDevFt > FAIL_FT || st.ct > FAIL_S) {
     st.why = s.stalled ? 'stall' : d > LOST_RADII * st.R ? 'drift' : st.maxAltDevFt > FAIL_FT ? 'height' : 'time';
     st.phase = 'failed';
@@ -179,6 +182,10 @@ export function aroundPrompt(st, s, kid) {
   const left = st.side <= 0;
   if (st.phase === 'entry') return st.along > -ROLL_LEAD_M * 3 ? (left ? 'tptRollL' : 'tptRollR') : left ? 'tptFlyOnL' : 'tptFlyOnR';
   if (Math.abs(s.bankDeg) > MAX_BANK_DEG + 2) return 'tptSteep';
+  // Level or banked away from the pole: which way first (panel: "steepen the bank" at 0°, or the wrong way, made it worse).
+  if (s.bankDeg * (left ? -1 : 1) < 10 && st.d > st.R - SAY_OFF_M) return left ? 'tptToL' : 'tptToR';
+  if (st.iasF < st.kts0 - KTS_TOL) return 'tptSlow'; // 10 kt slow in a bank outranks the height (the stall comes first)
+  if (Math.abs(st.d - st.R) > 2 * SAY_OFF_M) return st.d > st.R ? 'tptWide' : 'tptClose';
   const altDev = s.altFt - st.alt0;
   if (altDev < -ALT_TOL_FT / 2) return 'tptLow';
   if (altDev > ALT_TOL_FT / 2) return 'tptHigh';
@@ -237,33 +244,42 @@ export function kidGuide(st, out) {
   return ASSIST_BANK_DEG;
 }
 
-// The HUD's pole readout (main.js renderHud, in the takeoff call's slot under the heading box, hudLayout.js): its
-// distance and clock position from the nose, the way an instructor calls it ("pole at 9 o'clock"): the pole sits under
-// the lowered wing (AFH p. 7-7 warns a high wing can block it in a left turn: "ensure that the reference point is
-// visible at all times"), and 90° off the nose, out of any forward camera. Green on the circle (±SAY_OFF_M), amber off it. The text is
-// rebuilt only when what it says changes (no string per frame, AGENTS.md invariant 4).
+// The HUD's pole readout (main.js renderHud, in the takeoff call's slot under the heading box, hudLayout.js): an arrow
+// pointing to the pole from the nose (up = ahead, left = off the left wing) and its distance against the circle's, e.g.
+// "POLE 1,480 / 1,500 FT". The pole is 90° off the nose while circling, out of any forward camera (a phone held upright
+// sees ~42° across: panel), and AFH p. 7-7 warns a high wing can hide it in a left turn ("ensure that the reference point
+// is visible at all times"). Green on the circle (±SAY_OFF_M), amber off it. The text is rebuilt only when its number
+// changes (no string per frame, AGENTS.md invariant 4).
 export const POLE_BOX_W = 232, POLE_BOX_H = 24;
-let poleFt = -1, poleClock = -1, poleText = '';
-export function poleClockOf(st, x, z, hdgTrueDeg) {
+let poleFt = -1, poleText = '';
+export function poleRelDeg(st, x, z, hdgTrueDeg) {
   const brg = Math.atan2(st.px - x, -(st.pz - z)) * DEG; // true bearing to the pole (+x east, −z north)
-  const rel = ((brg - hdgTrueDeg) % 360 + 360) % 360;
-  return Math.round(rel / 30) % 12 || 12;
+  return ((brg - hdgTrueDeg) % 360 + 360) % 360;
 }
+export const poleClockOf = (st, x, z, hdgTrueDeg) => Math.round(poleRelDeg(st, x, z, hdgTrueDeg) / 30) % 12 || 12;
 export function drawPole(ctx, cx, top, st, sim, hdgTrueDeg) {
   if (!aroundLive(st) || !st.live) return;
   const q = st.d > 2 * st.R ? 50 : 10; // coarser far out: fewer rebuilds on the run-in
-  const ft = Math.round(st.d * M_TO_FT / q) * q, clock = poleClockOf(st, sim.pos.x, sim.pos.z, hdgTrueDeg);
-  if (ft !== poleFt || clock !== poleClock) { poleFt = ft; poleClock = clock; poleText = `POLE ${ft.toLocaleString('en-US')} FT · ${clock} O'CLOCK`; }
+  const ft = Math.round(st.d * M_TO_FT / q) * q;
+  if (ft !== poleFt) { poleFt = ft; poleText = `POLE ${ft.toLocaleString('en-US')} / ${Math.round(st.R * M_TO_FT).toLocaleString('en-US')} FT`; }
   ctx.fillStyle = 'rgba(2, 6, 23, 0.7)';
   ctx.fillRect(cx - POLE_BOX_W / 2, top, POLE_BOX_W, POLE_BOX_H);
+  const col = st.phase === 'circle' && Math.abs(st.d - st.R) <= SAY_OFF_M ? '#6ee7b7' : '#fcd34d';
+  ctx.fillStyle = col;
+  // The arrow, at the box's left, turned to the pole's bearing from the nose.
+  ctx.save();
+  ctx.translate(cx - POLE_BOX_W / 2 + 15, top + POLE_BOX_H / 2);
+  ctx.rotate(poleRelDeg(st, sim.pos.x, sim.pos.z, hdgTrueDeg) / DEG);
+  ctx.beginPath();
+  ctx.moveTo(0, -9); ctx.lineTo(6, 2); ctx.lineTo(2, 2); ctx.lineTo(2, 9); ctx.lineTo(-2, 9); ctx.lineTo(-2, 2); ctx.lineTo(-6, 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
   ctx.font = 'bold 13px monospace';
   ctx.textAlign = 'center';
-  ctx.fillStyle = st.phase === 'circle' && Math.abs(st.d - st.R) <= SAY_OFF_M ? '#6ee7b7' : '#fcd34d';
-  ctx.fillText(poleText, cx, top + 17);
+  ctx.fillText(poleText, cx + 10, top + 17);
 }
 
-// The lit pole: a 60 m mast with a lamp on top over a 25 m disc, unlit materials (it glows at dusk as by day).
-// Its height follows the ground under it (main.js moves it as the terrain's DEM arrives).
 // Built once per chunk and reused (panel: a new one per load leaked its GPU buffers): moved to each lesson's pole.
 let marker = null;
 export function makeMarker(st) {
@@ -316,13 +332,14 @@ export function gradeAroundPoint(st, kid = false) {
   if (failed) {
     score = Math.min(score, LOST_CAP);
     reason = st.why === 'stall' ? 'Stalled in the turn: no steeper than 45°, and keep the speed up.'
-      : st.why === 'drift' ? 'The wind carried you away from the pole: steepen the bank as the wind comes behind you.'
+      : st.why === 'drift' ? (st.awayS > st.ct / 2 ? `You flew away from the pole: bank ${st.side < 0 ? 'left' : 'right'}, toward it, all the way round.`
+        : 'The wind carried you away from the pole: steepen the bank as the wind comes behind you.')
         : st.why === 'height' ? `${st.altSignFt < 0 ? 'Lost' : 'Gained'} over ${FAIL_FT} ft: hold your height round the turns.`
           : st.why === 'missed' ? 'Never reached the pole: fly on until it is off your wingtip, then roll round it.'
             : 'Not finished: two full circles round the pole.';
   } else if (sdFt > SPREAD_D_FT) {
     score = Math.min(score, LOST_CAP);
-    reason = 'An oval, not a circle: the wind pushed the track out downwind. Steeper as the wind comes behind you, shallower into it. Capped at D.';
+    reason = 'An oval, not a circle: the distance from the pole swung in and out. Steeper as the wind comes behind you, shallower into it. Capped at D.';
   } else if (alt > 2 * ALT_TOL_FT) {
     score = Math.min(score, LOST_CAP);
     reason = `${st.altSignFt < 0 ? 'Lost' : 'Gained'} ${Math.round(alt)} ft: the test allows 100. Capped at D.`;

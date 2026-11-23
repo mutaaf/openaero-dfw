@@ -25,7 +25,7 @@ export function trackPlotSvg(track, px = 144) {
   const ext = trackExtent(track);
   const fs = r1(Math.max(ext * 0.11, 12 * 2 * ext / Math.max(60, px)));
   const line = 'fill="none" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"';
-  let svg = `<svg viewBox="${r1(-ext)} ${r1(-ext)} ${r1(2 * ext)} ${r1(2 * ext)}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`
+  let svg = `<svg viewBox="${r1(-ext)} ${r1(-ext)} ${r1(2 * ext)} ${r1(2 * ext)}" width="100%" style="height:calc(100% - ${LEGEND_PX}px)" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`
     + `<circle r="${r1(R)}" ${line} stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4"/>`;
   if (s0 > 0) svg += `<path d="${path(pts, 0, Math.min(n, s0 + 1))}" ${line} stroke="#94a3b8" stroke-width="1.5"/>`;
   if (n - s0 > 1) svg += `<path d="${path(pts, s0, n)}" ${line} stroke="#38bdf8" stroke-width="2.5"/>`;
@@ -42,6 +42,11 @@ export function trackPlotSvg(track, px = 144) {
   }
   return `${svg}</svg>`;
 }
+
+// The plot's legend for a first-timer (panel: only the aria-label said what the lines were): an HTML line under the
+// SVG (in the SVG it would be clipped in a short box), which gives up LEGEND_PX of the box's height.
+export const LEGEND_PX = 14;
+export const TRACK_LEGEND = `<div style="font-size:11px;line-height:${LEGEND_PX}px;text-align:center;color:#cbd5e1">dashed: the circle asked · blue: your track</div>`;
 
 export function trackLabel(track) {
   const ft = Math.round(track.R * 3.28084).toLocaleString('en-US');

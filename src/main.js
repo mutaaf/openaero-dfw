@@ -2127,7 +2127,8 @@ function updateActiveRunway(dt) {
     sim.rwySelectTimer = 0.5;
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     const hdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
-    if (!sim.onGround) sim.activeEnd = selectActiveRunway(RUNWAY_ENDS, sim.pos, hdg, sim.activeEnd);
+    // 0211: no runway (PAPI, runway wind, Kid's final guide) over the fields while the lesson flies.
+    if (!sim.onGround) sim.activeEnd = sim.aroundPoint && tapLib.aroundLive(sim.aroundPoint) ? null : selectActiveRunway(RUNWAY_ENDS, sim.pos, hdg, sim.activeEnd);
   }
   if (sim.activeEnd) {
     const ap = Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));

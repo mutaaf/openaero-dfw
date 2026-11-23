@@ -1,6 +1,6 @@
 // The results card's track plot (ticket 0211): a north-up SVG of the ground track round the pole.
 import { describe, it, expect } from 'vitest';
-import { trackPlotSvg, trackExtent, trackLabel } from '../../src/trackPlot.js';
+import { trackPlotSvg, trackExtent, trackLabel, TRACK_LEGEND } from '../../src/trackPlot.js';
 
 const R = 457.2;
 // An entry up the east side, then one circle (sim frame: +x east, +z south).
@@ -49,6 +49,10 @@ describe('track plot (0211)', () => {
       const fs = Number(/<text[^>]*font-size="([\d.]+)"[^>]*>N</.exec(svg)[1]);
       expect(fs * px / (2 * trackExtent(t))).toBeGreaterThanOrEqual(11);
     }
+  });
+  it('has a legend a first-timer can read (panel)', () => {
+    expect(TRACK_LEGEND).toMatch(/dashed: the circle asked · blue: your track/);
+    expect(TRACK_LEGEND).toMatch(/font-size:11px/);
   });
   it('says what it shows', () => {
     expect(trackLabel(track())).toMatch(/1,500 ft asked for, the arrow the 12 knot wind's way/);

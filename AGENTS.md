@@ -293,8 +293,8 @@ src/aroundPoint.js  turns around a point (0211, lazy chunk loaded with `turns_ar
                     pole and ends after 720°. Graded on the distance's spread over the circles (the ACS sets no number: ±150 ft for a B,
                     ±350 ft an oval = D), its average against 1,500 ft, altitude ±100 ft, airspeed ±10 kt (2 s filter) and the steepest
                     bank (past 45° for 1 s ≤ B); 3 radii out, 500 ft off, a stall or 300 s fail, never reaching the pole fails. Its tpt*
-                    words reach coach.js through s.ds; the HUD's pole readout (drawPole: distance and clock position, under the heading
-                    box in the takeoff call's slot) because a high wing can hide the pole in a left turn (AFH p. 7-7). Kid: the guide's circleBankDeg (Vt²/d plus a
+                    words reach coach.js through s.ds; the HUD's pole readout (drawPole: an arrow to the pole from the nose and its distance against
+                    the circle's, under the heading box in the takeoff call's slot; no active runway while it is live) because a high wing can hide the pole in a left turn (AFH p. 7-7). Kid: the guide's circleBankDeg (Vt²/d plus a
                     spring to the radius and radial damping, the handbook's tan φ = Vg²/(gR)), the autothrottle on 90, no auto flaps
                     while it is live; Kid and Learner get a 53° cap (full stick 45°). The card's track plot is src/trackPlot.js (an SVG
                     in results.js's chunk). Kept once graded (its wind flies on); another mission or airframe ends it (endAroundPoint).
