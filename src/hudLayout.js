@@ -9,7 +9,8 @@ export const BELOW_TOP_BAR = 72;
 
 // Top of the TRK heading box: cy - 145 where there is room; on a phone held sideways it
 // drops under the top bar. The box is 104 px wide, centred between the tapes (which sit
-// at cx - 175 … cx - 131 and cx + 130 … cx + 186), so it may share their rows.
+// at cx - 175 … cx - 131 and cx + 130 … cx + 186, closer in under 390 px: speedTapeX / altTapeX),
+// so it may share their rows.
 export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }

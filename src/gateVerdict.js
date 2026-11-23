@@ -52,9 +52,10 @@ export function altLabels(level) {
 }
 
 // Draws the tab main.js placed (`r`, from altCaptionRect) with the level's word, and writes its width
-// and text into `r` (the ?debug snapshot reads them). On a phone under ~390 px across the readout box
-// itself runs past the screen's edge: the tab stops at it (screenW) and the word drops to 9 px (seven
-// glyphs ~38 px: whole at 375 px, ~5% squeezed by maxWidth at 360 px; at 320 px the box and both
+// and text into `r` (the ?debug snapshot reads them). Since 0217 the tape comes in under 390 px across
+// and its readout box stays on screen, so the tab is whole; the clamp below is a guard: where the box
+// would run past the screen's edge the tab stops at it (screenW) and the word drops to 9 px (seven
+// glyphs ~38 px; before 0217: whole at 375 px, ~5% squeezed by maxWidth at 360 px; at 320 px the box and both
 // tabs are cut by the edge, as MSL was before).
 // An opaque-enough tab keeps 4.5:1 over bright imagery.
 // The same call draws the wind box's plain words (0142) when main.js passes sim and the wind box
@@ -177,6 +178,8 @@ export function baroLabel(inHg, src, out) {
 //   right over it (568x320, 640x304): left out under 660 px across (from there the 4 px keeps it clear,
 //   whatever the height or the inset);
 // - under ~375 px across the clamp to the screen's edge pulls it into the verdict (cx + 120): 360, 344.
+// Under 390 px across the altitude tape's edge comes in (0217, hudLayout.js altTapeX: cx + 119.5 at 375);
+// the box stays clamped to the screen, so it is 7.5 px right of that edge there, still in the column.
 // Writes `out`.
 export const BARO_W = 58;
 export const BARO_H = 26;
