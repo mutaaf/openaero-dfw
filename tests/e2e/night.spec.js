@@ -95,12 +95,20 @@ test('the KDFW 35C night ILS flies at night with the lights showing, and the nex
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   expect((await snap(page)).mission).toBe('kdfw_35c_night');
   await expect.poll(async () => (await snap(page)).sky.runwayLights, { timeout: 15_000 }).toBeGreaterThan(5000);
+  // Paused near the 4 NM spawn, inside the page, so the lit and dark frames are the same scene
+  // wherever the runner is: flying on, the PAPIs and the runway fill the band and the dark
+  // count climbs (~250 at 500 ft, ~440 at 160 ft here; a slow CI runner read >= 450, 2026-11-23).
+  await page.evaluate(() => document.getElementById('btnPause').click());
+  expect((await snap(page)).paused).toBe(true);
+  const agl = Math.round((await snap(page)).aglFt);
   // Same threshold as the 0011 test (~850 lit vs ~130 from the PAPIs alone at 1280x720),
   // and the control: with the runway lights' materials off, the count drops below it.
-  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 15_000 }).toBeGreaterThan(450);
+  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 15_000, message: `lit, ${agl} ft` }).toBeGreaterThan(450);
   await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = false; }); });
-  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 10_000 }).toBeLessThan(450);
+  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 10_000, message: `dark, ${agl} ft` }).toBeLessThan(450);
   await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = true; }); });
+  await page.evaluate(() => document.getElementById('btnPause').click());
+  expect((await snap(page)).paused).toBe(false);
 
   // The next mission without a sky of its own gives the player's Dusk back.
   await page.locator('#btnOpenMissions').click();
