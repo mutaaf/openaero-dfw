@@ -1024,6 +1024,22 @@ function checkSteepTurns(dt) {
   sim.steepTurns = null;
   drillCard(result, stLib.STEEP_PLACE);
 }
+// Turns around a point (0211, aroundPoint.js): sim.aroundPoint and its pole on that mission, graded after two
+// circles; kept once graded (its wind flies on for KEEP FLYING), ended by another mission or airframe.
+let tapLib = null, tapPole = null;
+function checkAroundPoint(dt) {
+  const st = sim.aroundPoint;
+  if (!st) return;
+  tapPole.position.y = ground.heightAt(st.px, st.pz); // the DEM can arrive after the pole
+  const ev = tapLib.aroundSimStep(st, sim, dt, cockpitEntered && !modalOpen());
+  if (ev === 'complete' || ev === 'failed') drillCard(tapLib.gradeAroundPoint(st, sim.assist === 'kid'), tapLib.AROUND_PLACE);
+}
+function endAroundPoint() {
+  if (!sim.aroundPoint) return;
+  sim.aroundPoint = null;
+  scene.remove(tapPole);
+  refreshWeather(); // the lesson's wind goes with it
+}
 // Unusual attitudes (0174, upset.js): handed over once the player is flying; graded when level (or not).
 let upLib = null;
 function checkUpset(dt) {
@@ -1128,9 +1144,10 @@ function startDrills(mission) {
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.noFlap = sim.emergencyDescent = null;
   sim.softField = sim.surfaceMu = null;
   sim.wingLow = null; sim.touchYaw = 0;
+  endAroundPoint();
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.emergencyDescent || mission.shortField || mission.noFlap || mission.softField || mission.wingLow);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.emergencyDescent || mission.shortField || mission.noFlap || mission.softField || mission.wingLow || mission.aroundPoint);
   if (mission.shortField) loadDrill(mission, sfdLib, () => import('./shortField.js'), (lib) => { sfdLib = lib; if (sim.aircraftKey === mission.aircraft) sim.shortField = lib.createShortField(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.noFlap) loadDrill(mission, nfLib, () => import('./noFlap.js'), (lib) => { nfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.noFlap = lib.createNoFlap(runwayEnd(mission.airport, mission.rwy)); });
   // The wing-low lesson (0188): its wind is currentWeather()'s while it flies (the live METAR's when it suits, else its scenario's).
@@ -1141,6 +1158,8 @@ function startDrills(mission) {
   if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
   if (mission.emergencyDescent) loadDrill(mission, edLib, () => import('./emergencyDescent.js'), (lib) => { edLib = lib; if (sim.aircraftKey === mission.aircraft) sim.emergencyDescent = lib.createEmergencyDescent(); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
+  // Turns around a point (0211): its scenario wind is currentWeather()'s while it flies; the pole goes in the scene.
+  if (mission.aroundPoint) loadDrill(mission, tapLib, () => import('./aroundPoint.js'), (lib) => { tapLib = lib; if (sim.aircraftKey === mission.aircraft) { scene.add(tapPole = lib.makeMarker(sim.aroundPoint = lib.createAroundPoint(mission))); refreshWeather(); } });
   // The stall drills: powerOnStall.js (0191) is the one chunk, the idle drill its `idle` (stallDrill.js, 0087): the same calls, the
   // power-on drill's plus its coach's powerOnPrompt (one import: each import() adds boot bytes to Vite's preload map).
   if (mission.stallDrill) loadDrill(mission, stallRoot, () => import('./powerOnStall.js'), (lib) => { stallRoot = lib; stallLib = mission.powerOn ? lib : lib.idle; sim.stallDrill = stallLib.createStallDrill(); });
@@ -1440,7 +1459,7 @@ function updateCoach(dt) {
   // ...and the dead-stick challenge (0036) to the stop; the engine failure after takeoff (0104)
   // from the spawn, but not on the runway between a hop and the failure (no "brakes" mid-takeoff).
   if (sim.windshear && !wsLib.shearLive(sim.windshear)) { /* graded (0112): no landing coach under its card */ }
-  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.emergencyDescent || sim.wake || sim.shortField || sim.noFlap || sim.wingLow || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
+  else if ((coachEnabled && (sim.loadedMission?.kind === 'final' || coachHandover || (sim.toCoach && !sim.toCoach.over))) || (drillCoach && (stallLive() || sim.deadStick || sim.pattern || sim.steepTurns || sim.upset || sim.slowFlight || sim.emergencyDescent || sim.wake || sim.shortField || sim.noFlap || sim.wingLow || (sim.aroundPoint && tapLib.aroundLive(sim.aroundPoint)) || (sim.softField && !sfoLib.softFieldDone(sim.softField)) || (sim.rto && rtoLib.rtoLive(sim.rto)) || (sim.engineOut && (sim.engineFailed || !sim.onGround || !coach.flown))))) {
     coachInput.aglFt = sim.aglFt;
     coachInput.vsiFpm = sim.vsiFpm;
     coachInput.papiWhite = sim.papiWhite;
@@ -1471,6 +1490,7 @@ function updateCoach(dt) {
       : sim.engineOut ? eoLib.engineOutPrompt(sim.engineOut, sim) : sim.rto ? rtoLib.rtoPrompt(sim.rto, sim)
       : sim.windshear ? wsLib.shearPrompt(sim.windshear, sim)
       : sim.steepTurns ? stLib.steepCoach(sim.steepTurns, coachInput.kid)
+      : sim.aroundPoint ? tapLib.aroundCoach(sim.aroundPoint, coachInput.kid)
       : sim.upset ? upLib.upsetCoach(sim.upset, coachInput.kid)
       : sim.slowFlight ? sfLib.slowCoach(sim.slowFlight, coachInput.kid)
       : sim.emergencyDescent ? edLib.descentCoach(sim.emergencyDescent, coachInput.kid)
@@ -1690,7 +1710,7 @@ function currentWeather() {
   const field = sim.activeEnd ? sim.activeEnd.airport : 'KDFW';
   if (sim.dh) return ifrLib.WX;
   const wx = sim.wxByIcao[field] || sim.wxByIcao.KDFW || scenarioWeather();
-  return sim.wingLow ? wlLib.lessonWx(sim.wingLow, wx) : wx; // 0188: the lesson's crosswind
+  return sim.wingLow ? wlLib.lessonWx(sim.wingLow, wx) : sim.aroundPoint ? sim.aroundPoint.wx : wx; // 0188: the lesson's crosswind; 0211's wind
 }
 
 function refreshWeather() {
@@ -1698,7 +1718,7 @@ function refreshWeather() {
   sim.wx = currentWeather();
   // The wing-low lesson's wind (0188) arrives with its lazy chunk or a METAR, after the spawn: before the flight starts, the
   // spawn keeps its airspeed (its velocity moves with the air) instead of a gust of the difference.
-  if (sim.wingLow && sim.wingLow.readyT === null && was && was !== sim.wx && !sim.onGround) {
+  if (((sim.wingLow && sim.wingLow.readyT === null) || (sim.aroundPoint && !sim.aroundPoint.live)) && was && was !== sim.wx && !sim.onGround) {
     const f = KTS_TO_MPS * surfaceWindFactor(sim.pos.y - sim.groundY);
     const a = windVector(was.windDirDeg, was.windKts * f), b = windVector(sim.wx.windDirDeg, sim.wx.windKts * f);
     sim.vel.x += b.x - a.x; sim.vel.z += b.z - a.z;
@@ -1859,6 +1879,7 @@ function step6DofPhysics(dt) {
   checkRto();
   checkWindshear(dt);
   checkSteepTurns(dt);
+  checkAroundPoint(dt);
   checkSlowFlight(dt);
   checkEmergencyDescent(dt);
   checkUpset(dt);
@@ -2106,7 +2127,8 @@ function updateActiveRunway(dt) {
     sim.rwySelectTimer = 0.5;
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     const hdg = (-_euler.y * RAD_TO_DEG + 360) % 360;
-    if (!sim.onGround) sim.activeEnd = selectActiveRunway(RUNWAY_ENDS, sim.pos, hdg, sim.activeEnd);
+    // 0211: no runway (PAPI, runway wind, Kid's final guide) over the fields while the lesson flies.
+    if (!sim.onGround) sim.activeEnd = sim.aroundPoint && tapLib.aroundLive(sim.aroundPoint) ? null : selectActiveRunway(RUNWAY_ENDS, sim.pos, hdg, sim.activeEnd);
   }
   if (sim.activeEnd) {
     const ap = Object.assign(sim.approach, approachGeometry(sim.activeEnd, sim.pos));
@@ -2407,6 +2429,7 @@ function renderHud() {
   if (sim.gate && sim.simTime < sim.gateShownUntil) gateVerdict?.drawGateVerdict(hudCtx, sim, w, h, caption.text);
   // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
   if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
+  else if (sim.aroundPoint && !caption.text) tapLib.drawPole(hudCtx, cx, takeoffCallTop(cy), sim.aroundPoint, sim, hdgTrue); // 0211: the pole's distance and clock
 
   hudCtx.restore();
 }
@@ -2686,7 +2709,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   // The traffic pattern (0048): Kid's guide flies the legs and turns (pattern.js kidGuide).
   else if (sim.pattern && !departing) patLib.kidGuide(sim.pattern, sim, _assistIn);
   // Steep turns (0161): Kid's guide flies the turns, and returns Kid's and Learner's 53° cap (full stick = 45°).
-  _assistIn.bankMaxDeg = sim.steepTurns ? stLib.kidGuide(sim.steepTurns, _assistIn) : 0;
+  _assistIn.bankMaxDeg = sim.steepTurns ? stLib.kidGuide(sim.steepTurns, _assistIn) : sim.aroundPoint ? tapLib.kidGuide(sim.aroundPoint, _assistIn) : 0; // 0211: the same cap, the circle's guide
   if (sim.emergencyDescent) _assistIn.bankMaxDeg = edLib.kidGuide(sim.emergencyDescent, _assistIn); // 0209: Kid spirals down; full stick = 40°
   if (sim.slowFlight) sfLib.kidGuide(sim.slowFlight, _assistIn); // slow flight (0164): level, on the heading
   _assistIn.noFloor = sim.engineFailed;
@@ -2705,7 +2728,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
   sim.rudderInput = slewRudder(sim.rudderInput, _assistOut.rud, dt);
   // No engine (0036): no power to manage, and flaps are the pilot's call (the coach says when).
   if (sim.engineFailed) return;
-  if (cfg.autoConfig && !wsEscape) { // no gear or flaps in the shear
+  if (cfg.autoConfig && !wsEscape && !(sim.aroundPoint && tapLib.aroundLive(sim.aroundPoint))) { // no gear or flaps in the shear; none round the pole (0211: a sink at 1,000 ft is no approach)
     _assistCfg.gearDown = sim.gearDown; _assistCfg.flapsIndex = sim.flapsIndex;
     autoConfigure(spec, sim, _assistCfg);
     if (sim.shortField && _assistCfg.flapsIndex >= landingFlaps(spec)) _assistCfg.flapsIndex = sfdLib.FULL_FLAPS; // 0181: the POH's 30°
@@ -2724,7 +2747,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : sim.noFlap ? nfLib.APPROACH_KTS + kidGustAddKts(spec, sim.wx) : 0;
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns || sim.aroundPoint ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), kidGustAddKts(spec, sim.wx)) : sim.noFlap ? nfLib.APPROACH_KTS + kidGustAddKts(spec, sim.wx) : 0;
       sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, kidGustAddKts(spec, sim.wx)), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland
@@ -3225,6 +3248,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.noFlap = sim.emergencyDescent = null;
   sim.softField = sim.surfaceMu = null;
   if (sim.wingLow) { sim.wingLow = null; sim.touchYaw = 0; refreshWeather(); } // 0188: the lesson's wind goes with it
+  endAroundPoint(); // 0211: and this one's, with its pole
   sim.windshear = null;
   sim.engineFailed = false;
   setAircraft(e.target.value);
@@ -3825,6 +3849,7 @@ window.openaeroDebug = () => {
     rto: sim.rto ? { ...sim.rto } : null,
     windshear: sim.windshear ? { ...sim.windshear } : null,
     steepTurns: sim.steepTurns ? { ...sim.steepTurns } : null,
+    aroundPoint: sim.aroundPoint && tapLib.debugSnap(sim.aroundPoint), // aroundPoint.js (0211)
     upset: sim.upset ? { ...sim.upset } : null,
     slowFlight: sim.slowFlight ? { ...sim.slowFlight } : null,
     emergencyDescent: sim.emergencyDescent ? { ...sim.emergencyDescent } : null,
