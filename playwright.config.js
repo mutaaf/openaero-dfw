@@ -24,6 +24,13 @@ export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
+  // CI's runner has 4 vCPUs: 3 workers (75%), not Playwright's default 2 (50%). In Oct 2026 a
+  // third worker starved SwiftShader and flight specs timed out, but since then the desktop 3D
+  // view draws at 0.25x, phones at 0.5x and the long flights are warped: on a 4-core sandbox
+  // the full suite (388 tests, CI=1) ran 27.2 min on 2 workers and 23.1 min on 3, all green,
+  // while main's CI was being cancelled at its 30 min limit with every test passing (2026-11-23).
+  // perf and devices still run alone after everything else (one test file each).
+  workers: process.env.CI ? '75%' : undefined,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:4173',

@@ -28,9 +28,12 @@ test('every airport has wind cones on its own ground, each in its own field\'s w
   await cockpit(page);
   await expect.poll(() => page.evaluate(() => window.openaeroDebug().terrain?.demLoaded)).toBe(true);
   // Let the pendulums settle on the live METAR (they were primed on the first weather seen).
+  // Both fields: Love Field's cones swing round on their own, lighter wind, and a loaded
+  // runner read one still turning (16° off 270) once DFW's had settled.
   await expect.poll(async () => {
     const socks = (await page.evaluate(() => window.openaeroDebug())).windsocks;
-    return socks.filter((s) => s.airport === 'KDFW').every((s) => angleDiff(s.yawDeg, 90) < 6 && s.extensionDeg > 80);
+    return socks.filter((s) => s.airport === 'KDFW').every((s) => angleDiff(s.yawDeg, 90) < 6 && s.extensionDeg > 80)
+      && socks.filter((s) => s.airport === 'KDAL').every((s) => angleDiff(s.yawDeg, 270) < 8);
   }, { timeout: 15_000 }).toBe(true);
   const socks = (await page.evaluate(() => window.openaeroDebug())).windsocks;
   for (const icao of ['KDFW', 'KDAL', 'KAFW', 'KADS', 'KGKY', 'KFTW']) {
