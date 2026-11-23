@@ -13,8 +13,10 @@ import { stallBand } from './hudLayout.js';
 // while a caption shows, as the takeoff call does (0137). 132: hudLayout.js GATE_VERDICT_BOTTOM, the
 // two-line box's foot, which the coach card's slot clears. Writes into `out`.
 export const TOUCH_DECK_H = 207;
-export function gateVerdictRect(w, h, lines, out) {
-  const cy = h / 2, sky = out.sky = h > w && cy + 132 > h - TOUCH_DECK_H - 40;
+// w, h: the HUD's virtual space (main.js renderHud); k its scale (hudLayout.js hudScale, 0218): the deck is
+// DOM px, so TOUCH_DECK_H + 40 is that over k here.
+export function gateVerdictRect(w, h, lines, out, k = 1) {
+  const cy = h / 2, sky = out.sky = h > w && cy + 132 > h - (TOUCH_DECK_H + 40) / k;
   const half = Math.min(120, w / 2 - 74); // under 388 px across, clear of the tapes' edges, which come in there (0217)
   out.x = w / 2 - half;
   out.y = sky ? Math.max(cy - 117, 100) : cy + 76;
@@ -28,7 +30,7 @@ const _box = {};
 export function drawGateVerdict(ctx, sim, w, h, captionOn) {
   const g = sim.gate;
   const lines = Math.ceil(g.failing.length / 3);
-  const r = gateVerdictRect(w, h, lines, _box), cx = w / 2, y = r.y + 16;
+  const r = gateVerdictRect(w, h, lines, _box, sim.hudScale), cx = w / 2, y = r.y + 16;
   if (r.sky && captionOn) return;
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
@@ -110,11 +112,11 @@ export function windPlainWords(xwKts, hwKts, kid = false, wingLow = false) {
 // screen held upright the coach card takes the top slot (main.js placeCoach, .coach-top) and would cover the
 // strip: drawWind leaves it out while the card is there (the device panel). Writes `out`.
 export const WIND_PLAIN_H = 24;
-export function windPlainRect(box, out) {
+export function windPlainRect(box, out, k = 1) { // k: the HUD's scale (0218); the top bar is 72 DOM px
   out.x = box.x;
   out.w = box.w;
   out.h = WIND_PLAIN_H;
-  out.y = box.y - WIND_PLAIN_H - 2 >= 72 ? box.y - WIND_PLAIN_H - 2 : box.y + box.h + 2;
+  out.y = box.y - WIND_PLAIN_H - 2 >= 72 / k ? box.y - WIND_PLAIN_H - 2 : box.y + box.h + 2;
   return out;
 }
 
@@ -131,7 +133,7 @@ export function drawWind(ctx, box, s, level) {
   const coachTop = coachEl && coachEl.classList.contains('coach-top') && !coachEl.classList.contains('hidden');
   const words = level === 'pilot' || s.onGround || s.raFt < 30 || coachTop ? null : windPlainWords(hw.xwKts, hw.hwKts, level === 'kid', !!s.wingLow);
   hw.plain = words;
-  hw.plainBox = words && windPlainRect(box, _plain);
+  hw.plainBox = words && windPlainRect(box, _plain, s.hudScale);
   if (!words) return;
   const r = _plain;
   ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
@@ -183,14 +185,15 @@ export function baroLabel(inHg, src, out) {
 // Writes `out`.
 export const BARO_W = 58;
 export const BARO_H = 26;
-export function baroRect(w, h, out) {
+// w, h: the HUD's virtual space; k its scale (0218): the deck and the 660 px button row are DOM px.
+export function baroRect(w, h, out, k = 1) {
   const cx = w / 2;
   out.x = Math.min(cx + 134, w - BARO_W - 2);
   out.y = h / 2 + 94;
   out.w = BARO_W;
   out.h = BARO_H;
   const foot = out.y + BARO_H;
-  out.show = out.x >= cx + 122 && (h > w ? foot <= h - TOUCH_DECK_H - 40 : w >= 660);
+  out.show = out.x >= cx + 122 && (h > w ? foot <= h - (TOUCH_DECK_H + 40) / k : w * k >= 660);
   return out;
 }
 
@@ -200,7 +203,8 @@ export function baroRect(w, h, out) {
 const _baro = {}, _baroBox = {};
 function drawBaro(ctx, s, level) {
   const hw = s.hudWind;
-  const r = baroRect(ctx.canvas.width, ctx.canvas.height, _baroBox);
+  const k = s.hudScale || 1; // the canvas is screen px, the HUD draws in its virtual space (0218)
+  const r = baroRect(ctx.canvas.width / k, ctx.canvas.height / k, _baroBox, k);
   if (level !== 'pilot' || !r.show || !(s.altimInHg > 0)) {
     hw.baro = hw.baroSrc = hw.baroBox = null;
     return;

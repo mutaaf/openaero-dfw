@@ -54,7 +54,7 @@ import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSup
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
   windBoxRect, altCaptionRect, ALT_CAPTION_H, speedTapeX, altTapeX, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand,
-  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
+  ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud, hudScale,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron, rollHoldScale } from './flightModel.js';
 import { radioAltitudeM } from './gear.js';
@@ -126,6 +126,7 @@ const sim = {
   windNowKts: 0,
   // The HUD wind readout's text (0075), refreshed with the ribbon once a second
   hudWind: windReadout(scenarioWeather(), null),
+  hudScale: 1, // the canvas HUD's scale on a tablet (0218, hudLayout.js hudScale; handleResize)
   simTime: 0,
 
   // Touchdown detection for the landing grade (landing.js)
@@ -1574,11 +1575,12 @@ function placeCoach(resized = false) {
   if (!coachTopHeld) {
     el.classList.remove('coach-top');
     const r = el.getBoundingClientRect();
-    coachTopHeld = coachOverHud(window.innerHeight, r.top, r.bottom);
+    coachTopHeld = coachOverHud(window.innerHeight, r.top, r.bottom, sim.hudScale);
     el.classList.toggle('coach-top', coachTopHeld);
   }
   el.classList.remove('coach-tight');
-  if (coachTopHeld && el.getBoundingClientRect().bottom > headingBoxTop(window.innerHeight / 2) - 2) el.classList.add('coach-tight');
+  const k = sim.hudScale; // the heading box's top on screen (the HUD draws at k, 0218)
+  if (coachTopHeld && el.getBoundingClientRect().bottom > k * headingBoxTop(window.innerHeight / 2 / k) - 2) el.classList.add('coach-tight');
 }
 
 // Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
@@ -2258,14 +2260,20 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false, clea
 // above sea level, the top bar's AGL the main wheels' radio altitude (sim.raFt). gateVerdict.js (lazy)
 // draws it, in plain words for Kid and Learner (0140).
 const _altCap = {};
-// The tapes' inner edges this frame, canvas px (the ?debug snapshot's hudTapes, 0217).
-const hudTapes = { speedX: 0, altX: 0 };
+// The tapes' inner edges this frame, canvas px (the ?debug snapshot's hudTapes, 0217), and the HUD's scale (0218).
+const hudTapes = { speedX: 0, altX: 0, scale: 1 };
 // The scale's numbers (text ty - 4 … ty + 3.5) stay off the tab's rows.
 const ALT_CAPTION_CLEAR = ALT_BOX.h / 2 + 2 + ALT_CAPTION_H + 4;
 
+// A HUD box from renderHud's virtual space to canvas px = CSS px (the ?debug snapshot, 0218).
+const hudPx = (r, k = sim.hudScale) => r && { ...r, x: r.x * k, y: r.y * k, w: r.w * k, h: r.h * k };
+
 function renderHud() {
-  const w = hudCanvas.width;
-  const h = hudCanvas.height;
+  // On a tablet everything draws larger (0218, hudLayout.js hudScale): in a virtual w x h, s px each.
+  const s = sim.hudScale;
+  const w = hudCanvas.width / s;
+  const h = hudCanvas.height / s;
+  hudCtx.setTransform(s, 0, 0, s, 0, 0);
   hudCtx.clearRect(0, 0, w, h);
 
   const cx = w / 2;
@@ -2349,8 +2357,10 @@ function renderHud() {
   // Speed and altitude tapes: see-through scales that scroll past a boxed readout, so
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
   // Their edges come in on a phone under 390 px across so both stay on screen (0217, hudLayout.js).
-  const spdX = hudTapes.speedX = cx + speedTapeX(w), altX = altTapeX(w);
-  hudTapes.altX = cx + altX;
+  const spdX = cx + speedTapeX(w), altX = altTapeX(w);
+  hudTapes.speedX = spdX * s;
+  hudTapes.altX = (cx + altX) * s;
+  hudTapes.scale = s;
   drawTape(spdX, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
   drawTape(cx + altX, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
   gateVerdict?.drawAltCaption(hudCtx, altCaptionRect(cx, cy, _altCap, altX), sim.assist, w, sim, _windBox); // + the wind box's plain words (0142)
@@ -3105,6 +3115,8 @@ function handleResize() {
 
   hudCanvas.width = w;
   hudCanvas.height = h;
+  sim.hudScale = hudScale(w, h, touchOnly); // 0218: larger on a tablet; the callout caption follows (styles.css --hud-s)
+  document.documentElement.style.setProperty('--hud-s', sim.hudScale);
 
   sizeMap();
   placeCoach(true);
@@ -3796,7 +3808,7 @@ window.openaeroDebug = () => {
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
     hudTapes: { ...hudTapes }, // the tapes' inner edges (0217), canvas px
-    hudAltCaption: { ..._altCap }, // the altitude tape's MSL / SEA LVL tab (0132, 0140), canvas px
+    hudAltCaption: hudPx(_altCap), // the altitude tape's MSL / SEA LVL tab (0132, 0140), canvas px
     headingDeg: hdg,
     pitchDeg: _euler.x * RAD_TO_DEG,
     bankRightDeg: -_euler.z * RAD_TO_DEG,
@@ -3830,7 +3842,8 @@ window.openaeroDebug = () => {
     precip: precipFx && { ...precipFx.state }, // 0196: what falls, how many streaks, flashes so far
     airspace: airspace && { ...airspace.state }, // 0197: shelves drawn, the status line
     // The HUD wind box (0075): what it says and where it is (canvas px = CSS px).
-    hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, hdg), box: { ..._windBox } },
+    hudWind: { ...sim.hudWind, arrowDeg: windArrowDeg(sim.hudWind.dirDeg, sim.hudWind.kts, hdg), box: hudPx(_windBox),
+      plainBox: hudPx(sim.hudWind.plainBox), baroBox: hudPx(sim.hudWind.baroBox) },
     pixelRatio: resScale.ratio,
     paused: sim.paused,
     gfxLost: gfx.lost,
