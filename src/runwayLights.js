@@ -14,6 +14,7 @@ import { createShadow } from './shadow.js';
 import { createTouchdownFeel as touchdownFeel } from './touchdownFeel.js';
 import { createBuffet } from './buffet.js';
 import { createFuel } from './fuel.js';
+import { ROAD_START, LOAD_M } from './world/serviceRoad.js';
 import { nightUniforms } from './nightGround.js'; // landingLight.js imports it too: no new boot export
 // The touchdown's chirp and tyre smoke (0147), and with it the stall buffet's shake and rumble (0079)
 // the Cessna's fuel (0162) and the ambient traffic (0080): all hook the scene the touchdown group is added to (main.js
@@ -32,7 +33,9 @@ export function createLandingLight(sim, root, heightAt) {
 }
 
 // The Rapier world (0043): its own lazy chunk (Rapier's glue and ~1.2 MB gz of wasm), fetched once the
-// player has started flying (the start screen closed), never at boot or behind the first start screen.
+// player has started flying (the start screen closed) a flight at KDFW (the runway end flown is DFW's, so the
+// wasm compiles on the spawn, not mid-final: device panel), or within LOAD_M of the tug's road; never at
+// boot, behind the first start screen or at another airport. A check a frame, no allocation, until it loads.
 let worldWatched = false;
 function watchStart(scene, sim, heightAt) {
   if (worldWatched) return;
@@ -43,6 +46,7 @@ function watchStart(scene, sim, heightAt) {
   scene.onBeforeRender = function (renderer, sc, camera, target) {
     before.call(this, renderer, sc, camera, target);
     if (loading || !startScreen?.classList.contains('hidden')) return;
+    if (sim.activeEnd?.airport !== 'KDFW' && Math.hypot(sim.pos.x - ROAD_START.x, sim.pos.z - ROAD_START.z) >= LOAD_M) return;
     loading = true;
     import('./world/worldScene.js').then((m) => m.createWorldScene(scene, sim, heightAt)).catch(console.warn);
   };

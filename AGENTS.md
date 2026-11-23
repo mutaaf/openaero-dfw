@@ -514,19 +514,23 @@ src/traffic.js      ambient traffic (0080, lazy chunk fetched by runwayLights.js
                     KDFW end lands in the touchdown zone). ?debug: window.openaeroTraffic()
 src/world/          the Rapier world (0043; @dimforge/rapier3d 0.21, Apache-2.0, the non-compat build): physicsWorld.js (pure,
                     flown in Node by tests/unit/physicsWorld.test.js) is one World on a fixed 1/60 s step (≤ 15 a frame), a flat
-                    fixed cuboid whose top runs through terrain.js heights at both ends of SERVICE_ROAD (200 m N-S on KDFW's
-                    centre spine, midway between 18L/36R and 17R/35L: placed by the runways' survey, approximate), and ONE tow
-                    tractor (3 t box, four sprung wheels on Rapier's raycast vehicle controller, rear drive, front steering)
-                    driving it at 5 km/h: out, a 3 s stop, back in reverse, a stop. The wheels' rays skip dynamic bodies (they
-                    start inside the chassis); each wheel's max suspension force is the tug's weight (Rapier's 6 kN default
-                    bottomed the springs and the box slid on the road). Steps only while the aircraft is < WAKE_M (3 km) from
-                    the tug; the aircraft is not a Rapier body. initRapier instantiates the .wasm itself: Rapier's glue
-                    imports it as an ES module, which neither Vite nor Node loads, so vite.config.js's rapierWasm plugin
-                    resolves its `./rapier_wasm3d` to rapierRaw.js (the bindings without that import; Vitest inlines the
-                    package). worldScene.js (lazy chunk, ~41 kB gz + the 1.19 MB gz wasm) is fetched by runwayLights.js's
-                    landing-light hook once #onboardingModal first hides (after Start, never at boot), steps on sim.simTime
-                    from the scene's onBeforeRender and poses a box + four wheels (suspension, steer, spin). Rapier's
-                    getters allocate a few small objects an awake frame. ?debug: window.openaeroWorld()
+                    fixed cuboid whose top runs through terrain.js heights at both ends of serviceRoad.js SERVICE_ROAD (~200 m
+                    N-S on Terminal C's east ramp at KDFW, lon -97.0344, read off the imagery: approximate) and its return lane
+                    beside it (laneOffsetM, a full-lock U-turn's diameter), and ONE tow tractor (3 t box + seat + tow bar, four
+                    sprung wheels on Rapier's raycast vehicle controller, rear drive, front steering) driving a closed loop at
+                    5 km/h: out, a U-turn, back on the return lane, a U-turn, a 3 s hold. Each wheel's max suspension force is
+                    the tug's weight (Rapier's 6 kN default bottomed the springs and the box slid on the road). Steps only
+                    while the aircraft is < WAKE_M (3 km) from the tug; the aircraft is not a Rapier body. initRapier
+                    instantiates the .wasm itself: Rapier's glue imports it as an ES module, which neither Vite nor Node
+                    loads, so vite.config.js's rapierWasm plugin resolves its `./rapier_wasm3d` to rapierRaw.js (the
+                    bindings without that import; Vitest inlines the package). worldScene.js (lazy chunk, ~41 kB gz + the
+                    1.19 MB gz wasm) is fetched by runwayLights.js's landing-light hook once #onboardingModal has hidden on a
+                    flight whose runway end is KDFW's (sim.activeEnd), or within serviceRoad.js LOAD_M (5 km) of the road:
+                    never at boot, never at another airport. It takes one step at load (Chrome compiles the wasm lazily on
+                    first call: ~400 ms on a 4x-throttled phone, so on the spawn, not in a frame mid-flight), steps on
+                    sim.simTime from the scene's onBeforeRender and poses the tug and its wheels (suspension, steer, spin).
+                    Rapier's getters fill preallocated objects; asleep, nothing calls into the wasm. ?debug:
+                    window.openaeroWorld()
 src/replay.js       landing replay (0019, lazy chunk after boot): main.js records pos, quat, throttle, gear, flaps and
                     the stick into one preallocated ring buffer, the last 30 s at 20 Hz of sim time (reset by loadScenario);
                     ▶ REPLAY on the results card plays it back with the physics paused (main.js renderLoop calls its step

@@ -1,12 +1,14 @@
 // The game's side of the Rapier world (ticket 0043): a lazy chunk fetched once the player has
-// started flying (runwayLights.js's landing-light hook watches the start screen close), never at
+// started flying within serviceRoad.js LOAD_M of the tug (runwayLights.js's landing-light hook), never at
 // boot. It fetches Rapier's .wasm (~1.2 MB gz, same origin, bundled from npm), builds
 // physicsWorld.js's world on terrain.js heights, and draws the tow tractor: a box and four wheels
-// posed from the raycast vehicle (suspension, steering, spin). It chains the scene's
+// posed from the raycast vehicle (suspension, steering, spin), a seat back and a tow bar. It chains the scene's
 // onBeforeRender and steps on the sim's clock (sim.simTime: nothing moves while the flight is
 // paused or behind a menu); the world sleeps while the aircraft is WAKE_M or more from the tug.
-// Rapier's getters (translation, rotation) hand back new small objects, so an awake frame makes a
-// few; an asleep one makes none.
+// Rapier's getters fill preallocated objects here; an asleep frame calls nothing in Rapier (world.step
+// itself makes and frees one small RawVector a step). The first step is taken at load time: Chrome
+// compiles the wasm's functions lazily on first call (~400 ms on a 4x-throttled phone, device panel),
+// which in a render frame was a hitch on the takeoff roll. A failed fetch is not retried this page.
 import * as THREE from 'three';
 import * as R from '@dimforge/rapier3d';
 import wasmUrl from '@dimforge/rapier3d/rapier_wasm3d_bg.wasm?url';
@@ -15,6 +17,7 @@ import { initRapier, createPhysicsWorld, TUG } from './physicsWorld.js';
 export async function createWorldScene(scene, sim, heightAt) {
   await initRapier(fetch(wasmUrl));
   const w = createPhysicsWorld(R, { heightAt });
+  w.stepOnce(); // compile now, on the spawn, not in the frame the tug wakes
   const h = TUG.halfM;
   const body = new THREE.Mesh(new THREE.BoxGeometry(2 * h.x, 2 * h.y, 2 * h.z), new THREE.MeshLambertMaterial({ color: 0xd9a21b }));
   body.name = 'tug';
@@ -28,11 +31,19 @@ export async function createWorldScene(scene, sim, heightAt) {
     body.add(m);
     wheels.push(m);
   }
+  // A seat back and a tow bar, so the box reads as a tractor (children of the chassis: one pose).
+  const dark = new THREE.MeshLambertMaterial({ color: 0x334155 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 0.9), dark);
+  seat.position.set(-0.6, h.y + 0.35, 0);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.12, 0.12), dark);
+  bar.position.set(-h.x - 0.4, -0.25, 0);
+  body.add(seat, bar);
   scene.add(body);
 
   let last = null;
+  const p = { x: 0, y: 0, z: 0 }, q = { x: 0, y: 0, z: 0, w: 1 };
   const pose = () => {
-    const p = w.chassis.translation(), q = w.chassis.rotation();
+    w.chassis.translation(p); w.chassis.rotation(q);
     body.position.set(p.x, p.y, p.z);
     body.quaternion.set(q.x, q.y, q.z, q.w);
     for (let i = 0; i < 4; i++) {
