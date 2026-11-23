@@ -3,8 +3,12 @@
 // FAA-H-8083-3C ch. 7: a constant radius over the ground needs a bank "proportional to groundspeed" (p. 7-3, its
 // examples follow tan φ = Vg² / (g R)), steepest downwind and shallowest upwind; a constant bank flies a constant
 // circle in the air, and "the path over the ground is not circular" (p. 7-4). The cards check the lesson against
-// that: a pilot who holds one bank grades D as an oval in every wind, one who banks for the groundspeed grades A or
-// better, and the steepest and shallowest banks it needs are the handbook's formula at the downwind and upwind points.
+// that: a pilot who holds one bank grades D in every wind (the circle drifts off, or at 5 kt is an oval); one who banks
+// for the groundspeed with an eye on the distance (Vt²/d plus a spring to the radius: the same physics as the lesson's
+// Kid guide, other gains) grades A or better; one who flies the handbook's formula alone, tan φ = Vg²/(gR), with no eye
+// on the distance, beats the one-bank pilot but drifts; and the banks it takes are the formula's downwind and upwind.
+// The four wind directions turn the whole geometry (the frames, signs and the wind's sense); 5 and 15 kt and a
+// right-hand circle (ACS PA.V.B.S5: "either direction") vary the problem itself.
 import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
@@ -26,10 +30,11 @@ const WIND_KTS = 12;
 // The lesson's geometry, turned to each wind: the airplane at the origin on the downwind entry (heading the way the
 // wind blows, AFH p. 7-4), the pole half a mile ahead and R to the left, as missions.js sets it for its south wind.
 const entryHdg = (fromDeg) => (fromDeg + 180) % 360;
-function lesson(fromDeg) {
+// side −1: the pole off the left wing (the mission's); +1 off the right.
+function lesson(fromDeg, windKts = WIND_KTS, side = -1) {
   const h = entryHdg(fromDeg) * DEG_TO_RAD;
-  const fx = Math.sin(h), fz = -Math.cos(h), lx = -Math.cos(h), lz = -Math.sin(h); // ahead, to the left
-  return { point: [926 * fx + R * lx, 926 * fz + R * lz], hdg: entryHdg(fromDeg), radiusFt: R_FT, wind: [fromDeg, WIND_KTS], pos: [0, 0], aglFt: 1000 };
+  const fx = Math.sin(h), fz = -Math.cos(h), lx = Math.cos(h) * side, lz = Math.sin(h) * side; // ahead, to the pole's side
+  return { point: [926 * fx + R * lx, 926 * fz + R * lz], hdg: entryHdg(fromDeg), radiusFt: R_FT, wind: [fromDeg, windKts], pos: [0, 0], aglFt: 1000, kias: KTS };
 }
 // harness.js makeBody heads north: turn the body (attitude and velocity) to the entry heading.
 function headTo(b, hdgDeg) {
@@ -39,16 +44,17 @@ function headTo(b, hdgDeg) {
 }
 const DIRS = [180, 0, 90, 270]; // a south wind (the mission's), north, east, west
 
-// pilot: 'constant' holds the still-air bank for the radius from abeam; 'wind' banks for the groundspeed round
-// the pole (its own law, not the lesson's: Vt² / d plus a spring to the radius and damping on the radial speed).
-function aroundPoint(fromDeg, pilot) {
+// pilot: 'constant' holds the still-air bank for the radius from abeam; 'handbook' banks tan φ = Vg²/(gR) for the
+// groundspeed it has, open loop (no eye on the distance); 'wind' banks for the groundspeed round the pole with an eye
+// on the distance (Vt²/d plus a spring to the radius and damping on the radial speed).
+function aroundPoint(fromDeg, pilot, { windKts = WIND_KTS, side = -1 } = {}) {
   const b = makeBody(c172, { kts: KTS, altM: ALT_M, throttle: 0.6 });
   b.spec = c172;
   headTo(b, entryHdg(fromDeg));
-  const w = windVector(fromDeg, WIND_KTS * KTS_TO_MPS);
+  const w = windVector(fromDeg, windKts * KTS_TO_MPS);
   b.windVec.set(w.x, 0, w.z);
   b.vel.add(b.windVec); // an airborne spawn flies its airspeed (main.js loadScenario adds the wind)
-  const st = createAroundPoint(lesson(fromDeg));
+  const st = createAroundPoint(lesson(fromDeg, windKts, side));
   const alt0 = b.pos.y;
   const prevVel = b.vel.clone(), f = new Vector3(), inv = new Quaternion();
   const tas = tasFromIas(KTS * KTS_TO_MPS, airAt(ALT_M).sigma);
@@ -62,11 +68,12 @@ function aroundPoint(fromDeg, pilot) {
     const abeam = rx * st.ux + rz * st.uz > -40;
     let target = 0;
     if (abeam || st.phase === 'circle') {
-      if (pilot === 'constant') target = -stillBank;
+      if (pilot === 'constant') target = side * stillBank;
+      else if (pilot === 'handbook') target = side * Math.min(45, Math.atan((x.vel.x ** 2 + x.vel.z ** 2) / (GRAVITY * R)) / DEG_TO_RAD);
       else {
         const vr = (x.vel.x * rx + x.vel.z * rz) / d;
         const vt2 = x.vel.x ** 2 + x.vel.z ** 2 - vr * vr;
-        target = -Math.min(45, Math.max(-10, Math.atan((vt2 / d + 0.01 * (d - R) + 0.15 * vr) / GRAVITY) / DEG_TO_RAD));
+        target = side * Math.min(45, Math.max(-10, Math.atan((vt2 / d + 0.01 * (d - R) + 0.15 * vr) / GRAVITY) / DEG_TO_RAD));
       }
     }
     bankCmd += Math.max(-15 * dt, Math.min(15 * dt, target - bankCmd));
@@ -86,7 +93,7 @@ function aroundPoint(fromDeg, pilot) {
     x.rudderInput = Math.max(-1, Math.min(1, rudInt - ball * 2));
     if (st.phase === 'circle' && st.ct > 10) {
       const v = Math.hypot(x.vel.x, x.vel.z);
-      banks.push([-bankRightDeg, (w.x * x.vel.x + w.z * x.vel.z) / (WIND_KTS * KTS_TO_MPS * v), v]);
+      banks.push([-bankRightDeg, (w.x * x.vel.x + w.z * x.vel.z) / (windKts * KTS_TO_MPS * v), v]);
     }
   };
   fly(b, c172, 400, pilotFn, (x) => {
@@ -102,7 +109,7 @@ const fmt = (r) => `${r.st.phase}${r.st.why ? ` (${r.st.why})` : ''} in ${r.st.c
 
 describe('C172 turns around a point (0211, FAA-H-8083-3C ch. 7): a 12 kt wind from four sides', () => {
   for (const dir of DIRS) {
-    it(`wind from ${dir}°: one bank all the way round is an oval over the ground, graded D`, () => {
+    it(`wind from ${dir}°: one bank all the way round drifts off the pole, graded D`, () => {
       const r = aroundPoint(dir, 'constant');
       console.log(`[c172 around ${dir}° constant ${r.stillBank.toFixed(1)}°] ${fmt(r)}`);
       // Flown at one bank, the circle is round in the air and drifts ~12 kt × its ~60 s period (~370 m) a turn.
@@ -142,6 +149,33 @@ describe('C172 turns around a point (0211, FAA-H-8083-3C ch. 7): a 12 kt wind fr
     expect(Math.abs(down.bank - afh(down.vg))).toBeLessThan(3);
     expect(Math.abs(up.bank - afh(up.vg))).toBeLessThan(3);
     expect(down.bank).toBeLessThan(MAX_BANK_DEG); // the lesson's radius keeps the steepest under the handbook's 45°
+  }, 30000);
+});
+
+describe('C172 turns around a point (0211): other winds, the other way round, the handbook pilot', () => {
+  for (const kts of [5, 15]) {
+    it(`${kts} kt: one bank is graded D, banking for the groundspeed A or better`, () => {
+      const c = aroundPoint(180, 'constant', { windKts: kts }), r = aroundPoint(180, 'wind', { windKts: kts });
+      console.log(`[c172 around ${kts} kt constant] ${fmt(c)}\n[c172 around ${kts} kt wind] ${fmt(r)}`);
+      expect(c.grade.grade).toBe('D');
+      expect(r.st.phase).toBe('complete');
+      expect(r.st.maxBankDeg).toBeLessThanOrEqual(MAX_BANK_DEG);
+      expect(['S', 'A']).toContain(r.grade.grade);
+    }, 30000);
+  }
+  it('a right-hand circle (the pole off the right wing) flies and grades the same', () => {
+    const r = aroundPoint(180, 'wind', { side: 1 });
+    console.log(`[c172 around right] ${fmt(r)}`);
+    expect(r.st.phase).toBe('complete');
+    expect(r.st.side).toBe(1);
+    expect(r.st.swept).toBeGreaterThan(0);
+    expect(['S', 'A']).toContain(r.grade.grade);
+  }, 30000);
+  it('the handbook\'s formula alone (no eye on the distance) holds a far rounder circle than one bank, but drifts: the lesson asks for both', () => {
+    const h = aroundPoint(180, 'handbook'), c = aroundPoint(180, 'constant');
+    console.log(`[c172 around handbook open loop] ${fmt(h)}`);
+    expect(h.sdFt).toBeLessThan(c.sdFt / 2);
+    expect(['A', 'B', 'C']).toContain(h.grade.grade);
   }, 30000);
 });
 

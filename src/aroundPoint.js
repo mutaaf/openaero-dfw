@@ -81,7 +81,8 @@ export function createAroundPoint(m) {
     phase: 'entry', px: m.point[0], pz: m.point[1], ux: Math.sin(h), uz: -Math.cos(h), R: m.radiusFt * FT_TO_M,
     live: false, hold: null, spawn: m, wx: lessonWx(m),
     t: 0, ct: 0, swept: 0, lastAng: null, side: 0, d: 0, along: 0,
-    alt0: 0, kts0: 0, iasF: 0, maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, maxBankDeg: 0, steepS: 0,
+    alt0: null, kts0: m.kias, iasF: m.kias, // graded against the lesson's 90 KIAS and the height flying started at (panel: not the abeam instant's)
+    maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, maxBankDeg: 0, steepS: 0,
     w: 0, sum: 0, sumSq: 0, why: null,
     track: new Float32Array(2 * TRACK_MAX), trackN: 0, trackStart: -1, trackT: 0,
   };
@@ -118,8 +119,9 @@ export function aroundStep(st, s) {
     // Which side the pole is on (+ right, − left): the ground track crossed with the line to it.
     const cr = rx * s.vz - rz * s.vx;
     if (Math.abs(cr) > 1) st.side = cr > 0 ? 1 : -1;
-    // The entry altitude and speed: the ones where the circle starts.
-    st.alt0 = s.altFt; st.kts0 = s.iasKts; st.iasF = s.iasKts;
+    // The height to hold: where the player started flying (the spawn's 1,000 ft AGL). The speed is the lesson's (kts0).
+    if (st.alt0 === null) st.alt0 = s.altFt;
+    st.iasF = s.iasKts;
     if (st.along < 0 && st.t < ENTRY_FAIL_S) return '';
     if (st.along >= 0 && d <= 2 * st.R) {
       st.phase = 'circle'; st.trackStart = Math.max(0, st.trackN - 1);
@@ -233,7 +235,8 @@ export function kidGuide(st, out) {
 
 // The HUD's pole readout (main.js renderHud, in the takeoff call's slot under the heading box, hudLayout.js): its
 // distance and clock position from the nose, the way an instructor calls it ("pole at 9 o'clock"): the pole sits under
-// the lowered wing, out of a forward view (AFH p. 7-7). Green on the circle (±SAY_OFF_M), amber off it. The text is
+// the lowered wing (AFH p. 7-7 warns a high wing can block it in a left turn: "ensure that the reference point is
+// visible at all times"), and 90° off the nose, out of any forward camera. Green on the circle (±SAY_OFF_M), amber off it. The text is
 // rebuilt only when what it says changes (no string per frame, AGENTS.md invariant 4).
 export const POLE_BOX_W = 210, POLE_BOX_H = 24;
 let poleFt = -1, poleClock = -1, poleText = '';

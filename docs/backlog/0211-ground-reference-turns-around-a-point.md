@@ -40,5 +40,5 @@ tan φ = Vg²/(gR)). The ACS (FAA-S-ACS-6C Area V Task B, PA.V.B.S7) grades alti
 radius bands (spread ±150 ft for a B, ±350 ft an oval = D) are the game's and the card says so. The wind is a scenario 12 kt from
 the south (labelled SCENARIO WX), not the live METAR: a live wind would need the spawn turned to its downwind, a follow-up.
 The flight cards fly the four winds with the entry turned downwind for each (a crosswind entry starts off the radius: not the
-handbook's). The pole is out of a forward view while circling (under the lowered wing, AFH p. 7-7), so the HUD shows its distance
+handbook's). The pole is 90° off the nose while circling, out of any forward camera, and AFH p. 7-7 warns a high wing can hide it in a left turn ("ensure that the reference point is visible at all times"), so the HUD shows its distance
 and clock position under the heading box.

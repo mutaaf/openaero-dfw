@@ -116,6 +116,25 @@ describe('turns around a point (0211): the steps', () => {
       expect(gradeAroundPoint(st).score).toBeLessThanOrEqual(cap);
     }
   });
+  it('the speed is graded against the lesson\'s 90 KIAS and the height against where flying started, not the abeam instant (panel)', () => {
+    const st = createAroundPoint(MISSION);
+    // Flown at a steady 70 KIAS from start to finish: 20 kt slow all the way, outside the test's ±10.
+    let z = st.pz + 926;
+    while (st.phase === 'entry') { aroundStep(st, { dt: DT, x: st.px + R, z, vx: 0, vz: -46, wx: 0, wz: 0, altFt: 1700, iasKts: 70, bankDeg: 0, stalled: false }); z -= 4.6; }
+    let a = 0;
+    while (st.phase === 'circle') { aroundStep(st, onCircle(st, a, R, { iasKts: 70 })); a -= (46 / R) * DT; }
+    expect(st.maxKtsDev).toBeGreaterThan(15);
+    expect(gradeAroundPoint(st).score).toBeLessThanOrEqual(84);
+    // A climb of 150 ft on the entry, then held there round the circles: 150 ft off the height flying started at.
+    const st2 = createAroundPoint(MISSION);
+    z = st2.pz + 926;
+    let alt = 1700;
+    while (st2.phase === 'entry') { aroundStep(st2, { dt: DT, x: st2.px + R, z, vx: 0, vz: -46, wx: 0, wz: 0, altFt: alt, iasKts: 90, bankDeg: 0, stalled: false }); z -= 4.6; alt = Math.min(1850, alt + 2); }
+    a = 0;
+    while (st2.phase === 'circle') { aroundStep(st2, onCircle(st2, a, R, { altFt: 1850 })); a -= (46 / R) * DT; }
+    expect(st2.maxAltDevFt).toBeCloseTo(150, 0);
+    expect(gradeAroundPoint(st2).score).toBeLessThanOrEqual(84);
+  });
   it('drifting three radii from the pole fails (the wind carried it off)', () => {
     const st = createAroundPoint(MISSION);
     const evs = flyLesson(st, { r: (a) => R * (1 - a * 0.5) });
