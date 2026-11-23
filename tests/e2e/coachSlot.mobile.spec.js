@@ -19,19 +19,23 @@ async function boxes(page) {
     const hit = document.elementFromPoint(s.left + s.width / 2, s.top + s.height / 2);
     const deck = [...document.querySelectorAll('#touchDeck button, #touchDeck .touch-control')]
       .filter((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden').map(rect);
-    return { coach: rect(document.getElementById('coach')), skip: rect(skip), skipHit: skip.contains(hit), deck, w: innerWidth, h: innerHeight };
+    return { coach: rect(document.getElementById('coach')), skip: rect(skip), skipHit: skip.contains(hit), deck, w: innerWidth, h: innerHeight,
+      k: window.openaeroDebug().hudTapes.scale }; // the tablet HUD's scale (0218)
   });
 }
 
-function expectClear({ coach, skip, skipHit, deck, w, h }, label) {
+function expectClear({ coach, skip, skipHit, deck, w, h, k }, label) {
   const cx = w / 2, cy = h / 2;
+  // On a tablet the canvas HUD draws k times larger (0218): every offset below times k; 1 on a phone.
+  if (Math.min(w, h) < 600) expect(k, `${label}: phone HUD`).toBe(1);
+  else expect(k, `${label}: tablet HUD`).toBeGreaterThanOrEqual(1.3);
   const meets = (a, b) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
   const keepOut = {
     // As drawn (main.js drawTape): the speed strip x - 60 … x at cx - 131, the altitude readout to cx + 194.
-    'speed tape': { l: cx - 191, r: cx - 131, t: cy - 90, b: cy + 90 },
-    'altitude tape': { l: cx + 130, r: cx + 194, t: cy - 90, b: cy + 90 },
-    'gate verdict': { l: cx - 120, r: cx + 120, t: cy + 76, b: cy + 132 },
-    'SPD label': { l: cx - 131 - 60, r: cx - 131, t: cy + 106 - 10, b: cy + 106 + 3 },
+    'speed tape': { l: cx - 191 * k, r: cx - 131 * k, t: cy - 90 * k, b: cy + 90 * k },
+    'altitude tape': { l: cx + 130 * k, r: cx + 194 * k, t: cy - 90 * k, b: cy + 90 * k },
+    'gate verdict': { l: cx - 120 * k, r: cx + 120 * k, t: cy + 76 * k, b: cy + 132 * k },
+    'SPD label': { l: cx - 191 * k, r: cx - 131 * k, t: cy + 96 * k, b: cy + 109 * k },
     'horizon band': { l: 0, r: w, t: cy, b: cy + 0.12 * h },
   };
   for (const [name, box] of Object.entries(keepOut)) expect(meets(coach, box), `${label}: coach on the ${name}`).toBe(false);

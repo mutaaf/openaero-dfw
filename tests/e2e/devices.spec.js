@@ -101,7 +101,13 @@ for (const d of DEVICES) {
         boxes.push([id, b]);
       }
       const cx = d.width / 2, cy = d.height / 2;
-      boxes.push(['TRK box', { x: cx - 52, y: Math.max(cy - 145, 72), width: 104, height: 24 }]);
+      // The canvas HUD draws at ?debug hudTapes.scale on a tablet (0218, hudLayout.js hudScale): 1 on a phone.
+      const { hudTapes } = await page.evaluate(() => window.openaeroDebug());
+      const k = hudTapes.scale;
+      if (d.width < 600 || d.height < 600) expect(k, 'a phone keeps the phone HUD').toBe(1);
+      if (d.width >= 820 && d.height >= 820) expect(k, 'a tablet HUD is at least 1.3x').toBeGreaterThanOrEqual(1.3);
+      if (d.width >= 1024 && d.height >= 1024) expect(k).toBe(1.5);
+      boxes.push(['TRK box', { x: cx - 52 * k, y: k * Math.max(cy / k - 145, 72), width: 104 * k, height: 24 * k }]);
       // Alerts take the coach's slot on purpose (GPWS over stall over coach).
       const sharesSlot = (a, b) => [a, b].every((id) => id === '#coach' || ALERTS.includes(id));
       for (let i = 0; i < boxes.length; i++) {
@@ -112,12 +118,15 @@ for (const d of DEVICES) {
       }
       // The centre 40% x 30% around the horizon is free of DOM overlays, and the canvas
       // tapes (renderHud, published as ?debug hudTapes: the speed scale and its readout 60 px left of
-      // its edge, the altitude scale and its readout 64 px right of its edge, cy - 90 … cy + 90) are
+      // its edge, the altitude scale and its readout 64 px right of its edge, cy - 90 … cy + 90, all times k) are
       // whole on screen (0217) and unobstructed.
       const horizon = { x: d.width * 0.3, y: d.height * 0.35, width: d.width * 0.4, height: d.height * 0.3 };
-      const { hudTapes } = await page.evaluate(() => window.openaeroDebug());
-      const tapes = [{ x: hudTapes.speedX - 60, y: cy - 90, width: 60, height: 180 }, { x: hudTapes.altX, y: cy - 90, width: 64, height: 180 }];
-      if (d.width >= 390) expect([hudTapes.speedX, hudTapes.altX], 'tapes where they always were').toEqual([cx - 131, cx + 130]);
+      const tapes = [{ x: hudTapes.speedX - 60 * k, y: cy - 90 * k, width: 60 * k, height: 180 * k }, { x: hudTapes.altX, y: cy - 90 * k, width: 64 * k, height: 180 * k }];
+      if (d.width >= 390) {
+        expect(hudTapes.speedX, 'speed tape where it always was, times the scale').toBeCloseTo(cx - 131 * k, 6);
+        expect(hudTapes.altX, 'altitude tape where it always was, times the scale').toBeCloseTo(cx + 130 * k, 6);
+        if (k === 1) expect([hudTapes.speedX, hudTapes.altX], 'a phone: to the pixel').toEqual([cx - 131, cx + 130]);
+      }
       expect(tapes[0].x, 'speed tape and readout inside the left edge').toBeGreaterThanOrEqual(4);
       expect(tapes[1].x + tapes[1].width, 'altitude tape and readout inside the right edge').toBeLessThanOrEqual(d.width - (d.width >= 390 ? 1 : 4));
       for (const tp of tapes) expect(overlaps(tp, boxes.find(([id]) => id === 'TRK box')[1]), 'a tape vs the TRK box').toBe(false);

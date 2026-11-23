@@ -11,6 +11,9 @@ export const BELOW_TOP_BAR = 72;
 // drops under the top bar. The box is 104 px wide, centred between the tapes (which sit
 // at cx - 175 … cx - 131 and cx + 130 … cx + 186, closer in under 390 px: speedTapeX / altTapeX),
 // so it may share their rows.
+// On a tablet the HUD is drawn larger (0218, hudScale): main.js renderHud draws in a virtual w/s x h/s
+// space, whose short side is then at least HUD_SCALE_FROM (600) px, so cy - 145 is always under the
+// top bar there and these DOM-bound floors (BELOW_TOP_BAR, the touch deck) only bind on phones (s = 1).
 export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
@@ -106,6 +109,20 @@ export const TAKEOFF_CALL_H = 26;
 export const TAKEOFF_CALL_W = 232;
 export function takeoffCallTop(cy) {
   return headingBoxTop(cy) + HEADING_BOX_H + 4;
+}
+
+// The canvas HUD's size on a tablet (0218). Every offset above is in CSS px tuned for a phone; on a
+// 10.9" iPad (820x1180) that drew the tapes and their 12 px text at about half the angular size of
+// an iPhone's, at arm's length. main.js renderHud draws under setTransform(s): s keeps the HUD the
+// share of the screen's short side it has at HUD_SCALE_FROM px, 1 on every phone (short side
+// under 600 px, both ways up: their geometry is unchanged to the pixel) and on a fine pointer
+// (desktop and laptop layouts were tuned at 1280x720 and are not tablets), capped at HUD_SCALE_MAX:
+// iPad mini 744 -> 1.24, iPad Air 820 -> 1.37, from 900 (iPad Pro 12.9, 1024) 1.5.
+export const HUD_SCALE_FROM = 600;
+export const HUD_SCALE_MAX = 1.5;
+export function hudScale(w, h, touch = true) {
+  if (!touch || !(w > 0 && h > 0)) return 1;
+  return Math.min(HUD_SCALE_MAX, Math.max(1, Math.min(w, h) / HUD_SCALE_FROM));
 }
 
 // Camera field of view (ticket 0044). Landscape screens keep the classic 62° vertical. In
@@ -214,10 +231,11 @@ export function windReadout(wx, comps, out = {}, bumpy = false, storm = false) {
 export const COACH_TOP_SLOT = 58;
 export const GATE_VERDICT_BOTTOM = 132;
 
-export function coachClearBottom(h) {
+// Screen px; s: the HUD's scale (hudScale, 0218), which moves the tapes' top and the verdict's foot.
+export function coachClearBottom(h, s = 1) {
   const cy = h / 2;
-  return Math.max(cy + GATE_VERDICT_BOTTOM, cy + h * 0.12);
+  return Math.max(cy + GATE_VERDICT_BOTTOM * s, cy + h * 0.12);
 }
-export function coachOverHud(h, top, bottom) {
-  return bottom > h / 2 + TAPE_TOP && top < coachClearBottom(h);
+export function coachOverHud(h, top, bottom, s = 1) {
+  return bottom > h / 2 + TAPE_TOP * s && top < coachClearBottom(h, s);
 }

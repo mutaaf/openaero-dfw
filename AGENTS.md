@@ -585,7 +585,10 @@ src/haptics.js      phone haptics (0033): touchdownPattern by sink (landing.js's
 src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/results), feature-
                     detected and silent; hiding the tab pauses the sim + audio (ticket 0032)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
-                    phone's top bar in landscape) and the camera FOV (62° vertical in
+                    phone's top bar in landscape; hudScale, 0218: on a touch screen whose short side is
+                    over 600 px the HUD draws in a virtual w/s x h/s space under setTransform(s),
+                    s = short side / 600 capped at 1.5, so an iPad's tapes are ~1.24 (mini) to 1.5x; 1 on every
+                    phone and any fine pointer (main.js touchOnly is read once at boot: an iPad booted with a trackpad may stay at 1); the callout caption grows with it (--hud-s); ?debug hudTapes.scale, boxes published in screen px) and the camera FOV (62° vertical in
                     landscape; portrait opens towards 60° across, capped at 80° vertical:
                     an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the coach card's slot (0130:
                     coachOverHud; over the tapes, SPD label or 12% under the horizon on a short upright
@@ -852,6 +855,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-23 (0218): 198.18 kB (the tablet HUD scale: hudLayout.js hudScale, renderHud's setTransform and the screen-px ?debug boxes (hudPx), the coach slot's scale, +0.26 kB over 0211's 197.92).
 2026-11-23 (0211): 197.92 kB (the turns-around-a-point mission's entry and blurb, its lazy import and wiring (the pole, its wind, coach, Kid's guide and cap, no auto flaps, the HUD's pole readout call, the snapshot's aroundPoint), +0.61 kB over 0217's 197.31; aroundPoint.js is a lazy chunk, trackPlot.js rides in results.js's).
 2026-11-23 (0217): 197.31 kB (the tapes' edges from the width on phones under 390 px: hudLayout.js speedTapeX/altTapeX, altCaptionRect's altX and the snapshot's hudTapes, +0.22 kB over 0210's 197.09).
 2026-11-22 (0210): 197.09 kB (the no-flap lesson's mission entry and blurb, its lazy import and wiring (the stuck lever's toast, the coach target, Kid's flaps and speed, the stop-hold and grade hooks, the snapshot's noFlap), +0.48 kB over 0209's 196.61; noFlap.js is a lazy chunk).

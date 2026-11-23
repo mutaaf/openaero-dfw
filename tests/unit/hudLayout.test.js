@@ -503,3 +503,79 @@ describe('speedTapeX / altTapeX (0217)', () => {
     });
   }
 });
+
+describe('hudScale (0218): the canvas HUD grows on a tablet, never on a phone', async () => {
+  const { hudScale, HUD_SCALE_MAX, coachOverHud, coachClearBottom, GATE_VERDICT_BOTTOM, speedTapeX: spX } = await import('../../src/hudLayout.js');
+  const { gateVerdictRect, baroRect, windPlainRect, TOUCH_DECK_H } = await import('../../src/gateVerdict.js');
+  const PHONES = [[360, 800], [360, 640], [375, 667], [390, 844], [412, 915], [430, 932], [844, 390], [932, 430], [667, 375], [568, 320]];
+
+  it('is exactly 1 on every phone, both ways up (their geometry is unchanged to the pixel)', () => {
+    for (const [w, h] of PHONES) expect(hudScale(w, h), `${w}x${h}`).toBe(1);
+  });
+
+  it('is 1 on a fine pointer, whatever the size (desktop 1280x720, 1920x1080)', () => {
+    for (const [w, h] of [[1280, 720], [1920, 1080], [1024, 1366]]) expect(hudScale(w, h, false)).toBe(1);
+  });
+
+  it('draws the iPad Air at least 1.3x and the iPad Pro 12.9 at 1.5x, both ways up', () => {
+    expect(hudScale(820, 1180)).toBeGreaterThanOrEqual(1.3);
+    expect(hudScale(1180, 820)).toBe(hudScale(820, 1180));
+    expect(hudScale(1024, 1366)).toBe(1.5);
+    expect(hudScale(1366, 1024)).toBe(1.5);
+    expect(hudScale(744, 1133)).toBeGreaterThan(1.2); // iPad mini
+  });
+
+  it('rises monotonically with the short side and stops at the cap', () => {
+    let last = 0;
+    for (let side = 300; side <= 2000; side += 10) {
+      const s = hudScale(side, side * 1.4);
+      expect(s).toBeGreaterThanOrEqual(last);
+      expect(s).toBeLessThanOrEqual(HUD_SCALE_MAX);
+      expect(s).toBeGreaterThanOrEqual(1);
+      last = s;
+    }
+    expect(hudScale(0, 0)).toBe(1);
+    expect(hudScale(NaN, 800)).toBe(1);
+  });
+
+  it('keeps the scaled tapes and their readouts on a tablet screen, clear of the TRK box', () => {
+    for (const [w, h] of [[744, 1133], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024], [834, 1194]]) {
+      const s = hudScale(w, h), vw = w / s, vh = h / s;
+      expect(Math.min(vw, vh), 'the virtual short side is at least a phone held upright').toBeGreaterThanOrEqual(390);
+      const left = (vw / 2 + spX(vw) - 60) * s, right = (vw / 2 + 130 + 64) * s;
+      expect(left).toBeGreaterThanOrEqual(4);
+      expect(right).toBeLessThanOrEqual(w - 4);
+      // The heading box (cy - 145) is under the top bar in the virtual space: the 72 px floor never binds.
+      expect(headingBoxTop(vh / 2) * s).toBeGreaterThan(BELOW_TOP_BAR);
+    }
+  });
+
+  it('moves the coach card\'s band with the scaled tapes (screen px)', () => {
+    const h = 1180, s = hudScale(820, h);
+    expect(coachClearBottom(h, s)).toBeCloseTo(Math.max(h / 2 + GATE_VERDICT_BOTTOM * s, h / 2 + h * 0.12));
+    // A card spanning the tapes' scaled top (cy - 90 s) is over the HUD; one ending above it is not.
+    expect(coachOverHud(h, h / 2 - 100 * s, h / 2 - 85 * s, s)).toBe(true);
+    expect(coachOverHud(h, h / 2 - 140 * s, h / 2 - 95 * s, s)).toBe(false);
+    // s = 1 is the phone's rule, unchanged.
+    expect(coachOverHud(844, 300, 400)).toBe(coachOverHud(844, 300, 400, 1));
+  });
+
+  it('keeps the DOM-bound floors in screen px in the gate verdict, baro and plain-wind boxes', () => {
+    // The verdict goes to the sky where its foot (screen px) would meet the deck: the same answer scaled or not.
+    for (const [w, h] of [[820, 1180], [1024, 1366], [744, 1133]]) {
+      const s = hudScale(w, h);
+      const r = gateVerdictRect(w / s, h / s, 2, {}, s);
+      const footScreen = (h / s / 2 + 132) * s;
+      expect(r.sky).toBe(footScreen > h - TOUCH_DECK_H - 40);
+      const b = baroRect(w / s, h / s, {}, s);
+      expect(b.show).toBe((b.y + b.h) * s <= h - TOUCH_DECK_H - 40);
+    }
+    // Sideways, the button row's 660 px is screen px: an iPad held sideways shows the box at any scale.
+    expect(baroRect(1180 / 1.5, 820 / 1.5, {}, 1.5).show).toBe(true);
+    // The plain words sit over the wind box where that stays under the 72 px top bar, on screen.
+    // A box at virtual y 96: over it the strip starts at 70, which is 70 px on a phone (under the bar: below
+    // the box instead) but 105 px on screen at 1.5 (clear of the bar: over the box).
+    expect(windPlainRect({ x: 0, y: 96, w: 68, h: 50 }, {}).y).toBe(96 + 50 + 2);
+    expect(windPlainRect({ x: 0, y: 96, w: 68, h: 50 }, {}, 1.5).y).toBe(96 - 26);
+  });
+});

@@ -172,9 +172,12 @@ body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
 }
 /* The coach card yields to the open menu sheet (they meet in phone landscape). */
 .hud-menu-open #coach, .hud-menu-open #calloutCaption, .hud-menu-open #atis { visibility: hidden; }
-/* Callout captions (0117): hudLayout.js takeoffCallTop (heading box top max(cy - 145, 72) + 28),
+/* Callout captions (0117): hudLayout.js takeoffCallTop (heading box top max(cy - 145, 72) + 28, times
+   the HUD's scale on a tablet, --hud-s: main.js handleResize, 0218),
    left of the wind box (windBoxRect: x = min(cx + 126, w - 70)), so between the tapes too. */
-#calloutCaption { top: max(calc(50% - 117px), 100px); max-width: min(248px, calc(100% - 148px)); width: max-content; }
+#calloutCaption { top: max(calc(50% - 117px * var(--hud-s, 1)), 100px); max-width: min(248px * var(--hud-s, 1), calc(100% - 148px)); width: max-content; }
+/* On a tablet the words grow with the canvas verdict they sit over (0218, the first-timer panel); 13 px on a phone. */
+#calloutCaption { font-size: calc(13px * var(--hud-s, 1)); line-height: calc(16px * var(--hud-s, 1)); }
 
 /* The alert banners stand under the top bar, which moves down by the status bar's inset when
    installed (0086); a phone held sideways puts them in the coach's slot below. */

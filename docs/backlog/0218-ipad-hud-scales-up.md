@@ -1,12 +1,12 @@
 ---
 id: 0218
 title: The canvas HUD scales up on an iPad, so the tapes and readouts are not postage stamps
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: accessibility
 created: 2026-11-23
-pr:
+pr: 312
 ---
 
 ## Why
