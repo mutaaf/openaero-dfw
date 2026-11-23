@@ -434,3 +434,72 @@ describe('altLabels and drawAltCaption (0140)', () => {
     });
   }
 });
+
+// Ticket 0217: on a 360 or 375 px phone the speed tape's scale and the altitude readout ran off the
+// screen (they need ~190 px each side of the centre). Under 390 px across the tapes' edges come in.
+import { speedTapeX, altTapeX, NARROW_HUD_W, HUD_EDGE, TAPE_SCALE_W } from '../../src/hudLayout.js';
+describe('speedTapeX / altTapeX (0217)', () => {
+  const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  // What drawTape draws: the speed scale and its 44 px readout left of the edge, the altitude scale
+  // and its readout (ALT_BOX) right of it.
+  const speedOuter = (w) => w / 2 + speedTapeX(w) - TAPE_SCALE_W;
+  const altOuter = (w) => w / 2 + altTapeX(w) + Math.max(TAPE_SCALE_W, ALT_BOX.dx + ALT_BOX.w);
+
+  it('keeps today\'s offsets from 390 px across (no pixel change)', () => {
+    expect(NARROW_HUD_W).toBe(390);
+    for (const w of [390, 393, 412, 430, 568, 667, 820, 844, 1180, 1280, 1920]) {
+      expect(speedTapeX(w), `${w}`).toBe(SPEED_TAPE_X);
+      expect(altTapeX(w), `${w}`).toBe(ALT_TAPE_X);
+    }
+  });
+
+  it('keeps both tapes and their readouts at least 4 px inside every width from 320 to 480 px', () => {
+    for (let w = 320; w <= 480; w++) {
+      expect(speedOuter(w), `${w}: speed tape's left edge`).toBeGreaterThanOrEqual(HUD_EDGE);
+      // From 390 px up the layout is today's, whose readout ends 1 px in at 390 (the ticket keeps it).
+      expect(altOuter(w), `${w}: altitude readout's right edge`).toBeLessThanOrEqual(w < NARROW_HUD_W ? w - HUD_EDGE : w - 1);
+    }
+    // The ticket's phones, exactly 4 px in.
+    for (const w of [360, 375]) {
+      expect(speedOuter(w)).toBe(HUD_EDGE);
+      expect(altOuter(w)).toBe(w - HUD_EDGE);
+    }
+  });
+
+  it('never moves out, and stays clear of the TRK box, the boresight and the pitch ladder', () => {
+    for (let w = 320; w <= 480; w++) {
+      expect(speedTapeX(w)).toBeGreaterThanOrEqual(SPEED_TAPE_X);
+      expect(altTapeX(w)).toBeLessThanOrEqual(ALT_TAPE_X);
+      // TRK box ±40, ladder lines ±35 and its numbers to ~+52 px (main.js renderHud).
+      expect(-speedTapeX(w), `${w}`).toBeGreaterThan(60);
+      expect(altTapeX(w), `${w}`).toBeGreaterThan(60);
+    }
+  });
+
+  for (const [w, h] of [[360, 800], [360, 640], [375, 667], [375, 548], [390, 844], [1280, 720]]) {
+    it(`${w}x${h}: the tapes clear the gate verdict, the takeoff call and the heading box; the MSL tab follows its tape`, () => {
+      const cx = w / 2, cy = h / 2;
+      const speed = { x: cx + speedTapeX(w) - TAPE_SCALE_W, y: cy + TAPE_TOP, w: TAPE_SCALE_W, h: -2 * TAPE_TOP };
+      const alt = { x: cx + altTapeX(w), y: cy + TAPE_TOP, w: ALT_BOX.dx + ALT_BOX.w, h: -2 * TAPE_TOP };
+      for (const lines of [1, 2]) {
+        const v = gateVerdictRect(w, h, lines, {});
+        expect(overlaps(v, speed), `verdict vs speed tape (${lines})`).toBe(false);
+        expect(overlaps(v, alt), `verdict vs altitude tape (${lines})`).toBe(false);
+        expect(v.w, 'the verdict holds a 26-character line (~205 px)').toBeGreaterThanOrEqual(205);
+      }
+      const call = { x: cx - TAKEOFF_CALL_W / 2, y: takeoffCallTop(cy), w: TAKEOFF_CALL_W, h: TAKEOFF_CALL_H };
+      if (h > w) {
+        expect(overlaps(call, speed), 'takeoff call vs speed tape').toBe(false);
+        expect(overlaps(call, alt), 'takeoff call vs altitude tape').toBe(false);
+      }
+      const hdg = { x: cx - 40, y: headingBoxTop(cy), w: 80, h: HEADING_BOX_H };
+      expect(overlaps(hdg, speed) || overlaps(hdg, alt), 'heading box').toBe(false);
+      const r = altCaptionRect(cx, cy, {}, altTapeX(w));
+      const box = { x: cx + altTapeX(w) + ALT_BOX.dx, y: cy - ALT_BOX.h / 2, w: ALT_BOX.w, h: ALT_BOX.h };
+      expect(overlaps(r, box)).toBe(false);
+      expect(r.x).toBeGreaterThan(cx + altTapeX(w) + 9);
+      expect(r.x + altLabels('kid').altW, 'the SEA LVL tab fits its column').toBeLessThanOrEqual(box.x + box.w + 1);
+      expect(r.x + altLabels('kid').altW).toBeLessThanOrEqual(w);
+    });
+  }
+});

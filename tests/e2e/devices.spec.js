@@ -17,6 +17,9 @@ const DEVICES = [
   // Exactly on the 1024 px breakpoint, where the touch-only desktop-width rule starts.
   { name: 'iPad Pro 12.9 portrait', width: 1024, height: 1366 },
   { name: 'Pixel 8 portrait', width: 412, height: 915 },
+  // 0217: the commonest Android width and the iPhone SE / mini, where the tapes' edges come in.
+  { name: 'Android 360 portrait', width: 360, height: 800 },
+  { name: 'iPhone SE portrait', width: 375, height: 667 },
 ];
 const CPU_THROTTLE = 4;
 const ALERTS = ['#masterAlertBanner', '#stallAlertBanner'];
@@ -108,9 +111,16 @@ for (const d of DEVICES) {
         }
       }
       // The centre 40% x 30% around the horizon is free of DOM overlays, and the canvas
-      // tapes (renderHud: cx - 175 … cx + 186, cy - 90 … cy + 90) are unobstructed.
+      // tapes (renderHud, published as ?debug hudTapes: the speed scale and its readout 60 px left of
+      // its edge, the altitude scale and its readout 64 px right of its edge, cy - 90 … cy + 90) are
+      // whole on screen (0217) and unobstructed.
       const horizon = { x: d.width * 0.3, y: d.height * 0.35, width: d.width * 0.4, height: d.height * 0.3 };
-      const tapes = [{ x: cx - 175, y: cy - 90, width: 44, height: 180 }, { x: cx + 130, y: cy - 90, width: 56, height: 180 }];
+      const { hudTapes } = await page.evaluate(() => window.openaeroDebug());
+      const tapes = [{ x: hudTapes.speedX - 60, y: cy - 90, width: 60, height: 180 }, { x: hudTapes.altX, y: cy - 90, width: 64, height: 180 }];
+      if (d.width >= 390) expect([hudTapes.speedX, hudTapes.altX], 'tapes where they always were').toEqual([cx - 131, cx + 130]);
+      expect(tapes[0].x, 'speed tape and readout inside the left edge').toBeGreaterThanOrEqual(4);
+      expect(tapes[1].x + tapes[1].width, 'altitude tape and readout inside the right edge').toBeLessThanOrEqual(d.width - (d.width >= 390 ? 1 : 4));
+      for (const tp of tapes) expect(overlaps(tp, boxes.find(([id]) => id === 'TRK box')[1]), 'a tape vs the TRK box').toBe(false);
       for (const [id, b] of boxes) {
         if (id === 'TRK box') continue;
         expect(overlaps(b, horizon), `${id} covers the horizon`).toBe(false);
@@ -149,6 +159,32 @@ for (const d of DEVICES) {
     });
   });
 }
+
+// 0217 on a short 360 px Android (360x640), outside the matrix above: the tapes, their readouts and the
+// MSL tab are whole on screen and no DOM panel covers them. (The matrix's full alert-overlap check is a
+// separate gap at this height: the stall banner, forced on, reaches the TRK box.)
+test.describe('Android 360 short portrait tapes', () => {
+  test.use({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+  test('360x640: both tapes and their readouts are inside the screen and uncovered', async ({ page }) => {
+    const errors = collectErrors(page);
+    await stubTiles(page);
+    await page.goto(BASE);
+    await page.locator('#btnStartFlight').tap();
+    await expect(page.locator('#coach')).toBeVisible({ timeout: 10_000 });
+    await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).hudTapes?.speedX ?? 0).toBeGreaterThan(0);
+    const { hudTapes, hudAltCaption } = await page.evaluate(() => window.openaeroDebug());
+    const cy = 320;
+    const tapes = [{ x: hudTapes.speedX - 60, y: cy - 90, width: 60, height: 180 }, { x: hudTapes.altX, y: cy - 90, width: 64, height: 180 }];
+    expect(tapes[0].x).toBeGreaterThanOrEqual(4);
+    expect(tapes[1].x + tapes[1].width).toBeLessThanOrEqual(356);
+    expect(hudAltCaption.x + hudAltCaption.w).toBeLessThanOrEqual(356);
+    for (const id of PANELS.filter((p) => !ALERTS.includes(p))) {
+      const b = await page.locator(id).boundingBox();
+      if (b) for (const tp of tapes) expect(overlaps(b, tp), `${id} covers a tape`).toBe(false);
+    }
+    expect(errors).toEqual([]);
+  });
+});
 
 // On a tablet the function buttons are one row along the bottom, and with photoreal on the
 // Google attribution (logo + data line, ~31 px tall, z-index above the deck) sits there too:

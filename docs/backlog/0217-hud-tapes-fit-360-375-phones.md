@@ -1,7 +1,7 @@
 ---
 id: 0217
 title: The speed and altitude tapes fit inside a 360 or 375 px phone, readouts and all
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel

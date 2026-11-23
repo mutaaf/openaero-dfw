@@ -15,7 +15,7 @@ import { stallBand } from './hudLayout.js';
 export const TOUCH_DECK_H = 207;
 export function gateVerdictRect(w, h, lines, out) {
   const cy = h / 2, sky = out.sky = h > w && cy + 132 > h - TOUCH_DECK_H - 40;
-  const half = sky ? Math.min(120, w / 2 - 74) : 120;
+  const half = Math.min(120, w / 2 - 74); // under 388 px across, clear of the tapes' edges, which come in there (0217)
   out.x = w / 2 - half;
   out.y = sky ? Math.max(cy - 117, 100) : cy + 76;
   out.w = 2 * half;
