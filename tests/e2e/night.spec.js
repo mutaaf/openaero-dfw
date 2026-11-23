@@ -10,13 +10,13 @@ const snap = (page) => page.evaluate(() => window.openaeroDebug());
 
 // Mean luminance and the count of bright (lum > 200) pixels in a band of the bare canvas,
 // rows from y0 to y1 and columns from x0 to x1 (fractions of the size), at full resolution (lights are 2-5 px).
-async function band(page, y0, y1, x0 = 0, x1 = 1) {
+async function band(page, y0, y1, x0 = 0, x1 = 1, grid = false) {
   const style = await page.addStyleTag({
     content: 'body * { visibility: hidden !important; } #simCanvas { visibility: visible !important; }',
   });
   const png = await page.locator('#simCanvas').screenshot();
   await style.evaluate((el) => el.remove());
-  return page.evaluate(async ([b64, y0, y1, x0, x1]) => {
+  return page.evaluate(async ([b64, y0, y1, x0, x1, grid]) => {
     const img = new Image();
     img.src = `data:image/png;base64,${b64}`;
     await img.decode();
@@ -26,15 +26,20 @@ async function band(page, y0, y1, x0 = 0, x1 = 1) {
     ctx.drawImage(img, 0, 0);
     const top = Math.round(y0 * img.height);
     const left = Math.round(x0 * img.width);
-    const d = ctx.getImageData(left, top, Math.round(x1 * img.width) - left, Math.round(y1 * img.height) - top).data;
+    const bw = Math.round(x1 * img.width) - left, bh = Math.round(y1 * img.height) - top;
+    const d = ctx.getImageData(left, top, bw, bh).data;
     let sum = 0, bright = 0;
+    const cells = grid ? new Array(24).fill(0) : null; // 8 columns x 3 rows of the band
     for (let i = 0; i < d.length; i += 4) {
       const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
       sum += l;
-      if (l > 200) bright++;
+      if (l > 200) {
+        bright++;
+        if (cells) { const p = i / 4; cells[Math.min(2, Math.floor(3 * Math.floor(p / bw) / bh)) * 8 + Math.min(7, Math.floor(8 * (p % bw) / bw))]++; }
+      }
     }
-    return { mean: sum / (d.length / 4), bright };
-  }, [png.toString('base64'), y0, y1, x0, x1]);
+    return { mean: sum / (d.length / 4), bright, ...(cells && { w: img.width, h: img.height, cells: cells.join(',') }) };
+  }, [png.toString('base64'), y0, y1, x0, x1, grid]);
 }
 
 async function pickTime(page, label) {
@@ -95,12 +100,29 @@ test('the KDFW 35C night ILS flies at night with the lights showing, and the nex
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
   expect((await snap(page)).mission).toBe('kdfw_35c_night');
   await expect.poll(async () => (await snap(page)).sky.runwayLights, { timeout: 15_000 }).toBeGreaterThan(5000);
+  // Paused near the 4 NM spawn, inside the page, so the lit and dark frames are the same scene
+  // wherever the runner is: flying on, the PAPIs and the runway fill the band and the dark
+  // count climbs (~250 at 500 ft, ~440 at 160 ft here; a slow CI runner read >= 450, 2026-11-23).
+  await page.evaluate(() => document.getElementById('btnPause').click());
+  expect((await snap(page)).paused).toBe(true);
+  const s = await snap(page);
+  const agl = Math.round(s.aglFt);
   // Same threshold as the 0011 test (~850 lit vs ~130 from the PAPIs alone at 1280x720),
   // and the control: with the runway lights' materials off, the count drops below it.
-  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 15_000 }).toBeGreaterThan(450);
+  // Each frame's numbers and where its bright pixels sit (an 8 x 3 grid over the band) are logged:
+  // CI read >= 450 dark at the spawn where this sandbox reads ~30 (2026-11-23).
+  let lit = null, dark = null;
+  const ctx = () => JSON.stringify({ agl, px: s.pixelRatio, pitch: s.pitchDeg, sky: s.sky, lit, dark });
+  await expect.poll(async () => (lit = await band(page, 0.5, 0.62, 0, 1, true)).bright, { timeout: 15_000, message: `lit: ${agl} ft` }).toBeGreaterThan(450);
   await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = false; }); });
-  await expect.poll(async () => (await band(page, 0.5, 0.62)).bright, { timeout: 10_000 }).toBeLessThan(450);
+  try {
+    await expect.poll(async () => (dark = await band(page, 0.5, 0.62, 0, 1, true)).bright, { timeout: 10_000 }).toBeLessThan(450);
+  } finally {
+    console.log(`[night 0060] ${ctx()}`);
+  }
   await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = true; }); });
+  await page.evaluate(() => document.getElementById('btnPause').click());
+  expect((await snap(page)).paused).toBe(false);
 
   // The next mission without a sky of its own gives the player's Dusk back.
   await page.locator('#btnOpenMissions').click();
