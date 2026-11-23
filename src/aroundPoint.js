@@ -49,8 +49,8 @@ export const KP = 0.012; // m/s² per m off the radius
 export const KD = 0.17; // m/s² per m/s outward
 
 export const AROUND_TEXT = {
-  tptFlyOnL: 'Fly on, level: when the lit pole is off your left wingtip, roll left round it',
-  tptFlyOnR: 'Fly on, level: when the lit pole is off your right wingtip, roll right round it',
+  tptFlyOnL: 'Fly on, level: the lit pole is ahead on your left. Wait until it is off your left wingtip',
+  tptFlyOnR: 'Fly on, level: the lit pole is ahead on your right. Wait until it is off your right wingtip',
   tptRollL: 'Pole abeam: roll left now, steep: you are downwind, fastest over the ground',
   tptRollR: 'Pole abeam: roll right now, steep: you are downwind, fastest over the ground',
   tptWide: 'Drifting wide of the circle: steepen the bank',
@@ -122,11 +122,15 @@ export function aroundStep(st, s) {
     // The height to hold: where the player started flying (the spawn's 1,000 ft AGL). The speed is the lesson's (kts0).
     if (st.alt0 === null) st.alt0 = s.altFt;
     st.iasF = s.iasKts;
-    if (st.along < 0 && st.t < ENTRY_FAIL_S) return '';
-    if (st.along >= 0 && d <= 2 * st.R) {
+    // The circle starts once the Cessna stops closing on the pole within 2 radii: abeam it on the straight entry,
+    // or wherever a player who rolled in early is already going round it (panel: else it never started).
+    const opening = rx * s.vx + rz * s.vz >= 0;
+    if (opening && d <= 2 * st.R) {
       st.phase = 'circle'; st.trackStart = Math.max(0, st.trackN - 1);
       return 'circle';
     }
+    // Missed: past abeam and going away from the pole more than 2 radii out, or never there in ENTRY_FAIL_S.
+    if (st.t < ENTRY_FAIL_S && !(opening && st.along >= 0)) return '';
     st.why = 'missed'; st.phase = 'failed';
     return 'failed';
   }
@@ -238,7 +242,7 @@ export function kidGuide(st, out) {
 // the lowered wing (AFH p. 7-7 warns a high wing can block it in a left turn: "ensure that the reference point is
 // visible at all times"), and 90° off the nose, out of any forward camera. Green on the circle (±SAY_OFF_M), amber off it. The text is
 // rebuilt only when what it says changes (no string per frame, AGENTS.md invariant 4).
-export const POLE_BOX_W = 210, POLE_BOX_H = 24;
+export const POLE_BOX_W = 232, POLE_BOX_H = 24;
 let poleFt = -1, poleClock = -1, poleText = '';
 export function poleClockOf(st, x, z, hdgTrueDeg) {
   const brg = Math.atan2(st.px - x, -(st.pz - z)) * DEG; // true bearing to the pole (+x east, −z north)
@@ -247,7 +251,8 @@ export function poleClockOf(st, x, z, hdgTrueDeg) {
 }
 export function drawPole(ctx, cx, top, st, sim, hdgTrueDeg) {
   if (!aroundLive(st) || !st.live) return;
-  const ft = Math.round(st.d * M_TO_FT / 10) * 10, clock = poleClockOf(st, sim.pos.x, sim.pos.z, hdgTrueDeg);
+  const q = st.d > 2 * st.R ? 50 : 10; // coarser far out: fewer rebuilds on the run-in
+  const ft = Math.round(st.d * M_TO_FT / q) * q, clock = poleClockOf(st, sim.pos.x, sim.pos.z, hdgTrueDeg);
   if (ft !== poleFt || clock !== poleClock) { poleFt = ft; poleClock = clock; poleText = `POLE ${ft.toLocaleString('en-US')} FT · ${clock} O'CLOCK`; }
   ctx.fillStyle = 'rgba(2, 6, 23, 0.7)';
   ctx.fillRect(cx - POLE_BOX_W / 2, top, POLE_BOX_W, POLE_BOX_H);
@@ -259,14 +264,17 @@ export function drawPole(ctx, cx, top, st, sim, hdgTrueDeg) {
 
 // The lit pole: a 60 m mast with a lamp on top over a 25 m disc, unlit materials (it glows at dusk as by day).
 // Its height follows the ground under it (main.js moves it as the terrain's DEM arrives).
+// Built once per chunk and reused (panel: a new one per load leaked its GPU buffers): moved to each lesson's pole.
+let marker = null;
 export function makeMarker(st) {
+  if (marker) { marker.position.set(st.px, 0, st.pz); return marker; }
   const g = new THREE.Group();
   const add = (geo, color, y) => { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color })); m.position.y = y; g.add(m); };
   add(new THREE.CylinderGeometry(25, 25, 0.6, 24), 0xf97316, 0.3); // the disc on the ground
   add(new THREE.CylinderGeometry(1.5, 2.5, 60, 8), 0xf8fafc, 30); // the mast
   add(new THREE.CylinderGeometry(4, 4, 8, 10), 0xfacc15, 64); // the lamp
   g.position.set(st.px, 0, st.pz);
-  return g;
+  return (marker = g);
 }
 
 const WEIGHTS = { spread: 0.4, radius: 0.1, alt: 0.25, speed: 0.15, bank: 0.1 };

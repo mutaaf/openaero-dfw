@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createAroundPoint, aroundStep, aroundPrompt, aroundKidGuide, circleBankDeg, gradeAroundPoint, spreadFt, lessonWx, aroundSimStep, kidGuide,
-  poleClockOf, CIRCLES_DEG, SPREAD_B_FT, SPREAD_D_FT, TRACK_MAX, ASSIST_BANK_DEG, AROUND_TEXT, KID_NOTE,
+  poleClockOf, makeMarker, CIRCLES_DEG, SPREAD_B_FT, SPREAD_D_FT, TRACK_MAX, ASSIST_BANK_DEG, AROUND_TEXT, KID_NOTE,
 } from '../../src/aroundPoint.js';
 import { MISSIONS } from '../../src/missions.js';
 import { DRILL_TEXT } from '../../src/coach.js';
@@ -135,6 +135,16 @@ describe('turns around a point (0211): the steps', () => {
     expect(st2.maxAltDevFt).toBeCloseTo(150, 0);
     expect(gradeAroundPoint(st2).score).toBeLessThanOrEqual(84);
   });
+  it('a player who rolls in early, before abeam, still starts the circle once going round the pole (panel)', () => {
+    const st = createAroundPoint(MISSION);
+    // Straight up the entry line to 300 m before abeam, then round a circle centred 300 m short of the pole.
+    let z = st.pz + 926, ev = '';
+    while (z > st.pz + 300) { aroundStep(st, { dt: DT, x: st.px + R, z, vx: 0, vz: -46, wx: 0, wz: 0, altFt: 1700, iasKts: 90, bankDeg: 0, stalled: false }); z -= 4.6; }
+    const cz = st.pz + 300;
+    for (let a = 0; a > -Math.PI && !ev; a -= 0.01) ev = aroundStep(st, { dt: DT, x: st.px + R * Math.cos(a), z: cz + R * Math.sin(a), vx: 46 * Math.sin(a), vz: -46 * Math.cos(a), wx: 0, wz: 0, altFt: 1700, iasKts: 90, bankDeg: -27, stalled: false });
+    expect(ev).toBe('circle');
+    expect(st.d).toBeLessThan(R / 2); // started on its own circle, not abeam on the entry line (R out)
+  });
   it('drifting three radii from the pole fails (the wind carried it off)', () => {
     const st = createAroundPoint(MISSION);
     const evs = flyLesson(st, { r: (a) => R * (1 - a * 0.5) });
@@ -249,5 +259,16 @@ describe('turns around a point (0211): the HUD\'s pole readout', () => {
     expect(poleClockOf(st, 0, 500, 90)).toBe(9);
     // The lesson's spawn: half a mile before abeam, R off the left: ~11 o'clock.
     expect(poleClockOf(st, R, 926, 0)).toBe(11);
+  });
+});
+
+describe('turns around a point (0211): the pole', () => {
+  it('is built once and moved to each lesson\'s point (no new GPU buffers per load: panel)', () => {
+    const a = makeMarker(createAroundPoint(MISSION));
+    const b = makeMarker({ ...createAroundPoint(MISSION), px: 10, pz: 20 });
+    expect(b).toBe(a);
+    expect(b.position.x).toBe(10);
+    expect(b.position.z).toBe(20);
+    expect(b.children.length).toBe(3);
   });
 });

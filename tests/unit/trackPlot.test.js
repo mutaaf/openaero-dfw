@@ -42,6 +42,14 @@ describe('track plot (0211)', () => {
     expect(svg.match(/<path d="M/g).length).toBe(1);
     expect(svg).not.toContain(' kt</text>');
   });
+  it('its labels stay at least 11 px tall in a small box (the 96 px plot of a phone held sideways: panel)', () => {
+    const t = track();
+    for (const px of [96, 144, 300]) {
+      const svg = trackPlotSvg(t, px);
+      const fs = Number(/<text[^>]*font-size="([\d.]+)"[^>]*>N</.exec(svg)[1]);
+      expect(fs * px / (2 * trackExtent(t))).toBeGreaterThanOrEqual(11);
+    }
+  });
   it('says what it shows', () => {
     expect(trackLabel(track())).toMatch(/1,500 ft asked for, the arrow the 12 knot wind's way/);
   });

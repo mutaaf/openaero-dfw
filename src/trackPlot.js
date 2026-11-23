@@ -18,11 +18,12 @@ function path(pts, a, b) {
   return d;
 }
 
-export function trackPlotSvg(track) {
+// px: the plot's height on screen (the labels stay ≥ 11 px tall however small the box is: panel).
+export function trackPlotSvg(track, px = 144) {
   const { pts, n, R, wind } = track;
   const s0 = track.start < 0 ? n : Math.min(track.start, n);
   const ext = trackExtent(track);
-  const fs = r1(ext * 0.11);
+  const fs = r1(Math.max(ext * 0.11, 12 * 2 * ext / Math.max(60, px)));
   const line = 'fill="none" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"';
   let svg = `<svg viewBox="${r1(-ext)} ${r1(-ext)} ${r1(2 * ext)} ${r1(2 * ext)}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">`
     + `<circle r="${r1(R)}" ${line} stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4"/>`;
@@ -37,7 +38,7 @@ export function trackPlotSvg(track) {
     const x0 = cx - ux * L, z0 = cz - uz * L, x1 = cx + ux * L, z1 = cz + uz * L, h = ext * 0.07;
     svg += `<path d="M${r1(x0)} ${r1(z0)}L${r1(x1)} ${r1(z1)}" ${line} stroke="#f8fafc" stroke-width="2"/>`
       + `<path d="M${r1(x1)} ${r1(z1)}L${r1(x1 - ux * h - uz * h * 0.6)} ${r1(z1 - uz * h + ux * h * 0.6)}L${r1(x1 - ux * h + uz * h * 0.6)} ${r1(z1 - uz * h - ux * h * 0.6)}Z" fill="#f8fafc"/>`
-      + `<text x="${r1(cx)}" y="${r1(cz + L + fs * 1.3)}" font-size="${r1(fs * 0.8)}" fill="#cbd5e1" text-anchor="middle" font-family="monospace">${Math.round(wind[1])} kt</text>`;
+      + `<text x="${r1(cx)}" y="${r1(cz + L + fs * 1.3)}" font-size="${fs}" fill="#cbd5e1" text-anchor="middle" font-family="monospace">${Math.round(wind[1])} kt</text>`;
   }
   return `${svg}</svg>`;
 }

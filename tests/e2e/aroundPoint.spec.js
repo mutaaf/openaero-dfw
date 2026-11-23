@@ -31,7 +31,7 @@ test('?mission=turns_around_point: held at the spawn, the coach calls the roll, 
   expect(Math.abs((await snap(page)).aroundPoint.along - a.aroundPoint.along)).toBeLessThan(5);
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText(/lit pole is off your left wingtip/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/Wait until it is off your left wingtip/, { timeout: 10_000 });
   await expect(page.locator('#txtCoach')).toHaveText(/Pole abeam: roll left/, { timeout: 30_000 });
   await page.keyboard.down('KeyA');
   await expect.poll(async () => (await snap(page)).aroundPoint.phase, { timeout: 20_000 }).toBe('circle');
