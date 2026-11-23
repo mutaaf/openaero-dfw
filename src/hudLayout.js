@@ -9,7 +9,8 @@ export const BELOW_TOP_BAR = 72;
 
 // Top of the TRK heading box: cy - 145 where there is room; on a phone held sideways it
 // drops under the top bar. The box is 104 px wide, centred between the tapes (which sit
-// at cx - 175 … cx - 131 and cx + 130 … cx + 186), so it may share their rows.
+// at cx - 175 … cx - 131 and cx + 130 … cx + 186, closer in under 390 px: speedTapeX / altTapeX),
+// so it may share their rows.
 export function headingBoxTop(cy) {
   return Math.max(cy - 145, BELOW_TOP_BAR);
 }
@@ -19,15 +20,30 @@ export function headingBoxTop(cy) {
 export const SPEED_TAPE_X = -131;
 export const ALT_TAPE_X = 130;
 export const ALT_BOX = { dx: 8, w: 56, h: 22 };
+// On a phone under 390 px across (a 360 px Android, a 375 px iPhone SE / mini) those offsets put the
+// speed tape's scale (60 px left of its edge) and the altitude readout (ALT_BOX, 64 px right of its edge)
+// off the screen (0217): there both edges move toward the centre so each tape's outer edge stays
+// HUD_EDGE px inside it. From 390 px up they are SPEED_TAPE_X / ALT_TAPE_X, unchanged. Even at 320 px the
+// inner edges stay ~92 px from the centre, outside the TRK box (±40), the boresight and the pitch
+// ladder's numbers (~±52). Pure numbers: main.js calls these every frame.
+export const NARROW_HUD_W = 390;
+export const TAPE_SCALE_W = 60;
+export const HUD_EDGE = 4;
+export function speedTapeX(w) {
+  return w >= NARROW_HUD_W ? SPEED_TAPE_X : Math.max(SPEED_TAPE_X, HUD_EDGE + TAPE_SCALE_W - w / 2);
+}
+export function altTapeX(w) {
+  return w >= NARROW_HUD_W ? ALT_TAPE_X : Math.min(ALT_TAPE_X, w / 2 - HUD_EDGE - ALT_BOX.dx - ALT_BOX.w);
+}
 // The altitude tape reads above sea level (0132): "MSL" in a small tab just under its readout box,
 // right of the major ticks (9 px), where drawTape leaves out the scale's numbers. The top bar's
-// AGL is the main wheels' radio altitude (0122). Whole pixels, so the tab's edges stay sharp
+// AGL is the main wheels' radio altitude (0122). altX: the tape's edge (altTapeX). Whole pixels, so the tab's edges stay sharp
 // when cy is a half pixel (an odd height). Writes into `out`.
 export const ALT_CAPTION = 'MSL';
 export const ALT_CAPTION_W = 26;
 export const ALT_CAPTION_H = 13;
-export function altCaptionRect(cx, cy, out) {
-  out.x = Math.round(cx + ALT_TAPE_X + 12);
+export function altCaptionRect(cx, cy, out, altX = ALT_TAPE_X) {
+  out.x = Math.round(cx + altX + 12);
   out.y = Math.round(cy + ALT_BOX.h / 2 + 2);
   out.w = ALT_CAPTION_W;
   out.h = ALT_CAPTION_H;

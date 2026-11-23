@@ -819,6 +819,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-23 (0217): 197.31 kB (the tapes' edges from the width on phones under 390 px: hudLayout.js speedTapeX/altTapeX, altCaptionRect's altX and the snapshot's hudTapes, +0.22 kB over 0210's 197.09).
 2026-11-22 (0210): 197.09 kB (the no-flap lesson's mission entry and blurb, its lazy import and wiring (the stuck lever's toast, the coach target, Kid's flaps and speed, the stop-hold and grade hooks, the snapshot's noFlap), +0.48 kB over 0209's 196.61; noFlap.js is a lazy chunk).
 2026-11-21 (0209): 196.61 kB (the emergency descent's mission entry and blurb, its lazy import and wiring (coach, Kid's guide, idle and bank cap, the snapshot's emergencyDescent), +0.44 kB over 0197's 196.17; emergencyDescent.js is a lazy chunk).
 2026-11-18 (0197): 196.17 kB (the Class B map layer: main.js sizeMap's lazy import of airspace.js and its draw call, the snapshot's airspace, +0.09 kB over main's 196.08; airspace.js is a lazy chunk and its data a same-origin JSON, both fetched only where the map is shown).

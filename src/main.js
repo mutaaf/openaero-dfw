@@ -53,7 +53,7 @@ import { loadPrefs, savePrefs } from './prefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
   headingBoxTop, HEADING_BOX_H, takeoffCallTop, TAKEOFF_CALL_H, TAKEOFF_CALL_W, cameraFovDeg,
-  windBoxRect, altCaptionRect, ALT_CAPTION_H, ALT_TAPE_X, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand,
+  windBoxRect, altCaptionRect, ALT_CAPTION_H, speedTapeX, altTapeX, ALT_BOX, windArrowDeg, windReadout, nearRunwayForWind, fixed1, speedLimitBand,
   ilsBarOffsetPx, ILS_PX_PER_DOT, ILS_MAX_DOTS, ILS_BOX_HALF, coachOverHud,
 } from './hudLayout.js';
 import { stepFlightModel, trimThrottle, dihedralAileron, rollHoldScale } from './flightModel.js';
@@ -2236,6 +2236,8 @@ function drawTape(x, y, side, value, pxPerUnit, minor, major, warn = false, clea
 // above sea level, the top bar's AGL the main wheels' radio altitude (sim.raFt). gateVerdict.js (lazy)
 // draws it, in plain words for Kid and Learner (0140).
 const _altCap = {};
+// The tapes' inner edges this frame, canvas px (the ?debug snapshot's hudTapes, 0217).
+const hudTapes = { speedX: 0, altX: 0 };
 // The scale's numbers (text ty - 4 … ty + 3.5) stay off the tab's rows.
 const ALT_CAPTION_CLEAR = ALT_BOX.h / 2 + 2 + ALT_CAPTION_H + 4;
 
@@ -2324,12 +2326,15 @@ function renderHud() {
 
   // Speed and altitude tapes: see-through scales that scroll past a boxed readout, so
   // they never hide the runway (2 px per knot, 0.2 px per foot over a 180 px window).
-  drawTape(cx - 131, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
-  drawTape(cx + ALT_TAPE_X, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
-  gateVerdict?.drawAltCaption(hudCtx, altCaptionRect(cx, cy, _altCap), sim.assist, w, sim, _windBox); // + the wind box's plain words (0142)
-  if (sim.speedLimitKts) drawSpeedLimit(cx - 131, cy);
-  if (sim.stallKts && !sim.onGround) gateVerdict?.drawStallBand(hudCtx, cx - 131, cy, sim.stallKts, sim.iasKts); // lazy (0156)
-  if (sim.activeEnd && !sim.onGround) drawSpeedBug(cx - 131, cy);
+  // Their edges come in on a phone under 390 px across so both stay on screen (0217, hudLayout.js).
+  const spdX = hudTapes.speedX = cx + speedTapeX(w), altX = altTapeX(w);
+  hudTapes.altX = cx + altX;
+  drawTape(spdX, cy, -1, sim.iasKts, 2, 5, 20, sim.overspeed);
+  drawTape(cx + altX, cy, 1, sim.mslFt, 0.2, 100, 500, false, ALT_CAPTION_CLEAR);
+  gateVerdict?.drawAltCaption(hudCtx, altCaptionRect(cx, cy, _altCap, altX), sim.assist, w, sim, _windBox); // + the wind box's plain words (0142)
+  if (sim.speedLimitKts) drawSpeedLimit(spdX, cy);
+  if (sim.stallKts && !sim.onGround) gateVerdict?.drawStallBand(hudCtx, spdX, cy, sim.stallKts, sim.iasKts); // lazy (0156)
+  if (sim.activeEnd && !sim.onGround) drawSpeedBug(spdX, cy);
   const showTrim = trimControl() && !(sim.wingLow && sim.assist !== 'kid'); // 0188: the pedals take the rocker's slot
   if (showTrim !== trimShown) { // the rocker follows (no layout work on other frames)
     trimShown = showTrim;
@@ -2348,7 +2353,7 @@ function renderHud() {
     byId('txtTouchRud').textContent = rudPct ? `${Math.abs(rudPct)}% ${rudPct < 0 ? 'L' : 'R'}` : '0';
   }
   // Pilot's trim bug (0094): drawn by the lazy gateVerdict.js (off the boot budget, 0156).
-  if (trimControl() && sim.trimAlphaDeg != null) gateVerdict?.drawTrimBug(hudCtx, cx - 131, cy, trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex), sim.iasKts);
+  if (trimControl() && sim.trimAlphaDeg != null) gateVerdict?.drawTrimBug(hudCtx, spdX, cy, trimSpeedKts(sim.spec, sim.trimAlphaDeg, sim.flapsIndex), sim.iasKts);
   if (sim.activeEnd && !sim.onGround && sim.raFt < 60) drawFlareCue(cx, cy);
 
   // Heading
@@ -3766,6 +3771,7 @@ window.openaeroDebug = () => {
     activeRunway: sim.activeEnd?.id ?? null,
     runwayHdgT: sim.activeEnd?.hdgT ?? null,
     hudHeading: sim.hudHdg,
+    hudTapes: { ...hudTapes }, // the tapes' inner edges (0217), canvas px
     hudAltCaption: { ..._altCap }, // the altitude tape's MSL / SEA LVL tab (0132, 0140), canvas px
     headingDeg: hdg,
     pitchDeg: _euler.x * RAD_TO_DEG,
