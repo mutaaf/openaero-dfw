@@ -3799,7 +3799,7 @@ window.openaeroDebug = () => {
     stallKts: sim.stallKts ?? null,
     // The PAPI (0131): the white lamps the HUD/coach read, and the active end's 3D lamps that are white.
     papiWhite: sim.papiWhite, papiLampsWhite: debugScreen?.papiLampsWhite(papiLamps, sim.activeEnd, RUNWAY_ENDS) ?? null, // ?debug (debugScreen.js)
-    ilsLocDots: sim.ilsLocDots, ilsGsDots: sim.ilsGsDots, ilsLocBarPx: sim.ilsLocBarPx, ilsGsBarPx: sim.ilsGsBarPx,
+    ilsLocDots: sim.ilsLocDots, ilsGsDots: sim.ilsGsDots, ilsLocBarPx: sim.ilsLocBarPx && sim.ilsLocBarPx * sim.hudScale, ilsGsBarPx: sim.ilsGsBarPx && sim.ilsGsBarPx * sim.hudScale, // screen px (0218)
     inputSource: sim.inputSource,
     stick: { ...sim.stick },
     simTime: sim.simTime,
