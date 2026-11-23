@@ -588,7 +588,7 @@ src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box 
                     phone's top bar in landscape; hudScale, 0218: on a touch screen whose short side is
                     over 600 px the HUD draws in a virtual w/s x h/s space under setTransform(s),
                     s = short side / 600 capped at 1.5, so an iPad's tapes are ~1.24 (mini) to 1.5x; 1 on every
-                    phone and any fine pointer; ?debug hudTapes.scale, boxes published in screen px) and the camera FOV (62° vertical in
+                    phone and any fine pointer (main.js touchOnly is read once at boot: an iPad booted with a trackpad may stay at 1); the callout caption grows with it (--hud-s); ?debug hudTapes.scale, boxes published in screen px) and the camera FOV (62° vertical in
                     landscape; portrait opens towards 60° across, capped at 80° vertical:
                     an iPad gets 60°, a phone ~42°, 0044; pure, tested) + the coach card's slot (0130:
                     coachOverHud; over the tapes, SPD label or 12% under the horizon on a short upright
