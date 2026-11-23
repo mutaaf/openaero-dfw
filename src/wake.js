@@ -126,8 +126,8 @@ export function wakePrompt(w, s, heightAbovePathM = 0, aimPointM = AIM_POINT_M) 
   if (w.tdT !== null && w.t - w.tdT < SAY_S) return kid ? 'wkLandedKid' : 'wkLanded';
   if (w.tdT === null && w.t - w.readyT < SAY_S) return kid ? 'wkWatchKid' : 'wkWatch';
   if (kid || s.aglFt <= 100) return null;
-  const urgent = s.flapsLanding === false || (s.aglFt < 1000 && s.vsiFpm < -1200) || s.iasKts - s.targetKts < -5 || Math.abs(s.locDots ?? 0) > 0.6;
-  if (urgent) return null;
+  const urgent = s.flapsLanding === false || (s.aglFt < 1000 && s.vsiFpm < -1200) || s.iasKts - s.targetKts < -5 - (s.gustAddKts ?? 0) || Math.abs(s.locDots ?? 0) > 0.6;
+  if (urgent) return null; // the landing coach's own safety prompts, on its bands (the slow floor is Vref on a gusty day, 0219)
   const band = gateHeightAbovePathM(w, heightAbovePathM, aimPointM);
   if (s.papiWhite >= 3 && band === 0) return 'wkHigh';
   if (heightAbovePathM <= 0 && s.papiWhite !== null && s.papiWhite <= 2) return 'wkAim';

@@ -939,7 +939,8 @@ function startGoAroundDrill(mission) {
     sim.goAround = lib.createGoAround();
     sim.goAround.end = runwayEnd(mission.airport, mission.rwy);
     // Kid's autothrottle holds the drill's fast approach speed down to the gate (the hands-
-    // off guide still flies the path), so the gate calls it and Kid sees the go-around.
+    // off guide still flies the path), so the gate calls it and Kid sees the go-around. On a gusty day applyAssists adds
+    // the bug's gust share (0219), as the gate's FAST limit does: the drill stays fastKts over the raised bug.
     sim.goAround.holdKts = sim.spec.vrefKts + 5 + (mission.fastKts ?? 0);
   });
 }
@@ -1441,7 +1442,7 @@ function updateTutor(dt) {
   tutorInput.crossM = sim.approach.crossM;
   tutorInput.heightAbovePathM = sim.approach.heightAbovePathM;
   tutorInput.iasKts = sim.iasKts;
-  tutorInput.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
+  tutorInput.targetKts = bugKts(sim.spec, sim.flapsIndex, sim.wx);
   tutorLib.stepTutor(tutor, tutorInput, dt);
   return tutor.caption;
 }
@@ -1537,7 +1538,7 @@ function updateCoach(dt) {
   skip.textContent = caption ? 'Hide' : 'Skip';
   skip.setAttribute('aria-label', caption ? 'Hide the autopilot tips' : 'Skip the coach');
   if (caption) {
-    tutorVals.targetKts = vrefFor(sim.spec, sim.flapsIndex) + 5;
+    tutorVals.targetKts = Math.round(bugKts(sim.spec, sim.flapsIndex, sim.wx));
     tutorVals.hdgDeg = magHeadingText(sim.targetHdgDeg);
     tutorVals.altFt = Math.round(sim.targetAltFt / 100) * 100;
     const text = tutorLib.TUTOR_TEXT[caption](tutorVals);
@@ -2032,7 +2033,7 @@ function integrateSubStep(dt) {
           sim.apGsIntegral = THREE.MathUtils.clamp(sim.apGsIntegral + ap.heightAbovePathM * dt, -100, 100);
         }
         holdGamma(glidepathGammaDeg(ap.heightAbovePathM, sim.apGsIntegral), true);
-        sim.throttle = autoThrottle(vrefFor(spec, sim.flapsIndex) + 5, -3, dt);
+        sim.throttle = autoThrottle(bugKts(spec, sim.flapsIndex, sim.wx), -3, dt); // the bug: + half the gust factor (0219)
       } else {
         // Flare from 15 m: trade sink rate for height; hold Vref+3 until ~8 m (25 ft), then retard.
         holdGamma(Math.atan2(flareSinkMps(wheelH), gsMps) * RAD_TO_DEG);
@@ -2460,7 +2461,7 @@ function hudProject(p, w, h) {
 }
 
 // Target speed (Vref + 5, + half the gust factor on a gusty day (0219); the short-field lesson's 61) on the speed tape (0073): a magenta bug and its band, Vref to
-// Vref + 10, the speeds a stable approach lives in; the bug parks at the tape's end when off scale.
+// the bug + 5, the speeds a stable approach lives in; the bug parks at the tape's end when off scale.
 function drawSpeedBug(x, y) {
   const target = coachKts(); // the coach's target: 0181's short field flies the POH's 61
   const off = (target - sim.iasKts) * 2;
@@ -2758,7 +2759,7 @@ function applyAssists(cfg, pitchIn, rollIn, yawIn, dt) {
     } else if (wheelHeightM > 8) {
       const gammaDeg = Math.atan2(sim.vel.y, Math.max(20, gsMps)) * RAD_TO_DEG;
       // The go-around drill's fast approach; the steep turns' entry speed (0161).
-      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts : sim.steepTurns || sim.aroundPoint ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), gustAddKts(spec, sim.wx)) : sim.noFlap ? nfLib.APPROACH_KTS + gustAddKts(spec, sim.wx) : 0;
+      const drillKts = sim.goAround?.phase === 'approach' ? sim.goAround.holdKts + coachGustKts() : sim.steepTurns || sim.aroundPoint ? sim.loadedMission.kias : sim.slowFlight ? sfLib.slowKidKts(sim.slowFlight) : sim.emergencyDescent ? edLib.ED_KID_LEVEL_KTS : sim.shortField ? sfdLib.kidKts(flapsLanding(sfdLib.FULL_FLAPS), gustAddKts(spec, sim.wx)) : sim.noFlap ? nfLib.APPROACH_KTS + gustAddKts(spec, sim.wx) : 0;
       sim.throttle = autoThrottle(drillKts || kidTargetKts(spec, sim.flapsIndex, gustAddKts(spec, sim.wx)), gammaDeg, dt);
     } else {
       sim.throttle = Math.max(0, sim.throttle - dt * 0.5); // retard in the flare, like the autoland

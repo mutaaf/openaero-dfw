@@ -491,15 +491,15 @@ describe('Kid hands off on a turbulent 25G38 day still lands C or better (ticket
 // at a Pilot's (full) share of the turbulence, ten seeds. At the 500 ft gate (its FAST limit raised by the same share, its
 // Vref floor not): no SLOW, FAST or SINK. The coach's speed calls from 1,000 to 100 ft are counted on the same flight
 // under the new bands (slow below Vref, fast above the bug + 10) and the old (Vref + 5's: slow below Vref, fast above
-// Vref + 15): "fast" all but goes and "slow" never grows. Full turbulence still drops the raw IAS under Vref on some seeds
-// (a lull, and the log law's shear near the ground: 2 s filtered it stays under on seeds 5, 7, 8); that is slow by any
-// band, and the coach (which reads the raw IAS, as before) says so.
+// Vref + 15): "fast" all but goes and the "slow" floor is still Vref (the same seconds as before). Full turbulence still
+// drops the raw IAS under Vref on some seeds (seeds 5, 7, 8: ~25 s each, down to 48-53 kt): slow by either band, and the
+// coach (which reads the raw IAS, as before) says so.
 describe('a pilot on the gusty-day speed bug is stabilized and not told "fast" (ticket 0219)', () => {
   const spec = AIRCRAFT_DATABASE.c172, wx = { windDirDeg: 160, windKts: 25, gustKts: 38 };
   const bug = { kts: (f) => bugKts(spec, f, wx), gustAddKts: kidGustAddKts(spec, wx) };
   const tot = { fastS: 0, oldFastS: 0 };
   for (let seed = 1; seed <= 10; seed++) {
-    it(`kads_16_final, 25G38, Pilot turbulence, seed ${seed}: the 500 ft gate passes speed and sink; slow calls no more than before`, () => {
+    it(`kads_16_final, 25G38, Pilot turbulence, seed ${seed}: the 500 ft gate passes speed and sink; the slow floor is still Vref`, () => {
       const r = flyKidFinal('c172', 'kads_16_final', { fromDeg: 160, kts: 25, bug, air: turbulentAir(spec, wx, { seed, level: 'pilot' }) },
         null, null, 0, 0, 1, null, (full) => (full ? bug.kts(landingFlaps(spec)) : 0));
       const sc = r.speedCalls;
@@ -508,7 +508,7 @@ describe('a pilot on the gusty-day speed bug is stabilized and not told "fast" (
       expect(r.td).not.toBeNull();
       expect(r.gate).not.toBeNull();
       for (const f of ['SLOW', 'FAST', 'SINK']) expect(r.gate.failing).not.toContain(f);
-      expect(sc.slowS).toBeLessThanOrEqual(sc.oldSlowS + 1e-9);
+      expect(sc.slowS).toBeCloseTo(sc.oldSlowS, 6);
       expect(sc.fastS).toBeLessThan(Math.max(1, sc.oldFastS / 2));
       tot.fastS += sc.fastS; tot.oldFastS += sc.oldFastS;
     }, 30000);
@@ -518,6 +518,25 @@ describe('a pilot on the gusty-day speed bug is stabilized and not told "fast" (
     expect(tot.oldFastS).toBeGreaterThan(100);
     expect(tot.fastS).toBeLessThan(tot.oldFastS * 0.2);
   });
+});
+
+// 0219 (physics panel): the go-around drill (0047) flown in the Cessna on Kid: its autothrottle holds Vref + 5 + fastKts so the
+// gate calls FAST. The gate's FAST limit now rises by the bug's gust share, so main.js applyAssists adds the same share to the
+// drill's hold. Without it, 15G25 called FAST on 0 of 10 seeds (it had on 10 of 10): Kid landed instead of going around.
+describe('the go-around drill still trips FAST for the Cessna on a gusty day (ticket 0219)', () => {
+  const spec = AIRCRAFT_DATABASE.c172, m = missionByKey('go_around_drill');
+  for (const [k, g] of [[15, 25], [10, 22], [25, 38]]) {
+    it(`go_around_drill, ${k}G${g} from 350°, Kid turbulence, seeds 1-5: the 500 ft gate fails FAST`, () => {
+      const wx = { windDirDeg: 350, windKts: k, gustKts: g }, add = kidGustAddKts(spec, wx);
+      const hold = spec.vrefKts + 5 + m.fastKts + add; // main.js: sim.goAround.holdKts + coachGustKts()
+      for (let seed = 1; seed <= 5; seed++) {
+        const r = flyKidFinal('c172', 'go_around_drill', { fromDeg: 350, kts: k, bug: { kts: (f) => bugKts(spec, f, wx), gustAddKts: add }, air: turbulentAir(spec, wx, { seed, level: 'kid' }) },
+          null, null, 0, 0, 1, null, () => hold);
+        console.log(`[0219 go-around] ${k}G${g} seed ${seed}: gate ${r.gate?.failing.join(',') || 'stable'} at ${r.gate?.iasKt.toFixed(1)} kt (FAST over ${(spec.vrefKts + 20 + add).toFixed(1)})`);
+        expect(r.gate?.failing).toContain('FAST');
+      }
+    }, 60000);
+  }
 });
 
 // 0195: the short-field lesson on a gusty day (0199 adds 25G38: Kid's guide sagged ~35 ft under the path in its headwind). The lesson's 61 KIAS wins over Kid's own target, so its autothrottle takes the
