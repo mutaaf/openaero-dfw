@@ -200,18 +200,31 @@ const creditLayout = (page, google) => page.evaluate(([ids, google]) => {
   const el = document.getElementById('mapCredits');
   const controls = ids.flatMap((id) => [...document.querySelectorAll(`${id}, ${id} button, ${id} .touch-control`)])
     .filter((e) => e.checkVisibility()).map((e) => ({ id: e.id || e.textContent.trim().slice(0, 12), ...box(e) }));
-  // Each line box of the credit's text (a wrapped inline gives one rect per line).
+  // Each line of the credit's text: one rect per line box of the text (the 8 px lines are 10 px
+  // tall; taller rects are the wrapping spans').
   const range = document.createRange();
   range.selectNodeContents(el);
-  const lines = [...new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)))].length;
+  const lines = [...new Set([...range.getClientRects()].filter((r) => r.width > 0 && r.height < 14).map((r) => Math.round(r.top)))].length;
   const links = [...el.querySelectorAll('a')].filter((a) => a.checkVisibility()).map((a) => a.href);
-  return { credit: box(el), scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, lines, controls, links };
+  // A thumb on the bottom edge of the throttle and stick lands on them, not on the credit's box.
+  const edgeTaps = ['touchThrottle', 'touchStick'].map((id) => {
+    const b = document.getElementById(id).getBoundingClientRect();
+    return [id, [2, 6, 10].every((dy) => document.elementFromPoint(b.x + b.width / 2, b.bottom - dy)?.closest(`#${id}`))];
+  });
+  const thrChip = document.getElementById('txtTouchThr').parentElement.getBoundingClientRect().top;
+  const googleData = document.getElementById('txtGoogleData').getBoundingClientRect().height;
+  return { credit: box(el), scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, lines, controls, links, edgeTaps, thrChip, googleData };
 }, [CREDIT_TOUCH, google]);
 
+// Under 430 px the free credit is two lines, one credit each, whatever the font: at 390 px one
+// line had <1% to spare in CI's font, and a wider font (iOS's SF; simulated with letter spacing)
+// wrapped it onto ILS AUTO. `spacing` widens the text that way.
 const SMALL_PHONES = [
   { name: 'Android 360 portrait', width: 360, height: 800 },
   { name: 'iPhone SE portrait', width: 375, height: 667 },
   { name: 'Android 360 short portrait', width: 360, height: 640 },
+  { name: 'iPhone 15 portrait, wide font', width: 390, height: 844, spacing: 0.2 },
+  { name: 'iPhone 17 portrait, wide font', width: 402, height: 874, spacing: 0.2 },
 ];
 for (const d of SMALL_PHONES) {
   test.describe(`${d.name} imagery credit`, () => {
@@ -223,7 +236,9 @@ for (const d of SMALL_PHONES) {
         await page.goto(BASE);
         await page.locator('#btnStartFlight').tap();
         await expect(page.locator('#coach')).toBeVisible({ timeout: 10_000 });
+        if (d.spacing) await page.addStyleTag({ content: `#mapCredits { letter-spacing: ${d.spacing}px; }` });
         const r = await creditLayout(page, google);
+        if (!google) expect(r.lines, 'two lines, one credit each').toBe(2);
         expect(r.credit.x, 'credit left edge').toBeGreaterThanOrEqual(0);
         expect(r.credit.x + r.credit.width, 'credit right edge').toBeLessThanOrEqual(d.width);
         expect(r.credit.y + r.credit.height, 'credit bottom edge').toBeLessThanOrEqual(d.height);
@@ -232,6 +247,11 @@ for (const d of SMALL_PHONES) {
         // Google's box is ~31 px tall (the logo's 10 px clear space above it) and stands into the
         // deck at every phone width, 390 included: a separate gap, not this ticket's line.
         if (!google) for (const c of r.controls) expect(overlaps(r.credit, c), `credit vs ${c.id}`).toBe(false);
+        for (const [id, ok] of r.edgeTaps) expect(ok, `a tap on ${id}'s bottom edge reaches it`).toBeTruthy();
+        // The SPD bug readout is drawn at cy + 106 (main.js renderHud's speed tape): the lifted deck's
+        // THR chip stays under it.
+        expect(r.thrChip, 'THR chip clear of the SPD readout').toBeGreaterThanOrEqual(d.height / 2 + 108);
+        if (google) expect(r.googleData, "Google's providers on one line").toBeLessThan(14);
         expect(r.links.length, 'credit links').toBe(google ? 0 : 2);
         if (!google) {
           expect(r.links[0]).toContain('esri.com');
@@ -245,8 +265,8 @@ for (const d of SMALL_PHONES) {
   });
 }
 
-// Wider screens keep the free credit on one line, where it was.
-for (const d of [{ width: 390, height: 844, touch: true }, { width: 844, height: 390, touch: true }, { width: 1280, height: 720, touch: false }]) {
+// From 430 px the free credit stays on one line, where it was (phones on their side, tablets, desktop).
+for (const d of [{ width: 844, height: 390, touch: true }, { width: 568, height: 320, touch: true }, { width: 1280, height: 720, touch: false }]) {
   test.describe(`${d.width}x${d.height} imagery credit`, () => {
     test.use({ viewport: { width: d.width, height: d.height }, deviceScaleFactor: 1, hasTouch: d.touch, isMobile: d.touch });
     test(`${d.width}x${d.height}: the Esri credit stays one line, on screen`, async ({ page }) => {
