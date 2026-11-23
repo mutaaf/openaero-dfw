@@ -22,6 +22,9 @@ const ADS_ENTRY = latLonToSimMeters(32.94468, -96.75069);
 // The power-off 180 (0189, power180.js): a left downwind for 16 half a mile east of the centreline, abeam the
 // spot (the 1,000 ft aiming-point marking past the displaced threshold; tests/unit/power180.test.js checks it).
 const ADS_ABEAM_SPOT = latLonToSimMeters(32.97555, -96.82898);
+// Turns around a point (0211): fields west of Justin, ~7.5 NM north of Alliance (KAFW, 32.99N 97.32W) and away from
+// its towered airspace, inside the terrain's DEM (terrain.js: ±48 km east-west, ±42 km north-south).
+const AROUND_POINT = latLonToSimMeters(33.115, -97.345);
 
 export const MISSIONS = [
   { key: 'kdfw_35c_final', label: 'KDFW RWY 35C (4 NM ILS Final)', blurb: '4 NM out, lined up on 35C. Follow the green velocity vector and the 4-light PAPI down.', kind: 'final', airport: 'KDFW', rwy: '35C', distNm: 4 },
@@ -80,6 +83,9 @@ export const MISSIONS = [
   { key: 'c172_slow_flight', label: 'Cessna Slow Flight', blurb: 'Over Grapevine Lake: throttle back and raise the nose until you fly just above the stall warning, then add power to hold your height (±100 ft) and heading (±10°) for 45 seconds without the horn. The pilot test\'s standard.', kind: 'drill', aircraft: 'c172', pos: [GRAPEVINE_LAKE.x, GRAPEVINE_LAKE.z], aglFt: 4500, kias: 95, hdg: 0, slowFlight: true },
   // Emergency descent (0209, emergencyDescent.js): smoke in the cockpit; idle, a 30-45° bank and VA (105 KIAS) down 3,000 ft.
   { key: 'c172_emergency_descent', label: 'Cessna Emergency Descent', blurb: 'Smoke in the cockpit over Grapevine Lake: get down 3,000 ft fast. Power idle, bank 30-45°, nose down to 95-105 knots, never past 163 knots (the never-exceed speed), then level off at the height the coach gives you (±100 ft). The pilot test\'s standard.', kind: 'drill', aircraft: 'c172', pos: [GRAPEVINE_LAKE.x, GRAPEVINE_LAKE.z], aglFt: 5000, kias: 100, hdg: 0, emergencyDescent: true },
+  // Turns around a point (0211, aroundPoint.js): a lit pole in the fields north-west of Alliance; the Cessna 1,000 ft above
+  // them at 90 KIAS on the downwind entry (AFH ch. 7), half a mile before abeam the pole, the circle's 1,500 ft off its left wing.
+  { key: 'turns_around_point', label: 'Cessna Turns Around a Point', blurb: 'A 12-knot wind from the south and a lit pole on the ground ahead, off your left wing. When it is abeam, roll left and circle it twice, the same 1,500 ft away all the way round: bank steepest with the wind behind you, shallowest into it, never past 45°. Hold 1,000 ft (±100) and 90 knots (±10). Under the wing you may lose sight of it: the HUD gives its distance and clock position. The pilot test\'s ground-reference lesson.', kind: 'drill', aircraft: 'c172', pos: [AROUND_POINT.x + 1500 * 0.3048, AROUND_POINT.z + 926], point: [AROUND_POINT.x, AROUND_POINT.z], radiusFt: 1500, wind: [180, 12], aglFt: 1000, kias: 90, hdg: 0, aroundPoint: true },
   // Unusual attitudes (0174, upset.js): level at 100 KIAS, then the instructor hands it over nose-high or nose-low.
   { key: 'upset_nose_high', label: 'Cessna Unusual Attitude: Nose High', blurb: 'A moment after you start, your instructor pitches the Cessna up steeply, slowing, and hands it over: full power, nose down to the horizon, wings level.', kind: 'drill', aircraft: 'c172', pos: [GRAPEVINE_LAKE.x, GRAPEVINE_LAKE.z], aglFt: 5000, kias: 100, hdg: 0, upset: 'high' },
   { key: 'upset_nose_low', label: 'Cessna Unusual Attitude: Nose Low', blurb: 'A moment after you start, your instructor rolls the Cessna into a steep diving turn and hands it over: throttle to idle, wings level, then nose up. Don\'t pull while banked.', kind: 'drill', aircraft: 'c172', pos: [GRAPEVINE_LAKE.x, GRAPEVINE_LAKE.z], aglFt: 5000, kias: 100, hdg: 0, upset: 'low' },

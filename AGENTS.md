@@ -285,6 +285,20 @@ src/steepTurns.js   steep turns (0161, lazy chunk loaded with the mission): the 
                     and Learner get a 53° bank cap there (assists.js s.bankMaxDeg: full stick = 45°), Kid's guide flies the
                     turns (pitch for the path less α(1 − cos φ)) and Kid's autothrottle holds 95. sim.steepTurns is null once
                     graded (KEEP FLYING is free flight). Cards: tests/flight/steepTurns.test.js
+src/aroundPoint.js  turns around a point (0211, lazy chunk loaded with `turns_around_point`, `aroundPoint: true`): the C172 at 90 KIAS,
+                    1,000 ft AGL over the fields north-west of Alliance, a scenario 12 kt south wind (its `wind`, currentWeather()'s while
+                    it flies; the spawn's airspeed kept as it arrives, refreshWeather) and a lit pole (makeMarker: three's classes
+                    windsock.js already pulls in) half a mile ahead, the 1,500 ft circle off the left wing: the downwind entry
+                    (FAA-H-8083-3C ch. 7). Held at the spawn until the player flies (power180.js's way); the circle starts abeam the
+                    pole and ends after 720°. Graded on the distance's spread over the circles (the ACS sets no number: ±150 ft for a B,
+                    ±350 ft an oval = D), its average against 1,500 ft, altitude ±100 ft, airspeed ±10 kt (2 s filter) and the steepest
+                    bank (past 45° for 1 s ≤ B); 3 radii out, 500 ft off, a stall or 300 s fail, never reaching the pole fails. Its tpt*
+                    words reach coach.js through s.ds; the HUD's pole readout (drawPole: distance and clock position, under the heading
+                    box in the takeoff call's slot) because the pole hides under the wing. Kid: the guide's circleBankDeg (Vt²/d plus a
+                    spring to the radius and radial damping, the handbook's tan φ = Vg²/(gR)), the autothrottle on 90, no auto flaps
+                    while it is live; Kid and Learner get a 53° cap (full stick 45°). The card's track plot is src/trackPlot.js (an SVG
+                    in results.js's chunk). Kept once graded (its wind flies on); another mission or airframe ends it (endAroundPoint).
+                    Cards: tests/flight/aroundPoint.test.js (one bank = an oval, D; banking for the groundspeed = A, four winds)
 src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_slow_flight`): the C172 clean at 95 KIAS,
                     4,500 ft AGL over Grapevine Lake; slow to the band and hold it, graded to FAA-S-ACS-6C Area VII Task A
                     (S5: altitude ±100 ft, heading ±10°, airspeed +10/−0; S4: no stall warning). The band is the airplane's
@@ -838,6 +852,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-23 (0211): 197.92 kB (the turns-around-a-point mission's entry and blurb, its lazy import and wiring (the pole, its wind, coach, Kid's guide and cap, no auto flaps, the HUD's pole readout call, the snapshot's aroundPoint), +0.61 kB over 0217's 197.31; aroundPoint.js is a lazy chunk, trackPlot.js rides in results.js's).
 2026-11-23 (0217): 197.31 kB (the tapes' edges from the width on phones under 390 px: hudLayout.js speedTapeX/altTapeX, altCaptionRect's altX and the snapshot's hudTapes, +0.22 kB over 0210's 197.09).
 2026-11-22 (0210): 197.09 kB (the no-flap lesson's mission entry and blurb, its lazy import and wiring (the stuck lever's toast, the coach target, Kid's flaps and speed, the stop-hold and grade hooks, the snapshot's noFlap), +0.48 kB over 0209's 196.61; noFlap.js is a lazy chunk).
 2026-11-21 (0209): 196.61 kB (the emergency descent's mission entry and blurb, its lazy import and wiring (coach, Kid's guide, idle and bank cap, the snapshot's emergencyDescent), +0.44 kB over 0197's 196.17; emergencyDescent.js is a lazy chunk).
