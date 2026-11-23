@@ -182,3 +182,83 @@ for (const d of TABLETS) {
   });
   });
 }
+
+// Ticket 0216: the imagery credit (AGENTS.md invariant 3: attribution stays visible) on the
+// commonest small phones, which the matrix above starts above: a Galaxy-class Android at 360 px
+// and an iPhone SE / mini at 375. Its one 378 px line ran off both edges there; it now wraps,
+// whole, inside the screen and clear of every touch control. On the wider screens it stays one
+// line. Both credits are checked whole on screen: the free one (Esri + elevation) and Google's
+// (logo + data line, forced on as photoreal shows it; tiles are stubbed).
+const CREDIT_TOUCH = ['#touchThrottle', '#touchStick', '#touchButtons', '#touchLeft'];
+const creditLayout = (page, google) => page.evaluate(([ids, google]) => {
+  if (google) {
+    document.getElementById('creditsGoogle').classList.remove('hidden');
+    document.getElementById('creditsFree').classList.add('hidden');
+    document.getElementById('txtGoogleData').textContent = 'Google, Airbus, Maxar Technologies, Vexcel Imaging US';
+  }
+  const box = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; };
+  const el = document.getElementById('mapCredits');
+  const controls = ids.flatMap((id) => [...document.querySelectorAll(`${id}, ${id} button, ${id} .touch-control`)])
+    .filter((e) => e.checkVisibility()).map((e) => ({ id: e.id || e.textContent.trim().slice(0, 12), ...box(e) }));
+  // Each line box of the credit's text (a wrapped inline gives one rect per line).
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const lines = [...new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)))].length;
+  const links = [...el.querySelectorAll('a')].filter((a) => a.checkVisibility()).map((a) => a.href);
+  return { credit: box(el), scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, lines, controls, links };
+}, [CREDIT_TOUCH, google]);
+
+const SMALL_PHONES = [
+  { name: 'Android 360 portrait', width: 360, height: 800 },
+  { name: 'iPhone SE portrait', width: 375, height: 667 },
+  { name: 'Android 360 short portrait', width: 360, height: 640 },
+];
+for (const d of SMALL_PHONES) {
+  test.describe(`${d.name} imagery credit`, () => {
+    test.use({ viewport: { width: d.width, height: d.height }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    for (const google of [false, true]) {
+      test(`${d.width}x${d.height}: the ${google ? 'Google' : 'Esri'} credit is whole on screen${google ? '' : ' and clear of the touch controls'}`, async ({ page }, info) => {
+        const errors = collectErrors(page);
+        await stubTiles(page);
+        await page.goto(BASE);
+        await page.locator('#btnStartFlight').tap();
+        await expect(page.locator('#coach')).toBeVisible({ timeout: 10_000 });
+        const r = await creditLayout(page, google);
+        expect(r.credit.x, 'credit left edge').toBeGreaterThanOrEqual(0);
+        expect(r.credit.x + r.credit.width, 'credit right edge').toBeLessThanOrEqual(d.width);
+        expect(r.credit.y + r.credit.height, 'credit bottom edge').toBeLessThanOrEqual(d.height);
+        expect(r.scrollWidth, 'no credit text clipped').toBeLessThanOrEqual(r.clientWidth);
+        expect(r.controls.length, 'touch controls found').toBeGreaterThan(3);
+        // Google's box is ~31 px tall (the logo's 10 px clear space above it) and stands into the
+        // deck at every phone width, 390 included: a separate gap, not this ticket's line.
+        if (!google) for (const c of r.controls) expect(overlaps(r.credit, c), `credit vs ${c.id}`).toBe(false);
+        expect(r.links.length, 'credit links').toBe(google ? 0 : 2);
+        if (!google) {
+          expect(r.links[0]).toContain('esri.com');
+          expect(r.links[1]).toContain('registry.opendata.aws/terrain-tiles');
+        }
+        const shot = await page.screenshot({ path: info.outputPath(`credit-${google ? 'google' : 'esri'}-${d.width}x${d.height}.png`) });
+        await info.attach(`${d.name} credit`, { body: shot, contentType: 'image/png' });
+        expect(errors).toEqual([]);
+      });
+    }
+  });
+}
+
+// Wider screens keep the free credit on one line, where it was.
+for (const d of [{ width: 390, height: 844, touch: true }, { width: 844, height: 390, touch: true }, { width: 1280, height: 720, touch: false }]) {
+  test.describe(`${d.width}x${d.height} imagery credit`, () => {
+    test.use({ viewport: { width: d.width, height: d.height }, deviceScaleFactor: 1, hasTouch: d.touch, isMobile: d.touch });
+    test(`${d.width}x${d.height}: the Esri credit stays one line, on screen`, async ({ page }) => {
+      await stubTiles(page);
+      await page.goto(BASE);
+      await page.locator('#btnStartFlight').click();
+      await expect(page.locator('#onboardingModal')).toBeHidden();
+      const r = await creditLayout(page, false);
+      expect(r.lines, 'one line').toBe(1);
+      expect(r.credit.x).toBeGreaterThanOrEqual(0);
+      expect(r.credit.x + r.credit.width).toBeLessThanOrEqual(d.width);
+      for (const c of r.controls) expect(overlaps(r.credit, c), `credit vs ${c.id}`).toBe(false);
+    });
+  });
+}

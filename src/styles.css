@@ -71,7 +71,7 @@ input[type=range] { accent-color: #38bdf8; }
   text-align: right;
   text-decoration: none;
 }
-.imagery-credit a { color: inherit; text-decoration: none; }
+.imagery-credit a { color: inherit; text-decoration: none; white-space: nowrap; } /* a narrow screen breaks between credits (0216) */
 .imagery-credit a:hover { color: #e2e8f0; }
 /* Google's attribution rules: logo 16–19 px tall with clear space; data providers in a line. */
 .imagery-credit .google-logo { display: inline-block; height: 16px; width: auto; margin: 10px 10px 5px 10px; vertical-align: bottom; }
@@ -86,9 +86,18 @@ input[type=range] { accent-color: #38bdf8; }
   bottom: max(1px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   text-align: center;
-  white-space: nowrap;
+  /* One line where it fits (390 px and up); on a 360/375 px phone it wraps, whole, inside the
+     screen rather than running off both edges (0216: the line is 378 px). */
+  width: max-content;
+  max-width: calc(100vw - 8px);
+  white-space: normal;
   pointer-events: auto;
 }
+
+/* The touch deck stands on the credit's line: it pads the same inset plus 0.75rem. Under 390 px
+   the credit is two lines (~20 px), so the deck stands 10 px higher to keep them clear (0216). */
+#touchDeck { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }
+@media (max-width: 389.98px) { #touchDeck { padding-bottom: calc(1.375rem + env(safe-area-inset-bottom)); } }
 
 /* Start screen inside the safe area: installed fullscreen (0086) the page runs under the
    notch, the status bar and the home indicator (viewport-fit=cover). */

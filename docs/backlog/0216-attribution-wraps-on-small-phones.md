@@ -1,7 +1,7 @@
 ---
 id: 0216
 title: The imagery credit wraps instead of clipping on 360 and 375 px phones
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: accessibility
