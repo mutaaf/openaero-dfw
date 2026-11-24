@@ -1103,7 +1103,10 @@ function checkXwTakeoff(dt) {
   const f = sim.xwTakeoff;
   if (!f || xtLib.xwTakeoffDone(f) || !cockpitEntered || modalOpen()) return;
   _euler.setFromQuaternion(sim.quat, 'YXZ');
-  if (xtLib.xwTakeoffSimStep(f, sim, (-_euler.y * RAD_TO_DEG + 360) % 360, -_euler.z * RAD_TO_DEG, dt) === 'done') drillCard(xtLib.gradeXwTakeoff(f, sim.assist === 'kid'), f.end);
+  const was = f.phase;
+  const done = xtLib.xwTakeoffSimStep(f, sim, (-_euler.y * RAD_TO_DEG + 360) % 360, -_euler.z * RAD_TO_DEG, dt) === 'done';
+  if (was === 'roll' && f.phase !== 'roll') sim.touchYaw = 0; // the roll's latched touch pedal is not the climb's (first-timer panel)
+  if (done) drillCard(xtLib.gradeXwTakeoff(f, sim.assist === 'kid', sim.assist === 'learner'), f.end);
 }
 function checkShortField(dt) {
   const f = sim.shortField;
@@ -1246,7 +1249,7 @@ function checkTouchdown(dt) {
   if (sim.loadedMission?.engineOutFt && !sim.engineOut?.failed) return;
   if (sim.loadedMission?.rto) return; // the rejected takeoff (0107) is graded at its stop
   if (sim.softField && !sfoLib.softFieldDone(sim.softField)) return; // the soft-field takeoff (0182): a settle-back is part of its roll
-  if (sim.xwTakeoff && !xtLib.xwTakeoffDone(sim.xwTakeoff)) return; // the crosswind takeoff (0220): a skip is graded on its card
+  if (sim.xwTakeoff && (!xtLib.xwTakeoffDone(sim.xwTakeoff) || sim.xwTakeoff.why)) return; // the crosswind takeoff (0220): a skip, or the roll that ended it, is graded on its card
   if (sim.windshear && sim.windshear.phase !== 'final') return; // the windshear escape (0112) is graded out of it
   _euler.setFromQuaternion(sim.quat, 'YXZ');
   // The dead-stick challenge (0036) is graded on Addison wherever the wheels touch.
@@ -1528,7 +1531,7 @@ function updateCoach(dt) {
     r.canReverse = !!systemsOf(sim.spec).reverser;
     r.reverserPos = sim.reverserPos ?? 0;
     r.braking = sim.brakesOn || sim.autobrakeActive;
-    if (sim.toCoach) coach.flown = false; // a hop on the rotation is not a landing (0093)
+    if (sim.toCoach || (sim.xwTakeoff && !xtLib.xwTakeoffDone(sim.xwTakeoff))) coach.flown = false; // a hop on the rotation is not a landing (0093; 0220's skip)
     stepCoach(coach, coachInput, dt);
     if (coach.done) coachDoneS += dt;
     // After the landing the rollout prompts run to the stop; "Stopped" then fades.

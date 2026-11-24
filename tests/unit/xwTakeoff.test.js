@@ -115,6 +115,21 @@ describe('xwTakeoff.js coach', () => {
     expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...air, wheelFt: 80 })]).toMatch(/^Turn a little left, into the wind/);
     expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...air, wheelFt: 80, trackOffDeg: 6 })]).toBe('Drifting right: turn a little more left, into the wind');
   });
+  it('first-timer panel: the stick comes out before the rotate and in the slip; a good crab is held; a centred stick past 40 kt keeps a little in', () => {
+    const st = ready('R');
+    xwTakeoffStep(st, { ...base(), throttle: 1, gsKts: 10, iasKts: 15 }, 0.1);
+    expect(xwTakeoffPrompt(st, { ...base(), throttle: 1, iasKts: VR_KTS + 2, ail: 0.95 })).toBe('xtEaseR');
+    expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...base(), throttle: 1, iasKts: VR_KTS + 2, ail: 0.3 })]).toMatch(/^55 knots or a little more: ease back/);
+    expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...base(), throttle: 1, iasKts: 45, ail: 0 })]).toBe('Keep a little right stick in, rudder keeps the line');
+    expect(xwTakeoffPrompt(st, { ...base(), throttle: 1, iasKts: 45, ail: 0.4 })).toBeNull();
+    const air = { ...base(), onGround: false, throttle: 1, iasKts: 65 };
+    xwTakeoffStep(st, { ...air, wheelFt: 2 }, 0.1);
+    expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...air, wheelFt: 20, ail: 0.95 })]).toBe('Less right stick: just enough to keep the right wing a little low');
+    expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...air, wheelFt: 80, noseOffDeg: 9, trackOffDeg: 1 })]).toBe('Good crab: hold it, over the centreline');
+    // A drift of 1,600 ft off the extended centreline is a D.
+    expect(gradeXwTakeoff(flyScript('R', { track: 9, crossAtTop: -1600 * FT })).score).toBeLessThanOrEqual(FAIL_CAP);
+    expect(gradeXwTakeoff(flyScript('R'), false, true).note).toMatch(/^Learner level: the plane's pedals help/);
+  });
   it('Kid: power, rotate, climb; nothing before the player is flying', () => {
     const st = createXwTakeoff(end);
     lessonWx(st, wind('R'));
@@ -133,7 +148,7 @@ describe('xwTakeoff.js grade', () => {
     expect(g.kind).toBe('xwTakeoff');
     expect(g.score).toBeGreaterThanOrEqual(90);
     expect(row(g, 'ail').value).toBe('100% of full right');
-    expect(row(g, 'liftoff').value).toBe('60 kt, 0° right wing low');
+    expect(row(g, 'liftoff').value).toBe('60 kt, wings level');
     expect(row(g, 'track').value).toMatch(/^crab 9° right \(the wind's ~10°\), track 0° off, 0 ft right at 200 ft$/);
     expect(g.reason).toBeNull();
     expect(g.note).toMatch(/Addison's live wind: 12 kt across from the right/);

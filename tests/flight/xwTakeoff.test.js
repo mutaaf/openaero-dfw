@@ -106,7 +106,7 @@ describe('Cessna 172S crosswind takeoff lesson, 12 kt from the right (FAA-H-8083
     // The coach named the stick and the crab on the handbook's flight.
     // The coach: power with the stick already in, hold it, rotate, the sideslip, then the crab; with the stick in the middle
     // it asks for the aileron before the power and on the roll.
-    expect([...afh.prompts]).toEqual(expect.arrayContaining(['xtPower', 'xtHoldR', 'xtEaseR', 'xtRotate', 'xtSlipR', 'xtCrabR']));
+    expect([...afh.prompts]).toEqual(expect.arrayContaining(['xtPower', 'xtHoldR', 'xtEaseR', 'xtRotate', 'xtSlipR', 'xtCrabOkR']));
     expect([...noAil.prompts]).toEqual(expect.arrayContaining(['xtBriefR', 'xtAilR']));
     expect([...afh.prompts].some((k) => k.endsWith('L'))).toBe(false);
   }, 30000);
@@ -120,6 +120,6 @@ describe('Cessna 172S crosswind takeoff lesson, 12 kt from the right (FAA-H-8083
     expect(row(l.grade, 'ail').score).toBe(100);
     expect(l.st.crabSum / l.st.trackN).toBeGreaterThan(5); // into the wind (the crab is measured toward the wind's side)
     expect(Math.abs(l.grade.score - r.grade.score)).toBeLessThanOrEqual(8); // the prop's left-turning tendency differs by side
-    expect([...l.prompts]).toEqual(expect.arrayContaining(['xtHoldL', 'xtSlipL', 'xtCrabL']));
+    expect([...l.prompts]).toEqual(expect.arrayContaining(['xtHoldL', 'xtSlipL', 'xtCrabOkL']));
   }, 30000);
 });

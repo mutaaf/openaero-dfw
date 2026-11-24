@@ -50,7 +50,13 @@ export const ROLL_GS_KTS = 5;
 export const AIL_ASK = 0.5;
 export const EASE_AIL = 0.6;
 // The coach's centreline call: off it by this much on the roll.
-export const LINE_CALL_M = 4;
+export const LINE_CALL_M = 3; // a touch pedal takes a moment (first-timer panel: 4 m called it ~1 s before the edge)
+// A crab into the wind past this, with the track within DRIFT_CALL_DEG, is a good crab: "hold it", not "turn".
+export const CRAB_OK_DEG = 3;
+// Under this much stick into the wind past AIL_TO_KTS the coach asks to keep a little in.
+export const KEEP_AIL = 0.2;
+// Drifted this far off the extended centreline at DONE_FT caps D (a different runway's line).
+export const DRIFT_FAIL_FT = 500;
 // Lifted off: the wheels this high (a hop over a bump is not a lift-off). Back on the runway after it: a skip.
 export const LIFT_FT = 1;
 // A steep bank into the wind at the lift-off (p. 6-9's "excessive aileron input in the latter stage") is named past this.
@@ -93,6 +99,9 @@ for (const s of ['R', 'L']) {
   XT_TEXT[`xtLine${s}`] = `${w[0].toUpperCase()}${w.slice(1)} of the centreline: ${o} rudder (${RUD_KEY[OTHER[s]]})`;
   XT_TOUCH[`xtLine${s}`] = `${w[0].toUpperCase()}${w.slice(1)} of the centreline: tap ${BTN[OTHER[s]]}`;
   XT_TEXT[`xtSlip${s}`] = `Flying! Keep the ${w} wing a little low, rudder holds the line`;
+  XT_TEXT[`xtKeep${s}`] = `Keep a little ${w} stick in, rudder keeps the line`;
+  XT_TEXT[`xtLess${s}`] = `Less ${w} stick: just enough to keep the ${w} wing a little low`;
+  XT_TEXT[`xtCrabOk${s}`] = `Good crab: hold it, over the centreline`;
   XT_TEXT[`xtCrab${s}`] = `Turn a little ${w}, into the wind: crab, wings level, stay over the centreline`;
   XT_TEXT[`xtDrift${s}`] = `Drifting ${o}: turn a little more ${w}, into the wind`;
   XT_TEXT[`xtOver${s}`] = `Drifting ${w}: a little less ${w}`;
@@ -101,13 +110,13 @@ for (const s of ['R', 'L']) {
 }
 Object.assign(XT_TEXT, {
   xtPower: 'Full power (Shift), keep the stick into the wind',
-  xtRotate: `${VR_KTS} knots: ease back (S or ↑) for a firm, definite lift-off`,
+  xtRotate: `${VR_KTS} knots or a little more: ease back (S or ↑) for a firm, definite lift-off`,
   xtKidRotate: `${VR_KTS} knots: hold ↑ to lift off`,
   xtKidClimb: 'Flying! Let it climb',
 });
 Object.assign(XT_TOUCH, {
   xtPower: 'Throttle to the top, keep the stick into the wind',
-  xtRotate: `${VR_KTS} knots: stick up a little (nose up) for a firm, definite lift-off`,
+  xtRotate: `${VR_KTS} knots or a little more: stick up a little (nose up) for a firm, definite lift-off`,
   xtKidRotate: `${VR_KTS} knots: hold the stick up to lift off`,
 });
 Object.assign(DRILL_TEXT, XT_TEXT);
@@ -117,7 +126,7 @@ for (const k of Object.keys(XT_TEXT)) RANK[k] = k.startsWith('xtLine') || k === 
 // The coach's keys per wind side, built once (the prompt runs every frame: no strings made there).
 const KEYS = {};
 for (const s of ['R', 'L']) {
-  KEYS[s] = { brief: `xtBrief${s}`, ail: `xtAil${s}`, hold: `xtHold${s}`, ease: `xtEase${s}`, slip: `xtSlip${s}`, crab: `xtCrab${s}`,
+  KEYS[s] = { brief: `xtBrief${s}`, ail: `xtAil${s}`, hold: `xtHold${s}`, ease: `xtEase${s}`, slip: `xtSlip${s}`, crab: `xtCrab${s}`, keep: `xtKeep${s}`, less: `xtLess${s}`, crabOk: `xtCrabOk${s}`,
     drift: `xtDrift${s}`, over: `xtOver${s}`, kid: `xtKid${s}`, lineR: 'xtLineR', lineL: 'xtLineL' };
 }
 
@@ -196,28 +205,31 @@ export function xwTakeoffPrompt(st, s) {
   if (s.onGround) {
     if (!st.rolled) return a < AIL_ASK ? k.brief : 'xtPower';
     if (Math.abs(s.crossM) > LINE_CALL_M) return s.crossM > 0 ? k.lineR : k.lineL;
-    if (s.iasKts >= VR_KTS) return 'xtRotate';
     if (s.iasKts < AIL_TO_KTS) return a < AIL_ASK ? k.ail : k.hold;
-    return a > EASE_AIL ? k.ease : k.hold;
+    // Past 40 kt the stick comes out (p. 6-9: not a steep bank at the lift-off), before the rotate call too.
+    if (a > EASE_AIL) return k.ease;
+    if (s.iasKts >= VR_KTS) return 'xtRotate';
+    return a < KEEP_AIL ? k.keep : null;
   }
-  if (s.wheelFt < TRACK_FROM_FT) return k.slip;
+  if (s.wheelFt < TRACK_FROM_FT) return a > EASE_AIL ? k.less : k.slip;
   // The track against the runway, + = drifting downwind (with the wind).
   const down = st.side === 'R' ? -s.trackOffDeg : s.trackOffDeg;
   if (down > DRIFT_CALL_DEG) return k.drift;
   if (down < -DRIFT_CALL_DEG) return k.over;
-  return k.crab;
+  return (st.side === 'R' ? s.noseOffDeg : -s.noseOffDeg) > CRAB_OK_DEG ? k.crabOk : k.crab;
 }
 
 const fmt = (n) => Math.round(n).toLocaleString('en-US');
 const REASONS = {
-  overrun: 'Ran out of runway: full power, and ease back at 55 knots.',
+  overrun: 'Ran out of runway: full power, and raise the nose at 55 knots.',
   off: 'Left the side of the runway: the rudder keeps it on the centreline, the stick into the wind keeps the wing down.',
-  stopped: 'Never got airborne: full power, stick into the wind, and ease back at 55 knots.',
+  stopped: 'Never got airborne: full power, stick into the wind, and raise the nose at 55 knots.',
   noclimb: 'Never climbed to 200 ft: once airborne, climb away at 74 knots.',
 };
 
 // The grade. kid: Kid's pedals held the roll and its hands-off climb has no crab: the centreline and the lift-off only.
-export function gradeXwTakeoff(st, kid = false) {
+// learner: Learner's pedals hold the centreline when the player doesn't (assists.js): the card says so.
+export function gradeXwTakeoff(st, kid = false, learner = false) {
   const w = SIDES[st.side], o = SIDES[OTHER[st.side]];
   const flew = st.liftKts !== null;
   const offFt = st.maxOffM * M_TO_FT;
@@ -227,7 +239,7 @@ export function gradeXwTakeoff(st, kid = false) {
   const ailRow = { key: 'ail', label: `Aileron into the wind, to ${AIL_TO_KTS} kt`, value: `${Math.round(Math.max(0, ail) * 100)}% of full ${ail >= 0 ? w : `(the stick went ${o})`}`,
     score: curve(ail, [[0, 0], [0.3, 40], [0.6, 80], [0.8, 100]]) };
   const bank = st.liftBankIntoDeg ?? 0;
-  const liftoff = { key: 'liftoff', label: 'Lift-off', value: flew ? `${Math.round(st.liftKts)} kt, ${Math.abs(bank).toFixed(0)}° ${bank >= 0 ? `${w} wing low` : `${o} wing low`}` : 'never lifted off',
+  const liftoff = { key: 'liftoff', label: 'Lift-off', value: flew ? `${Math.round(st.liftKts)} kt, ${Math.abs(bank) < 1 ? 'wings level' : `${Math.abs(bank).toFixed(0)}° ${bank >= 0 ? `${w} wing low` : `${o} wing low`}`}` : 'never lifted off',
     score: flew ? Math.min(curve(st.liftKts, [[VR_KTS - 10, 20], [VR_KTS - EARLY_KTS, 60], [VR_KTS - 2, 100], [VR_KTS + 20, 100], [VR_KTS + 35, 30]]),
       curve(bank, [[-6, 0], [-RISEN_DEG - 1, 60], [-1, 100], [STEEP_BANK_DEG, 100], [10, 40], [15, 0]])) : 0 };
   const trackErr = st.trackN ? st.trackSum / st.trackN : null;
@@ -251,14 +263,14 @@ export function gradeXwTakeoff(st, kid = false) {
     const downFt = (st.side === 'R' ? -st.endCrossM : st.endCrossM) * M_TO_FT;
     if (downFt > DRIFT_SAY_FT) reasons.push(`Drifted ${fmt(downFt)} ft ${o} of the extended centreline by 200 ft: turn into the wind (${w}) to crab.`);
     else if (-downFt > DRIFT_SAY_FT) reasons.push(`Drifted ${fmt(-downFt)} ft ${w} of the extended centreline by 200 ft: a little less crab.`);
-    if (Math.abs(downFt) > DRIFT_SAY_FT) score = Math.min(score, CAP_B);
+    if (Math.abs(downFt) > DRIFT_SAY_FT) score = Math.min(score, Math.abs(downFt) > DRIFT_FAIL_FT ? FAIL_CAP : CAP_B);
   }
   if (!reasons.length && score < 85) reasons.push({ line: 'Wandered off the centreline: rudder keeps it straight.', ail: `Full ${w} stick into the wind from the start of the roll.`,
     liftoff: `Lift off at ${VR_KTS} knots, wings nearly level.`, track: `Crab into the wind (${w}) to stay over the extended centreline.` }[factors.reduce((a, f) => (f.score < a.score ? f : a)).key]);
   return {
     kind: 'xwTakeoff', title: flew ? 'Crosswind takeoff' : 'Crosswind takeoff failed', grade: letterGrade(score), score, factors,
     reason: reasons.join(' ') || null,
-    note: `${kid ? 'Kid level: your plane kept the line on the roll. ' : ''}${st.wx?.live ? `Addison's live wind: ${fmt(st.xwKts)} kt across from the ${w}.` : `A scenario wind: ${fmt(st.xwKts)} kt across from the ${w}.`}`,
+    note: `${kid ? 'Kid level: your plane kept the line on the roll. ' : learner ? 'Learner level: the plane\'s pedals help hold the centreline on the roll. ' : ''}${st.wx?.live ? `Addison's live wind: ${fmt(st.xwKts)} kt across from the ${w}.` : `A scenario wind: ${fmt(st.xwKts)} kt across from the ${w}.`}`,
   };
 }
 
