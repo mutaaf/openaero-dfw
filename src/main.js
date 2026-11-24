@@ -1607,10 +1607,11 @@ function updateCoach(dt) {
 // bar (.coach-top) and stays there for the flight (a wrapped bounce prompt must not make it jump),
 // with smaller words (.coach-tight) if a long one would still reach the heading box. Measured when
 // the words change and on resize, never per frame.
-let coachTopHeld = false;
+let coachTopHeld = false, refTop = 0;
 function placeCoach(resized = false) {
   const el = byId('coach');
   if (resized) coachTopHeld = false;
+  refTop = 0;
   if (el.classList.contains('hidden')) return;
   if (!coachTopHeld) {
     el.classList.remove('coach-top');
@@ -1621,6 +1622,9 @@ function placeCoach(resized = false) {
   el.classList.remove('coach-tight');
   const k = sim.hudScale; // the heading box's top on screen (the HUD draws at k, 0218)
   if (coachTopHeld && el.getBoundingClientRect().bottom > k * headingBoxTop(window.innerHeight / 2 / k) - 2) el.classList.add('coach-tight');
+  // 0223 (device panel): a ground-reference lesson's readout (232 x 24 under the heading box) drops below a card over it (568x320).
+  const r = el.getBoundingClientRect(), t = k * takeoffCallTop(window.innerHeight / 2 / k), x = window.innerWidth / 2;
+  if (r.bottom > t && r.top < t + 24 * k && r.left < x + 116 * k && r.right > x - 116 * k) refTop = (r.bottom + 4) / k;
 }
 
 // Leaving the modal (ENTER COCKPIT or ✕) applies the coach checkbox.
@@ -2480,7 +2484,7 @@ function renderHud() {
   if (sim.gate && sim.simTime < sim.gateShownUntil) gateVerdict?.drawGateVerdict(hudCtx, sim, w, h, caption.text);
   // A callout caption (0117) takes the same slot: it wins (a GPWS call just after lift-off).
   if (sim.takeoffCalloutIdx >= 0 && sim.simTime < sim.takeoffCallShownUntil && !caption.text) drawTakeoffCall(cx, cy);
-  else if (sim.groundRef && !caption.text) grLib.drawHud(hudCtx, cx, takeoffCallTop(cy), sim.groundRef, sim, hdgTrue); // 0211, 0223: the arrow to the pole or the field, and its distance
+  else if (sim.groundRef && !caption.text) grLib.drawHud(hudCtx, cx, refTop || takeoffCallTop(cy), sim.groundRef, sim, hdgTrue); // 0211, 0223: the arrow to the pole or the field, and its distance
 
   hudCtx.restore();
 }

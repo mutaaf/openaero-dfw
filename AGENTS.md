@@ -907,7 +907,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-24 (0223): 199.45 kB (the rectangular course's mission entry and blurb, its lazy import beside aroundPoint.js's in one ground-reference slot (sim.groundRef, grLib), the snapshot's computed field, +0.28 kB over 0214's 199.17; rectCourse.js is a lazy chunk).
+2026-11-24 (0223): 199.57 kB (the rectangular course's mission entry and blurb, its lazy import beside aroundPoint.js's in one ground-reference slot (sim.groundRef, grLib), the snapshot's computed field, placeCoach dropping the readout below a card over it, +0.40 kB over 0214's 199.17; rectCourse.js is a lazy chunk).
 2026-11-24 (0214): 199.17 kB (the C172's elevator lift beyond trim: flightModel.js elevatorLiftCl, its call and lift-off fade, gear.js's step-mean tail contact, +0.25 kB over 0221's 198.92).
 2026-11-24 (0221): 198.92 kB (the left-handed chip's wiring (setHand, the stored hand, the wind box's side and height), +0.19 kB over 0220's 198.73; the mirror is CSS).
 2026-11-24 (0220): 198.73 kB (the crosswind takeoff's mission entry and blurb, its lazy import and wiring (checkXwTakeoff, the coach's ground and air prompts, currentWeather's lesson wind, the pedals' and trim's toggles, checkTouchdown's skip, the snapshot's xwTakeoff, the touch pedal's reset at the lift-off, the coach's and checkTouchdown's skip guards), +0.44 kB over 0219's 198.29; xwTakeoff.js is a lazy chunk).

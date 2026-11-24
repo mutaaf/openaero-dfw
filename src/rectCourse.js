@@ -19,7 +19,7 @@
 // and flown headless in tests/flight/rectCourse.test.js.
 import * as THREE from 'three';
 import { curve, letterGrade } from './landing.js';
-import { DRILL_TEXT, RANK } from './coach.js';
+import { DRILL_TEXT, RANK, TOUCH_WORDS } from './coach.js';
 import { stallAoaDeg } from './aero.js';
 import { lessonWx, MAX_BANK_DEG, ALT_TOL_FT, KTS_TOL, SPREAD_B_FT, SPREAD_D_FT, IAS_TAU_S, STEEP_HOLD_S, ASSIST_BANK_DEG,
   SAY_OFF_M, TRACK_MAX, TRACK_DT_S, KP, KD, ACS_CAP, LOST_CAP } from './aroundPoint.js';
@@ -42,7 +42,7 @@ export const ROLL_LEAD_M = 60;
 export const RECT_TEXT = {
   rcFlyOn: 'Fly on: the field is on your left. Keep its edge the same distance off your left wing',
   rcKidIn: 'Let go: the plane flies round the field, the same distance off its edges',
-  rcKid: 'Watch the nose: it points into the wind on the legs, and the turns are steepest with the wind behind',
+  rcKid: 'Watch: the nose into the wind on the sides, steeper turns with it behind',
   rcCornerDown: 'Corner abeam: roll left, steep: the wind is behind you, fastest over the ground',
   rcCornerUp: 'Corner abeam: roll left, gently: into the wind you are slowest over the ground',
   rcCorner: 'Corner abeam: roll left, a medium bank, round the corner',
@@ -58,10 +58,23 @@ export const RECT_TEXT = {
   rcSlow: 'Slowing: add power',
   rcFast: 'Fast: ease off the power',
   rcSteep: 'Over 45° of bank: shallower. You are too close to the field, or started the corner late',
+  // Panel (first-timer): the corner's word holds while you turn it, says which way off the distance, and calls the roll-out.
+  rcHoldDown: 'Hold the steep bank round the corner: the wind is behind you, fastest over the ground',
+  rcHoldUp: 'Hold a gentle bank round the corner: into the wind you are slowest over the ground',
+  rcHold: 'Hold a medium bank round the corner',
+  rcTurnWide: 'Swinging wide round the corner: a little more left bank',
+  rcTurnClose: 'Cutting inside the corner: ease the bank a little shallower',
+  rcRollOut: 'Roll out: wings level, the field\'s next edge off your left wing',
+  rcCrabGood: 'Good crab: the nose into the wind, the track straight along the edge. Hold it',
+  rcCrabLess: 'Too much crab: ease the nose a little back toward the edge\'s line',
 };
 Object.assign(DRILL_TEXT, RECT_TEXT);
 Object.assign(RANK, { rcFlyOn: 1, rcKidIn: 1, rcKid: 1, rcCornerDown: 2, rcCornerUp: 2, rcCorner: 2, rcWide: 1, rcClose: 1, rcCrabL: 1, rcCrabR: 1,
-  rcLegDown: 1, rcLegUp: 1, rcLevel: 1, rcLow: 1, rcHigh: 1, rcSlow: 1, rcFast: 1, rcSteep: 2 });
+  rcLegDown: 1, rcLegUp: 1, rcLevel: 1, rcLow: 1, rcHigh: 1, rcSlow: 1, rcFast: 1, rcSteep: 2,
+  rcHoldDown: 1, rcHoldUp: 1, rcHold: 1, rcTurnWide: 1, rcTurnClose: 1, rcRollOut: 2, rcCrabGood: 1, rcCrabLess: 1 });
+// On the touch stick up is nose up (lesson 2026-11-24): "back pressure" means nothing there.
+export const RECT_TOUCH = { rcLow: 'Sinking: stick up a touch (nose up), a little power', rcHigh: 'Climbing: stick down a touch (nose down)' };
+Object.assign(TOUCH_WORDS, RECT_TOUCH);
 
 const wrap180 = (d) => ((d % 360) + 540) % 360 - 180;
 const DEG = 180 / Math.PI;
@@ -74,7 +87,7 @@ export function createRectCourse(m) {
     kind: 'rectCourse',
     phase: 'entry', cx: m.field[0], cz: m.field[1], hx: m.fieldFt[0] * FT_TO_M / 2, hz: m.fieldFt[1] * FT_TO_M / 2, D: m.distFt * FT_TO_M,
     live: false, hold: null, spawn: m, wx: lessonWx(m),
-    t: 0, ct: 0, swept: 0, lastAng: null, d: 0, corner: false, nx: 0, nz: 0,
+    t: 0, ct: 0, swept: 0, lastAng: null, d: 0, corner: false, nx: 0, nz: 0, ck: '',
     alt0: null, kts0: m.kias, iasF: m.kias,
     maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, maxBankDeg: 0, steepS: 0,
     w: 0, sum: 0, sumSq: 0, why: null, awayS: 0,
@@ -194,22 +207,29 @@ const windFromRight = (s) => {
 };
 
 // The coach's word for this moment (coach.js s.ds). kid: the guide flies it.
+// A corner's word is chosen once, as it comes abeam, from the wind on the leg it ends (st.ck: 'Down', 'Up' or '' medium):
+// "roll left" while the wings are level, then "hold" that bank round it (panel: it fell back to "medium" mid-turn).
+const SIN3 = Math.sin(3 / DEG);
 export function rectPrompt(st, s, kid) {
   if (st.phase === 'complete' || st.phase === 'failed' || !st.live) return null;
   if (kid) return st.phase === 'entry' ? 'rcKidIn' : 'rcKid';
   if (st.phase === 'entry') return 'rcFlyOn';
   if (Math.abs(s.bankDeg) > MAX_BANK_DEG + 2) return 'rcSteep';
-  // The corner: roll in as it comes abeam (the game's cue), the bank by the wind behind.
   const toC = toCornerM(st, s);
+  const far = Math.abs(st.d - st.D) > 2 * SAY_OFF_M;
   if (st.corner || (toC >= 0 && toC < ROLL_LEAD_M)) {
-    if (s.bankDeg > -10) {
-      const wb = windBehind(s);
-      return wb > 0.5 ? 'rcCornerDown' : wb < -0.5 ? 'rcCornerUp' : 'rcCorner';
-    }
+    if (st.ck === '' && !st.corner) { const wb = windBehind(s); st.ck = wb > 0.5 ? 'Down' : wb < -0.5 ? 'Up' : 'M'; }
+    const k = st.ck === 'M' ? '' : st.ck;
+    if (st.corner && far) return st.d > st.D ? 'rcTurnWide' : 'rcTurnClose'; // in the turn: steeper or shallower, not "turn right"
+    if (!st.corner && far) return st.d > st.D ? 'rcWide' : 'rcClose'; // off the distance before it: that first (panel)
+    if (s.bankDeg > -10) return `rcCorner${k}`;
+    if (st.iasF < st.kts0 - KTS_TOL) return 'rcSlow';
+    return `rcHold${k}`;
   }
+  st.ck = '';
   if (st.iasF < st.kts0 - KTS_TOL) return 'rcSlow';
-  if (st.d - st.D > 2 * SAY_OFF_M) return 'rcWide';
-  if (st.D - st.d > 2 * SAY_OFF_M) return 'rcClose';
+  if (far) return st.d > st.D ? 'rcWide' : 'rcClose';
+  if (Math.abs(s.bankDeg) > 20) return 'rcRollOut'; // past the corner, still turning (panel: nothing said roll out)
   const altDev = s.altFt - st.alt0;
   if (altDev < -ALT_TOL_FT / 2) return 'rcLow';
   if (altDev > ALT_TOL_FT / 2) return 'rcHigh';
@@ -217,9 +237,15 @@ export function rectPrompt(st, s, kid) {
   if (st.D - st.d > SAY_OFF_M) return 'rcClose';
   if (st.iasF < st.kts0 - KTS_TOL / 2) return 'rcSlow';
   if (st.iasF > st.kts0 + KTS_TOL / 2) return 'rcFast';
-  if (st.corner) return 'rcCorner';
   const xw = windFromRight(s);
-  if (Math.abs(xw) > 3) return xw > 0 ? 'rcCrabR' : 'rcCrabL';
+  if (Math.abs(xw) > 3) {
+    // The crab judged by the track: straight along the edge (within 3°) is a good crab; drifting the wind's way wants
+    // more, drifting against it less (panel: it asked for more crab however much there was).
+    const v = Math.hypot(s.vx, s.vz), vn = s.vx * st.nx + s.vz * st.nz, wn = s.wx * st.nx + s.wz * st.nz;
+    if (Math.abs(vn) < SIN3 * v) return 'rcCrabGood';
+    if (vn * wn > 0) return xw > 0 ? 'rcCrabR' : 'rcCrabL';
+    return 'rcCrabLess';
+  }
   const wb = windBehind(s);
   return wb > 0.7 ? 'rcLegDown' : wb < -0.7 ? 'rcLegUp' : 'rcLevel';
 }

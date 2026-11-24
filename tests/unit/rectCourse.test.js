@@ -7,7 +7,7 @@ import {
 import * as rc from '../../src/rectCourse.js';
 import * as tap from '../../src/aroundPoint.js';
 import { MISSIONS } from '../../src/missions.js';
-import { DRILL_TEXT } from '../../src/coach.js';
+import { DRILL_TEXT, TOUCH_WORDS } from '../../src/coach.js';
 import { FT_TO_M } from '../../src/constants.js';
 
 const MISSION = MISSIONS.find((m) => m.key === 'rectangular_course');
@@ -198,36 +198,70 @@ describe('rectangular course (0223): the coach and Kid\'s guide', () => {
     expect(rectPrompt(st, s, false)).toBe('rcFlyOn');
     expect(rectPrompt(st, s, true)).toBe('rcKidIn');
   });
-  it('abeam a corner, wings level: roll left, steep with the wind behind, gently into it', () => {
+  it('abeam a corner, wings level: roll left, steep with the wind behind, gently into it; then hold that bank round it (panel)', () => {
     const st = live();
     flyLesson(st, { maxS: 0 }); // to abeam
     // The north-east corner on the downwind (east) leg in a south wind: the wind behind.
     const a = input(st, { x: st.cx + st.hx + D, z: st.cz - st.hz + ROLL_LEAD_M / 2, vx: 0, vz: -V }, { wz: -6 });
     rectStep(st, a);
     expect(rectPrompt(st, a, false)).toBe('rcCornerDown');
-    // The same corner with the wind ahead.
+    // Banked in, half way round: hold the steep bank (chosen as it came abeam), not "medium".
+    const h = Math.SQRT1_2;
+    const mid = input(st, { x: st.cx + st.hx + D * h, z: st.cz - st.hz - D * h, vx: -V * h, vz: -V * h }, { wz: -6, bankDeg: -20 });
+    rectStep(st, mid);
+    expect(st.corner).toBe(true);
+    expect(rectPrompt(st, mid, false)).toBe('rcHoldDown');
+    // Swinging wide or cutting inside in the turn: more or less bank, never "turn right".
+    const wide = { ...mid, x: st.cx + st.hx + (D + 150) * h, z: st.cz - st.hz - (D + 150) * h };
+    rectStep(st, wide);
+    expect(rectPrompt(st, wide, false)).toBe('rcTurnWide');
+    const inside = { ...mid, x: st.cx + st.hx + (D - 150) * h, z: st.cz - st.hz - (D - 150) * h };
+    rectStep(st, inside);
+    expect(rectPrompt(st, inside, false)).toBe('rcTurnClose');
+    // The same corner reached with the wind ahead (a fresh corner): gently.
+    const st2 = live();
+    flyLesson(st2, { maxS: 0 });
     const b = { ...a, wz: 6 };
-    rectStep(st, b);
-    expect(rectPrompt(st, b, false)).toBe('rcCornerUp');
-    // Already banked left: no "roll left" again.
-    const c = { ...a, bankDeg: -30 };
-    rectStep(st, c);
-    expect(rectPrompt(st, c, false)).not.toMatch(/Corner/);
+    rectStep(st2, b);
+    expect(rectPrompt(st2, b, false)).toBe('rcCornerUp');
+    // Far too close just before the corner: that first, not "roll left, steep" toward the field (panel).
+    const st3 = live();
+    flyLesson(st3, { maxS: 0 });
+    const close = { ...a, x: st3.cx + st3.hx + D - 150 };
+    rectStep(st3, close);
+    expect(rectPrompt(st3, close, false)).toBe('rcClose');
   });
-  it('on a crosswind leg it asks for the crab into the wind; off the distance, which way to turn', () => {
+  it('past the corner and still banked on the next leg: roll out (panel)', () => {
     const st = live();
     flyLesson(st, { maxS: 0 });
-    // The north side, going west, in a south wind: the wind from the left.
-    const s = input(st, { x: st.cx, z: st.cz - st.hz - D, vx: -V, vz: 0 }, { wx: 0, wz: -6 });
+    const s = input(st, { x: st.cx, z: st.cz - st.hz - D, vx: -V, vz: 0 }, { bankDeg: -30 });
     rectStep(st, s);
-    expect(rectPrompt(st, s, false)).toBe('rcCrabL');
+    expect(rectPrompt(st, s, false)).toBe('rcRollOut');
+  });
+  it('on a crosswind leg: crab into the wind while it drifts you, "good crab" when the track runs along the edge, less when over-crabbed', () => {
+    const st = live();
+    flyLesson(st, { maxS: 0 });
+    // The north side, going west, in a south wind (blowing north, outward here): the wind from the left.
+    const along = input(st, { x: st.cx, z: st.cz - st.hz - D, vx: -V, vz: 0 }, { wx: 0, wz: -6 });
+    rectStep(st, along);
+    expect(rectPrompt(st, along, false)).toBe('rcCrabGood');
+    const drift = { ...along, vz: -6 }; // carried north, away from the field
+    rectStep(st, drift);
+    expect(rectPrompt(st, drift, false)).toBe('rcCrabL');
     expect(RECT_TEXT.rcCrabL).toMatch(/nose a little left, into it/);
-    const wide = { ...s, z: st.cz - st.hz - D - 120 };
+    const over = { ...along, vz: 6 }; // crabbed so far it closes on the field
+    rectStep(st, over);
+    expect(rectPrompt(st, over, false)).toBe('rcCrabLess');
+    const wide = { ...along, z: st.cz - st.hz - D - 120 };
     rectStep(st, wide);
     expect(rectPrompt(st, wide, false)).toBe('rcWide');
-    const close = { ...s, z: st.cz - st.hz - D + 120 };
+    const close = { ...along, z: st.cz - st.hz - D + 120 };
     rectStep(st, close);
     expect(rectPrompt(st, close, false)).toBe('rcClose');
+  });
+  it('the height words on a touch screen say the stick, up for nose up', () => {
+    expect(TOUCH_WORDS.rcLow).toMatch(/stick up a touch \(nose up\)/);
+    expect(TOUCH_WORDS.rcHigh).toMatch(/stick down/);
   });
   it('the guide banks left round a corner, steeper with the wind behind (the handbook\'s Vg² / (g R)), level on a leg', () => {
     const st = live();

@@ -17,7 +17,7 @@ test('phone, Kid, hands off: the plane flies the course, the flaps stay up and t
   expect((await snap()).assist).toBe('kid');
   await expect(page.locator('#txtCoach')).toHaveText(/flies round the field/, { timeout: 10_000 });
   await expect.poll(async () => (await snap()).rectCourse?.phase, { timeout: 40_000 }).toBe('course');
-  await expect(page.locator('#txtCoach')).toHaveText(/Watch the nose/, { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText(/Watch: the nose into the wind/, { timeout: 10_000 });
   // Round the first corner (~25 s at 2x up the leg): the guide banks left.
   await expect.poll(async () => (await snap()).bankRightDeg, { timeout: 60_000 }).toBeLessThan(-20);
   const coach = await page.locator('#coach').boundingBox();

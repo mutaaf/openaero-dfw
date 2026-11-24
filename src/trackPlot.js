@@ -40,7 +40,9 @@ export function trackPlotSvg(track, px = 144) {
   if (wind && wind[1] > 0) {
     // The air moves toward fromDeg + 180 (weather.js windVector): in this frame (−sin, cos) of the "from" bearing.
     const a = wind[0] * Math.PI / 180, ux = -Math.sin(a), uz = Math.cos(a);
-    const cx = -ext * 0.7, cz = -ext * 0.72, L = ext * 0.2;
+    // Top left of a circle's plot; on the field itself for the rectangular course (device panel: the label sat on its path).
+    const L = rect ? Math.min(ext * 0.2, rect[1] * 0.45) : ext * 0.2;
+    const cx = rect ? 0 : -ext * 0.7, cz = rect ? -fs * 0.7 : -ext * 0.72;
     const x0 = cx - ux * L, z0 = cz - uz * L, x1 = cx + ux * L, z1 = cz + uz * L, h = ext * 0.07;
     svg += `<path d="M${r1(x0)} ${r1(z0)}L${r1(x1)} ${r1(z1)}" ${line} stroke="#f8fafc" stroke-width="2"/>`
       + `<path d="M${r1(x1)} ${r1(z1)}L${r1(x1 - ux * h - uz * h * 0.6)} ${r1(z1 - uz * h + ux * h * 0.6)}L${r1(x1 - ux * h + uz * h * 0.6)} ${r1(z1 - uz * h - ux * h * 0.6)}Z" fill="#f8fafc"/>`
