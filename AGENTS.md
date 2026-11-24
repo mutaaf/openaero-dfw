@@ -644,6 +644,11 @@ src/flightModel.js  the 6-DOF rigid body: one sub-step of forces, moments, gear 
                     spec.elevatorAlphaDeg (Cmδe/Cmα); autoTrim (assists, AP, harness pilots) and
                     spec.pitchFbw (F-16) carry the trim with α; Pilot's is the spawn's (or the
                     autopilot's), moved only by a held stick (main.js, ~8 s, 4° short of the stall).
+                    Elevator lift (0214, spec.clElevator: the C172's Roskam CLδe 0.43, as our JSBSim C172 since
+                    0203): elevatorLiftCl adds CLδe on the elevator beyond the one that trims α (the stick's plus
+                    α's distance from the trimmed α, at pitchBreak's η, held at the clean stall): nothing in steady
+                    pre-stall flight, a transient download on a pull, ~−0.13 CL at full back past the stall. In the
+                    air only: on the wheels the rotation is gear.js tailVsMainsAccel's (a weight-scaled heuristic).
                     Roll (0156): rollRateGain, the steady rate per aileron, goes as the TAS where a
                     source gives the roll power (spec.rollPerTas: C172 Roskam p·b/2V 0.116; F-16
                     TP-1538 0.128, capped by its 308°/s roll-rate command spec.rollCmdRad); the 737
@@ -687,7 +692,9 @@ src/gear.js         landing gear on oleo struts (0074): nose + mains at their re
                     spec.gear.tail (0144, the C172): a stiff structural tail contact at our JSBSim C172's TAIL
                     point (15.0° about the mains) in the same loop, wheelLoads[3]: it carries load, scrapes (μ 0.5)
                     and stops the rotation in the air too, but alone it is not onGround (no grade, bounce or
-                    horn from it); flightModel.js's onGround pitch clamp is off for it; damper sized for 1/60 s sub-steps
+                    horn from it); flightModel.js's onGround pitch clamp is off for it; damper sized for 1/60 s sub-steps;
+                    its force is the step's mean (0214: penetration and in-contact share over the step), so a tail
+                    crossing into the runway mid-step meets it in that step and the impulse is the same at any dt
                     radioAltitudeM (0122): the lowest main wheel's height (struts out, 0 at touchdown) =
                     sim.raFt, what the GPWS heights, retard, sink rate / pull up and too low gear read
                     (audio.js, main.js), as do the RADAR AGL box, the phone's AGL, the HUD FLARE/IDLE cue
@@ -878,6 +885,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-24 (0214): 199.13 kB (the C172's elevator lift beyond trim: flightModel.js elevatorLiftCl and its call, gear.js's step-mean tail contact, +0.21 kB over 0221's 198.92).
 2026-11-24 (0221): 198.92 kB (the left-handed chip's wiring (setHand, the stored hand, the wind box's side and height), +0.19 kB over 0220's 198.73; the mirror is CSS).
 2026-11-24 (0220): 198.73 kB (the crosswind takeoff's mission entry and blurb, its lazy import and wiring (checkXwTakeoff, the coach's ground and air prompts, currentWeather's lesson wind, the pedals' and trim's toggles, checkTouchdown's skip, the snapshot's xwTakeoff, the touch pedal's reset at the lift-off, the coach's and checkTouchdown's skip guards), +0.44 kB over 0219's 198.29; xwTakeoff.js is a lazy chunk).
 2026-11-23 (0219): 198.29 kB (the speed bug's gust share: assists.js bugKts/gustAddKts in coachKts, the APR autothrottle and its tutor, the go-around drill's hold, the coach's and gate's gust input, the bug band's Vref floor and the snapshot's speedBug, +0.11 kB over 0218's 198.18).

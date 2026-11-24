@@ -1196,8 +1196,8 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
     // - The pitch: the rest of the 3-5° is the flight path. JSBSim's lift table is aero.js's POH stall-speed fit
     //   (OAERO), which already holds the trimmed elevator's download; until 0203 it added Roskam's CLδe 0.43 on
     //   the whole elevator (full up: −0.21 CL) and peaked at 20.0 / 21.7°. 0203 counts only the deflection beyond
-    //   trim (−0.11 to −0.18 CL at full up): 21.1 / 22.6°. flightModel.js, 23.3 / 24.4°, has no elevator lift at
-    //   all, so full back stick loses none of the lift it really costs: ticket 0214.
+    //   trim (−0.11 to −0.18 CL at full up): 21.1 / 22.6°. flightModel.js had no elevator lift at all (23.3 / 24.4°)
+    //   until 0214 counted the same CLδe beyond its own trimmed elevator (flightModel.js elevatorLiftCl): 21.9 / 23.9°.
     it(`flaps ${flaps * 10}, held: the peak angle of attack within 0.75° of JSBSim's C172 (Roskam's Cmα̇, 0202)`, async () => {
       useFdm(null);
       const fm = fullAftAtVr(flaps);
@@ -1207,7 +1207,7 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
       console.log(`[c172] full aft at Vr flaps ${flaps * 10}: peak α ${fm.peakAoaDeg.toFixed(1)}°, JSBSim ${jsb.peakAoaDeg.toFixed(1)}°; peak pitch under 5 ft ${fm.peakLowDeg.toFixed(1)}°, JSBSim ${jsb.peakLowDeg.toFixed(1)}°`);
       expect(Math.abs(fm.peakAoaDeg - jsb.peakAoaDeg)).toBeLessThanOrEqual(0.75);
     }, 30000);
-    it.fails(`KNOWN GAP (0214): flaps ${flaps * 10}, held: peak pitch while the wheels are under 5 ft within 1.5° of JSBSim's C172`, async () => {
+    it(`flaps ${flaps * 10}, held: peak pitch while the wheels are under 5 ft within 1.5° of JSBSim's C172 (Roskam's CLδe beyond trim, 0214)`, async () => {
       useFdm(null);
       const fm = fullAftAtVr(flaps);
       useFdm(await nodeJsbsim());

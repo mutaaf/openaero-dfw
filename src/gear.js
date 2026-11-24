@@ -67,7 +67,7 @@ export function gearConstants(spec) {
 // Sums the struts' forces into `force` (world, N) and their moments about the CG into
 // `moment` (body axes, N·m), for a body whose ground is at groundY. Writes body.wheelLoads
 // [nose, left, right, tail if any] (N) and returns the wheels' total normal force.
-export function gearForces(body, spec, force, moment) {
+export function gearForces(body, spec, force, moment, dt = 0) {
   const c = gearConstants(spec);
   _omega.copy(body.angVel).applyQuaternion(body.quat); // body rates → world
   _qi.copy(body.quat).invert();
@@ -77,16 +77,28 @@ export function gearForces(body, spec, force, moment) {
   for (let i = 0; i < c.wheels.length; i++) {
     _r.copy(c.wheels[i]).applyQuaternion(body.quat);  // CG → axle, world
     const wy = body.pos.y + _r.y;
-    const comp = body.groundY - wy;                   // how far the strut is pushed in
-    if (comp <= 0) { loads[i] = 0; continue; }
+    let comp = body.groundY - wy;                     // how far the strut is pushed in
     // Axle velocity: the body's plus the rotation's.
     _w.copy(_omega).cross(_r).add(body.vel);
+    // The tail's stiff contact on ~120 kg (0214) is averaged over the step, not read at its start: read at the
+    // start, a tail that crosses into the runway during a step meets no force for it, and the spring then hands
+    // back energy it never took (at 1/60 s up to ~2.9 cm of a rotation's 1.7 m/s, ~8 kN more on the strike). With
+    // the axle moving at its present rate, the step's mean force is the spring at the mean penetration while in
+    // contact, spring and damper both times the share of the step in contact, so it reads the same at any dt.
+    let share = 1;
+    if (i === 3 && dt > 0) {
+      const end = comp - _w.y * dt;                   // the penetration at the step's end
+      if (comp <= 0 && end <= 0) { loads[i] = 0; continue; }
+      if (comp > 0 && end > 0) comp = (comp + end) / 2;
+      else { share = Math.max(comp, end) / Math.abs(end - comp); comp = Math.max(comp, end) / 2; }
+    }
+    if (comp <= 0) { loads[i] = 0; continue; }
     // Oleos damp the rebound (extending, axle rising) harder than the compression: the
     // struts settle instead of springing the airframe off the runway.
     const damp = c.d[i] * (_w.y > 0 && i < 3 ? REBOUND : 1);
     // Past its full stroke a strut is bottomed: a stiff stop (10× the spring), not slack,
     // so hard braking can't fold the nose down onto the pitch floor (0082).
-    const n = Math.max(0, c.k[i] * (Math.min(comp, c.maxStroke) + BUMP_STOP * Math.max(0, comp - c.maxStroke)) - damp * _w.y);
+    const n = share * Math.max(0, c.k[i] * (Math.min(comp, c.maxStroke) + BUMP_STOP * Math.max(0, comp - c.maxStroke)) - damp * _w.y);
     loads[i] = n;
     if (i < 3) total += n; // the wheels: a tail scrape alone is not on the ground
     force.y += n;
