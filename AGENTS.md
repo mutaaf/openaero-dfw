@@ -369,6 +369,22 @@ src/softField.js    soft-field takeoff lesson (0182, lazy chunk loaded with `kad
                     (not Kid), an overrun, run-off or no lift-off ≤ D. Every tyre rolls at the same μ, so the Handbook roll
                     wins by the wing's early lift and slower lift-off, not a lighter nose tyre: nose-wheel bogging is not
                     modelled. The takeoff callouts are off in it (it lifts off under Vr). Cards: tests/flight/softField.test.js
+src/xwTakeoff.js    crosswind takeoff lesson (0220, lazy chunk loaded with `kads_crosswind_takeoff`, `xwTakeoff: true`, Drills group):
+                    the C172 on KADS 16 flaps up, full length, in the wing-low lesson's wind (wingLow.js liveSuits/scenarioWx: Addison's
+                    own live METAR 5-15 kt across, else 12 kt from the right, labelled SCENARIO; frozen once the roll starts). AFH
+                    FAA-H-8083-3C ch. 6 pp. 6-6 to 6-9: the coach (through coach.js dsGround/ds) names the stick (A/D, or "stick
+                    right" on touch) before the power, asks for full aileron into the wind to 40 KIAS, then to ease it, calls the
+                    centreline's pedal (Q/E or the RUD buttons, the wing-low lesson's touch pedals), "ease back" at the POH's 55 KIAS,
+                    the sideslip under 50 ft and the crab (and drift either way) from 50 to 200 ft. checkXwTakeoff grades at 200 ft
+                    (drillCard): the roll's widest centreline excursion, the time-weighted aileron into the wind to 40 kt, the
+                    lift-off (speed, tapered past Vr + 20; early < 50 kt, the downwind wing low and a > 5° bank into the wind named),
+                    the ground track against the runway from 50 ft (mean within 3° = the crab within the wind correction angle ±3°;
+                    the crab itself shown, not graded) with the distance off the extended centreline at 200 ft (> 100 ft caps B,
+                    > 500 ft D); a skip (back on the runway after the lift-off) caps C, off the side/overrun/no lift-off caps D. Kid: the
+                    centreline and the lift-off only (its pedals and its hands-off climb flew the rest); Learner's card notes its
+                    pedals. The roll starts at half power. A latched touch pedal resets at the lift-off. checkTouchdown skips a skip
+                    and the roll that ended the lesson; the landing coach's "touchdown" stays off while it flies. tests/unit/xwTakeoff.test.js,
+                    tests/flight/xwTakeoff.test.js (the handbook's takeoff, no aileron, no crab), e2e xwTakeoff(.mobile).spec.js.
 src/wingLow.js      wing-low crosswind landing lesson (0188, lazy chunk loaded with `kads_crosswind_wing_low`, `wingLow: true`, Drills
                     group): the C172 on a 2 NM final to KADS 16 at 70 KIAS, flaps 10 (a game choice after POH p. 4-34's "minimum
                     flap setting" in a strong crosswind; the landing coach asks for FLAPS). Its wind is currentWeather()'s while it
@@ -855,6 +871,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-24 (0220): 198.73 kB (the crosswind takeoff's mission entry and blurb, its lazy import and wiring (checkXwTakeoff, the coach's ground and air prompts, currentWeather's lesson wind, the pedals' and trim's toggles, checkTouchdown's skip, the snapshot's xwTakeoff, the touch pedal's reset at the lift-off, the coach's and checkTouchdown's skip guards), +0.44 kB over 0219's 198.29; xwTakeoff.js is a lazy chunk).
 2026-11-23 (0219): 198.29 kB (the speed bug's gust share: assists.js bugKts/gustAddKts in coachKts, the APR autothrottle and its tutor, the go-around drill's hold, the coach's and gate's gust input, the bug band's Vref floor and the snapshot's speedBug, +0.11 kB over 0218's 198.18).
 2026-11-23 (0218): 198.18 kB (the tablet HUD scale: hudLayout.js hudScale, renderHud's setTransform and the screen-px ?debug boxes (hudPx), the coach slot's scale, +0.26 kB over 0211's 197.92).
 2026-11-23 (0211): 197.92 kB (the turns-around-a-point mission's entry and blurb, its lazy import and wiring (the pole, its wind, coach, Kid's guide and cap, no auto flaps, the HUD's pole readout call, the snapshot's aroundPoint), +0.61 kB over 0217's 197.31; aroundPoint.js is a lazy chunk, trackPlot.js rides in results.js's).
