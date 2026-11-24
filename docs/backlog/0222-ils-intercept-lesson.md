@@ -33,3 +33,6 @@ Flight card flying an on-time and a late capture; e2e starts the mission.
 
 ## Out of scope
 Procedures with real fixes, holding patterns, other airports.
+
+## Scout note (2026-11-24)
+Still blocked: faa.gov PDFs return HTTP 403 to the Scout's fetch tool, so the chapter could not be read here.
