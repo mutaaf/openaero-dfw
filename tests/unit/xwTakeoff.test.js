@@ -128,7 +128,7 @@ describe('xwTakeoff.js grade', () => {
     expect(g.score).toBeGreaterThanOrEqual(90);
     expect(row(g, 'ail').value).toBe('100% of full right');
     expect(row(g, 'liftoff').value).toBe('60 kt, 0° right wing low');
-    expect(row(g, 'track').value).toMatch(/^crab 9° right \(the wind's ~10°\), track 0° off$/);
+    expect(row(g, 'track').value).toMatch(/^crab 9° right \(the wind's ~10°\), track 0° off, 0 ft right at 200 ft$/);
     expect(g.reason).toBeNull();
     expect(g.note).toMatch(/Addison's live wind: 12 kt across from the right/);
   });
@@ -166,6 +166,21 @@ describe('xwTakeoff.js grade', () => {
     const skip = gradeXwTakeoff(flyScript('R', { skip: true }));
     expect(skip.score).toBeLessThanOrEqual(CAP_C);
     expect(skip.reason).toMatch(/^Skipped: it lifted off and settled back/);
+  });
+  it('physics panel: the downwind wing low at the lift-off, a parallel drift, a roll under full power, a very late lift-off', () => {
+    const risen = gradeXwTakeoff(flyScript('R', { bank: -5 }));
+    expect(risen.factors.find((f) => f.key === 'liftoff').score).toBeLessThan(40);
+    expect(risen.reason).toMatch(/The right wing rose at the lift-off \(left wing 5° low\)/);
+    // Tracking parallel to the centreline 150 ft downwind is not over it: the row falls and the grade stops at B.
+    const parallel = gradeXwTakeoff(flyScript('R', { crossAtTop: -150 * FT }));
+    expect(parallel.factors.find((f) => f.key === 'track').score).toBeLessThan(60);
+    expect(parallel.score).toBeLessThanOrEqual(84);
+    // 85% power still rolls: the aileron is measured.
+    const st = ready('R');
+    xwTakeoffStep(st, { ...base(), throttle: 0.85, gsKts: 10, iasKts: 15, ail: 1 }, 0.1);
+    expect(st.rolled).toBe(true);
+    expect(st.ailN).toBeGreaterThan(0);
+    expect(gradeXwTakeoff(flyScript('R', { liftKts: 100 })).factors.find((f) => f.key === 'liftoff').score).toBeLessThan(60);
   });
   it('Kid: the centreline and the lift-off only, the technique rows not scored', () => {
     const g = gradeXwTakeoff(flyScript('R', { ail: 0, track: 9 }), true);

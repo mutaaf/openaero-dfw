@@ -1,7 +1,7 @@
 // Crosswind takeoff lesson (ticket 0220): the Cessna 172S, flaps up, full power, a 12 kt wind straight across from the right
 // (the lesson's scenario wind; the POH demonstrates 15), flown three ways on flightModel.js and graded by xwTakeoff.js:
 //  - 'afh': the Airplane Flying Handbook's technique (FAA-H-8083-3C ch. 6, "Crosswind Takeoff", pp. 6-6 to 6-8): full aileron
-//    into the wind as the roll starts, held to 40 KIAS and then eased to what keeps the wings level, the rudder holding the
+//    into the wind as the roll starts, held to 40 KIAS and then eased to what keeps the upwind wing a little low through the lift-off, the rudder holding the
 //    centreline, the nose eased up at the POH's 55 KIAS, and once climbing a crab into the wind that holds the track over the
 //    extended centreline;
 //  - 'noAileron': the same, but the stick left in the middle on the roll (p. 6-9's "less than full aileron pressure into the
@@ -44,10 +44,11 @@ export function flyXwTakeoff(tech, { xwKts = 12, fromLeft = false } = {}) {
       // The pedals: the runway heading, steering back to the centreline (harness.js crosswindTakeoff's pilot).
       const want = clamp(offFt * 0.15 + x.vel.x * M_TO_FT * 0.3, -3, 3);
       x.rudderInput = clamp((yawLeft - want) * 0.3 + x.angVel.y * RAD_TO_DEG * 0.15, -1, 1);
-      const level = aileronForBank(0, bankRightDeg, -x.angVel.z) / 0.6;
-      // The handbook's aileron: full into the wind to AIL_TO_KTS, then eased over 10 kt to what holds the wings level.
+            // The handbook's aileron: full into the wind to AIL_TO_KTS, then eased over 10 kt to what holds the upwind wing a
+      // little low (p. 6-7: aileron into the wind held through the lift-off, the airplane sideslipping into the wind).
       const ease = clamp((x.iasKts - AIL_TO_KTS) / 10, 0, 1);
-      x.aileronInput = tech === 'noAileron' && x.onGround ? 0 : clamp(sign * (1 - ease) + level * ease, -1, 1);
+      const hold = aileronForBank(sign * 4, bankRightDeg, -x.angVel.z) / 0.6;
+      x.aileronInput = tech === 'noAileron' && x.onGround ? 0 : clamp(sign * (1 - ease) + hold * ease, -1, 1);
       if (x.onGround) maxBankRollDeg = Math.max(maxBankRollDeg, Math.abs(bankRightDeg));
     } else {
       // The climb: bank to a heading; the handbook's crab points the nose into the wind by the drift it sees (the track off the
@@ -83,6 +84,7 @@ describe('Cessna 172S crosswind takeoff lesson, 12 kt from the right (FAA-H-8083
     expect(afh.st.skipped).toBe(false);
     expect(afh.st.maxOffM * M_TO_FT).toBeLessThan(25);
     expect(afh.st.liftKts).toBeGreaterThan(VR_KTS - 5);
+    expect(afh.st.liftBankIntoDeg).toBeGreaterThanOrEqual(-1); // the upwind wing held down through the lift-off (p. 6-7)
     expect(row(afh.grade, 'ail').score).toBe(100);
     expect(row(afh.grade, 'track').score).toBeGreaterThanOrEqual(90);
     expect(afh.grade.score).toBeGreaterThanOrEqual(85);

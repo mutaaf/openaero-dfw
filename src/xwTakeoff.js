@@ -22,7 +22,10 @@
 // full throw into the wind from the start of the roll to AIL_TO_KTS (where "the ailerons become effective" is taken to be);
 // the centreline by the roll's widest excursion; the climb by the ground track against the runway from TRACK_FROM_FT to
 // DONE_FT (a crab equal to the wind correction angle tracks the centreline: a track within TRACK_OK_DEG is the ticket's
-// "crab within the wind correction angle ±3°"). Kid's pedals hold the centreline on the roll (assists.js), and its
+// "crab within the wind correction angle ±3°"; the crab angle itself is shown, not graded: a sideslip that holds the track
+// scores as a crab does), and the distance off the extended centreline at DONE_FT (p. 6-8: staying over it "is paramount").
+// The lift-off: p. 6-7 holds the aileron into the wind through it, so the upwind wing low or level is right and the downwind
+// wing low (the upwind wing risen) is not; a steep bank into the wind (p. 6-9) is not either. Kid's pedals hold the centreline on the roll (assists.js), and its
 // hands-off climb holds the wings level without a crab: its card scores the result only (the centreline and the lift-off).
 // A lazy chunk, loaded with the mission (main.js startDrills). Pure (no THREE, no DOM): tests/unit/xwTakeoff.test.js,
 // tests/flight/xwTakeoff.test.js.
@@ -39,7 +42,8 @@ export const VR_KTS = 55;
 export const EARLY_KTS = 5;
 // Full aileron into the wind from the start of the roll to here (the game's "ailerons become effective").
 export const AIL_TO_KTS = 40;
-// The roll counts as started (the aileron clock runs) at full power and this groundspeed.
+// The roll counts as started (the aileron clock runs) at ROLL_THROTTLE and this groundspeed.
+export const ROLL_THROTTLE = 0.5;
 export const ROLL_GS_KTS = 5;
 // The coach asks for more aileron under this share of full throw on the roll's first part, and to ease it past AIL_TO_KTS
 // above EASE_AIL.
@@ -61,7 +65,10 @@ export const DRIFT_CALL_DEG = 3;
 export const DRIFT_SAY_FT = 100;
 // A run that never gets airborne or to DONE_FT in this long (from the roll) is graded anyway.
 export const GIVE_UP_S = 150;
+export const CAP_B = 84;
 export const CAP_C = 69;
+// The upwind wing risen at the lift-off (the downwind wing low) is named past this.
+export const RISEN_DEG = 2;
 export const FAIL_CAP = 54;
 const WEIGHTS = { line: 0.3, ail: 0.25, liftoff: 0.15, track: 0.3 };
 const KID_WEIGHTS = { line: 0.6, liftoff: 0.4 };
@@ -150,7 +157,7 @@ export function xwTakeoffStep(st, s, dt) {
   if (st.phase === 'done') return '';
   if (st.readyT === null) st.readyT = st.t;
   if (st.rolled) st.t += dt; // the give-up clock runs from the roll: reading the coach is free
-  if (!st.rolled && s.throttle >= 0.9 && s.gsKts > ROLL_GS_KTS) st.rolled = true;
+  if (!st.rolled && s.throttle >= ROLL_THROTTLE && s.gsKts > ROLL_GS_KTS) st.rolled = true;
   if (s.onGround) {
     if (st.rolled && s.iasKts < AIL_TO_KTS && st.phase === 'roll') { st.ailSum += Math.max(-1, Math.min(1, into(st, s.ail))) * dt; st.ailN += dt; }
     if (Math.abs(s.crossM) > st.maxOffM) { st.maxOffM = Math.abs(s.crossM); st.maxOffSide = Math.sign(s.crossM); }
@@ -220,25 +227,30 @@ export function gradeXwTakeoff(st, kid = false) {
     score: curve(ail, [[0, 0], [0.3, 40], [0.6, 80], [0.8, 100]]) };
   const bank = st.liftBankIntoDeg ?? 0;
   const liftoff = { key: 'liftoff', label: 'Lift-off', value: flew ? `${Math.round(st.liftKts)} kt, ${Math.abs(bank).toFixed(0)}° ${bank >= 0 ? `${w} wing low` : `${o} wing low`}` : 'never lifted off',
-    score: flew ? Math.min(curve(st.liftKts, [[VR_KTS - 10, 20], [VR_KTS - EARLY_KTS, 60], [VR_KTS - 2, 100]]), curve(bank, [[STEEP_BANK_DEG, 100], [10, 40], [15, 0]])) : 0 };
+    score: flew ? Math.min(curve(st.liftKts, [[VR_KTS - 10, 20], [VR_KTS - EARLY_KTS, 60], [VR_KTS - 2, 100], [VR_KTS + 20, 100], [VR_KTS + 35, 30]]),
+      curve(bank, [[-6, 0], [-RISEN_DEG - 1, 60], [-1, 100], [STEEP_BANK_DEG, 100], [10, 40], [15, 0]])) : 0 };
   const trackErr = st.trackN ? st.trackSum / st.trackN : null;
   const crab = st.trackN ? st.crabSum / st.trackN : 0, wca = st.trackN ? st.wcaSum / st.trackN : 0;
+  const endFt = st.endCrossM === null ? null : st.endCrossM * M_TO_FT;
   const track = { key: 'track', label: `Track over the centreline, ${TRACK_FROM_FT}-${DONE_FT} ft`,
-    value: trackErr === null ? 'never climbed' : `crab ${Math.abs(crab).toFixed(0)}° ${crab >= 0 ? w : o} (the wind's ~${wca.toFixed(0)}°), track ${trackErr.toFixed(0)}° off`,
-    score: trackErr === null ? 0 : curve(trackErr, [[TRACK_OK_DEG, 100], [6, 60], [10, 25], [15, 0]]) };
+    value: trackErr === null ? 'never climbed' : `crab ${Math.abs(crab).toFixed(0)}° ${crab >= 0 ? w : o} (the wind's ~${wca.toFixed(0)}°), track ${trackErr.toFixed(0)}° off${endFt === null ? '' : `, ${fmt(Math.abs(endFt))} ft ${endFt >= 0 ? 'right' : 'left'} at ${DONE_FT} ft`}`,
+    score: trackErr === null ? 0 : Math.min(curve(trackErr, [[TRACK_OK_DEG, 100], [6, 60], [10, 25], [15, 0]]), endFt === null ? 100 : curve(Math.abs(endFt), [[50, 100], [DRIFT_SAY_FT, 75], [200, 35], [400, 0]])) };
   const factors = kid ? [line, liftoff] : [line, ailRow, liftoff, track];
   const weights = kid ? KID_WEIGHTS : WEIGHTS;
   for (const f of factors) f.score = Math.round(f.score);
   let score = Math.round(factors.reduce((sum, f) => sum + f.score * weights[f.key], 0));
   const reasons = [];
   if (st.why) { reasons.push(REASONS[st.why]); score = Math.min(score, st.why === 'noclimb' ? CAP_C : FAIL_CAP); }
-  if (st.skipped) { reasons.push(`Skipped: it lifted off and settled back onto the runway. Hold it on a little longer for a definite lift-off${kid ? '' : `, the stick ${w}`}.`); score = Math.min(score, CAP_C); }
+  if (st.skipped && !st.why) { reasons.push(`Skipped: it lifted off and settled back onto the runway. Hold it on a little longer for a definite lift-off${kid ? '' : `, the stick ${w}`}.`); score = Math.min(score, CAP_C); }
   if (flew && st.liftKts < VR_KTS - EARLY_KTS) reasons.push(`Lifted off at ${Math.round(st.liftKts)} kt, before ${VR_KTS}: hold it on the runway a little longer in a crosswind.`);
+  if (!kid && flew && bank < -RISEN_DEG) reasons.push(`The ${w} wing rose at the lift-off (${o} wing ${Math.abs(bank).toFixed(0)}° low): keep a little ${w} stick in through the lift-off.`);
   if (!kid && flew && bank > STEEP_BANK_DEG) reasons.push(`A steep ${bank.toFixed(0)}° bank at the lift-off: ease the stick toward the middle as the speed builds.`);
   if (!kid && st.ailN && ail < AIL_ASK) reasons.push(`Too little aileron into the wind on the roll: full ${w} stick from the start, eased out as the speed builds.`);
   if (!kid && st.endCrossM !== null) {
     const downFt = (st.side === 'R' ? -st.endCrossM : st.endCrossM) * M_TO_FT;
     if (downFt > DRIFT_SAY_FT) reasons.push(`Drifted ${fmt(downFt)} ft ${o} of the extended centreline by 200 ft: turn into the wind (${w}) to crab.`);
+    else if (-downFt > DRIFT_SAY_FT) reasons.push(`Drifted ${fmt(-downFt)} ft ${w} of the extended centreline by 200 ft: a little less crab.`);
+    if (Math.abs(downFt) > DRIFT_SAY_FT) score = Math.min(score, CAP_B);
   }
   if (!reasons.length && score < 85) reasons.push({ line: 'Wandered off the centreline: rudder keeps it straight.', ail: `Full ${w} stick into the wind from the start of the roll.`,
     liftoff: `Lift off at ${VR_KTS} knots, wings nearly level.`, track: `Crab into the wind (${w}) to stay over the extended centreline.` }[factors.reduce((a, f) => (f.score < a.score ? f : a)).key]);
