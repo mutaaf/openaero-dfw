@@ -43,7 +43,7 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'desktop', testIgnore: /mobile\.spec|phone-landscape\.spec|perf\.spec|devices\.spec/, use: DESKTOP },
+    { name: 'desktop', testIgnore: /mobile\.spec|phone-landscape\.spec|perf\.spec|devices\.spec|deviceLayout\.spec/, use: DESKTOP },
     // Phone specs check layout and touch in CSS pixels (the HUD canvas is CSS-sized whatever the
     // ratio), so the 3D view draws at half resolution: the Pixel 7's 2.625 (2x after the resolution
     // cap) made the project 6.6 min, 1x 5.1 (2026-10-27); 1x → 0.5 took it 6.2 → 5.3 min here
@@ -51,10 +51,15 @@ export default defineConfig({
     { name: 'phone', testMatch: /mobile\.spec|phone-landscape\.spec/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 0.5, storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [PILOT] }] }, launchOptions: { args: GL_ARGS } } },
     // The frame-time probe runs alone, after everything else: sharing SwiftShader's CPU
     // with a parallel flight test swung the same build from 207 to 314 ms a frame.
-    { name: 'perf', testMatch: /perf\.spec/, dependencies: ['desktop', 'phone'], use: { ...DESKTOP, deviceScaleFactor: 1 } },
+    { name: 'perf', testMatch: /perf\.spec/, dependencies: ['desktop', 'phone', 'device-layout'], use: { ...DESKTOP, deviceScaleFactor: 1 } },
     // The device-class probe (0044): iPhone, iPad and Pixel sizes, touch, 4x CPU throttle.
     // After perf, so its throttled frames never share the CPU with the probe or a flight test.
     { name: 'devices', testMatch: /devices\.spec/, dependencies: ['perf'], use: { launchOptions: { args: GL_ARGS } } },
+    // The device sizes' layout-only checks (credits, short-phone tapes: no flight, no frame times)
+    // run in the parallel phase. In devices.spec.js they were 17 tests run one at a time after perf
+    // while two workers sat idle: ~40 s of CI's wall clock on a normal runner, ~1 min on a slow one
+    // (main's CI on 45be31b was cancelled at 30 min in that tail, 383/390 green, 2026-11-24).
+    { name: 'device-layout', testMatch: /deviceLayout\.spec/, use: { launchOptions: { args: GL_ARGS } } },
   ],
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173 --strictPort',

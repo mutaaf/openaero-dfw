@@ -80,6 +80,9 @@ no page scroll, HUD boxes clear of each other, the horizon box and the tapes, an
 control ≥ 44 px; screenshots (`final-*.png`, `layout-*.png`) land in the test output.
 Same SwiftShader caveat as above: these numbers rank sizes and catch regressions; frame cost
 there scales with pixels, which is why the iPad sizes are slowest.
+The device sizes' layout-only checks (credits, the short-phone tapes: no flight, no frame times)
+are `tests/e2e/deviceLayout.spec.js`, project `device-layout`, in the parallel phase; `perf` waits
+for it so the frame probes still run alone.
 
 | Date | Machine | Device (CSS px) | Frames / 5 s | Avg frame | p95 frame |
 |---|---|---|---|---|---|
