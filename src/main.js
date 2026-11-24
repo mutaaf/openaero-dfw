@@ -2419,7 +2419,7 @@ function renderHud() {
     if (!showPedals) { pedalHeld.l = pedalHeld.r = 0; sim.touchYaw = 0; }
   }
   const rudPct = showPedals ? Math.round(sim.touchYaw * 100) : 0;
-  if (rudPct !== rudShown) { // the pedal's position, under the left thumb (it stays where it was left)
+  if (rudPct !== rudShown) { // the pedal's position, beside the throttle (it stays where it was left)
     rudShown = rudPct;
     byId('txtTouchRud').textContent = rudPct ? `${Math.abs(rudPct)}% ${rudPct < 0 ? 'L' : 'R'}` : '0';
   }

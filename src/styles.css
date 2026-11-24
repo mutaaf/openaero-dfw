@@ -135,6 +135,9 @@ input[type=range] { accent-color: #38bdf8; }
 .lefty #touchLeft { flex-direction: row-reverse; }
 .hand-l, .lefty .hand-r { display: none; }
 .lefty .hand-l { display: inline; }
+/* The How to fly tip names the chip only where the chip is (touch-only screens). */
+.hand-tip { display: none; }
+@media (hover: none) and (pointer: coarse) { .hand-tip { display: inline; } }
 
 /* Coarse pointers get ≥44px targets on the HUD buttons. */
 @media (pointer: coarse) {

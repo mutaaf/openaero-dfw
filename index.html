@@ -155,6 +155,7 @@
           <b class="hand-r">Right thumb</b><b class="hand-l">Left thumb</b>: the stick (drag up to raise the nose; on the ground on Pilot, left and right steer the nose wheel below 40 kt; Kid and Learner keep you on the centreline)<br>
           <b class="hand-r">Left thumb</b><b class="hand-l">Right thumb</b>: throttle (top = full power)<br>
           <b>Middle</b>: gear, flaps, brakes, and ILS AUTO lands it for you<br>
+          <span class="hand-tip"><b>Left-handed?</b> In Options at the bottom of this screen, tap Left-handed: the stick goes under your left thumb, the throttle under your right<br></span>
           <b>Pilot</b>: hold NOSE UP / NOSE DN by the throttle to trim; let go of the stick and it settles on the amber trim speed (T on the speed tape)<br>
           <b>Gamepad</b>: left stick flies, RT/LT throttle, A flaps, B gear, X brakes, right stick trims
         </div>
@@ -192,12 +193,12 @@
       </div>
 
       <details class="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-      <summary class="cursor-pointer text-[11px] font-bold text-slate-300 min-h-[28px] flex items-center">Options</summary>
+      <summary class="cursor-pointer text-[11px] font-bold text-slate-300 min-h-[44px] flex items-center">Options</summary>
       <div class="flex flex-col gap-1.5">
         <!-- Left-handed touch layout (0221, src/handPrefs.js): touch-only screens (main.js unhides it);
              the root class `lefty` mirrors the deck in styles.css: the stick under the left thumb -->
         <div id="handPicker" role="group" aria-labelledby="txtHandTitle" class="hidden items-center gap-2 text-xs text-slate-300">
-          <span id="txtHandTitle">Touch controls</span>
+          <span id="txtHandTitle">Touch controls<span class="block text-[10px] text-slate-400">which thumb flies the stick</span></span>
           <button data-hand="right" aria-pressed="true" class="btnHand hud-btn min-h-[44px] px-3 rounded-lg font-bold text-slate-100">Right-handed</button>
           <button data-hand="left" aria-pressed="false" class="btnHand hud-btn min-h-[44px] px-3 rounded-lg font-bold text-slate-100">Left-handed</button>
         </div>
@@ -463,7 +464,7 @@
     </div>
   </aside>
 
-  <!-- Touch flight deck (below lg): throttle under the left thumb, stick under the right (mirrored by .lefty, 0221) -->
+  <!-- Touch flight deck (below lg): throttle under the left thumb, stick under the right (mirrored by .lefty, 0221: the other way round) -->
   <div id="touchDeck" class="lg:hidden absolute inset-x-0 bottom-0 z-20 pointer-events-none font-mono">
     <div class="flex items-end justify-between gap-2 px-3">
       <div id="touchLeft" class="flex items-end gap-1.5">
@@ -486,7 +487,7 @@
           </div>
         </div>
         <!-- Rudder pedals (0188): the wing-low crosswind lesson only, Pilot and Learner (main.js; the trim rocker's slot, which
-             the lesson hides: the left thumb works the pedals while the right flies the stick). A tap steps the rudder 20%
+             the lesson hides: the throttle's thumb works the pedals while the other flies the stick). A tap steps the rudder 20%
              that way and it stays (hold to keep moving it); the other pedal brings it back. Centred at the touchdown. -->
         <div id="touchRudder" class="hidden pointer-events-auto flex flex-col items-center gap-1">
           <span class="text-[10px] text-slate-300 bg-slate-900/90 rounded px-1">RUD <b id="txtTouchRud" class="text-emerald-400">0</b></span>

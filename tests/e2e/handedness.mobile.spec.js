@@ -178,3 +178,41 @@ test.describe('desktop', () => {
     await expect(page.locator('html')).not.toHaveClass(/lefty/);
   });
 });
+
+// The crosswind lessons' rudder pedals take the trim's slot, inboard of the throttle: left-handed they
+// stand beside it under the right thumb (the lessons' blurbs say "beside the throttle"), clear of the
+// HUD both ways round, and ◀ RUD still steps the rudder left.
+for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 568, height: 320 }]) {
+  test.describe(`left-handed pedals ${vp.width}x${vp.height}`, () => {
+    test.use({ viewport: vp, hasTouch: true, isMobile: true });
+    test('the wing-low lesson\'s pedals stand beside the throttle on the right, clear of the HUD (0221)', async ({ page }) => {
+      const errors = collectErrors(page);
+      await page.addInitScript((kv) => localStorage.setItem(kv.name, kv.value), LEFTY);
+      await stubTiles(page);
+      await page.goto(`${BASE}?mission=kads_crosswind_wing_low&debug`);
+      expect(await page.locator('.btnMission.active').innerText()).toContain('beside the throttle');
+      await fly(page, false);
+      await expect(page.locator('#touchRudder')).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('#touchTrim')).toBeHidden();
+      const box = async (id) => page.locator(id).boundingBox();
+      const rud = await box('#touchRudder'), thr = await box('#touchThrottle'), stick = await box('#touchStick'), btns = await box('#touchButtons');
+      expect(mid(rud)).toBeGreaterThan(mid(btns));
+      expect(mid(rud)).toBeLessThan(mid(thr) + 1);
+      expect(mid(stick)).toBeLessThan(mid(btns));
+      for (const [a, b] of [[rud, thr], [rud, btns], [rud, stick]]) expect(overlaps(a, b)).toBe(false);
+      expect(rud.x + rud.width).toBeLessThanOrEqual(vp.width);
+      expect(rud.y).toBeGreaterThanOrEqual(0);
+      const { hudTapes, hudAltCaption, hudWind } = await page.evaluate(() => window.openaeroDebug());
+      const cy = vp.height / 2, k = hudTapes.scale || 1;
+      const rect = (r) => ({ x: r.x, y: r.y, width: r.w, height: r.h });
+      const hud = [['alt tape', { x: hudTapes.altX, y: cy - 90 * k, width: 64 * k, height: 180 * k }], ['MSL tab', rect(hudAltCaption)], ['wind box', rect(hudWind.box)]];
+      if (hudWind.plainBox) hud.push(['wind words', rect(hudWind.plainBox)]);
+      if (hudWind.baroBox?.show) hud.push(['altimeter setting', rect(hudWind.baroBox)]);
+      for (const [name, h] of hud) expect(overlaps(rud, h), `pedals cover the ${name}`).toBe(false);
+      for (const b of await page.locator('#touchRudder button').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) expect(b).toBeGreaterThanOrEqual(44);
+      await page.locator('#touchRudL').tap();
+      await expect(page.locator('#txtTouchRud')).toHaveText(/% L$/);
+      expect(errors).toEqual([]);
+    });
+  });
+}
