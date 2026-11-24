@@ -144,6 +144,13 @@ for (const vp of SIZES) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: stick.x + 4, y: stick.y + 4, id: 1 }] });
       await expect.poll(() => page.locator('#meterAil').textContent(), { timeout: 5_000 }).not.toBe('0%');
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      // The ATIS card (asked for: its top-left slot when sideways) leaves the moved wind box uncovered.
+      await page.evaluate(() => document.getElementById('btnAtis').click());
+      await expect(page.locator('#atis')).toBeVisible();
+      const atis = await box('#atis');
+      const wbNow = (await page.evaluate(() => window.openaeroDebug())).hudWind.box;
+      expect(overlaps(atis, rect(wbNow)), 'ATIS card covers the wind box').toBe(false);
+      for (const id of DECK) expect(overlaps(atis, await box(id)), `ATIS card vs ${id}`).toBe(false);
       await info.attach(`lefty-${vp.width}x${vp.height}`, { body: await page.screenshot(), contentType: 'image/png' });
       expect(errors).toEqual([]);
     });
@@ -209,6 +216,10 @@ for (const vp of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { wi
       if (hudWind.plainBox) hud.push(['wind words', rect(hudWind.plainBox)]);
       if (hudWind.baroBox?.show) hud.push(['altimeter setting', rect(hudWind.baroBox)]);
       for (const [name, h] of hud) expect(overlaps(rud, h), `pedals cover the ${name}`).toBe(false);
+      // The coach card (z above the deck; its top-right slot when sideways) leaves the pedals and their readout whole.
+      await expect(page.locator('#coach')).toBeVisible({ timeout: 10_000 });
+      expect(overlaps(await box('#coach'), rud), 'coach card covers the pedals').toBe(false);
+      expect((await box('#touchThrottle')).height).toBeGreaterThanOrEqual(44);
       for (const b of await page.locator('#touchRudder button').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) expect(b).toBeGreaterThanOrEqual(44);
       await page.locator('#touchRudL').tap();
       await expect(page.locator('#txtTouchRud')).toHaveText(/% L$/);

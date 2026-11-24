@@ -114,9 +114,13 @@ describe('wind readout (0075)', () => {
     for (const [w, h] of SCREENS) {
       const r = windBoxRect(w, h), l = windBoxRect(w, h, {}, true);
       const cx = w / 2, cy = h / 2;
-      expect(l.y).toBe(r.y);
       if (r.y === Math.max(cy - 90, BELOW_TOP_BAR) && r.x > cx + 130) { // the sideways slot, right of the altitude tape
         expect(l.x, `${w}x${h}`).toBe(w - r.x - WIND_BOX_W);
+        // Low on the left, over the stick (its CSS clamp, 12 px padding + a 21 px inset) and under the
+        // ATIS card's top-left slot (its foot: 154 px at 568x320, 127 at 667x375, 101 at 844x390).
+        const stick = Math.min(128, Math.max(56, cx - 207));
+        expect(l.y + l.h, `${w}x${h} over the stick`).toBeLessThanOrEqual(h - 33 - stick);
+        expect(l.y, `${w}x${h} under the ATIS card`).toBeGreaterThanOrEqual({ 568: 154, 667: 127, 844: 101 }[w] ?? BELOW_TOP_BAR);
         expect(l.x).toBeGreaterThanOrEqual(0);
         expect(l.x + l.w, `${w}x${h} left of the speed scale`).toBeLessThan(cx + speedTapeX(w) - TAPE_SCALE_W);
         const horizon = { x: w * 0.3, y: h * 0.35, w: w * 0.4, h: h * 0.3 };

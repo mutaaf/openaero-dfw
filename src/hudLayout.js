@@ -143,9 +143,10 @@ export function cameraFovDeg(w, h) {
 // for where it blows relative to the nose, its speed and, low on a runway, the cross and
 // head/tail components. It ends above the tapes and above the horizon band (35% of the
 // height) the layout keeps clear; where that leaves no room under the top bar (a phone
-// held sideways) it moves to the right of the altitude tape, level with its top; left-handed
-// (0221: the deck mirrors, the throttle and trim column stands on the right there) it mirrors to the
-// left of the speed tape's scale.
+// held sideways) it moves to the right of the altitude tape, level with its top. Left-handed (0221)
+// the throttle and trim (or pedals) column stands there, so it goes left of the speed tape's scale,
+// just over the stick (styles.css: clamp(56, cx - 195 - 12, 128) px from the deck's 12 px padding, plus
+// a 21 px home-indicator inset): under the ATIS card's top-left slot, which reaches ~154 px at 568x320.
 export const WIND_BOX_W = 68;
 export const WIND_BOX_H = 50;
 export const WIND_SHOW_COMPONENTS_FT = 1500;
@@ -158,8 +159,12 @@ export function windBoxRect(w, h, out = { x: 0, y: 0, w: WIND_BOX_W, h: WIND_BOX
     out.y = bottom - WIND_BOX_H;
   } else {
     out.x = Math.min(cx + 192, w - WIND_BOX_W - 2);
-    if (left) out.x = w - out.x - WIND_BOX_W;
     out.y = Math.max(cy + TAPE_TOP, BELOW_TOP_BAR);
+    if (left) {
+      out.x = w - out.x - WIND_BOX_W;
+      const stick = Math.min(128, Math.max(56, cx - 207));
+      out.y = Math.max(BELOW_TOP_BAR, h - 33 - stick - 4 - WIND_BOX_H);
+    }
   }
   out.w = WIND_BOX_W;
   out.h = WIND_BOX_H;

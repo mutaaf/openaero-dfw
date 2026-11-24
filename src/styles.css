@@ -238,6 +238,11 @@ body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
     width: clamp(3.5rem, 50vw - 190px - max(0.75rem, var(--safe-right)), 8rem);
     height: clamp(3.5rem, 50vw - 190px - max(0.75rem, var(--safe-right)), 8rem);
   }
+  /* Left-handed (0221): under ~360 px tall the pedals over the throttle (the crosswind lessons) would reach the
+     coach card's top-right slot (its foot ~66 px): there the throttle is 4.5rem when the pedals show. */
+  @media (max-height: 359.98px) {
+    .lefty #touchLeft:has(#touchRudder:not(.hidden)) #touchThrottle { height: 4.5rem; }
+  }
   /* Left-handed (0221): left of the speed tape's scale (hudLayout.js: it reaches cx - 191 px) with
      4 px clear, inside the notch side's inset. */
   .lefty #touchStick {
