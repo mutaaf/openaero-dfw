@@ -1,12 +1,12 @@
 ---
 id: 0220
 title: Crosswind takeoff lesson at Addison: aileron into the wind, hold the line, then crab
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: content
 created: 2026-11-24
-pr:
+pr: 317
 ---
 
 ## Why
@@ -33,12 +33,12 @@ aileron into the wind, not a number the POH doesn't give), the track over the ex
 Kid: its hands-off line-up flies it; its card scores the result only.
 
 ## Acceptance criteria
-- [ ] Mission is in the picker's Drills group and spawns on Addison 16 with the wind above
-- [ ] Coach prompts name the correct wing and pedal for a wind from either side (unit test, both)
-- [ ] Grade falls for a roll that leaves the runway edge or drifts off the extended centreline
+- [x] Mission is in the picker's Drills group and spawns on Addison 16 with the wind above
+- [x] Coach prompts name the correct wing and pedal for a wind from either side (unit test, both)
+- [x] Grade falls for a roll that leaves the runway edge or drifts off the extended centreline
       (flight card flies a good and a no-aileron-into-wind takeoff headless; the second grades lower)
-- [ ] Works at 390x844 touch (RUD buttons) and 1280x720 keyboard
-- [ ] Boot JS budget unchanged (lazy chunk)
+- [x] Works at 390x844 touch (RUD buttons) and 1280x720 keyboard
+- [x] Boot JS budget unchanged (lazy chunk)
 
 ## Test plan
 tests/unit for the coach words and grade; tests/flight card with both takeoffs (cite the handbook
