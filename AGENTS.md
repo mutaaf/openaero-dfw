@@ -585,8 +585,9 @@ src/viewPrefs.js    clean view (desktop panels folded, H) on by default, remembe
 src/handPrefs.js    left-handed touch layout (0221): the Options chip (touch-only screens) sets the root class `lefty`;
                     styles.css mirrors the deck (stick left, throttle with the trim or pedals inboard right, buttons
                     between; sideways the stick's clamp keeps it left of the speed scale, cx - 191) and hudLayout.js
-                    windBoxRect(…, left) puts the sideways wind box left of the speed tape (the trim column stands where
-                    it was). The controls sheet and How to fly name the thumbs. Right-handed by default
+                    windBoxRect(…, left) puts the sideways wind box left of the speed tape, over the stick (the trim
+                    column stands where it was; the ATIS card owns the top-left). Under 360 px tall the throttle is 4.5rem
+                    while the crosswind lessons' pedals stand over it (the coach card's top-right slot). The controls sheet and How to fly name the thumbs. Right-handed by default
 src/prefs.js        sound, camera and the last mission flown (0022): loadPrefs/savePrefs over a storage getter (window.localStorage
                     can throw), each field validated alone (a dropped mission or crosswind_today is not restored). Restored at boot
                     unless a deep link picks the flight (the Fly button then reads "Continue ✈"); written on Fly, on every mission
@@ -877,7 +878,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-24 (0221): 198.90 kB (the left-handed chip's wiring (setHand, the stored hand, the wind box's side), +0.17 kB over 0220's 198.73; the mirror is CSS).
+2026-11-24 (0221): 198.92 kB (the left-handed chip's wiring (setHand, the stored hand, the wind box's side and height), +0.19 kB over 0220's 198.73; the mirror is CSS).
 2026-11-24 (0220): 198.73 kB (the crosswind takeoff's mission entry and blurb, its lazy import and wiring (checkXwTakeoff, the coach's ground and air prompts, currentWeather's lesson wind, the pedals' and trim's toggles, checkTouchdown's skip, the snapshot's xwTakeoff, the touch pedal's reset at the lift-off, the coach's and checkTouchdown's skip guards), +0.44 kB over 0219's 198.29; xwTakeoff.js is a lazy chunk).
 2026-11-23 (0219): 198.29 kB (the speed bug's gust share: assists.js bugKts/gustAddKts in coachKts, the APR autothrottle and its tutor, the go-around drill's hold, the coach's and gate's gust input, the bug band's Vref floor and the snapshot's speedBug, +0.11 kB over 0218's 198.18).
 2026-11-23 (0218): 198.18 kB (the tablet HUD scale: hudLayout.js hudScale, renderHud's setTransform and the screen-px ?debug boxes (hudPx), the coach slot's scale, +0.26 kB over 0211's 197.92).
