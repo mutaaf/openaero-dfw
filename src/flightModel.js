@@ -22,7 +22,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, wheelScrubYawHold, tailVsMainsAccel } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, wheelScrubYawHold, tailVsMainsAccel, radioAltitudeM } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -35,6 +35,7 @@ const _gearM = new Vector3();
 const BETA_LIN = 20 * DEG_TO_RAD;
 // Wider than any airframe's elevatorAlphaDeg, so no held stick out-pulls the restoring moment.
 const ALPHA_LIN = 90 * DEG_TO_RAD;
+const ELEV_LIFT_FADE_M = 0.5;
 
 export function stepFlightModel(body, spec, dt) {
   stepSystems(body, spec, dt);
@@ -69,7 +70,11 @@ export function stepFlightModel(body, spec, dt) {
   // The elevator's own lift beyond the trimmed one (spec.clElevator, Roskam's CLδe, 0214), as our JSBSim C172 has
   // flown it since 0203: liftCoefficient is a trimmed fit, so it already holds the tail's download at the elevator
   // that trims this α; only the deflection past that one adds or takes lift (full back stick at Vr: ~−0.1 CL).
-  if (spec.clElevator && !body.onGround) cl += elevatorLiftCl(spec, body.elevInput, body.trimAlphaDeg ?? body.aoaDeg, body.aoaDeg);
+  // In the air only, faded in over the first ELEV_LIFT_FADE_M of wheel height: switched on in full the step the wheels
+  // left, a pull's 0.05-0.19 CL put them straight back down (lift-off chattered for ~20 ms, the validation panel).
+  if (spec.clElevator && !body.onGround) {
+    cl += elevatorLiftCl(spec, body.elevInput, body.trimAlphaDeg ?? body.aoaDeg, body.aoaDeg) * Math.min(1, radioAltitudeM(body, spec) / ELEV_LIFT_FADE_M);
+  }
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
   const groundEffect = groundEffectFactor(body.pos.y - body.groundY, spec.wingSpanM);
@@ -304,7 +309,7 @@ export function stepFlightModel(body, spec, dt) {
 // CLδe·(δe − δe_trim(α)) (0214), Roskam's CLδe beyond the elevator that trims this α, as our JSBSim C172's
 // aero/coefficient/CLde and aero/function/elevator-trim-rad: the trimming elevator is Cmα·α / Cmδe
 // (spec.elevatorPerAlpha) over the elevator's share of its power at that α (spec.pitchBreak's η, src/pitchBreak.js,
-// by the stick's side as the pitch law reads it, nose-up when neutral as JSBSim's; 1 until the chunk loads), held
+// by the stick's side as the pitch law reads it; 1 until the chunk loads), held
 // at the clean stall's α past it (no trim exists there).
 // In flightModel.js's pitch law the stick moves the trimmed α by elevatorAlphaDeg (its elevator is that over
 // Cmδe / Cmα: the C172's 25.5° mean throw) and the trim sets the α it flies, so the elevator beyond trim is the
@@ -313,7 +318,7 @@ export function stepFlightModel(body, spec, dt) {
 // holds (full back stick at Vr: ~−0.1 CL).
 export function elevatorLiftCl(spec, elevInput, trimAlphaDeg, aoaDeg) {
   const a = MathUtils.clamp(aoaDeg, -0.2 * RAD_TO_DEG, spec.alphaStallDegByFlap[0]);
-  const eta = spec.pitchBreak ? spec.pitchBreak.eta(a, elevInput > 0 ? 1 : -1) : 1;
+  const eta = spec.pitchBreak ? spec.pitchBreak.eta(a, elevInput) : 1;
   return spec.clElevator * spec.elevatorPerAlpha * DEG_TO_RAD * (elevInput * spec.elevatorAlphaDeg + (a - trimAlphaDeg) / eta);
 }
 
