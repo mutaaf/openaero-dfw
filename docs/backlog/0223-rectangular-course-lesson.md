@@ -1,12 +1,12 @@
 ---
 id: 0223
 title: Rectangular course lesson: fly a box around a field in a 12 kt wind, graded on a constant distance
-status: in-progress
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-24
-pr:
+pr: 321
 ---
 
 ## Why
