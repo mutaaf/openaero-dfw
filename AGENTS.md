@@ -304,18 +304,22 @@ src/aroundPoint.js  turns around a point (0211, lazy chunk loaded with `turns_ar
                     (create, live, simStep, coachWord, grade, PLACE, drawHud, kidGuide, makeMarker, seatMarker, debugSnap, SNAP
                     = openaeroDebug's field name).
 src/rectCourse.js   the rectangular course (0223, lazy chunk loaded with `rectangular_course`, `rectCourse: true`): the C172 at 90 KIAS,
-                    1,000 ft AGL over the same fields in aroundPoint.js's scenario 12 kt south wind, a 1/2 by 3/4 mile field with a lit
-                    pole at each corner, two left-hand laps 1,320 ft (1/4 mile) off its edges, entered on the downwind leg (east side,
-                    heading north) half a mile short of abeam (FAA-H-8083-3C ch. 7). The distance is to the field's nearest edge or
-                    corner (fieldDistance, signed), so the path asked is the field grown by 1,320 ft: legs and quarter circles from
-                    abeam each corner. Held at the spawn until the player flies; the course starts abeam the field and ends after 720°
-                    round its centre. Graded as aroundPoint.js (spread ±150 ft a B, ±250 ft a C, ±350 ft a D; average vs 1,320 ft,
-                    ±100 ft, ±10 kt, 45°); 3x the distance out, over the field, 500 ft off, a stall or 600 s fail. rc* coach words (the
-                    corner's roll by the wind behind, the crab by the wind's side, which way when wide or close); the HUD's FIELD readout
-                    (an arrow to the nearest edge); Kid's guide rectBankDeg (Vt²/R round the corners, led 60 m, a spring and damping on
-                    the legs, i.e. a crab); the 53° cap, 90 KIAS, no auto flaps while live; the card's plot draws the field, the path
-                    asked (an SVG rect with rx) and the corner poles (trackPlot.js track.rect). Cards: tests/flight/rectCourse.test.js
-                    (crab + bank for the groundspeed = S/A in four winds; compass headings with no crab and a fixed 20° = D)
+                    1,000 ft AGL over the same fields in aroundPoint.js's scenario 12 kt south wind, a 1/2 by 3/4 mile field (the
+                    game's size: 3C gives none) with a lit pole at each corner, two left-hand laps half a mile (2,640 ft) off its
+                    edges (FAA-H-8083-3C ch. 7: "one-half to three-fourths of a mile"; 3B's 1/4 mile is superseded), entered on the
+                    downwind leg (east side, heading north) half a statute mile short of abeam (the AFH's downwind entry; ACS
+                    PA.V.B.S3a's is 45° to the downwind). The distance is to the field's nearest edge or corner (fieldDistance,
+                    signed), so the path asked is the field grown by 2,640 ft: legs and quarter circles from abeam each corner (the
+                    game's cue). Held at the spawn until the player flies; the course starts abeam the field flying the left-hand way
+                    and ends after 720° anticlockwise round its centre (swept falls in the sim's frame; +90° = 'wrongWay', failed).
+                    Graded as aroundPoint.js (spread ±150 ft a B, ±250 ft a C, ±350 ft a D; average vs 2,640 ft, ±100 ft, ±10 kt,
+                    45°); 3x the distance out, over the field, 500 ft off, a stall or 900 s fail. rc* coach words (the corner's roll by
+                    the wind behind, the crab by the wind's side, which way when wide or close); the HUD's FIELD readout (an arrow to
+                    the nearest edge); Kid's guide rectBankDeg (Vt²/R round the corners, led 60 m, a spring and damping on the legs,
+                    i.e. a crab); the 53° cap, 90 KIAS, no auto flaps while live; the card's plot draws the field, the path asked (an
+                    SVG rect with rx) and the corner poles (trackPlot.js track.rect). Cards: tests/flight/rectCourse.test.js (crab +
+                    bank for the groundspeed = S in four winds, corners ~20° downwind / ~12° upwind as tan φ = Vg²/(gR); compass
+                    headings with no crab and a fixed 20° = D)
 src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_slow_flight`): the C172 clean at 95 KIAS,
                     4,500 ft AGL over Grapevine Lake; slow to the band and hold it, graded to FAA-S-ACS-6C Area VII Task A
                     (S5: altitude ±100 ft, heading ±10°, airspeed +10/−0; S4: no stall warning). The band is the airplane's

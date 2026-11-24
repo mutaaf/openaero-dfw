@@ -50,7 +50,7 @@ test('?mission=rectangular_course: held at the spawn, the coach calls the corner
   await expect(page.locator('#resultsFactors')).toContainText(/Altitude held \(test: ±100 ft\)/);
   const plot = page.locator('#trackPlot');
   await expect(plot).toBeVisible();
-  await expect(plot).toHaveAttribute('aria-label', /1,320 ft off the field's edges/);
+  await expect(plot).toHaveAttribute('aria-label', /2,640 ft off the field's edges/);
   await expect(plot).toContainText(/dashed: the path asked/);
   expect(await plot.locator('svg rect').count()).toBe(2); // the field and the path asked
   const box = await plot.boundingBox();

@@ -11,7 +11,7 @@ import { DRILL_TEXT } from '../../src/coach.js';
 import { FT_TO_M } from '../../src/constants.js';
 
 const MISSION = MISSIONS.find((m) => m.key === 'rectangular_course');
-const D = 1320 * FT_TO_M;
+const D = 2640 * FT_TO_M;
 const DT = 0.1;
 const V = 46;
 
@@ -33,7 +33,7 @@ function pathAt(st, s, off = 0) {
 }
 const input = (st, p, extra = {}) => ({ dt: DT, ...p, wx: 0, wz: -6, altFt: 1700, iasKts: 90, bankDeg: 0, stalled: false, ...extra });
 // Spawn to abeam the field up the entry line, then round the path until done; off(s): metres out from it.
-function flyLesson(st, { off = () => 0, extra = () => ({}), maxS = 900 } = {}) {
+function flyLesson(st, { off = () => 0, extra = () => ({}), maxS = 1200 } = {}) {
   const evs = [];
   let z = MISSION.pos[1], t = 0;
   while (st.phase === 'entry' && t < 60) {
@@ -51,17 +51,16 @@ function flyLesson(st, { off = () => 0, extra = () => ({}), maxS = 900 } = {}) {
 
 describe('rectangular course (0223): the mission', () => {
   it('flies the Cessna on the downwind leg, the field on its left, the distance asked off the field\'s east edge', () => {
-    expect(MISSION).toMatchObject({ kind: 'drill', aircraft: 'c172', aglFt: 1000, kias: 90, distFt: 1320, rectCourse: true, hdg: 0 });
+    expect(MISSION).toMatchObject({ kind: 'drill', aircraft: 'c172', aglFt: 1000, kias: 90, distFt: 2640, rectCourse: true, hdg: 0 });
     const [fromDeg, kts] = MISSION.wind;
     expect(kts).toBe(12);
     expect((fromDeg + 180) % 360).toBe(MISSION.hdg); // heading the way the wind blows: downwind (AFH p. 7-4)
-    // The handbook: a field of sides about a mile (here 1/2 by 3/4 mile); the path 1/4 to 1/2 mile out.
-    for (const ft of MISSION.fieldFt) { expect(ft).toBeGreaterThanOrEqual(2640); expect(ft).toBeLessThanOrEqual(5280); }
-    expect(MISSION.distFt).toBeGreaterThanOrEqual(1320);
-    expect(MISSION.distFt).toBeLessThanOrEqual(2640);
+    // FAA-H-8083-3C ch. 7: the path one-half to three-fourths of a mile from the field's boundaries (the field's size is the game's).
+    expect(MISSION.distFt).toBeGreaterThanOrEqual(2640);
+    expect(MISSION.distFt).toBeLessThanOrEqual(3960);
     const hx = MISSION.fieldFt[0] / 2 * FT_TO_M, hz = MISSION.fieldFt[1] / 2 * FT_TO_M;
     expect(MISSION.pos[0] - MISSION.field[0]).toBeCloseTo(hx + D, 0); // east of the field: off the left wing heading north
-    expect(MISSION.pos[1] - MISSION.field[1]).toBeCloseTo(hz + 926, 0); // half a mile short of abeam its south-east corner
+    expect(MISSION.pos[1] - MISSION.field[1]).toBeCloseTo(hz + 2640 * FT_TO_M, 0); // half a statute mile short of abeam its south-east corner
   });
   it('its wind is a scenario (labelled so) from the mission', () => {
     expect(lessonWx(MISSION)).toMatchObject({ windDirDeg: 180, windKts: 12, live: false, scripted: true });
@@ -108,13 +107,13 @@ describe('rectangular course (0223): the steps and the grade', () => {
     const st = createRectCourse(MISSION);
     const evs = flyLesson(st);
     expect(evs).toEqual(['course', 'complete']);
-    expect(Math.abs(st.swept)).toBeGreaterThanOrEqual(LAPS_DEG);
-    expect(Math.abs(st.swept)).toBeLessThan(LAPS_DEG + 5);
+    expect(st.swept).toBeLessThanOrEqual(-LAPS_DEG); // left-hand: the angle falls in the sim's frame
+    expect(st.swept).toBeGreaterThan(-LAPS_DEG - 5);
     const { meanFt, sdFt } = spreadFt(st);
-    expect(meanFt).toBeCloseTo(1320, -1);
+    expect(meanFt).toBeCloseTo(2640, -1);
     expect(sdFt).toBeLessThan(1);
     expect(st.trackStart).toBeGreaterThan(0);
-    expect(st.ct).toBeGreaterThan(230); // ~6.6 km a lap at 46 m/s
+    expect(st.ct).toBeGreaterThan(330); // ~9 km a lap at 46 m/s
   });
   it('the exact path at the height and speed grades S; the Kid note when the guide flew it', () => {
     const st = createRectCourse(MISSION);
@@ -161,6 +160,25 @@ describe('rectangular course (0223): the steps and the grade', () => {
     const st2 = createRectCourse(MISSION);
     flyLesson(st2, { extra: (s) => ({ stalled: s > 3000 }) });
     expect(st2.why).toBe('stall');
+  });
+  it('the other way round (right-hand) neither joins on the east side nor completes: a quarter lap clockwise fails it (panel)', () => {
+    const st = createRectCourse(MISSION);
+    // Heading south along the east side: the field on the right.
+    rectStep(st, input(st, { x: MISSION.pos[0], z: st.cz, vx: 0, vz: V }));
+    expect(st.phase).toBe('entry');
+    // Joined the left-hand way, then turned round and flown clockwise.
+    const st2 = createRectCourse(MISSION);
+    flyLesson(st2, { maxS: 0 });
+    expect(st2.phase).toBe('course');
+    const per = 2 * (2 * st2.hx + 2 * st2.hz) + 2 * Math.PI * st2.D;
+    let ev = '';
+    for (let s = 0, t = 0; t < 400 && !ev; t += DT, s -= V * DT) {
+      const p = pathAt(st2, ((s % per) + per) % per);
+      ev = rectStep(st2, input(st2, { ...p, vx: -p.vx, vz: -p.vz }));
+    }
+    expect(ev).toBe('failed');
+    expect(st2.why).toBe('wrongWay');
+    expect(gradeRectCourse(st2).reason).toMatch(/left-hand/);
   });
   it('never joining the course fails it after two minutes', () => {
     const st = createRectCourse(MISSION);
@@ -218,7 +236,7 @@ describe('rectangular course (0223): the coach and Kid\'s guide', () => {
     const corner = (v) => rectBankDeg(st, { x: st.cx + st.hx + D * Math.SQRT1_2, z: st.cz - st.hz - D * Math.SQRT1_2, vx: -v * Math.SQRT1_2, vz: -v * Math.SQRT1_2 });
     const down = corner(V + 6), up = corner(V - 6);
     expect(down).toBeLessThan(up); // more negative: steeper left
-    expect(up).toBeLessThan(-15);
+    expect(up).toBeLessThan(-10);
     expect(-down).toBeCloseTo(Math.atan((V + 6) ** 2 / (9.80665 * D)) * 180 / Math.PI, 0);
     expect(rectBankDeg(st, { x: st.cx + st.hx + D, z: st.cz, vx: 0, vz: -V })).toBeCloseTo(0, 5);
     const out = {};

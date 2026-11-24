@@ -2,16 +2,19 @@
 // 1,000 ft AGL in a 12 kt wind flies two left-hand laps round a field marked by a lit pole at each corner, a constant
 // distance off its edges: crabbed into the wind on the legs, the turns at the corners steepest with the wind behind.
 // Source: FAA Airplane Flying Handbook (FAA-H-8083-3C) ch. 7, Ground Reference Maneuvers: flown "between 600 and
-// 1,000 feet AGL" (p. 7-2), never past "a bank angle of 45°" (p. 7-1), "entered from a downwind position" (p. 7-4);
-// the rectangular course (p. 7-4 onward): a field "with sides of approximately one mile" (here 3/4 by 1/2 statute
-// mile), flown "at a uniform distance" of "one-fourth to one-half mile" (here 1/4: 1,320 ft) outside its boundaries,
-// the turns at the corners begun abeam each one, the wind drift corrected by a crab on the legs, and the bank
-// steepest where the groundspeed is highest (the downwind-to-base corner) and shallowest into the wind; tan φ =
-// Vg² / (g R) for the corners' radius. FAA-S-ACS-6C (Nov 2023) Area V Task B (PA.V.B: rectangular course, S-turns or
-// turns around a point): S3c enter 600-1,000 ft AGL, S7 "Maintain altitude ±100 feet; maintain airspeed ±10 knots";
-// it sets no number for the distance (the bands here are 0211's, the game's own, and the card says so).
-// The "distance" is to the field's nearest edge or corner, so the path asked is the field grown by 1,320 ft: straight
-// legs and quarter circles round the corners (the turn begun abeam the corner, as the handbook asks).
+// 1,000 feet AGL", never past "a bank angle of 45°"; the rectangular course: the entry "accomplished downwind", the
+// legs flown "parallel to and at an equal distance between one-half to three-fourths of a mile away from the field
+// boundaries" (here one-half: 2,640 ft; 3C warns that flying close needs "very steep bank angles … especially in the
+// downwind to crosswind turn"), the drift on the legs corrected by a crab into the wind, and the bank steepest where the
+// groundspeed is highest and shallowest into the wind (tan φ = Vg² / (g R), the relation of the chapter's own worked
+// example). 3C gives no field size: the 1/2 by 3/4 statute mile field is the game's. FAA-S-ACS-6C (Nov 2023) Area V
+// Task B: PA.V.B.S3a "enter a left or right pattern, 600 to 1,000 feet AGL" (the ACS's entry is 45° to the downwind
+// leg; this lesson starts on the downwind leg's line, the handbook's downwind entry), S7 "Maintain altitude ±100 feet;
+// maintain airspeed ±10 knots"; it sets no number for the distance (the bands here are 0211's, the game's own, and the
+// card says so).
+// The "distance" is to the field's nearest edge or corner, so the path asked is the field grown by 2,640 ft: straight
+// legs and quarter circles round the corners. Rolling into each corner's turn as the Cessna comes abeam it is the game's
+// (and the common instructor's) cue: 3C lists only "failure to execute turns with accurate timing" as an error.
 // Pure but for makeMarker (aroundPoint.js's three classes: no new boot export). Tested in tests/unit/rectCourse.test.js
 // and flown headless in tests/flight/rectCourse.test.js.
 import * as THREE from 'three';
@@ -31,7 +34,7 @@ export const SPREAD_C_FT = 250; // wider than this: no better than a C
 export const OFF_FT = 300; // the average this far from the distance asked: no better than a B
 export const LOST_X = 3; // this many times the distance off the field: drifted away
 export const FAIL_FT = 500;
-export const FAIL_S = 600; // two laps take ~4.5 minutes
+export const FAIL_S = 900; // two laps take ~6.5 minutes
 export const ENTRY_FAIL_S = 120;
 // The corner's turn starts this far before abeam (the bank takes ~2 s to come), Kid's guide and the coach's "roll now".
 export const ROLL_LEAD_M = 60;
@@ -54,7 +57,7 @@ export const RECT_TEXT = {
   rcHigh: 'Climbing: ease the back pressure',
   rcSlow: 'Slowing: add power',
   rcFast: 'Fast: ease off the power',
-  rcSteep: 'Over 45° of bank: shallower, and start the next corner a little sooner',
+  rcSteep: 'Over 45° of bank: shallower. You are too close to the field, or started the corner late',
 };
 Object.assign(DRILL_TEXT, RECT_TEXT);
 Object.assign(RANK, { rcFlyOn: 1, rcKidIn: 1, rcKid: 1, rcCornerDown: 2, rcCornerUp: 2, rcCorner: 2, rcWide: 1, rcClose: 1, rcCrabL: 1, rcCrabR: 1,
@@ -118,8 +121,9 @@ export function rectStep(st, s) {
   if (st.phase === 'entry') {
     if (st.alt0 === null) st.alt0 = s.altFt;
     st.iasF = s.iasKts;
-    // The course starts abeam the field (its nearest point on an edge, not a corner) within twice the distance.
-    if (!st.corner && d > 0 && d <= 2 * st.D) {
+    // The course starts abeam the field (its nearest point on an edge, not a corner) within twice the distance, flying
+    // the left-hand way along it (the field on the left: the track along the left-hand tangent (nz, −nx); panel).
+    if (!st.corner && d > 0 && d <= 2 * st.D && s.vx * st.nz - s.vz * st.nx > 0) {
       st.phase = 'course'; st.trackStart = Math.max(0, st.trackN - 1);
       return 'course';
     }
@@ -139,12 +143,14 @@ export function rectStep(st, s) {
   if (bank > MAX_BANK_DEG + 2) st.steepS += s.dt;
   // Flying away from the field (opening faster than a fifth of the speed: not a crab's drift).
   if (s.vx * st.nx + s.vz * st.nz > 0.2 * Math.hypot(s.vx, s.vz)) st.awayS += s.dt;
-  if (s.stalled || d > LOST_X * st.D || d < 0 || st.maxAltDevFt > FAIL_FT || st.ct > FAIL_S) {
-    st.why = s.stalled ? 'stall' : d > LOST_X * st.D ? 'drift' : d < 0 ? 'over' : st.maxAltDevFt > FAIL_FT ? 'height' : 'time';
+  // Left-hand: anticlockwise from above, the angle round the field's centre falls in the sim's frame (+z south). A quarter
+  // of a lap the other way round is a right-hand course: not the lesson (panel: it completed S, the corner words wrong).
+  if (s.stalled || d > LOST_X * st.D || d < 0 || st.swept > 90 || st.maxAltDevFt > FAIL_FT || st.ct > FAIL_S) {
+    st.why = s.stalled ? 'stall' : d > LOST_X * st.D ? 'drift' : d < 0 ? 'over' : st.swept > 90 ? 'wrongWay' : st.maxAltDevFt > FAIL_FT ? 'height' : 'time';
     st.phase = 'failed';
     return 'failed';
   }
-  if (Math.abs(st.swept) >= LAPS_DEG) { st.phase = 'complete'; return 'complete'; }
+  if (st.swept <= -LAPS_DEG) { st.phase = 'complete'; return 'complete'; }
   return '';
 }
 
@@ -193,7 +199,7 @@ export function rectPrompt(st, s, kid) {
   if (kid) return st.phase === 'entry' ? 'rcKidIn' : 'rcKid';
   if (st.phase === 'entry') return 'rcFlyOn';
   if (Math.abs(s.bankDeg) > MAX_BANK_DEG + 2) return 'rcSteep';
-  // The corner: roll in when abeam it (the handbook), the bank by the wind behind.
+  // The corner: roll in as it comes abeam (the game's cue), the bank by the wind behind.
   const toC = toCornerM(st, s);
   if (st.corner || (toC >= 0 && toC < ROLL_LEAD_M)) {
     if (s.bankDeg > -10) {
@@ -260,7 +266,7 @@ export function kidGuide(st, out) {
 }
 
 // The HUD's field readout (aroundPoint.js drawPole's slot and box): an arrow from the nose to the field's nearest edge
-// and the distance against the one asked, e.g. "FIELD 1,300 / 1,320 FT". The field is off the left wing all the way
+// and the distance against the one asked, e.g. "FIELD 2,600 / 2,640 FT". The field is off the left wing all the way
 // round, out of a phone's forward view. The text is rebuilt only when its number changes (AGENTS.md invariant 4).
 export const BOX_W = 232, BOX_H = 24;
 let fieldFt = -1, fieldText = '';
@@ -355,6 +361,7 @@ export function gradeRectCourse(st, kid = false) {
     reason = st.why === 'stall' ? 'Stalled in a turn: no steeper than 45°, and keep the speed up.'
       : st.why === 'drift' ? (st.awayS > st.ct / 3 ? 'You flew away from the field: keep it off your left wing, and turn left at each corner.'
         : 'The wind carried you away from the field: crab into the wind on the legs, and turn steeper with the wind behind you.')
+        : st.why === 'wrongWay' ? 'You went round the other way: this course is left-hand, the field on your left and a left turn at each corner.'
         : st.why === 'over' ? 'You flew over the field: the course goes round it, the same distance off its edges.'
           : st.why === 'height' ? `${st.altSignFt < 0 ? 'Lost' : 'Gained'} over ${FAIL_FT} ft: hold your height round the course.`
             : st.why === 'missed' ? 'Never joined the course: fly along the field\'s edge with it off your left wing.'
@@ -388,4 +395,4 @@ export const debugSnap = (st) => {
 };
 
 // e2e: fast-forward the lesson to `deg` of the two laps (the flown samples so far stay its grade's).
-if (typeof window !== 'undefined') window.openaeroDebugRectCourse = (deg) => { if (last?.phase === 'course') last.swept = Math.sign(last.swept || 1) * deg; };
+if (typeof window !== 'undefined') window.openaeroDebugRectCourse = (deg) => { if (last?.phase === 'course') last.swept = -deg; }; // left-hand: the angle falls

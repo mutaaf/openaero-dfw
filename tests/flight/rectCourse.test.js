@@ -1,8 +1,8 @@
 // The rectangular course (ticket 0223) flown headless: the C172 through flightModel.js at the lesson's 90 KIAS and
-// ~1,700 ft MSL, two left-hand laps round a 3/4 by 1/2 mile field 1,320 ft off its edges, in a 12 kt wind.
-// FAA-H-8083-3C ch. 7 (the rectangular course, p. 7-4 onward): the legs are flown "at a uniform distance" from the
-// field, the drift corrected by crabbing into the wind, and the corners turned from abeam with the bank steepest where
-// the groundspeed is highest (wind behind) and shallowest into the wind. The cards check the lesson against that:
+// ~1,700 ft MSL, two left-hand laps round a 1/2 by 3/4 mile field half a mile (2,640 ft) off its edges, in a 12 kt wind.
+// FAA-H-8083-3C ch. 7 (the rectangular course): the legs flown at an equal distance (one-half to three-fourths of a mile)
+// from the field's boundaries, the drift corrected by crabbing into the wind, and the bank steepest where the
+// groundspeed is highest (wind behind) and shallowest into the wind; the turns begun abeam each corner are the game's cue. The cards check the lesson against that:
 // a pilot who crabs on the legs and banks for the groundspeed round the corners (Vt²/d plus a spring to the distance:
 // the same physics as the lesson's Kid guide, other gains) grades A or better in a wind from any side; one who flies
 // the compass headings with no crab and turns every corner at a fixed 20° grades C or worse (drifted off the box in
@@ -91,7 +91,7 @@ function rect(fromDeg, pilot, { windKts = WIND_KTS } = {}) {
     rudInt = Math.max(-1, Math.min(1, rudInt - ball * 4 * dt));
     x.rudderInput = Math.max(-1, Math.min(1, rudInt - ball * 2));
   };
-  fly(b, c172, 700, pilotFn, (x) => {
+  fly(b, c172, 1000, pilotFn, (x) => {
     maxAoa = Math.max(maxAoa, x.aoaDeg);
     ev = rectSimStep(st, x, 1 / 120, true);
     return ev === 'complete' || ev === 'failed';
@@ -115,9 +115,9 @@ describe('C172 rectangular course (0223, FAA-H-8083-3C ch. 7): two left-hand lap
       expect(r.st.maxBankDeg).toBeLessThanOrEqual(MAX_BANK_DEG);
       expect(r.maxAoa).toBeLessThan(stallAoaDeg(c172, 0) - 2);
       expect(['S', 'A']).toContain(r.grade.grade);
-      // Two laps of ~6.6 km at ~46 m/s TAS: ~4.5 minutes.
-      expect(r.st.ct).toBeGreaterThan(230);
-      expect(r.st.ct).toBeLessThan(330);
+      // Two laps of ~9 km at ~47 m/s TAS: ~6.5 minutes.
+      expect(r.st.ct).toBeGreaterThan(330);
+      expect(r.st.ct).toBeLessThan(450);
     }, 60000);
   }
   it('the mission\'s south wind: the compass headings with no crab and a fixed 20° bank at every corner drift off the box, C or worse', () => {
@@ -132,9 +132,9 @@ describe('C172 rectangular course (0223, FAA-H-8083-3C ch. 7): two left-hand lap
     const down = avg((x) => x[1] > 0.8), up = avg((x) => x[1] < -0.8);
     const afh = (vg) => Math.atan(vg * vg / (GRAVITY * D_FT * FT_TO_M)) / DEG_TO_RAD;
     console.log(`[c172 rect corner banks] wind behind ${down.toFixed(1)}° (formula ${afh(r.tas + WIND_KTS * KTS_TO_MPS).toFixed(1)}°), into it ${up.toFixed(1)}° (formula ${afh(r.tas - WIND_KTS * KTS_TO_MPS).toFixed(1)}°)`);
-    expect(down - up).toBeGreaterThan(8);
-    expect(Math.abs(down - afh(r.tas + WIND_KTS * KTS_TO_MPS))).toBeLessThan(5);
-    expect(Math.abs(up - afh(r.tas - WIND_KTS * KTS_TO_MPS))).toBeLessThan(5);
+    expect(down - up).toBeGreaterThan(6); // ~20° vs ~12° at half a mile
+    expect(Math.abs(down - afh(r.tas + WIND_KTS * KTS_TO_MPS))).toBeLessThan(3);
+    expect(Math.abs(up - afh(r.tas - WIND_KTS * KTS_TO_MPS))).toBeLessThan(3);
     expect(down).toBeLessThan(MAX_BANK_DEG);
   }, 60000);
 });
@@ -153,7 +153,7 @@ function assisted(level, fromDeg) {
   b.vel.add(b.windVec);
   const cfg = assistConfig(level), ast = createAssistState(), st = createRectCourse(m), s = {}, out = {}, at = { trim: 0 };
   let prevIas = null, iasRate = 0, ev = '';
-  fly(b, c172, 700, (x, dt) => {
+  fly(b, c172, 1000, (x, dt) => {
     const { pitchDeg, bankRightDeg } = attitude(x);
     s.guideBankDeg = 0; s.guideGammaDeg = 0;
     const cap = kidGuide(st, s);
