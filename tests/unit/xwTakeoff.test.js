@@ -62,6 +62,12 @@ describe('xwTakeoff.js wind', () => {
     expect(calm.xwKts).toBeCloseTo(12, 0);
     expect(lessonWx(createXwTakeoff(end), { ...wind('R'), icao: 'KDFW' }).scripted).toBe(true); // DFW's lent report is not Addison's
   });
+  it('offline, keeps its scenario wind object (no re-pick for each new fallback report)', () => {
+    const st = createXwTakeoff(end);
+    const first = lessonWx(st, { live: false, windDirDeg: 160, windKts: 5 });
+    expect(lessonWx(st, { live: false, windDirDeg: 160, windKts: 5 })).toBe(first);
+    expect(lessonWx(st, wind('L')).live).toBe(true); // a live report that suits still takes over before the roll
+  });
   it('keeps the wind it chose once the roll starts', () => {
     const st = ready('R');
     xwTakeoffStep(st, { ...base(), throttle: 1, gsKts: 10, iasKts: 15 }, 0.1);

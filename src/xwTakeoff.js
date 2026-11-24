@@ -135,7 +135,8 @@ export const debugSnap = (st) => ({ ...st, end: st.end.id, keys: undefined, wx: 
 // Chosen again only when the report object changes, and never once the roll has started (a METAR refresh mid-roll must not
 // swap the wind). Sets st.side (the wind's side: the stick goes that way) and st.xwKts. Allocates only on a change.
 export function lessonWx(st, live) {
-  if (st.wx && (st.rolled || live === st.src)) return st.wx;
+  // Offline (no live report, before or now) the scenario stays: currentWeather's fallback is a new object every call (device panel).
+  if (st.wx && (st.rolled || live === st.src || (!live?.live && !st.wx.live))) return st.wx;
   st.src = live;
   st.wx = liveSuits(live, st.end.hdgT, st.end.airport) ? live : scenarioWx(st.end);
   const { xw } = windAcross(st.wx, st.end.hdgT);
