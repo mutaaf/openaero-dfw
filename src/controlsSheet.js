@@ -57,11 +57,15 @@ export const TOUCH = [
   { input: '💡 ON / OFF (in ☰ Menu)', does: 'Landing light: lights the runway ahead at night' },
 ];
 
+// The left-handed layout (0221) swaps the stick's and slider's sides: name them where they are.
+const swapSides = (rows) => rows.map((r) => r.ids?.[0] === 'touchStick' ? { ...r, input: 'Left stick' }
+  : r.ids?.[0] === 'touchThrottle' ? { ...r, input: 'Right slider' } : r);
+
 // A touch screen reads its own controls first.
-export function sheetSections(touch) {
+export function sheetSections(touch, left = false) {
   const kb = { title: 'Keyboard and mouse', rows: KEYBOARD };
   const pad = { title: 'Gamepad', rows: GAMEPAD };
-  const t = { title: 'Touch', rows: TOUCH };
+  const t = { title: 'Touch', rows: left ? swapSides(TOUCH) : TOUCH };
   return touch ? [t, kb, pad] : [kb, pad, t];
 }
 
@@ -101,7 +105,7 @@ function fill(touch) {
   inKeys = false;
   const body = el('controlsBody');
   body.textContent = '';
-  for (const s of sheetSections(touch)) {
+  for (const s of sheetSections(touch, document.documentElement.classList.contains('lefty'))) {
     const sec = make('section');
     const dl = make('dl', 'controls-list');
     for (const r of s.rows) dl.append(make('dt', null, r.acts ? keysText(r.acts) + (r.hold ? ' (hold)' : '') : r.input), make('dd', null, r.does));

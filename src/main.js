@@ -49,6 +49,7 @@ import { createWakeLock } from './wakeLock.js';
 import { TIME_MODES, sunPreset, sunDirection, skyForSun, defaultTimeMode } from './sun.js';
 import { nightUniforms, cityLightsFor, setCityLights } from './nightGround.js';
 import { loadCleanView, saveCleanView } from './viewPrefs.js';
+import { loadLeftHanded, saveLeftHanded } from './handPrefs.js';
 import { loadPrefs, savePrefs } from './prefs.js';
 import { TICK, touchdownPattern, alertPattern, createAlertEdge, buzz, hapticsSupported, loadHaptics, saveHaptics } from './haptics.js';
 import {
@@ -1419,6 +1420,25 @@ if (canBuzz) {
   });
 }
 
+// Left-handed touch layout (0221): the Options chip on touch-only screens; styles.css mirrors the deck.
+let leftHanded = false; // the canvas wind box follows the deck (hudLayout.js windBoxRect)
+function setHand(left) {
+  leftHanded = left;
+  document.documentElement.classList.toggle('lefty', left);
+  for (const b of document.querySelectorAll('#handPicker .btnHand')) {
+    const on = (b.dataset.hand === 'left') === left;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  }
+}
+if (touchOnly) {
+  byId('handPicker').classList.replace('hidden', 'flex');
+  setHand(loadLeftHanded(safeStorage()));
+  for (const b of document.querySelectorAll('#handPicker .btnHand')) {
+    b.addEventListener('click', () => { const left = b.dataset.hand === 'left'; setHand(left); saveLeftHanded(safeStorage(), left); });
+  }
+}
+
 function resetCoach() {
   Object.assign(coach, createCoach());
   coachDoneS = 0;
@@ -2399,7 +2419,7 @@ function renderHud() {
     if (!showPedals) { pedalHeld.l = pedalHeld.r = 0; sim.touchYaw = 0; }
   }
   const rudPct = showPedals ? Math.round(sim.touchYaw * 100) : 0;
-  if (rudPct !== rudShown) { // the pedal's position, under the left thumb (it stays where it was left)
+  if (rudPct !== rudShown) { // the pedal's position, beside the throttle (it stays where it was left)
     rudShown = rudPct;
     byId('txtTouchRud').textContent = rudPct ? `${Math.abs(rudPct)}% ${rudPct < 0 ? 'L' : 'R'}` : '0';
   }
@@ -2520,7 +2540,7 @@ let trimShown = false;
 // hudLayout.js; the text is refreshed once a second (syncWeatherUI), so nothing is built here.
 const _windBox = windBoxRect(1, 1);
 function drawWindBox(w, h, hdgDeg) {
-  const r = windBoxRect(w, h, _windBox);
+  const r = windBoxRect(w, h, _windBox, leftHanded);
   const hw = sim.hudWind;
   // Calm is quiet but still legible: a dim border, the text at full contrast.
   hudCtx.fillStyle = 'rgba(2, 6, 23, 0.7)';

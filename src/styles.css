@@ -128,6 +128,17 @@ input[type=range] { accent-color: #38bdf8; }
 /* Touch controls own their gestures: no scroll, zoom or text selection. */
 .touch-control { touch-action: none; -webkit-touch-callout: none; }
 
+/* Left-handed (0221, main.js sets the root class on touch-only screens, src/handPrefs.js): the deck
+   mirrors, the stick under the left thumb, the throttle (with the trim or pedals inboard of it) under
+   the right, the function buttons between. Same boxes, same safe-area padding on both sides. */
+.lefty #touchDeck > div { flex-direction: row-reverse; }
+.lefty #touchLeft { flex-direction: row-reverse; }
+.hand-l, .lefty .hand-r { display: none; }
+.lefty .hand-l { display: inline; }
+/* The How to fly tip names the chip only where the chip is (touch-only screens). */
+.hand-tip { display: none; }
+@media (hover: none) and (pointer: coarse) { .hand-tip { display: inline; } }
+
 /* Coarse pointers get ≥44px targets on the HUD buttons. */
 @media (pointer: coarse) {
   header .hud-btn, header select { min-height: 44px; min-width: 44px; }
@@ -220,12 +231,23 @@ body #coach.coach-tight:not(.hidden) { line-height: 0.875rem; }
   #touchButtons { flex-direction: row; }
   /* The trim rocker (0094) stands over the throttle, not beside it (the speed tape starts
      just right of the throttle on a 568 px screen); a shorter throttle makes the room. */
-  #touchLeft { flex-direction: column-reverse; align-items: center; }
+  #touchLeft, .lefty #touchLeft { flex-direction: column-reverse; align-items: center; }
   #touchThrottle { height: 7rem; }
   /* Right of the altitude tape (it ends at cx + 186 px), 128 px at most. */
   #touchStick {
     width: clamp(3.5rem, 50vw - 190px - max(0.75rem, var(--safe-right)), 8rem);
     height: clamp(3.5rem, 50vw - 190px - max(0.75rem, var(--safe-right)), 8rem);
+  }
+  /* Left-handed (0221): under ~360 px tall the pedals over the throttle (the crosswind lessons) would reach the
+     coach card's top-right slot (its foot ~66 px): there the throttle is 4.5rem when the pedals show. */
+  @media (max-height: 359.98px) {
+    .lefty #touchLeft:has(#touchRudder:not(.hidden)) #touchThrottle { height: 4.5rem; }
+  }
+  /* Left-handed (0221): left of the speed tape's scale (hudLayout.js: it reaches cx - 191 px) with
+     4 px clear, inside the notch side's inset. */
+  .lefty #touchStick {
+    width: clamp(3.5rem, 50vw - 195px - max(0.75rem, var(--safe-left)), 8rem);
+    height: clamp(3.5rem, 50vw - 195px - max(0.75rem, var(--safe-left)), 8rem);
   }
   #coach, #masterAlertBanner, #stallAlertBanner {
     top: max(0.5rem, env(safe-area-inset-top));
