@@ -1,7 +1,7 @@
 ---
 id: 0221
 title: Left-handed touch layout: swap the stick and throttle sides
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: accessibility
@@ -24,11 +24,11 @@ CSS, no markup duplication. Stored as `openaero_hand_v1 = { v: 1, left, at }` in
 Landscape and portrait; the safe-area insets and the 44 px targets hold on both sides.
 
 ## Acceptance criteria
-- [ ] With the chip on, the stick's centre is left of the throttle's at 390x844 and 844x390, and
+- [x] With the chip on, the stick's centre is left of the throttle's at 390x844 and 844x390, and
       the buttons' column swaps with it; nothing overlaps the HUD (e2e bounding boxes)
-- [ ] Choice survives a reload; invalid or missing storage falls back to right-handed
-- [ ] Every control still >= 44 px; no page scroll; touch-only layout rule unchanged
-- [ ] Desktop and gamepad unaffected (chip hidden when not touch)
+- [x] Choice survives a reload; invalid or missing storage falls back to right-handed
+- [x] Every control still >= 44 px; no page scroll; touch-only layout rule unchanged
+- [x] Desktop and gamepad unaffected (chip hidden when not touch)
 
 ## Test plan
 Unit test for the prefs module (invalid, throwing storage); e2e at both phone orientations

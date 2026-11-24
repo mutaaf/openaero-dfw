@@ -143,12 +143,14 @@ export function cameraFovDeg(w, h) {
 // for where it blows relative to the nose, its speed and, low on a runway, the cross and
 // head/tail components. It ends above the tapes and above the horizon band (35% of the
 // height) the layout keeps clear; where that leaves no room under the top bar (a phone
-// held sideways) it moves to the right of the altitude tape, level with its top.
+// held sideways) it moves to the right of the altitude tape, level with its top; left-handed
+// (0221: the deck mirrors, the throttle and trim column stands on the right there) it mirrors to the
+// left of the speed tape's scale.
 export const WIND_BOX_W = 68;
 export const WIND_BOX_H = 50;
 export const WIND_SHOW_COMPONENTS_FT = 1500;
 
-export function windBoxRect(w, h, out = { x: 0, y: 0, w: WIND_BOX_W, h: WIND_BOX_H }) {
+export function windBoxRect(w, h, out = { x: 0, y: 0, w: WIND_BOX_W, h: WIND_BOX_H }, left = false) {
   const cx = w / 2, cy = h / 2;
   const bottom = Math.min(cy + TAPE_TOP - 2, h * 0.35);
   if (bottom - WIND_BOX_H >= BELOW_TOP_BAR) {
@@ -156,6 +158,7 @@ export function windBoxRect(w, h, out = { x: 0, y: 0, w: WIND_BOX_W, h: WIND_BOX
     out.y = bottom - WIND_BOX_H;
   } else {
     out.x = Math.min(cx + 192, w - WIND_BOX_W - 2);
+    if (left) out.x = w - out.x - WIND_BOX_W;
     out.y = Math.max(cy + TAPE_TOP, BELOW_TOP_BAR);
   }
   out.w = WIND_BOX_W;

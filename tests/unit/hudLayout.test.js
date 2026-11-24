@@ -110,6 +110,25 @@ describe('wind readout (0075)', () => {
     }
   });
 
+  it('left-handed (0221): beside the tapes on a phone held sideways it mirrors to the speed side, clear of the scale; elsewhere it stays', () => {
+    for (const [w, h] of SCREENS) {
+      const r = windBoxRect(w, h), l = windBoxRect(w, h, {}, true);
+      const cx = w / 2, cy = h / 2;
+      expect(l.y).toBe(r.y);
+      if (r.y === Math.max(cy - 90, BELOW_TOP_BAR) && r.x > cx + 130) { // the sideways slot, right of the altitude tape
+        expect(l.x, `${w}x${h}`).toBe(w - r.x - WIND_BOX_W);
+        expect(l.x).toBeGreaterThanOrEqual(0);
+        expect(l.x + l.w, `${w}x${h} left of the speed scale`).toBeLessThan(cx + speedTapeX(w) - TAPE_SCALE_W);
+        const horizon = { x: w * 0.3, y: h * 0.35, w: w * 0.4, h: h * 0.3 };
+        expect(overlaps(l, horizon)).toBe(false);
+      } else {
+        expect(l, `${w}x${h}`).toEqual(r);
+      }
+    }
+    // The phones held sideways all take the mirrored slot.
+    for (const [w, h] of [[844, 390], [568, 320], [640, 360], [667, 375]]) expect(windBoxRect(w, h, {}, true).x).toBeLessThan(w / 2);
+  });
+
   it('writes into the object it is given (no per-frame allocation)', () => {
     const out = { x: 0, y: 0, w: 0, h: 0 };
     expect(windBoxRect(1280, 720, out)).toBe(out);
