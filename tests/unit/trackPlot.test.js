@@ -1,6 +1,6 @@
 // The results card's track plot (ticket 0211): a north-up SVG of the ground track round the pole.
 import { describe, it, expect } from 'vitest';
-import { trackPlotSvg, trackExtent, trackLabel, TRACK_LEGEND } from '../../src/trackPlot.js';
+import { trackPlotSvg, trackExtent, trackLabel, TRACK_LEGEND, trackLegend } from '../../src/trackPlot.js';
 
 const R = 457.2;
 // An entry up the east side, then one circle (sim frame: +x east, +z south).
@@ -56,5 +56,28 @@ describe('track plot (0211)', () => {
   });
   it('says what it shows', () => {
     expect(trackLabel(track())).toMatch(/1,500 ft asked for, the arrow the 12 knot wind's way/);
+  });
+});
+
+describe('track plot: the rectangular course (0223)', () => {
+  const hx = 402.3, hz = 603.5, D = 402.3;
+  const rectTrack = () => {
+    const pts = [];
+    for (let z = hz + 900; z > -hz; z -= 100) pts.push(hx + D, z);
+    return { pts: Float32Array.from(pts), n: pts.length / 2, start: 5, R: D, rect: [hx, hz], wind: [180, 12] };
+  };
+  it('draws the field, the path asked (the field grown by the distance, rounded corners), the four corner poles', () => {
+    const svg = trackPlotSvg(rectTrack());
+    expect(svg).toContain(`<rect x="${-hx}" y="${-hz}" width="${2 * hx}" height="${2 * hz}"`);
+    expect(svg).toContain(`rx="${D}"`);
+    expect(svg).not.toContain(`<circle r="${D}"`);
+    expect(svg.match(/fill="#facc15"/g).length).toBe(4);
+    expect(svg).not.toMatch(/NaN|undefined/);
+    expect(trackExtent(rectTrack())).toBeGreaterThan(hz + D);
+  });
+  it('says what it shows, and its legend names the path', () => {
+    expect(trackLabel(rectTrack())).toMatch(/round the field.*1,320 ft off the field's edges, the arrow the 12 knot wind's way/);
+    expect(trackLegend(rectTrack())).toMatch(/dashed: the path asked · blue: your track/);
+    expect(trackLegend({ R: 1 })).toBe(TRACK_LEGEND);
   });
 });

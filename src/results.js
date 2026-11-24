@@ -4,7 +4,7 @@
 import { GRADE_COLOURS } from './landing.js';
 import { landingTip } from './landingTip.js';
 import { drawStrip, touchdownLabel } from './touchdownStrip.js';
-import { trackPlotSvg, trackLabel, TRACK_LEGEND, LEGEND_PX } from './trackPlot.js';
+import { trackPlotSvg, trackLabel, trackLegend, LEGEND_PX } from './trackPlot.js';
 
 const byId = (id) => document.getElementById(id);
 export function showResults(sim, result, best, end, gate) {
@@ -69,7 +69,7 @@ export function showResults(sim, result, best, end, gate) {
   // A ground-reference lesson's track from above (0211, trackPlot.js): an SVG, so it fits any size it is given.
   const plot = byId('trackPlot');
   plot.classList.toggle('hidden', !result.track);
-  plot.innerHTML = result.track ? trackPlotSvg(result.track, plot.clientHeight - LEGEND_PX) + TRACK_LEGEND : '';
+  plot.innerHTML = result.track ? trackPlotSvg(result.track, plot.clientHeight - LEGEND_PX) + trackLegend(result.track) : '';
   plot.setAttribute('aria-label', result.track ? trackLabel(result.track) : '');
   const body = byId('resultsBody');
   body.scrollTop = 0;

@@ -362,5 +362,11 @@ export const debugSnap = (st) => {
     maxAltDevFt: st.maxAltDevFt, maxKtsDev: st.maxKtsDev, maxBankDeg: st.maxBankDeg, why: st.why, trackN: st.trackN, windKts: st.wx.windKts, windDirDeg: st.wx.windDirDeg };
 };
 
+// The ground-reference lessons' common calls (main.js sim.groundRef: this chunk or rectCourse.js, 0223).
+export { createAroundPoint as create, aroundLive as live, aroundSimStep as simStep, aroundCoach as coachWord, gradeAroundPoint as grade,
+  AROUND_PLACE as PLACE, drawPole as drawHud };
+export const SNAP = 'aroundPoint'; // openaeroDebug's field
+export const seatMarker = (st, m, heightAt) => { m.position.y = heightAt(st.px, st.pz); };
+
 // e2e: fast-forward the lesson to `deg` of the two circles (the flown samples so far stay its grade's).
 if (typeof window !== 'undefined') window.openaeroDebugAroundPoint = (deg) => { if (last?.phase === 'circle') last.swept = Math.sign(last.swept || -1) * deg; };
