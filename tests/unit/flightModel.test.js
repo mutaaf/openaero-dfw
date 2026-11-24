@@ -187,7 +187,7 @@ describe('the elevator\'s lift beyond trim (C172, 0214)', () => {
       }
     }
   });
-  it('full back stick costs lift as JSBSim\'s does: ~−0.2 CL on the runway at Vr, −0.11 to −0.18 past the stall', () => {
+  it('full back stick costs lift as JSBSim\'s does: ~−0.2 CL at a rotation\'s α 1°, −0.11 to −0.18 past the stall', () => {
     expect(elevatorLiftCl(c172, -1, 2.9, 1)).toBeCloseTo(-0.2, 1);
     const past = elevatorLiftCl(c172, -1, 2.9, 19); // α held at the clean stall, 14.1°
     expect(past).toBeLessThan(-0.11);
@@ -198,7 +198,9 @@ describe('the elevator\'s lift beyond trim (C172, 0214)', () => {
 });
 
 // Ticket 0214: the tail's stiff contact (2.9e5 N/m on ~120 kg) is averaged over the step, so a tail that crosses
-// into the runway during a step meets its force in that step, and the impulse is the same at any sub-step.
+// into the runway during a step meets its force in that step. On a prescribed path the step's mean is exact at any
+// sub-step (the old start-of-step read missed most of the first step); flown, it never adds energy (at 1/60 s it
+// damps a little more than at 1/180 s: the physics panel's 1-DOF check, 0.13 vs 0.51 m/s of rebound).
 describe('the tail contact is averaged over the step (C172, 0214)', () => {
   const c172 = AIRCRAFT_DATABASE.c172;
   const impulse = (dt) => {
@@ -216,7 +218,7 @@ describe('the tail contact is averaged over the step (C172, 0214)', () => {
     }
     return J;
   };
-  it('the same impulse at 1/60, 1/120 and 1/180 s as at 1/6000 s (within 3%)', () => {
+  it('on a prescribed path, the impulse at 1/60, 1/120 and 1/180 s is 1/6000 s\'s (within 3%)', () => {
     const ref = impulse(1 / 6000);
     console.log(`[tail] impulse over 1/30 s: 1/6000 s ${ref.toFixed(1)}, ${[60, 120, 180].map((hz) => `1/${hz} s ${impulse(1 / hz).toFixed(1)}`).join(', ')} N·s`);
     expect(ref).toBeGreaterThan(0);

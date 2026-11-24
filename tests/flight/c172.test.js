@@ -1197,7 +1197,7 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
     //   (OAERO), which already holds the trimmed elevator's download; until 0203 it added Roskam's CLδe 0.43 on
     //   the whole elevator (full up: −0.21 CL) and peaked at 20.0 / 21.7°. 0203 counts only the deflection beyond
     //   trim (−0.11 to −0.18 CL at full up): 21.1 / 22.6°. flightModel.js had no elevator lift at all (23.3 / 24.4°)
-    //   until 0214 counted the same CLδe beyond its own trimmed elevator (flightModel.js elevatorLiftCl): 21.9 / 23.9°.
+    //   until 0214 counted the same CLδe beyond its own trimmed elevator (flightModel.js elevatorLiftCl): 21.8 / 23.7°.
     it(`flaps ${flaps * 10}, held: the peak angle of attack within 0.75° of JSBSim's C172 (Roskam's Cmα̇, 0202)`, async () => {
       useFdm(null);
       const fm = fullAftAtVr(flaps);
@@ -1216,6 +1216,28 @@ describe('Cessna 172S full aft stick at Vr (ticket 0144)', () => {
       expect(Math.abs(fm.peakLowDeg - jsb.peakLowDeg)).toBeLessThanOrEqual(1.5);
     }, 30000);
   }
+});
+
+// The elevator's lift beyond trim (0214) switched on in full the step the wheels left: a pull's 0.05-0.19 CL put them
+// straight back down ~20 ms later (the validation panel). It fades in over 0.5 s after lift-off, so a held partial pull
+// leaves the runway once, at either sub-step.
+describe('Cessna 172S lift-off with a held pull: the wheels leave once (ticket 0214)', () => {
+  for (const hz of [60, 180]) it(`20-60% pulls from Vr at 1/${hz} s: one lift-off, no touch back`, () => {
+    for (const pull of [0.2, 0.4, 0.6]) {
+      const dt = 1 / hz;
+      const b = Object.assign(makeBody(c172, { flaps: 1, throttle: 1 }), { autoTrim: false, apMaster: false, trimAlphaDeg: takeoffTrimAoaDeg(c172, 1) });
+      let t = 0, t0 = null, toggles = 0, was = true;
+      while (t0 === null || t - t0 < 10) {
+        if (t0 === null && b.iasKts >= c172.vrKts) t0 = t;
+        b.elevInput += ((t0 === null ? 0 : -pull) - b.elevInput) * Math.min(1, dt * 10);
+        stepFlightModel(b, c172, dt);
+        t += dt;
+        if (t0 !== null && b.onGround !== was) toggles++;
+        was = b.onGround;
+      }
+      expect(toggles, `${pull * 100}% pull`).toBe(1);
+    }
+  });
 });
 
 // Takeoff trim, hands off after the rotation (ticket 0141). Cessna 172S POH Section 4: the

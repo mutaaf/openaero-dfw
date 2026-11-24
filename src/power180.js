@@ -39,8 +39,8 @@ export const DOWNWIND_NM = 0.5;
 export const RATIO_BY_FLAPS = [9.2, 8.8, 7.5, 6.6];
 // The glide is aimed this far before the spot: the round-out and hold-off float the rest. With TURN_FT,
 // fitted headless on flightModel.js (0202: 95 → 101 m, 170 → 160 ft, on a 20 ft round-out that doesn't hop;
-// 0214, the elevator's lift beyond trim: the flaps-30 flares floated 22-34 ft further, TURN_FT 160 → 157).
-export const FLOAT_M = 101;
+// 0214, the elevator's lift beyond trim: the flaps-30 flares floated 20-35 ft further, 101 → 109 m, TURN_FT kept).
+export const FLOAT_M = 109;
 const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 
 // The coach's plan: a short final (FINAL_M before the spot) flown with flaps 20 (RATIO_BY_FLAPS:
@@ -50,11 +50,11 @@ const AIM_X = SPOT_X - D.x * FLOAT_M, AIM_Z = SPOT_Z - D.z * FLOAT_M;
 // (tests/flight/power180.test.js), the coached pilot touches down inside the ACS window.
 export const FINAL_M = 600;
 const CLOSE_DEG_PER_M = 0.2;
-export const TURN_FT = 157;
+export const TURN_FT = 160;
 // Kid's guide turns this much later (lower), fitted in tests/e2e/power180.spec.js: since 0202 (Cmα̇, TURN_FT
 // 160) at 95 ft, as before, 87-168 ft past over 5 runs (main 113-173; TURN_FT − 75 gave 31-109). 0214 kept it at
-// 95 ft (77-188 over 6 runs; following TURN_FT to 92 ft gave 48-250, out twice in 5).
-export const KID_TURN_FT = TURN_FT - 62;
+// 95 ft: 13-160 ft past over 8 runs (a turn at 92 ft gave 48-250, out twice in 5).
+export const KID_TURN_FT = TURN_FT - 65;
 // Lined up: when a glide with the next notch out still reaches the aim with this much to spare,
 // the coach asks for it (flaps 20, then 30); Kid's guide sets them.
 export const FLAPS_FT = 10;

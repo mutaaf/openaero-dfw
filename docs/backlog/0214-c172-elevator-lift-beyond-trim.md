@@ -50,4 +50,7 @@ rotation by the mains' moment, so the download's extra weight slowed the rotatio
 left at 61.2 KIAS, not 58.7; JSBSim 55.6), which moved the held-pull and turn-back cards. The tail strike's
 1/60 s vs 1/180 s card then failed on a sampling phase (the tail crossed 2.9 cm into the runway in one 1/60 s
 step with no force): gear.js now takes the tail contact's mean over the step. The flaps-30 flares float
-22-34 ft further, so power180.js TURN_FT is 157 (was 160); Kid's turn stays at 95 ft.
+20-35 ft further, so power180.js FLOAT_M is 109 m (was 101; TURN_FT 160 and Kid's 95 ft kept).
+Validation panel: the term switched on in full at lift-off made the wheels chatter (a 20-40% pull touched back down
+~20 ms later), so it fades in over 0.5 s after the wheels leave (not by height: that cushioned the landing flare and
+made Kid's power-off 180 bimodal, 47-238 ft). Full aft at Vr now 21.8 / 23.7° (JSBSim 21.1 / 22.6°).

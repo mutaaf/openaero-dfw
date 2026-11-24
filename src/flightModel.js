@@ -22,7 +22,7 @@ import { engineThrust, spoolEngine, throttleForThrust } from './engine.js';
 import { dynamicPressure, liftCoefficient, groundEffectFactor, dragCoefficient } from './aero.js';
 import { sideslipYawAccel, trimAoaDeg } from './autopilot.js';
 import { stepSystems, brakeMu, reversedThrust, gearLocked } from './systems.js';
-import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, wheelScrubYawHold, tailVsMainsAccel, radioAltitudeM } from './gear.js';
+import { gearConstants, gearForces, gearFriction, noseSteerYawRate, noseWheelYawHold, wheelScrubYawHold, tailVsMainsAccel } from './gear.js';
 
 const _v1 = new Vector3();
 const _v2 = new Vector3();
@@ -35,7 +35,7 @@ const _gearM = new Vector3();
 const BETA_LIN = 20 * DEG_TO_RAD;
 // Wider than any airframe's elevatorAlphaDeg, so no held stick out-pulls the restoring moment.
 const ALPHA_LIN = 90 * DEG_TO_RAD;
-const ELEV_LIFT_FADE_M = 0.5;
+const ELEV_LIFT_FADE_S = 0.5;
 
 export function stepFlightModel(body, spec, dt) {
   stepSystems(body, spec, dt);
@@ -70,10 +70,13 @@ export function stepFlightModel(body, spec, dt) {
   // The elevator's own lift beyond the trimmed one (spec.clElevator, Roskam's CLδe, 0214), as our JSBSim C172 has
   // flown it since 0203: liftCoefficient is a trimmed fit, so it already holds the tail's download at the elevator
   // that trims this α; only the deflection past that one adds or takes lift (full back stick at Vr: ~−0.1 CL).
-  // In the air only, faded in over the first ELEV_LIFT_FADE_M of wheel height: switched on in full the step the wheels
-  // left, a pull's 0.05-0.19 CL put them straight back down (lift-off chattered for ~20 ms, the validation panel).
-  if (spec.clElevator && !body.onGround) {
-    cl += elevatorLiftCl(spec, body.elevInput, body.trimAlphaDeg ?? body.aoaDeg, body.aoaDeg) * Math.min(1, radioAltitudeM(body, spec) / ELEV_LIFT_FADE_M);
+  // In the air only, faded in over ELEV_LIFT_FADE_S after the wheels leave (body.elevLiftK: 0 on the ground, 1 for an
+  // airborne spawn): switched on in full the step they left, a pull's 0.05-0.19 CL put them straight back down (lift-off
+  // chattered for ~20 ms, the validation panel). Not by height: that took a held pull's download away in the last
+  // half metre of a landing, a cushion that floated Kid's flare 100 ft long.
+  if (spec.clElevator) {
+    body.elevLiftK = body.onGround ? 0 : Math.min(1, (body.elevLiftK ?? 1) + dt / ELEV_LIFT_FADE_S);
+    if (body.elevLiftK > 0) cl += elevatorLiftCl(spec, body.elevInput, body.trimAlphaDeg ?? body.aoaDeg, body.aoaDeg) * body.elevLiftK;
   }
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
