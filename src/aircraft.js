@@ -266,6 +266,10 @@ export const AIRCRAFT_DATABASE = {
     // the nose-up elevator (most of it past the stall), and past the stall takes the elevator's power and the nose-down break from NASA CR-3201 Figs. A3/A15 (model C, δe −15°)
     // and CR-3097 Figs. A3/A21 (high-wing model B, δe 0/+23°), static rotary-balance points.
     elevatorAlphaDeg: (1.28 / 0.89) * 25.5,
+    // The elevator's lift beyond the trimmed one (flightModel.js elevatorLiftCl, 0214): Roskam's CLδe 0.43 per radian,
+    // as our JSBSim C172's aero/coefficient/CLde (0203), on the elevator that trims α (Cmα / Cmδe = 0.89 / 1.28).
+    clElevator: 0.43,
+    elevatorPerAlpha: 0.89 / 1.28,
     rollDamping: 4.2,
     yawDamping: 2.5,
     // Sideslip (flightModel.js, 0081), per radian, Roskam's Cessna 172 as in our JSBSim C172

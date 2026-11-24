@@ -121,9 +121,10 @@ describe('Cessna 172S power-off 180 at Addison 16 (flightModel, ticket 0189)', (
 
   // The coach reads the wind on each leg (power180.js legWind): down the runway, up it and across, at
   // 5 and 10 kt. Measured 2026-11-18 with Cmα̇ (0202) and the 20 ft round-out (5 / 10 kt): 160°: +172 / +28 ft,
-  // 340°: +154 / +228, 250°: +154 / +135, 070°: +152 / +149; still air +152. It aims long because the test fails
+  // 340°: +154 / +228, 250°: +154 / +135, 070°: +152 / +149; still air +152. 2026-11-24 with the elevator's lift
+  // beyond trim (0214; FLOAT_M 109): 160°: +148 / +5, 340°: +161 / +241, 250°: +150 / +132, 070°: +148 / +141. It aims long because the test fails
   // short. 15 kt is logged, not carded. How touchy it is: FLOAT_M ±3 m or TURN_FT ±3 ft moved the 10 kt cases
-  // ~25 ft (TURN_FT 163 puts 340°/10 at +253, out); a real pilot's judgement is no finer, but the coach's call is not a guarantee.
+  // ~25 ft (0202: TURN_FT 163 put 340°/10 at +253, out); a real pilot's judgement is no finer, but the coach's call is not a guarantee.
   it('in a 5 or 10 kt wind from any side, as coached: on the spot to 250 ft past it, never short', () => {
     for (const windKts of [5, 10, 15]) for (const windFromDeg of [160, 340, 250, 70]) {
       const r = power180('coach', { windKts, windFromDeg });

@@ -35,6 +35,7 @@ const _gearM = new Vector3();
 const BETA_LIN = 20 * DEG_TO_RAD;
 // Wider than any airframe's elevatorAlphaDeg, so no held stick out-pulls the restoring moment.
 const ALPHA_LIN = 90 * DEG_TO_RAD;
+const ELEV_LIFT_FADE_S = 0.5;
 
 export function stepFlightModel(body, spec, dt) {
   stepSystems(body, spec, dt);
@@ -66,6 +67,17 @@ export function stepFlightModel(body, spec, dt) {
 
   // Aerodynamic Lift & Drag Curves with Post-Stall Drop (aero.js)
   let cl = liftCoefficient(spec, aoaRad, body.flapPos);
+  // The elevator's own lift beyond the trimmed one (spec.clElevator, Roskam's CLδe, 0214), as our JSBSim C172 has
+  // flown it since 0203: liftCoefficient is a trimmed fit, so it already holds the tail's download at the elevator
+  // that trims this α; only the deflection past that one adds or takes lift (full back stick at Vr: ~−0.1 CL).
+  // In the air only, faded in over ELEV_LIFT_FADE_S after the wheels leave (body.elevLiftK: 0 on the ground, 1 for an
+  // airborne spawn): switched on in full the step they left, a pull's 0.05-0.19 CL put them straight back down (lift-off
+  // chattered for ~20 ms, the validation panel). Not by height: that took a held pull's download away in the last
+  // half metre of a landing, a cushion that floated Kid's flare 100 ft long.
+  if (spec.clElevator) {
+    body.elevLiftK = body.onGround ? 0 : Math.min(1, (body.elevLiftK ?? 1) + dt / ELEV_LIFT_FADE_S);
+    if (body.elevLiftK > 0) cl += elevatorLiftCl(spec, body.elevInput, body.trimAlphaDeg ?? body.aoaDeg, body.aoaDeg) * body.elevLiftK;
+  }
 
   // Induced Drag Polar + Ground Effect Factor (aero.js)
   const groundEffect = groundEffectFactor(body.pos.y - body.groundY, spec.wingSpanM);
@@ -122,7 +134,7 @@ export function stepFlightModel(body, spec, dt) {
   let normalForce = 0, held = false;
   if (struts) {
     // A wheel can reach the ground only when the CG is lower than the longest leg below it.
-    if (body.pos.y <= body.groundY + spec.gearHeight + spec.gear.noseZ + 1) normalForce = gearForces(body, spec, totalForceWorld, _gearM);
+    if (body.pos.y <= body.groundY + spec.gearHeight + spec.gear.noseZ + 1) normalForce = gearForces(body, spec, totalForceWorld, _gearM, dt);
   } else if (body.pos.y <= gh + 0.01) {
     const penetration = gh - body.pos.y;
     const kSpring = spec.massKg * 85;
@@ -295,6 +307,22 @@ export function stepFlightModel(body, spec, dt) {
       if ((_euler.x >= maxP && body.angVel.x > 0) || (_euler.x <= minP && body.angVel.x < 0)) body.angVel.x = 0;
     }
   }
+}
+
+// CLδe·(δe − δe_trim(α)) (0214), Roskam's CLδe beyond the elevator that trims this α, as our JSBSim C172's
+// aero/coefficient/CLde and aero/function/elevator-trim-rad: the trimming elevator is Cmα·α / Cmδe
+// (spec.elevatorPerAlpha) over the elevator's share of its power at that α (spec.pitchBreak's η, src/pitchBreak.js,
+// by the stick's side as the pitch law reads it; 1 until the chunk loads), held
+// at the clean stall's α past it (no trim exists there).
+// In flightModel.js's pitch law the stick moves the trimmed α by elevatorAlphaDeg (its elevator is that over
+// Cmδe / Cmα: the C172's 25.5° mean throw) and the trim sets the α it flies, so the elevator beyond trim is the
+// stick's plus the one that α's distance from the trimmed α calls for, at the same η. Any steady pre-stall flight
+// (a held stick included) then adds nothing; the lift comes in a transient and past the stall, where the trim
+// holds (full back stick at Vr: ~−0.1 CL).
+export function elevatorLiftCl(spec, elevInput, trimAlphaDeg, aoaDeg) {
+  const a = MathUtils.clamp(aoaDeg, -0.2 * RAD_TO_DEG, spec.alphaStallDegByFlap[0]);
+  const eta = spec.pitchBreak ? spec.pitchBreak.eta(a, elevInput) : 1;
+  return spec.clElevator * spec.elevatorPerAlpha * DEG_TO_RAD * (elevInput * spec.elevatorAlphaDeg + (a - trimAlphaDeg) / eta);
 }
 
 // The steady roll rate (rad/s) per unit of aileron at true airspeed `tasMps` (0156). An airframe with

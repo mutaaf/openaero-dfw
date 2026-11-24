@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3, Quaternion, Euler } from 'three';
-import { stepFlightModel } from '../../src/flightModel.js';
+import { stepFlightModel, elevatorLiftCl } from '../../src/flightModel.js';
+import { gearConstants, gearForces } from '../../src/gear.js';
 import { fbwLoadLimit, fbwPushLimit } from '../../src/fbw.js';
 import { AIRCRAFT_DATABASE } from '../../src/aircraft.js';
 import { dynamicPressure, liftCoefficient, dragCoefficient } from '../../src/aero.js';
@@ -163,5 +164,64 @@ describe('seat load factor (body.loadFactor, the HUD G)', () => {
     stepFlightModel(b, spec, 1 / 120);
     const lift = liftCoefficient(spec, 5 * DEG_TO_RAD, 0) * dynamicPressure(35) * spec.wingAreaM2;
     expect(b.loadFactor).toBeCloseTo((lift * Math.cos(5 * DEG_TO_RAD) + dragCoefficient(spec, liftCoefficient(spec, 5 * DEG_TO_RAD, 0), true, 0, 1, 0) * dynamicPressure(35) * spec.wingAreaM2 * Math.sin(5 * DEG_TO_RAD)) / (spec.massKg * 9.80665), 2);
+  });
+});
+
+// Ticket 0214: Roskam's CLδe 0.43 on the elevator beyond the one that trims α, as our JSBSim C172 (0203).
+describe('the elevator\'s lift beyond trim (C172, 0214)', () => {
+  const c172 = AIRCRAFT_DATABASE.c172;
+  const E = c172.elevatorAlphaDeg;
+  it('only the C172 carries it', () => {
+    expect(c172.clElevator).toBe(0.43);
+    expect(AIRCRAFT_DATABASE.b738.clElevator).toBeUndefined();
+    expect(AIRCRAFT_DATABASE.f16.clElevator).toBeUndefined();
+  });
+  it('trimmed, or holding any stick in a steady pre-stall flight, it adds nothing (the lift table is a trimmed fit)', () => {
+    expect(elevatorLiftCl(c172, 0, 4, 4)).toBeCloseTo(0, 12);
+    // The pitch law's steady α for a held stick s is trimα − s·E·η: the elevator there trims that α.
+    for (const eta of [1, 0.8]) {
+      const s172 = { ...c172, pitchBreak: { eta: (a, elev) => (elev < 0 ? eta : 1), breakDeg: () => 0 } };
+      for (const [s, trim] of [[-0.3, 2], [0.1, 6]]) {
+        const etaS = s < 0 ? eta : 1;
+        expect(elevatorLiftCl(s172, s, trim, trim - s * E * etaS)).toBeCloseTo(0, 12);
+      }
+    }
+  });
+  it('full back stick costs lift as JSBSim\'s does: ~−0.2 CL at a rotation\'s α 1°, −0.11 to −0.18 past the stall', () => {
+    expect(elevatorLiftCl(c172, -1, 2.9, 1)).toBeCloseTo(-0.2, 1);
+    const past = elevatorLiftCl(c172, -1, 2.9, 19); // α held at the clean stall, 14.1°
+    expect(past).toBeLessThan(-0.11);
+    expect(past).toBeGreaterThan(-0.18);
+    // Pushing adds lift; it is linear in the stick.
+    expect(elevatorLiftCl(c172, 0.5, 4, 4)).toBeGreaterThan(0);
+  });
+});
+
+// Ticket 0214: the tail's stiff contact (2.9e5 N/m on ~120 kg) is averaged over the step, so a tail that crosses
+// into the runway during a step meets its force in that step. On a prescribed path the step's mean is exact at any
+// sub-step (the old start-of-step read missed most of the first step); flown, it never adds energy (at 1/60 s it
+// damps a little more than at 1/180 s: the physics panel's 1-DOF check, 0.13 vs 0.51 m/s of rebound).
+describe('the tail contact is averaged over the step (C172, 0214)', () => {
+  const c172 = AIRCRAFT_DATABASE.c172;
+  const impulse = (dt) => {
+    const b = {
+      pos: new Vector3(), vel: new Vector3(0, -1.7, 0), angVel: new Vector3(), groundY: 0,
+      quat: new Quaternion().setFromEuler(new Euler(20 * DEG_TO_RAD, 0, 0, 'YXZ')),
+    };
+    const tail = gearConstants(c172).wheels[3].clone().applyQuaternion(b.quat);
+    b.pos.y = 0.013 - tail.y; // the tail 1.3 cm over the runway, coming down at 1.7 m/s (a rotation's)
+    let J = 0;
+    for (let i = Math.round(1 / 30 / dt); i > 0; i--) { // 1/30 s: two steps at 1/60 s
+      gearForces(b, c172, new Vector3(), new Vector3(), dt);
+      J += b.wheelLoads[3] * dt;
+      b.pos.y += b.vel.y * dt;
+    }
+    return J;
+  };
+  it('on a prescribed path, the impulse at 1/60, 1/120 and 1/180 s is 1/6000 s\'s (within 3%)', () => {
+    const ref = impulse(1 / 6000);
+    console.log(`[tail] impulse over 1/30 s: 1/6000 s ${ref.toFixed(1)}, ${[60, 120, 180].map((hz) => `1/${hz} s ${impulse(1 / hz).toFixed(1)}`).join(', ')} N·s`);
+    expect(ref).toBeGreaterThan(0);
+    for (const hz of [60, 120, 180]) expect(Math.abs(impulse(1 / hz) - ref) / ref).toBeLessThan(0.03);
   });
 });

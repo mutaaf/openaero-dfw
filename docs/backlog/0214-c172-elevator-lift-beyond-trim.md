@@ -1,12 +1,12 @@
 ---
 id: 0214
 title: flightModel.js's Cessna loses the lift that elevator past trim really costs (Roskam's CLδe, as JSBSim since 0203)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-21
-pr:
+pr: 320
 ---
 
 ## Why
@@ -24,11 +24,11 @@ own pitch law (Cmα / Cmδe and the elevator's post-stall effectiveness, src/pit
 the POH stall speeds do not move. Only for an airframe that carries the data (spec field), not the 737 or F-16.
 
 ## Acceptance criteria
-- [ ] The two `KNOWN GAP (0214)` cards pass and are promoted to `it`
-- [ ] The C172's flown stall speeds stay within 0.5 kt of stallSpeedKts (the 0203 card) on both models
-- [ ] tests/flight/power180.test.js, takeoffCoach, shortField and powerOnStall stay green (the 2026-11-18 lesson:
+- [x] The two `KNOWN GAP (0214)` cards pass and are promoted to `it`
+- [x] The C172's flown stall speeds stay within 0.5 kt of stallSpeedKts (the 0203 card) on both models
+- [x] tests/flight/power180.test.js, takeoffCoach, shortField and powerOnStall stay green (the 2026-11-18 lesson:
       anything that re-times the flare moves power180's calm case)
-- [ ] No existing card changes tolerance
+- [x] No existing card changes tolerance
 
 ## Test plan
 `npx vitest run tests/flight`; then the full `npm test` and `node scripts/check-gaps.mjs`.
@@ -40,3 +40,17 @@ The 737 and F-16 (no published CLδe here); JSBSim's c172.xml (0203 did it).
 Promoted: the source is Roskam's CLδe 0.43, already cited and used by 0203 in JSBSim, so no new document is
 needed; the ticket names the two `KNOWN GAP (0214)` cards, and no draft PR holds it. Pair the Builder run with
 `node scripts/check-gaps.mjs`.
+
+## Builder note (2026-11-24)
+flightModel.js elevatorLiftCl: CLδe 0.43 × (the stick's elevator + α's distance from the trimmed α, both over
+Cmδe/Cmα at pitchBreak's η by the stick's side, α held at the clean stall), zero in any steady pre-stall flight.
+Full aft at Vr: peak pitch under 5 ft 21.3 / 23.5° against JSBSim's 21.1 / 22.6° (was 23.3 / 24.4°); peak α
+19.0 / 18.9° (JSBSim 19.1 / 19.0°). In the air only: on the runway gear.js tailVsMainsAccel scales the elevator's
+rotation by the mains' moment, so the download's extra weight slowed the rotation twice (a 40% pull's nose wheel
+left at 61.2 KIAS, not 58.7; JSBSim 55.6), which moved the held-pull and turn-back cards. The tail strike's
+1/60 s vs 1/180 s card then failed on a sampling phase (the tail crossed 2.9 cm into the runway in one 1/60 s
+step with no force): gear.js now takes the tail contact's mean over the step. The flaps-30 flares float
+20-35 ft further, so power180.js FLOAT_M is 109 m (was 101; TURN_FT 160 and Kid's 95 ft kept).
+Validation panel: the term switched on in full at lift-off made the wheels chatter (a 20-40% pull touched back down
+~20 ms later), so it fades in over 0.5 s after the wheels leave (not by height: that cushioned the landing flare and
+made Kid's power-off 180 bimodal, 47-238 ft). Full aft at Vr now 21.8 / 23.7° (JSBSim 21.1 / 22.6°).

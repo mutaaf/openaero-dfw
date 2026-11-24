@@ -78,7 +78,7 @@ describe('takeoff coach: the rotate attitude is a takeoff (ticket 0093)', () => 
 
 // The Cessna yanked to full aft stick on the roll (a kid's pull, early or at Vr): the coach's
 // "ease the nose" must come before the tail meets the runway (gear.js wheelLoads[3], 0144). It
-// first touches at ~14.2° pulled at 35 kt (static struts), ~15.2° at Vr: the call is set 1° short
+// first touches at ~14.2° pulled at 35 kt (static struts), ~15.2° at Vr (0214's step-mean contact: ~0.2-0.5° earlier): the call is set 1° short
 // of 13.7° (takeoffCoach.js tailStrikeDeg).
 describe('takeoff coach: "ease the nose" comes before the Cessna\'s tail strikes (ticket 0093)', () => {
   for (const pullKts of [35, 45, 55]) {
