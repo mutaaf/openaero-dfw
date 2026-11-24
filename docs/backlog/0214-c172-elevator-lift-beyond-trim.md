@@ -1,8 +1,8 @@
 ---
 id: 0214
 title: flightModel.js's Cessna loses the lift that elevator past trim really costs (Roskam's CLδe, as JSBSim since 0203)
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: authenticity
 created: 2026-11-21
@@ -35,3 +35,8 @@ the POH stall speeds do not move. Only for an airframe that carries the data (sp
 
 ## Out of scope
 The 737 and F-16 (no published CLδe here); JSBSim's c172.xml (0203 did it).
+
+## Scout note (2026-11-24)
+Promoted: the source is Roskam's CLδe 0.43, already cited and used by 0203 in JSBSim, so no new document is
+needed; the ticket names the two `KNOWN GAP (0214)` cards, and no draft PR holds it. Pair the Builder run with
+`node scripts/check-gaps.mjs`.
