@@ -100,8 +100,8 @@ Object.assign(XT_TEXT, {
 });
 Object.assign(XT_TOUCH, {
   xtPower: 'Throttle to the top, keep the stick into the wind',
-  xtRotate: `${VR_KTS} knots: stick down a little for a firm, definite lift-off`,
-  xtKidRotate: `${VR_KTS} knots: hold the stick down to lift off`,
+  xtRotate: `${VR_KTS} knots: stick up a little (nose up) for a firm, definite lift-off`,
+  xtKidRotate: `${VR_KTS} knots: hold the stick up to lift off`,
 });
 Object.assign(DRILL_TEXT, XT_TEXT);
 Object.assign(TOUCH_WORDS, XT_TOUCH);

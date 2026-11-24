@@ -88,6 +88,8 @@ describe('xwTakeoff.js coach', () => {
     expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...base(), throttle: 1, iasKts: 30, ail: 1, crossM: 6 })]).toBe('Right of the centreline: left rudder (Q)');
     expect(TOUCH_WORDS.xtLineL).toBe('Left of the centreline: tap RUD ▶');
     expect(xwTakeoffPrompt(st, { ...base(), throttle: 1, iasKts: VR_KTS })).toBe('xtRotate');
+    expect(TOUCH_WORDS.xtRotate).toMatch(/stick up a little \(nose up\)/); // the touch stick: up is nose up (softField.js's words)
+    expect(TOUCH_WORDS.xtKidRotate).toMatch(/hold the stick up/);
     const air = { ...base(), onGround: false, throttle: 1, iasKts: 65 };
     xwTakeoffStep(st, { ...air, wheelFt: 2 }, 0.1);
     expect(DRILL_TEXT[xwTakeoffPrompt(st, { ...air, wheelFt: 20 })]).toBe('Flying! Keep the right wing a little low, rudder holds the line');
