@@ -298,8 +298,24 @@ src/aroundPoint.js  turns around a point (0211, lazy chunk loaded with `turns_ar
                     the circle's, under the heading box in the takeoff call's slot; no active runway while it is live) because a high wing can hide the pole in a left turn (AFH p. 7-7). Kid: the guide's circleBankDeg (Vt²/d plus a
                     spring to the radius and radial damping, the handbook's tan φ = Vg²/(gR)), the autothrottle on 90, no auto flaps
                     while it is live; Kid and Learner get a 53° cap (full stick 45°). The card's track plot is src/trackPlot.js (an SVG
-                    in results.js's chunk). Kept once graded (its wind flies on); another mission or airframe ends it (endAroundPoint).
-                    Cards: tests/flight/aroundPoint.test.js (one bank = an oval, D; banking for the groundspeed = A, four winds)
+                    in results.js's chunk). Kept once graded (its wind flies on); another mission or airframe ends it (endGroundRef).
+                    Cards: tests/flight/aroundPoint.test.js (one bank = an oval, D; banking for the groundspeed = A, four winds).
+                    main.js holds it (or rectCourse.js's) in sim.groundRef with grLib its chunk: both export the same calls
+                    (create, live, simStep, coachWord, grade, PLACE, drawHud, kidGuide, makeMarker, seatMarker, debugSnap, SNAP
+                    = openaeroDebug's field name).
+src/rectCourse.js   the rectangular course (0223, lazy chunk loaded with `rectangular_course`, `rectCourse: true`): the C172 at 90 KIAS,
+                    1,000 ft AGL over the same fields in aroundPoint.js's scenario 12 kt south wind, a 1/2 by 3/4 mile field with a lit
+                    pole at each corner, two left-hand laps 1,320 ft (1/4 mile) off its edges, entered on the downwind leg (east side,
+                    heading north) half a mile short of abeam (FAA-H-8083-3C ch. 7). The distance is to the field's nearest edge or
+                    corner (fieldDistance, signed), so the path asked is the field grown by 1,320 ft: legs and quarter circles from
+                    abeam each corner. Held at the spawn until the player flies; the course starts abeam the field and ends after 720°
+                    round its centre. Graded as aroundPoint.js (spread ±150 ft a B, ±250 ft a C, ±350 ft a D; average vs 1,320 ft,
+                    ±100 ft, ±10 kt, 45°); 3x the distance out, over the field, 500 ft off, a stall or 600 s fail. rc* coach words (the
+                    corner's roll by the wind behind, the crab by the wind's side, which way when wide or close); the HUD's FIELD readout
+                    (an arrow to the nearest edge); Kid's guide rectBankDeg (Vt²/R round the corners, led 60 m, a spring and damping on
+                    the legs, i.e. a crab); the 53° cap, 90 KIAS, no auto flaps while live; the card's plot draws the field, the path
+                    asked (an SVG rect with rx) and the corner poles (trackPlot.js track.rect). Cards: tests/flight/rectCourse.test.js
+                    (crab + bank for the groundspeed = S/A in four winds; compass headings with no crab and a fixed 20° = D)
 src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_slow_flight`): the C172 clean at 95 KIAS,
                     4,500 ft AGL over Grapevine Lake; slow to the band and hold it, graded to FAA-S-ACS-6C Area VII Task A
                     (S5: altitude ±100 ft, heading ±10°, airspeed +10/−0; S4: no stall warning). The band is the airplane's
@@ -887,6 +903,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-24 (0223): 199.45 kB (the rectangular course's mission entry and blurb, its lazy import beside aroundPoint.js's in one ground-reference slot (sim.groundRef, grLib), the snapshot's computed field, +0.28 kB over 0214's 199.17; rectCourse.js is a lazy chunk).
 2026-11-24 (0214): 199.17 kB (the C172's elevator lift beyond trim: flightModel.js elevatorLiftCl, its call and lift-off fade, gear.js's step-mean tail contact, +0.25 kB over 0221's 198.92).
 2026-11-24 (0221): 198.92 kB (the left-handed chip's wiring (setHand, the stored hand, the wind box's side and height), +0.19 kB over 0220's 198.73; the mirror is CSS).
 2026-11-24 (0220): 198.73 kB (the crosswind takeoff's mission entry and blurb, its lazy import and wiring (checkXwTakeoff, the coach's ground and air prompts, currentWeather's lesson wind, the pedals' and trim's toggles, checkTouchdown's skip, the snapshot's xwTakeoff, the touch pedal's reset at the lift-off, the coach's and checkTouchdown's skip guards), +0.44 kB over 0219's 198.29; xwTakeoff.js is a lazy chunk).
