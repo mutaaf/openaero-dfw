@@ -1,7 +1,7 @@
 ---
 id: 0183
 title: Ground effect's induced-drag curve matches PHAK's 1.4 / 23.5 / 47.6% (fix aero.js, re-measure flare and landing cards)
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: authenticity

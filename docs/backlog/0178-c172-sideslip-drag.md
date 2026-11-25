@@ -1,7 +1,7 @@
 ---
 id: 0178
 title: The Cessna's forward slip loses height: flightModel.js gets drag due to sideslip (Roskam CDβ)
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: authenticity

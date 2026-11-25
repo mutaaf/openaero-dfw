@@ -1,7 +1,7 @@
 ---
 id: 0129
 title: 737 ceiling at 65 t: a cited buffet boundary or stratosphere thrust point closes the last ~70 fpm above FL410
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: authenticity
