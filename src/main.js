@@ -1182,7 +1182,7 @@ function startDrills(mission) {
   if (mission.xwTakeoff) loadDrill(mission, xtLib, () => import('./xwTakeoff.js'), (lib) => { xtLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.xwTakeoff = lib.createXwTakeoff(runwayEnd(mission.airport, mission.rwy)); refreshWeather(); } });
   if (mission.softField) loadDrill(mission, sfoLib, () => import('./softField.js'), (lib) => { sfoLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.softField = lib.createSoftField(runwayEnd(mission.airport, mission.rwy)); sim.surfaceMu = lib.SURFACE_MU; } });
   // The short-field takeoff (0225): the brakes held from the spawn (POH Section 4: brakes, full throttle, release).
-  if (mission.shortTakeoff) loadDrill(mission, stoLib, () => import('./shortTakeoff.js'), (lib) => { stoLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.shortTakeoff = lib.createShortTakeoff(runwayEnd(mission.airport, mission.rwy)); sim.brakesOn = true; } });
+  if (mission.shortTakeoff) loadDrill(mission, stoLib, () => import('./shortTakeoff.js'), (lib) => { stoLib = lib; if (sim.aircraftKey === mission.aircraft) { sim.shortTakeoff = lib.createShortTakeoff(runwayEnd(mission.airport, mission.rwy), mission.hot); sim.brakesOn = true; refreshWeather(); } });
   if (mission.wake) loadDrill(mission, wakeLib, () => import('./wake.js'), (lib) => { wakeLib = lib; if (sim.aircraftKey === mission.aircraft) sim.wake = lib.createWake(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.upset) loadDrill(mission, upLib, () => import('./upset.js'), (lib) => { upLib = lib; sim.upset = lib.createUpset(mission.upset); });
   if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
@@ -1770,7 +1770,7 @@ function currentWeather() {
   const field = sim.activeEnd ? sim.activeEnd.airport : 'KDFW';
   if (sim.dh) return ifrLib.WX;
   const wx = sim.wxByIcao[field] || sim.wxByIcao.KDFW || scenarioWeather();
-  return sim.wingLow ? wlLib.lessonWx(sim.wingLow, wx) : sim.xwTakeoff ? xtLib.lessonWx(sim.xwTakeoff, wx) : sim.groundRef ? sim.groundRef.wx : wx; // 0188: the lesson's crosswind; 0211's and 0223's wind
+  return sim.wingLow ? wlLib.lessonWx(sim.wingLow, wx) : sim.xwTakeoff ? xtLib.lessonWx(sim.xwTakeoff, wx) : sim.groundRef ? sim.groundRef.wx : sim.shortTakeoff?.wx || wx; // 0188: the lesson's crosswind; 0211's and 0223's wind; 0226's hot day
 }
 
 function refreshWeather() {
@@ -3318,8 +3318,10 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.engineOut = null;
   sim.rto = null;
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.noFlap = sim.emergencyDescent = null;
+  const hotDay = sim.shortTakeoff?.hot;
   if (sim.shortTakeoff) sim.brakesOn = false; // 0225: the lesson's held brakes go with it (device panel)
   sim.softField = sim.surfaceMu = sim.shortTakeoff = null;
+  if (hotDay) refreshWeather(); // 0226: and its scenario air
   if (sim.wingLow || sim.xwTakeoff) { sim.wingLow = sim.xwTakeoff = null; sim.touchYaw = 0; refreshWeather(); } // 0188, 0220: the lesson's wind goes with it
   endGroundRef(); // 0211: and this one's, with its pole
   sim.windshear = null;
@@ -3526,7 +3528,7 @@ byId('btnGear').addEventListener('click', () => {
 // it comes up a notch, the one direction a go-around needs.
 function moveFlapLever() {
   if (flapsStuck()) { if (byId('toast').classList.contains('hidden')) showToast('Flaps stuck at 0° for this lesson'); return; } // 0210: once, not per key repeat
-  if (goAroundActive() || sim.stallDrill?.flapsUp) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1); // the power-on stall's climb-away (0191) too
+  if (goAroundActive() || sim.stallDrill?.flapsUp || sim.shortTakeoff?.flapsUp) sim.flapsIndex = Math.max(0, sim.flapsIndex - 1); // the power-on stall's climb-away (0191) too
   else sim.flapsIndex = (sim.flapsIndex + 1) % (sim.spec.flapDetentsDeg ?? sim.flapAngles).length;
 }
 byId('btnFlaps').addEventListener('click', moveFlapLever);

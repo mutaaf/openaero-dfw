@@ -431,6 +431,22 @@ src/shortTakeoff.js short-field takeoff lesson (0225, lazy chunk loaded with `ka
                     6-11: not established to shorten the run; the sim agrees). Kid: its brakes come off at full power (the chunk clears
                     sim.brakesOn), its card is the roll and the 50 ft. The takeoff callouts are off in it. tests/unit/shortTakeoff.test.js,
                     tests/flight/shortTakeoff.test.js (both models: POH technique S, early rotation B, flaps up D), e2e shortTakeoff(.mobile).spec.js.
+                    The hot-day takeoff (0226, `kads_16_hot_takeoff`, `shortTakeoff: true, hot: true`; createShortTakeoff(end, true)):
+                    the same lesson on a scenario day, st.wx = hotWx (38 °C, 29.92, calm, live false: main.js currentWeather returns it
+                    while the lesson is loaded, so the start screen's DA line reads 3,500 ft (scenario, 38 °C) and the ribbon SCENARIO WX;
+                    another mission gives the day's weather back). hto* words on the brakes give the density altitude and Fig. 5-5's roll
+                    against a cool day's (15 °C, same field), the speeds stay the short field's; past 50 ft above FLAPS_UP_KTS 60 (POH step
+                    8) st.flapsUp lets main.js moveFlapLever raise the lever a notch and the coach says flaps up; graded at 400 ft. The card
+                    puts each distance beside the 15 °C one and adds the climb from 200 to 400 ft against POH Fig. 5-6 (pohClimbFpm, p.
+                    5-17: 625 vs 701 fpm at Addison; off Vy ±8 kt held to 60 and named). A reject (power under half below 51 KIAS) is
+                    judged by rejectCall: the roll still needed to 54 KIAS (the game's lift-off) on a = A − B v² fitted through 15 kt and
+                    now, against 0.75 of the runway left: the right call grades A (90), a needless one D. The acceleration is measured
+                    only at the power held with the brakes off; the reject is judged from where that ended (st.cut), and only after 1 s of
+                    steady power at half or more (physics panel: averaged through a ramped throttle and brakes, a needless stop read A). The game's Cessna flies away
+                    when hauled off where a cool day lifted off (no settle-back, printed): the card shows a slower lift-off, no cap.
+                    tests/unit/hotTakeoff.test.js, tests/flight/hotTakeoff.test.js (both models: hot/cool roll x 1.15-1.23 vs the POH's
+                    1.18, climb x 0.83-0.95 vs 0.89, POH pilot S, the reject estimate x 0.83-0.97 of the roll flown), e2e
+                    hotTakeoff(.mobile).spec.js.
 src/xwTakeoff.js    crosswind takeoff lesson (0220, lazy chunk loaded with `kads_crosswind_takeoff`, `xwTakeoff: true`, Drills group):
                     the C172 on KADS 16 flaps up, full length, in the wing-low lesson's wind (wingLow.js liveSuits/scenarioWx: Addison's
                     own live METAR 5-15 kt across, else 12 kt from the right, labelled SCENARIO; frozen once the roll starts). AFH
@@ -948,6 +964,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-26 (0226): 200.31 kB (the hot-day lesson's mission entry and blurb, createShortTakeoff's hot argument, currentWeather's
+lesson air and moveFlapLever's flaps-up hook, +0.20 kB over 0225's 200.11; the rest rides in shortTakeoff.js's lazy chunk).
 2026-11-26 (0225): 200.11 kB (the short-field takeoff's mission entry and blurb, its lazy import and wiring (checkShortTakeoff, the brakes set at the spawn and let go with an airplane switch, the coach's ground and air prompts, checkTouchdown's skip, the callouts off, the snapshot's shortTakeoff), +0.33 kB over 0224's 199.78; shortTakeoff.js is a lazy chunk).
 2026-11-26 (0224): 199.78 kB (the S-turns' mission entry and blurb, its lazy import in the ground-reference slot (grLibs), tower.js's quiet key, +0.21 kB over 0223's 199.57; sTurns.js is a lazy chunk).
 2026-11-24 (0223): 199.57 kB (the rectangular course's mission entry and blurb, its lazy import beside aroundPoint.js's in one ground-reference slot (sim.groundRef, grLib), the snapshot's computed field, placeCoach dropping the readout below a card over it, +0.40 kB over 0214's 199.17; rectCourse.js is a lazy chunk).
