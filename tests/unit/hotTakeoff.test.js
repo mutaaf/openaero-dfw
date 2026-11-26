@@ -1,0 +1,189 @@
+// Hot-day takeoff lesson (ticket 0226): shortTakeoff.js's hot day: the scenario air, POH Fig. 5-6, the words, the climb, the
+// reject and the grade beside a cool day's figures.
+import { describe, it, expect } from 'vitest';
+import { runwayEnd } from '../../src/airports.js';
+import { DRILL_TEXT, TOUCH_WORDS, coachText } from '../../src/coach.js';
+import { densityAltitudeFt, thinAir } from '../../src/atmosphere.js';
+import { missionByKey } from '../../src/missions.js';
+import { missionFromLink } from '../../src/deeplink.js';
+import {
+  createShortTakeoff, shortTakeoffStep, shortTakeoffTarget, gradeShortTakeoff, pohTakeoff, pohClimbFpm, rejectCall, hotWx,
+  CLIMB, FLAPS, OBSTACLE_FT, DONE_FT, HOT_DONE_FT, HOT_C, COOL_C, FAIL_CAP, REJECT_SCORE, REJECT_MARGIN, REJECT_LOF_KTS, FLAPS_UP_KTS,
+  HOT_TAKEOFF_KEY,
+} from '../../src/shortTakeoff.js';
+import { M_TO_FT } from '../../src/constants.js';
+
+const E16 = runwayEnd('KADS', '16');
+const HOT = pohTakeoff(E16.elevFt, 29.92, HOT_C);
+const base = (o = {}) => ({ brakes: false, throttle: 1, flapsIndex: FLAPS, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, alongM: 0, leftM: 2000,
+  crossM: 0, halfWidthM: 15, pitchDeg: 0, tailOn: false, poh: HOT, kid: false, ...o });
+const ftM = (ft) => ft / M_TO_FT;
+
+// A whole hot-day lesson: the roll, the lift-off, 50 ft, flaps up, then 200 to 400 ft in climbS at climbKts.
+function lesson({ rollFt = 1200, obstFt = 2040, liftKts = 52, obstKts = 56, climbS = 20, climbKts = 74, kid = false } = {}) {
+  const st = createShortTakeoff(E16, true);
+  shortTakeoffStep(st, base({ brakes: true }), 1);
+  shortTakeoffStep(st, base(), 0.1);
+  for (let k = 10; k < liftKts; k += 5) shortTakeoffStep(st, base({ iasKts: k, gsKts: k, alongM: ftM(rollFt) * k / liftKts, pitchDeg: k >= 45 ? 10 : 0 }), 1);
+  shortTakeoffStep(st, base({ onGround: false, wheelFt: 6, iasKts: liftKts, gsKts: liftKts, alongM: ftM(rollFt), pitchDeg: 10 }), 0.5);
+  shortTakeoffStep(st, base({ onGround: false, wheelFt: OBSTACLE_FT, iasKts: obstKts, gsKts: obstKts, alongM: ftM(obstFt) }), 1);
+  expect(shortTakeoffStep(st, base({ onGround: false, wheelFt: DONE_FT, iasKts: climbKts, alongM: ftM(obstFt + 2000) }), 1)).toBe(''); // the hot day goes on to 400 ft
+  shortTakeoffStep(st, base({ onGround: false, wheelFt: 300, iasKts: climbKts }), climbS / 2);
+  expect(shortTakeoffStep(st, base({ onGround: false, wheelFt: HOT_DONE_FT, iasKts: climbKts }), climbS / 2)).toBe('done');
+  return { st, r: gradeShortTakeoff(st, kid) };
+}
+
+describe('hot-day takeoff (0226): the scenario air', () => {
+  it('is a Drills mission at Addison 16 on the short-field lesson, hot; deep-linkable, not "fly from Addison"', () => {
+    expect(missionByKey(HOT_TAKEOFF_KEY)).toMatchObject({ kind: 'takeoff', airport: 'KADS', rwy: '16', aircraft: 'c172', flaps: FLAPS, fullLength: true, shortTakeoff: true, hot: true, group: 'drills' });
+    expect(missionFromLink(`?mission=${HOT_TAKEOFF_KEY}`)).toBe(HOT_TAKEOFF_KEY);
+    expect(missionFromLink('?airport=KADS')).toBe('kads_16_final');
+    expect(missionByKey('kads_16_short_field_takeoff').hot).toBeUndefined();
+  });
+  it('a labelled scenario (never live): 38 °C, 29.92, calm; density altitude ~3,500 ft, thin air', () => {
+    const wx = hotWx(E16);
+    expect(wx).toMatchObject({ live: false, tempC: 38, altimInHg: 29.92, windKts: 0, icao: 'KADS' });
+    expect(wx.raw).toMatch(/^SCENARIO KADS 00000KT .* 38\/16 A2992$/);
+    const st = createShortTakeoff(E16, true);
+    expect(st.wx).toEqual(wx);
+    expect(st.daFt).toBeCloseTo(densityAltitudeFt(E16.elevFt, 29.92, 38), 6);
+    expect(st.daFt).toBeGreaterThan(3400); expect(st.daFt).toBeLessThan(3600);
+    expect(st.daFt - E16.elevFt).toBeGreaterThan(2800); // ~2,880 ft above the field (the ticket's "> 4,000" needs ~47 °C)
+    expect(thinAir(st.daFt, E16.elevFt)).toBe(true);
+    expect(createShortTakeoff(E16).wx).toBeNull(); // the short-field lesson flies today's air
+  });
+  it('POH Fig. 5-6 at its own points and between them; the hot day climbs ~11% less than a cool one at Addison', () => {
+    expect(pohClimbFpm(0, 29.92, 20)).toBe(710);
+    expect(pohClimbFpm(2000, 29.92, 40)).toBe(560);
+    expect(pohClimbFpm(10000, 29.92, -20)).toBe(CLIMB[5][0]);
+    expect(pohClimbFpm(0, 29.92, 15)).toBeCloseTo(728.75, 6); // the c172 card's 729
+    expect(pohClimbFpm(1000, 29.92, 30)).toBeCloseTo((710 + 645 + 625 + 560) / 4, 6);
+    const hot = pohClimbFpm(E16.elevFt, 29.92, HOT_C), cool = pohClimbFpm(E16.elevFt, 29.92, COOL_C);
+    expect(hot).toBeCloseTo(625, 0); expect(cool).toBeCloseTo(701, 0);
+    expect(hot / cool).toBeGreaterThan(0.85); expect(hot / cool).toBeLessThan(0.92);
+  });
+});
+
+describe('hot-day takeoff (0226): the coach', () => {
+  it('the density altitude and the handbook roll before the brakes come off; the same speeds', () => {
+    const st = createShortTakeoff(E16, true);
+    expect(shortTakeoffTarget(st, base({ brakes: true, flapsIndex: 0, throttle: 0 }))).toBe('htoFlaps');
+    expect(shortTakeoffTarget(st, base({ brakes: true, throttle: 0 }))).toBe('htoPower');
+    expect(shortTakeoffTarget(st, base({ brakes: true }))).toBe('htoRelease');
+    expect(shortTakeoffTarget(st, base({ brakes: true, kid: true }))).toBe('htoKidPower');
+    expect(DRILL_TEXT.htoFlaps).toBe('Hot day (scenario 38 °C): density altitude 3,500 ft. Flaps 10°: press F');
+    expect(DRILL_TEXT.htoPower).toBe('Scenario 38 °C, density altitude 3,500 ft: the handbook roll is 1,200 ft, not 1,020. Hold Shift: full power');
+    expect(coachText('htoPower', { touch: true })).toMatch(/1,200 ft, not 1,020\. Throttle to the top$/);
+    expect(DRILL_TEXT.htoRelease).toMatch(/The same 45 knots, a longer roll \(1,200 ft\)\. Let the brakes go \(B\)/);
+    expect(TOUCH_WORDS.htoRelease).toMatch(/Tap BRAKES/);
+    // The short-field lesson keeps its own words.
+    expect(shortTakeoffTarget(createShortTakeoff(E16), base({ brakes: true }))).toBe('stoRelease');
+    // The roll and the rotation are the short-field lesson's: 45 knots, as on a cool day.
+    shortTakeoffStep(st, base(), 0.1);
+    expect(shortTakeoffTarget(st, base({ iasKts: 30, gsKts: 30 }))).toBe('stoRoll');
+    expect(shortTakeoffTarget(st, base({ iasKts: 46, gsKts: 46 }))).toBe('stoRotate');
+  });
+  it(`flaps up above ${FLAPS_UP_KTS} knots past 50 ft (POH step 8), then the hot climb; the lever comes up a notch then`, () => {
+    const st = createShortTakeoff(E16, true);
+    shortTakeoffStep(st, base(), 0.1);
+    shortTakeoffStep(st, base({ onGround: false, wheelFt: 10, iasKts: 52, gsKts: 52, alongM: 400 }), 0.1);
+    shortTakeoffStep(st, base({ onGround: false, wheelFt: 55, iasKts: 57, alongM: 600 }), 0.1);
+    expect(st.flapsUp).toBeFalsy();
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 55, iasKts: 57 }))).toBe('stoClear');
+    shortTakeoffStep(st, base({ onGround: false, wheelFt: 90, iasKts: 61 }), 0.1);
+    expect(st.flapsUp).toBe(true);
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 90, iasKts: 61 }))).toBe('htoFlapsUp');
+    expect(DRILL_TEXT.htoFlapsUp).toBe('Above 60 knots: flaps up, press F. Climb at 74');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 120, iasKts: 66, flapsIndex: 0 }))).toBe('stoClear');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 250, iasKts: 74, flapsIndex: 0 }))).toBe('htoClimb');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 250, iasKts: 74, kid: true }))).toBe('htoKidClimb');
+  });
+});
+
+describe('hot-day takeoff (0226): the grade', () => {
+  it('the handbook pilot: A or better; the roll, 50 ft and climb shown beside a cool day\'s; the scenario said', () => {
+    const { st, r } = lesson();
+    expect(st.climbFpm).toBeCloseTo(600, 6);
+    expect(r.title).toBe('Hot-day takeoff');
+    expect(r.score).toBeGreaterThanOrEqual(85);
+    const f = Object.fromEntries(r.factors.map((x) => [x.key, x]));
+    expect(f.roll.value).toBe('1,200 ft (handbook 1,202; 15 °C: 1,017)');
+    expect(f.obstacle.value).toBe('2,040 ft (handbook 2,037; 15 °C: 1,729)');
+    expect(f.climb.value).toBe('600 fpm at 74 kt (handbook 625; 15 °C: 701)');
+    expect(f.climb.score).toBe(100);
+    expect(r.note).toMatch(/^Scenario day: 38 °C, 29\.92, calm, density altitude 3,500 ft at Addison\..*a weaker climb/);
+    // The short-field lesson's card has no cool-day column and no climb.
+    const sf = createShortTakeoff(E16);
+    expect(gradeShortTakeoff(sf).factors.map((x) => x.key)).not.toContain('climb');
+  });
+  it('50 ft past the hot table x 1.15 caps B; a weak climb scores low; a climb off Vy is named and held to 60', () => {
+    expect(lesson({ obstFt: 2037 * 1.2 }).r.score).toBeLessThanOrEqual(84);
+    const weak = lesson({ climbS: 200 / 400 * 60 }); // 400 fpm
+    expect(weak.r.factors.find((x) => x.key === 'climb').score).toBeLessThan(50);
+    const slow = lesson({ climbKts: 60, climbS: 18 });
+    expect(slow.r.factors.find((x) => x.key === 'climb').score).toBe(60);
+    expect(slow.r.reason).toMatch(/Climb at 74 knots: the hot day's best rate is only 625 fpm/);
+  });
+  it('Kid: the roll and the obstacle only', () => {
+    expect(lesson({ kid: true }).r.factors.map((x) => x.key)).toEqual(['roll', 'obstacle']);
+  });
+  it('never to 400 ft says 400', () => {
+    const st = createShortTakeoff(E16, true);
+    st.why = 'noclimb'; st.liftKts = 52; st.rollM = 400;
+    expect(gradeShortTakeoff(st).reason).toMatch(/Never climbed to 400 ft/);
+  });
+});
+
+describe('hot-day takeoff (0226): the reject', () => {
+  it('rejectCall: the runway to the lift-off speed at the acceleration it had, against the runway left', () => {
+    // 30 kt over the ground, IAS 28 (thin air), 2 kt/s and no low-speed sample: the constant acceleration's (v² - u²) / 2a.
+    const c = rejectCall(30, 28, 2, 1000);
+    const v = REJECT_LOF_KTS * 30 / 28;
+    expect(c.needM).toBeCloseTo(0.514444 * (v * v - 900) / 4, 6);
+    expect(c.warranted).toBe(false);
+    expect(rejectCall(30, 28, 2, c.needM / REJECT_MARGIN - 1).warranted).toBe(true);
+    expect(rejectCall(30, 28, 0, 5000)).toMatchObject({ needM: Infinity, warranted: true }); // not accelerating
+    // Falling from 2.3 kt/s at 15 kt to 2 at 30: a = A - B v², B = 0.3/675; ∫ v dv / a = ln(a(30) / a(vLof)) / 2B.
+    const f = rejectCall(30, 28, 2, 1000, { kts: 15, accelKps: 2.3 });
+    const B = 0.3 / 675, aLof = 2 - B * (v * v - 900);
+    expect(f.needM).toBeCloseTo(0.514444 * Math.log(2 / aLof) / (2 * B), 6);
+    expect(f.needM).toBeGreaterThan(c.needM); // the fall costs runway
+    // Never reaching the lift-off speed at that rate of fall: Infinity, the right call.
+    expect(rejectCall(30, 28, 0.5, 1e6, { kts: 15, accelKps: 3 })).toMatchObject({ needM: Infinity, warranted: true });
+  });
+  // Pulled to idle at speed on a strip the roll wouldn't have made, then stopped: graded A for the decision.
+  function rejected(leftM, accel) {
+    const st = createShortTakeoff(E16, true);
+    shortTakeoffStep(st, base({ brakes: true }), 1);
+    shortTakeoffStep(st, base({ throttle: 0.6 }), 0.1);
+    for (let t = 0; t <= 15; t++) shortTakeoffStep(st, base({ throttle: 0.6, iasKts: 2 + accel * t, gsKts: 2 + accel * t, alongM: accel * t * t, leftM: leftM - accel * t * t }), 1);
+    shortTakeoffStep(st, base({ throttle: 0, brakes: true, iasKts: 2 + accel * 15, gsKts: 2 + accel * 15, alongM: 300, leftM: leftM - 300 }), 0.1);
+    for (let k = 2 + accel * 15; k > 0; k -= 6) shortTakeoffStep(st, base({ throttle: 0, brakes: true, iasKts: Math.max(0, k), gsKts: Math.max(0, k), alongM: 320, leftM: leftM - 320 }), 1);
+    expect(shortTakeoffStep(st, base({ throttle: 0, brakes: true, alongM: 330, leftM: leftM - 330 }), 1)).toBe('done');
+    return { st, r: gradeShortTakeoff(st) };
+  }
+  it('a reject on a roll that would not have made the end: the right call, A', () => {
+    const { st, r } = rejected(500, 1);
+    expect(st.why).toBe('stopped');
+    expect(st.reject.warranted).toBe(true);
+    expect(st.accelKps).toBeCloseTo(1, 1);
+    expect(r.score).toBe(REJECT_SCORE);
+    expect(r.grade).toBe('A');
+    expect(r.title).toBe('Hot-day takeoff: rejected');
+    expect(r.reason).toMatch(/^Right call: at 17 knots it still needed about [\d,]+ ft to lift off, and [\d,]+ ft were left/);
+  });
+  it('a reject on a roll that would have flown: a needless stop, D, with the estimate', () => {
+    const { st, r } = rejected(5000, 1);
+    expect(st.reject.warranted).toBe(false);
+    expect(r.score).toBeLessThanOrEqual(FAIL_CAP);
+    expect(r.title).toBe('Hot-day takeoff failed');
+    expect(r.reason).toMatch(/^Stopped a takeoff that would have flown/);
+  });
+  it('the short-field lesson never judges a reject', () => {
+    const st = createShortTakeoff(E16);
+    shortTakeoffStep(st, base(), 0.1);
+    shortTakeoffStep(st, base({ iasKts: 30, gsKts: 30, alongM: 100 }), 1);
+    shortTakeoffStep(st, base({ throttle: 0, iasKts: 30, gsKts: 30, alongM: 110 }), 1);
+    expect(st.reject).toBeNull();
+  });
+});
