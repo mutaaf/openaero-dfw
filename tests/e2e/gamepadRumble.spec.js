@@ -78,10 +78,13 @@ test('the ground roll rumbles the pad; none behind the start screen, paused, or 
     expect(f.weakMagnitude).toBeLessThanOrEqual(1);
     expect(f.duration).toBeGreaterThan(100); // each pulse outlasts the 100 ms to the next
   }
-  // About ten a second, not one per frame.
+  // About ten a second, not one per frame: the effects' stamps (performance.now, warped like the rumble's
+  // clock) are at least RUMBLE_GAP_MS apart. Not a count per wall second: that measures the runner's frame rate.
   const n0 = await fxCount(page);
   await page.waitForTimeout(1000);
-  expect(await fxCount(page) - n0).toBeLessThanOrEqual(13);
+  const gaps = await page.evaluate((n) => window.__fx.slice(n).map((f, i, a) => (i ? f.at - a[i - 1].at : Infinity)), n0);
+  expect(gaps.length).toBeGreaterThan(2);
+  expect(Math.min(...gaps)).toBeGreaterThanOrEqual(95);
 
   // Paused: still, and the running pulse is stopped.
   await page.locator('#btnPause').click();
