@@ -38,7 +38,8 @@ async function roll(page) {
     await press(page, 2, false);
   }
   await press(page, 7, true);
-  await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).gsKts, { timeout: 15_000 }).toBeGreaterThan(8);
+  // The 737's roll is felt from ~33 kt (∝ gs², full at 120 kt; a slow taxi is all but still).
+  await expect.poll(async () => (await page.evaluate(() => window.openaeroDebug())).gsKts, { timeout: 20_000 }).toBeGreaterThan(40);
 }
 // No new effect over `ms` of wall time.
 async function silentFor(page, ms) {
@@ -57,6 +58,9 @@ test('the ground roll rumbles the pad; none behind the start screen, paused, or 
   // A pad that can rumble shows the Vibrate toggle on a desktop too (it was phone-only), on by default.
   await expect(page.locator('#btnHaptics')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('#btnHaptics')).toContainText('Vibrate: ON');
+  // The connect toast says it rumbles and how to stop it.
+  await page.evaluate(() => { const e = new Event('gamepadconnected'); e.gamepad = window.__pad; window.dispatchEvent(e); });
+  await expect(page.locator('#toast')).toContainText('It rumbles: Vibrate in the menu turns that off');
   // Behind the start screen the boot flight rolls, but the pad stays still.
   await roll(page);
   await page.waitForTimeout(500);
@@ -91,6 +95,13 @@ test('the ground roll rumbles the pad; none behind the start screen, paused, or 
   await page.locator('#btnHaptics').click();
   await expect(page.locator('#btnHaptics')).toContainText('Vibrate: OFF');
   await silentFor(page, 600);
+  // Back on, it answers with one pulse even standing still (the phone's tick, in kind).
+  await press(page, 7, false);
+  const nOff = await fxCount(page);
+  await page.locator('#btnHaptics').click();
+  await expect(page.locator('#btnHaptics')).toContainText('Vibrate: ON');
+  await expect.poll(() => fxCount(page)).toBeGreaterThan(nOff);
+  await page.locator('#btnHaptics').click();
   expect(JSON.parse(await page.evaluate(() => localStorage.getItem('openaero_haptics_v1')))).toMatchObject({ v: 1, on: false });
   await press(page, 7, false);
   expect(errors).toEqual([]);

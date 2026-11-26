@@ -159,9 +159,10 @@ src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll;
                     main.js updateGamepad's getGamepads (0161: also a pad pressed before boot's listener), PAD_CLICKS names the button each pad button presses.
                     Rumble (0228): pollGamepad(sim, hapticsOn) plays the pad's vibrationActuator 'dual-rumble' (Chromium; feature-detected elsewhere,
                     never throws, a rejecting pad left alone 5 s, one reused params object): touchdownRumble (pure) at main.js touchdownBuzz's
-                    sim.tdT, 120-250 ms scaled by the sink to 600 fpm (Kid capped at 0.6); feelRumble (pure) every 100 ms, the stall buffet
-                    (buffet.js writes sim.buffetK) on the heavy motor, the ground roll on the light one (to 60 kt piston / 120 kt jet, none
-                    stopped or on a belly slide). The haptics setting (openaero_haptics_v1) switches it; silent behind the start screen or
+                    sim.tdT, 120-250 ms scaled by the sink 0.8 at 600 fpm, full only past it (a crash; Kid capped at 0.6); feelRumble (pure) every 100 ms, the stall buffet
+                    (buffet.js writes sim.buffetK) on the heavy motor from 0, the ground roll on the light one (∝ gs², full at 60 kt piston /
+                    120 kt jet, ±20% per pulse, Kid ×0.6, none under 0.03, stopped or on a belly slide). Turning Vibrate on answers with one pulse;
+                    the connect toast says the pad rumbles. The haptics setting (openaero_haptics_v1) switches it; silent behind the start screen or
                     results card, paused, in the replay and under reduced motion. A pad that can rumble shows the Vibrate toggle on any screen.
                     tests/unit/gamepadRumble.test.js, e2e gamepadRumble.spec.js
 src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +

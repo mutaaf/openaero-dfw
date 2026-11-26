@@ -17,7 +17,12 @@ describe('touchdownRumble', () => {
       expect(r.duration).toBeLessThanOrEqual(250);
       for (const m of [r.strongMagnitude, r.weakMagnitude]) { expect(m).toBeGreaterThan(0); expect(m).toBeLessThanOrEqual(1); }
     }
-    expect(touchdownRumble(-600).duration).toBe(250);
+    // The full thump is the crash's (landing.js: past 600 fpm), a hard landing short of it.
+    expect(touchdownRumble(-601).duration).toBe(250);
+    expect(touchdownRumble(-600).strongMagnitude).toBeLessThan(touchdownRumble(-601).strongMagnitude);
+  });
+  it("a greaser's light motor stays low (the roll follows it at once)", () => {
+    expect(touchdownRumble(-100).weakMagnitude).toBeLessThanOrEqual(0.3);
   });
   it('Kid (gentle) never gets the crash thump', () => {
     expect(touchdownRumble(-1200, true).strongMagnitude).toBeLessThan(touchdownRumble(-1200).strongMagnitude);
@@ -40,14 +45,24 @@ describe('feelRumble', () => {
     expect(full).toBeGreaterThan(light);
     expect(full).toBeLessThanOrEqual(1);
   });
+  const mid = () => 0.5; // the pulse's ±20% texture at its middle
   it('the ground roll rumbles with speed, not stopped, not on a belly slide', () => {
-    expect(feelRumble(ground(0)).weakMagnitude).toBe(0);
-    expect(feelRumble(ground(60, { gearPos: 0 })).weakMagnitude).toBe(0);
-    const slow = feelRumble(ground(15)).weakMagnitude, fast = feelRumble(ground(60)).weakMagnitude;
+    expect(feelRumble(ground(0), {}, mid).weakMagnitude).toBe(0);
+    expect(feelRumble(ground(60, { gearPos: 0 }), {}, mid).weakMagnitude).toBe(0);
+    const slow = feelRumble(ground(30), {}, mid).weakMagnitude, fast = feelRumble(ground(60), {}, mid).weakMagnitude;
     expect(slow).toBeGreaterThan(0);
     expect(fast).toBeGreaterThan(slow);
-    // A jet's rumble builds to 120 kt, the Cessna's to 60 (rollSound.js's rule).
-    expect(feelRumble(ground(60, { spec: { engine: { type: 'jet' } } })).weakMagnitude).toBeLessThan(fast);
+    // A jet's rumble builds to 120 kt, the Cessna's to 60 (rollSound.js's speeds).
+    expect(feelRumble(ground(60, { spec: { engine: { type: 'jet' } } }), {}, mid).weakMagnitude).toBeLessThan(fast);
+  });
+  it('a slow taxi is all but still; the roll varies pulse to pulse; Kid feels less (first-timer panel)', () => {
+    expect(feelRumble(ground(10), {}, mid).weakMagnitude).toBe(0);
+    const lo = feelRumble(ground(60), {}, () => 0).weakMagnitude, hi = feelRumble(ground(60), {}, () => 1).weakMagnitude;
+    expect(hi / lo).toBeCloseTo(1.5, 5);
+    expect(feelRumble(ground(60, { assist: 'kid' }), {}, mid).weakMagnitude).toBeCloseTo(0.6 * feelRumble(ground(60), {}, mid).weakMagnitude, 5);
+  });
+  it('the buffet starts from nothing, as the shudder does (first-timer panel)', () => {
+    expect(feelRumble(air(0.05)).strongMagnitude).toBeLessThan(0.06);
   });
   it('each pulse outlasts the gap to the next (a continuous feel), in the one object', () => {
     const out = {};

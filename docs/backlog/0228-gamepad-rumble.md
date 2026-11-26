@@ -11,10 +11,10 @@ pr: 334
 
 ## Why
 Touch players already feel the touchdown and the buffet (`src/haptics.js`, 0086-era
-`navigator.vibrate`); a pad in the player's hands feels nothing. Chromium and Firefox expose
+`navigator.vibrate`); a pad in the player's hands feels nothing. Chromium exposes
 `gamepad.vibrationActuator.playEffect('dual-rumble', {...})`
 (https://developer.mozilla.org/docs/Web/API/GamepadHapticActuator/playEffect), the same Gamepad
-API `src/gamepad.js` already polls; Safari lacks it, so it must be feature-detected.
+API `src/gamepad.js` already polls; Firefox lacks it (and other browsers vary), so it must be feature-detected.
 
 ## What
 Reuse haptics.js's event model (touchdown scaled by sink rate, stall buffet from
