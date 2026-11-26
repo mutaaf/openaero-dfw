@@ -1028,10 +1028,11 @@ function checkSteepTurns(dt) {
   sim.steepTurns = null;
   drillCard(result, stLib.STEEP_PLACE);
 }
-// The ground-reference lessons (0211 turns around a point, aroundPoint.js; 0223 the rectangular course, rectCourse.js):
-// one at a time in sim.groundRef, grLib its chunk (both export the same calls), its poles in the scene; graded after two
+// The ground-reference lessons (0211 turns around a point, aroundPoint.js; 0223 the rectangular course, rectCourse.js;
+// 0224 S-turns, sTurns.js): one at a time in sim.groundRef, grLib its chunk (all export the same calls), its poles in the scene; graded after two
 // circles or laps; kept once graded (its wind flies on for KEEP FLYING), ended by another mission or airframe.
-let tapLib = null, rcLib = null, grLib = null, grMarker = null;
+const grLibs = []; // aroundPoint.js, rectCourse.js, sTurns.js (0224) once loaded
+let grLib = null, grMarker = null;
 function checkGroundRef(dt) {
   const st = sim.groundRef;
   if (!st) return;
@@ -1163,7 +1164,7 @@ function startDrills(mission) {
   endGroundRef();
   sim.dh = null;
   sim.engineFailed = !!mission.deadStick;
-  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.emergencyDescent || mission.shortField || mission.noFlap || mission.softField || mission.wingLow || mission.xwTakeoff || mission.aroundPoint || mission.rectCourse);
+  drillCoach = !!(mission.stallDrill || mission.deadStick || mission.pattern || mission.engineOutFt || mission.rto || mission.steepTurns || mission.upset || mission.wake || mission.slowFlight || mission.emergencyDescent || mission.shortField || mission.noFlap || mission.softField || mission.wingLow || mission.xwTakeoff || mission.aroundPoint || mission.rectCourse || mission.sTurns);
   if (mission.shortField) loadDrill(mission, sfdLib, () => import('./shortField.js'), (lib) => { sfdLib = lib; if (sim.aircraftKey === mission.aircraft) sim.shortField = lib.createShortField(runwayEnd(mission.airport, mission.rwy)); });
   if (mission.noFlap) loadDrill(mission, nfLib, () => import('./noFlap.js'), (lib) => { nfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.noFlap = lib.createNoFlap(runwayEnd(mission.airport, mission.rwy)); });
   // The wing-low lesson (0188): its wind is currentWeather()'s while it flies (the live METAR's when it suits, else its scenario's).
@@ -1176,9 +1177,9 @@ function startDrills(mission) {
   if (mission.slowFlight) loadDrill(mission, sfLib, () => import('./slowFlight.js'), (lib) => { sfLib = lib; if (sim.aircraftKey === mission.aircraft) sim.slowFlight = lib.createSlowFlight(); });
   if (mission.emergencyDescent) loadDrill(mission, edLib, () => import('./emergencyDescent.js'), (lib) => { edLib = lib; if (sim.aircraftKey === mission.aircraft) sim.emergencyDescent = lib.createEmergencyDescent(); });
   if (mission.steepTurns) loadDrill(mission, stLib, () => import('./steepTurns.js'), (lib) => { stLib = lib; sim.steepTurns = lib.createSteepTurns(); });
-  // Turns around a point (0211) and the rectangular course (0223): the scenario wind is currentWeather()'s while it flies; the poles go in the scene.
-  const rc = !!mission.rectCourse;
-  if (rc || mission.aroundPoint) loadDrill(mission, rc ? rcLib : tapLib, () => (rc ? import('./rectCourse.js') : import('./aroundPoint.js')), (lib) => { if (rc) rcLib = lib; else tapLib = lib; if (sim.aircraftKey === mission.aircraft) { grLib = lib; scene.add(grMarker = lib.makeMarker(sim.groundRef = lib.create(mission))); refreshWeather(); } });
+  // Turns around a point (0211), the rectangular course (0223) and S-turns (0224): the scenario wind is currentWeather()'s while it flies; the poles go in the scene.
+  const gk = mission.rectCourse ? 1 : mission.sTurns ? 2 : mission.aroundPoint ? 0 : -1;
+  if (gk >= 0) loadDrill(mission, grLibs[gk], () => (gk === 1 ? import('./rectCourse.js') : gk === 2 ? import('./sTurns.js') : import('./aroundPoint.js')), (lib) => { grLibs[gk] = lib; if (sim.aircraftKey === mission.aircraft) { grLib = lib; scene.add(grMarker = lib.makeMarker(sim.groundRef = lib.create(mission))); refreshWeather(); } });
   // The stall drills: powerOnStall.js (0191) is the one chunk, the idle drill its `idle` (stallDrill.js, 0087): the same calls, the
   // power-on drill's plus its coach's powerOnPrompt (one import: each import() adds boot bytes to Vite's preload map).
   if (mission.stallDrill) loadDrill(mission, stallRoot, () => import('./powerOnStall.js'), (lib) => { stallRoot = lib; stallLib = mission.powerOn ? lib : lib.idle; sim.stallDrill = stallLib.createStallDrill(); });
@@ -3908,7 +3909,7 @@ window.openaeroDebug = () => {
     rto: sim.rto ? { ...sim.rto } : null,
     windshear: sim.windshear ? { ...sim.windshear } : null,
     steepTurns: sim.steepTurns ? { ...sim.steepTurns } : null,
-    ...(sim.groundRef && { [grLib.SNAP]: grLib.debugSnap(sim.groundRef) }), // aroundPoint.js (0211) / rectCourse.js (0223)
+    ...(sim.groundRef && { [grLib.SNAP]: grLib.debugSnap(sim.groundRef) }), // aroundPoint.js (0211) / rectCourse.js (0223) / sTurns.js (0224)
     upset: sim.upset ? { ...sim.upset } : null,
     slowFlight: sim.slowFlight ? { ...sim.slowFlight } : null,
     emergencyDescent: sim.emergencyDescent ? { ...sim.emergencyDescent } : null,

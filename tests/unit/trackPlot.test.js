@@ -81,3 +81,44 @@ describe('track plot: the rectangular course (0223)', () => {
     expect(trackLegend({ R: 1 })).toBe(TRACK_LEGEND);
   });
 });
+
+describe('track plot: S-turns across a road (0224)', () => {
+  const R = 457.2;
+  const sTrack = () => {
+    const pts = [];
+    for (let z = 1200; z > 0; z -= 100) pts.push(0, z);
+    const start = pts.length / 2;
+    for (let k = 0; k < 4; k++) {
+      for (let th = 0; th <= Math.PI; th += 0.2) pts.push(-(2 * k + 1) * R + R * Math.cos(th), (k % 2 ? 1 : -1) * R * Math.sin(th));
+    }
+    return { pts: Float32Array.from(pts), n: pts.length / 2, start, R, sTurns: 4, wind: [180, 12] };
+  };
+  it('draws the road, the S asked (four half-circles, north first), the five poles, centred on the S', () => {
+    const t = sTrack(), svg = trackPlotSvg(t);
+    expect(svg).toContain(`A${R} ${R} 0 0 0 ${-2 * R} 0A${R} ${R} 0 0 1 ${-4 * R} 0A${R} ${R} 0 0 0 ${-6 * R} 0A${R} ${R} 0 0 1 ${-8 * R} 0`);
+    expect(svg.match(/fill="#facc15"/g).length).toBe(5);
+    expect(svg).not.toContain(`<circle r="${R}"`);
+    expect(svg).not.toMatch(/NaN|undefined/);
+    const ext = trackExtent(t);
+    expect(ext).toBeGreaterThan(4 * R);
+    expect(svg).toContain(`viewBox="${Math.round((-4 * R - ext) * 10) / 10} `);
+    expect(ext).toBeLessThan(6.2 * R); // the run-in from 1,200 m south is left out
+    // The wind's arrow west of the S (device panel: its label sat on the leftmost half-circle).
+    const [, x0] = /<path d="M(-?[\d.]+) (-?[\d.]+)L(-?[\d.]+) (-?[\d.]+)" fill="none"[^>]*stroke="#f8fafc"/.exec(svg).map(Number);
+    expect(x0).toBeLessThan(-8.5 * R);
+  });
+  it('a wide view: its labels stay at least 11 px tall in the phone-sideways 96 px box', () => {
+    const t = sTrack();
+    const [, , , w, h] = /viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/.exec(trackPlotSvg(t));
+    expect(Number(w) / Number(h)).toBeCloseTo(2.3, 1);
+    for (const px of [96, 144]) {
+      const svg = trackPlotSvg(t, px);
+      const fs = Number(/<text[^>]*font-size="([\d.]+)"[^>]*>N</.exec(svg)[1]);
+      expect(fs * px / Number(h)).toBeGreaterThanOrEqual(11);
+    }
+  });
+  it('says what it shows, and its legend names the S', () => {
+    expect(trackLabel(sTrack())).toMatch(/across the road.*4 half-circles of 1,500 ft from pole to pole along the road, the arrow the 12 knot wind's way/);
+    expect(trackLegend(sTrack())).toMatch(/dashed: the S asked · blue: your track/);
+  });
+});
