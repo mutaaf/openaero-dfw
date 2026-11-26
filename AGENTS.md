@@ -964,8 +964,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
-2026-11-26 (0226): 200.30 kB (the hot-day lesson's mission entry and blurb, createShortTakeoff's hot argument, currentWeather's
-lesson air and moveFlapLever's flaps-up hook, +0.19 kB over 0225's 200.11; the rest rides in shortTakeoff.js's lazy chunk).
+2026-11-26 (0226): 200.31 kB (the hot-day lesson's mission entry and blurb, createShortTakeoff's hot argument, currentWeather's
+lesson air and moveFlapLever's flaps-up hook, +0.20 kB over 0225's 200.11; the rest rides in shortTakeoff.js's lazy chunk).
 2026-11-26 (0225): 200.11 kB (the short-field takeoff's mission entry and blurb, its lazy import and wiring (checkShortTakeoff, the brakes set at the spawn and let go with an airplane switch, the coach's ground and air prompts, checkTouchdown's skip, the callouts off, the snapshot's shortTakeoff), +0.33 kB over 0224's 199.78; shortTakeoff.js is a lazy chunk).
 2026-11-26 (0224): 199.78 kB (the S-turns' mission entry and blurb, its lazy import in the ground-reference slot (grLibs), tower.js's quiet key, +0.21 kB over 0223's 199.57; sTurns.js is a lazy chunk).
 2026-11-24 (0223): 199.57 kB (the rectangular course's mission entry and blurb, its lazy import beside aroundPoint.js's in one ground-reference slot (sim.groundRef, grLib), the snapshot's computed field, placeCoach dropping the readout below a card over it, +0.40 kB over 0214's 199.17; rectCourse.js is a lazy chunk).

@@ -223,7 +223,9 @@ export function createShortTakeoff(end, hot = false) {
     end, phase: 'hold', t: 0, poh: null, startAlongM: null, releaseThrottle: null, flapsRelease: null,
     rolled: false, stopS: 0, rotateKts: null, rotateM: null, liftKts: null, rollM: null, flapsLift: null, obstM: null, obstKts: null, minKts: null, maxCrossM: 0,
     tail: false, settled: false, why: null,
-    hot: !!hot, wx: null, accelKps: null, gsPrev: null, low: null, reject: null, maxThr: 0, steadyS: 0, cut: null, c200T: null, climbFpm: null, climbKts: null,
+    hot: !!hot, wx: null, accelKps: null, gsPrev: null, low: null, reject: null, maxThr: 0, steadyS: 0, cut: null, flapsUp: false,
+    daFt: null, hotPoh: null, cool: null, climbPoh: null, coolClimb: null, // the hot day's, set below (one shape either way)
+    c200T: null, climbFpm: null, climbKts: null,
   };
   if (hot) {
     const elevFt = end.elevFt ?? 0;
@@ -329,12 +331,12 @@ export function shortTakeoffStep(st, s, dt) {
   if (st.hot) {
     // The climb (0226): the time from DONE_FT to HOT_DONE_FT, and the speed's average over it.
     if (st.obstM !== null && s.iasKts >= FLAPS_UP_KTS) st.flapsUp = true; // main.js moveFlapLever: F raises a notch now
-    if (st.c200T === null) { if (s.wheelFt >= DONE_FT) { st.c200T = st.t; st.climbKts = 0; st.climbN = 0; } }
-    else { st.climbKts += s.iasKts; st.climbN++; }
+    if (st.c200T === null) { if (s.wheelFt >= DONE_FT) { st.c200T = st.t; st.climbKts = 0; } }
+    else st.climbKts += s.iasKts * dt; // time-weighted (device panel: per frame, slow frames counted less)
     if (s.wheelFt >= HOT_DONE_FT) {
       const min = (st.t - st.c200T) / 60;
       st.climbFpm = min > 0 ? (HOT_DONE_FT - DONE_FT) / min : null;
-      st.climbKts = st.climbN ? st.climbKts / st.climbN : s.iasKts;
+      st.climbKts = st.t > st.c200T ? st.climbKts / (st.t - st.c200T) : s.iasKts;
       return finish(st, null);
     }
   } else if (s.wheelFt >= DONE_FT) return finish(st, null);
@@ -346,10 +348,12 @@ export function shortTakeoffStep(st, s, dt) {
 export function shortTakeoffTarget(st, s) {
   if (st.phase === 'done') return null;
   if (st.phase === 'hold') {
-    const h = st.hot ? 'hto' : 'sto';
-    if (s.kid) return `${h}KidPower`;
-    if (s.flapsIndex !== FLAPS) return `${h}Flaps`;
-    return s.throttle < FULL_POWER ? `${h}Power` : `${h}Release`;
+    // Literal keys (device panel: a template here built a string every frame on the brakes).
+    const hot = st.hot;
+    if (s.kid) return hot ? 'htoKidPower' : 'stoKidPower';
+    if (s.flapsIndex !== FLAPS) return hot ? 'htoFlaps' : 'stoFlaps';
+    if (s.throttle < FULL_POWER) return hot ? 'htoPower' : 'stoPower';
+    return hot ? 'htoRelease' : 'stoRelease';
   }
   if (st.phase === 'roll' || s.onGround) {
     if (s.brakes) return 'stoBrakesOff'; // pressed again on the roll (B twice, a tap on BRAKES): first-timer panel
