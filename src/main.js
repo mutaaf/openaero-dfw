@@ -1325,7 +1325,7 @@ function finishLanding(result, end, gate, bestKey) {
   Object.assign(sim.lastLanding, { grade: result.grade, score: result.score, bounces: result.bounces ?? 0 });
   let best = { isNewBest: false, best: null };
   try { best = recordBest(window.localStorage, bestKey, result); } catch { /* storage unavailable */ }
-  showResults(result, best, end, gate);
+  showResults(result, best, end, gate, true);
 }
 
 let resultsPaused = false; // the card pauses the flight, in the air (0047) and on the rollout (0106)
@@ -1333,14 +1333,15 @@ let resultsPaused = false; // the card pauses the flight, in the air (0047) and 
 // mid-flight still gets its card) and retried if that fetch failed.
 let resultsChunk = null;
 const loadResults = () => (resultsChunk ??= import('./results.js').catch((e) => { resultsChunk = null; throw e; }));
-function showResults(result, best, end, gate) {
+// landed: a landing's card (finishLanding), which draws the approach from the side out of the replay's buffer (0227).
+function showResults(result, best, end, gate, landed = false) {
   const flight = sim.loadedMission;
   loadResults().then((m) => {
     if (sim.loadedMission !== flight) return; // restarted meanwhile: not this flight's card
     // On the rollout too: the card covers the runway, and the METAR crosswind would roll the
     // airplane on unwatched into the grass behind it (0106). KEEP ROLLING resumes it.
     if (!sim.paused) { resultsPaused = true; setPaused(true); }
-    m.showResults(sim, result, best, end, gate);
+    m.showResults(sim, result, best, end, gate, landed ? replayBuf : null);
     byId('btnReplay').classList.toggle('hidden', !(replayBuf && replayLib.replayDuration(replayBuf) > 2));
   }).catch(() => showToast(`${result.title ?? 'Landing'}: ${result.grade} · ${result.score}`));
 }

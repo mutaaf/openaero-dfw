@@ -36,6 +36,14 @@ test('a landing is graded and the personal best survives a reload', async ({ pag
     [L.dotX * px.sx, L.dotY * px.sx]);
   expect(rgb[3]).toBe(255);
   expect(rgb[0] + rgb[1] + rgb[2]).toBeGreaterThan(400);
+  // 0227: the approach from the side, the 3° path dashed and the autoland's track on it, summed up in words.
+  const side = page.locator('#profilePlot');
+  await expect(side).toBeVisible();
+  await expect(side).toHaveAttribute('role', 'img');
+  await expect(side).toHaveAttribute('aria-label', /^Your approach from the side: .+\.$/);
+  await expect(side.locator('svg path[stroke-dasharray]')).not.toHaveCount(0);
+  await expect(side.locator('svg path[stroke="#38bdf8"]')).toHaveCount(1);
+  await expect(page.locator('#trackPlot')).toBeHidden();
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_best') || 'null'));
   if (grade.trim() !== 'CRASH') {
     expect(stored.v).toBe(1);
