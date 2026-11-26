@@ -17,7 +17,7 @@ export function missionFromLink(search) {
   // "Fly from" an airport: its takeoff if it has one (not a drill's: the engine-failure takeoffs,
   // 0104, the rejected takeoff, 0107, the soft-field lesson, 0182, the crosswind takeoff, 0220), else its first approach.
   const here = MISSIONS.filter((m) => m.airport === icao);
-  const pick = here.find((m) => m.kind === 'takeoff' && !m.engineOutFt && !m.rto && !m.softField && !m.xwTakeoff) || here[0];
+  const pick = here.find((m) => m.kind === 'takeoff' && !m.engineOutFt && !m.rto && !m.softField && !m.xwTakeoff && !m.shortTakeoff) || here[0];
   return pick ? pick.key : null;
 }
 
