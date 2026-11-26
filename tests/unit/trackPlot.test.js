@@ -102,7 +102,10 @@ describe('track plot: S-turns across a road (0224)', () => {
     const ext = trackExtent(t);
     expect(ext).toBeGreaterThan(4 * R);
     expect(svg).toContain(`viewBox="${Math.round((-4 * R - ext) * 10) / 10} `);
-    expect(ext).toBeLessThan(5.2 * R); // the run-in from 1,200 m south is left out
+    expect(ext).toBeLessThan(6.2 * R); // the run-in from 1,200 m south is left out
+    // The wind's arrow west of the S (device panel: its label sat on the leftmost half-circle).
+    const [, x0] = /<path d="M(-?[\d.]+) (-?[\d.]+)L(-?[\d.]+) (-?[\d.]+)" fill="none"[^>]*stroke="#f8fafc"/.exec(svg).map(Number);
+    expect(x0).toBeLessThan(-8.5 * R);
   });
   it('a wide view: its labels stay at least 11 px tall in the phone-sideways 96 px box', () => {
     const t = sTrack();

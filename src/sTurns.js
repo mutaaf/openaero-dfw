@@ -10,11 +10,12 @@
 // airplane crosses the straight-line ground reference"; "there should be no delay in rolling out from one turn and
 // rolling into the next turn ... the roll in should be smooth and gentle and the initial bank angle should be shallow";
 // "If the straight-line ground reference is of sufficient length, the pilot may complete as many as can be safely
-// accomplished" (four here). The chapter's general rules: "between 600 and 1,000 feet AGL" (p. 7-2), no "bank angle of
-// 45°" or more (p. 7-1), and the bank for a constant radius is tan φ = Vg² / (g R) (p. 7-3's worked example).
+// accomplished" (four here). The chapter's general rules: flown "between 600 and 1,000 feet above ground level (AGL)" and
+// not to "exceed a bank angle of 45°" (p. 7-2), "the bank angle used is proportional to groundspeed": tan φ = Vg² / (g R),
+// the formula behind p. 7-4's worked examples (its 890 ft at 45° and 100 kt).
 // FAA-S-ACS-6C (Nov 2023) Area V Task B: S3 the entry 600 to 1,000 ft AGL, S7 "Maintain altitude ±100 feet; maintain
 // airspeed ±10 knots"; it sets no number for the radius. The game's own: the 1,500 ft radius (0211's circle), the road
-// marked by five lit poles where the crossings fall (3C names a road, a fence or a railroad), the radius bands (0211's),
+// is a line of five lit poles 3,000 ft apart (3C names a road, a fence or a railroad; no real road is claimed), the radius bands (0211's),
 // and "wings level at the crossing" scored by the bank there (3C: "the wings become level just as the airplane crosses").
 // Pure but for makeMarker (aroundPoint.js's three classes: no new boot export). Tested in tests/unit/sTurns.test.js and
 // flown headless in tests/flight/sTurns.test.js.
@@ -32,8 +33,10 @@ export const PLACE = { name: 'Fields north-west of Alliance · 1,000 ft' };
 export const SNAP = 'sTurns'; // openaeroDebug's field
 export const HALVES = 4;
 export const SPREAD_C_FT = 250; // wider than this: no better than a C
-export const OFF_FT = 300; // the average radius this far from the one asked: no better than a B
+export const OFF_FT = 200; // the average radius this far from the one asked: no better than a B
 export const CROSS_B_DEG = 10; // banked more than this over the road: no better than a B (3C: wings level as it crosses)
+export const SQUARE_B_DEG = 20; // the track this far off square across the road: no better than a B (3C: "at a 90° angle")
+export const WRONG_R = 0.3; // this far east of the half's crossing: turned the wrong way (told now, not a half-circle later)
 export const LOST_R = 3; // this many radii from the half-circle's middle: drifted away
 export const SHALLOW_R = 1 / 3; // a half-circle that never got this far from the road: crossed back too soon
 export const FAIL_FT = 500;
@@ -42,27 +45,27 @@ export const ENTRY_FAIL_S = 120;
 export const ENTRY_OFF_R = 1; // the first crossing within this many radii of the first pole
 // The roll-out: the bank is eased off over the last OUT_S seconds before the road, so the wings are level as it crosses.
 export const OUT_S = 3, OUT_LEAD_S = 0.8; // the roll takes a moment: level OUT_LEAD_S before the road, ramped from OUT_S before that
-// The coach's "road ahead: roll out" this long before the road; a half's roll-in word this long after the crossing.
-export const SAY_OUT_S = 5;
-export const ROLL_WORD_S = 6;
+// The coach's "road ahead: roll out" this long before the road.
+export const SAY_OUT_S = 4; // ~ OUT_LEAD_S + OUT_S: when the guide starts easing off
 
 export const S_TEXT = {
   stFlyOn: 'Fly on, wings level: straight across the road at the first lit pole, at a right angle',
   stKidIn: 'Let go: the plane crosses the road and flies the S-turns',
   stKid: 'Watch: steep with the wind behind, shallow into it, wings level over the road',
-  stRollLSteep: 'Over the road: roll left now, steep: the wind is behind you, fastest over the ground',
-  stRollRSteep: 'Over the road: roll right now, steep: the wind is behind you, fastest over the ground',
-  stRollLGentle: 'Over the road: roll left now, gently: into the wind you are slowest over the ground',
-  stRollRGentle: 'Over the road: roll right now, gently: into the wind you are slowest over the ground',
-  stRollL: 'Over the road: roll left now, a medium bank',
-  stRollR: 'Over the road: roll right now, a medium bank',
-  stShallower: 'Turning into the wind: ease the bank shallower as you come round',
-  stSteeper: 'The wind is coming behind you: steepen the bank as you come round',
-  stDown: 'Wind behind you: fastest over the ground, the steepest bank',
-  stUp: 'Into the wind: slowest over the ground, the shallowest bank',
-  stRollOut: 'Road ahead: roll the wings level just as you cross it, at the next lit pole',
-  stWide: 'Swinging wide of the half-circle: steepen the bank',
-  stClose: 'Inside the half-circle: ease the bank shallower',
+  stRollLSteep: 'Over the road: roll left now, steep (about 30°): the wind is behind you, fastest over the ground',
+  stRollRSteep: 'Over the road: roll right now, steep (about 30°): the wind is behind you, fastest over the ground',
+  stRollLGentle: 'Over the road: roll left now, gently (about 20°): into the wind you are slowest over the ground',
+  stRollRGentle: 'Over the road: roll right now, gently (about 20°): into the wind you are slowest over the ground',
+  stRollL: 'Over the road: roll left now, a medium bank (about 25°)',
+  stRollR: 'Over the road: roll right now, a medium bank (about 25°)',
+  stSteeper: 'A little steeper: the wind is coming round behind you',
+  stWide: 'A little steeper: you are swinging wide of the half-circle',
+  stShallower: 'A little shallower: you are turning into the wind',
+  stClose: 'A little shallower: you are inside the half-circle',
+  stHoldDown: 'Good bank, hold it: the wind behind you, the steepest of the turn',
+  stHoldUp: 'Good bank, hold it: into the wind, the shallowest of the turn',
+  stHold: 'Good bank, hold it: steeper as the wind comes behind, shallower as it comes ahead',
+  stRollOut: 'Road ahead: start rolling the wings level, level just as you cross it',
   stLow: 'Sinking: a little back pressure, a little power',
   stHigh: 'Climbing: ease the back pressure',
   stSlow: 'Slowing: add power',
@@ -71,7 +74,7 @@ export const S_TEXT = {
 };
 Object.assign(DRILL_TEXT, S_TEXT);
 Object.assign(RANK, { stFlyOn: 1, stKidIn: 1, stKid: 1, stRollLSteep: 2, stRollRSteep: 2, stRollLGentle: 2, stRollRGentle: 2, stRollL: 2, stRollR: 2,
-  stShallower: 1, stSteeper: 1, stDown: 1, stUp: 1, stRollOut: 2, stWide: 1, stClose: 1, stLow: 1, stHigh: 1, stSlow: 1, stFast: 1, stSteep: 2 });
+  stShallower: 1, stSteeper: 1, stHoldDown: 1, stHoldUp: 1, stHold: 1, stRollOut: 2, stWide: 1, stClose: 1, stLow: 1, stHigh: 1, stSlow: 1, stFast: 1, stSteep: 2 });
 // On the touch stick up is nose up (lesson 2026-11-24): "back pressure" means nothing there.
 export const S_TOUCH = { stLow: 'Sinking: stick up a touch (nose up), a little power', stHigh: 'Climbing: stick down a touch (nose down)' };
 Object.assign(TOUCH_WORDS, S_TOUCH);
@@ -86,9 +89,9 @@ export function createSTurns(m) {
     kind: 'sTurns',
     phase: 'entry', x0: m.road[0], z0: m.road[1], R: m.radiusFt * FT_TO_M,
     live: false, hold: null, spawn: m, wx: lessonWx(m),
-    t: 0, ct: 0, half: 0, ht: 0, xIn: 0, depth: 0, maxDepth: 0, d: 0, prevX: 0, prevZ: null, done: false,
+    t: 0, ct: 0, half: 0, ht: 0, out: false, xIn: 0, depth: 0, maxDepth: 0, d: 0, prevX: 0, prevZ: null, done: false,
     ck: '', alt0: null, kts0: m.kias, iasF: m.kias,
-    maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, maxBankDeg: 0, steepS: 0, maxCrossDeg: 0, crossDeg: [0, 0, 0, 0],
+    maxAltDevFt: 0, altSignFt: 0, maxKtsDev: 0, maxBankDeg: 0, steepS: 0, maxCrossDeg: 0, crossDeg: [0, 0, 0, 0], maxSquareDeg: 0,
     w: 0, sum: 0, sumSq: 0, why: null, halfN: 0,
     track: new Float32Array(2 * TRACK_MAX), trackN: 0, trackStart: -1, trackT: 0,
   };
@@ -99,10 +102,11 @@ export const create = createSTurns;
 export const sLive = (st) => st.phase === 'entry' || st.phase === 'course';
 export const live = sLive;
 
-// Half k's side (−1: north of the road, a left turn; +1 south, a right turn) and its middle (x, on the road): the
-// half-circles are anchored on the poles, 2R apart going west.
+// Half k's side (−1: north of the road, a left turn; +1 south, a right turn) and the current half's middle (x, on the
+// road): R west of where the Cessna crossed (panel: anchored on the poles, the HUD and coach fought a pilot who crossed
+// off a pole and flew an even S from there, and the grade, which measures from the pilot's own crossings).
 export const sideOf = (k) => (k % 2 === 0 ? -1 : 1);
-export const centreX = (st, k) => st.x0 - (2 * k + 1) * st.R;
+export const centreX = (st) => st.xIn - st.R;
 
 // Fold the half just ended into the radius's spread: each sample's distance from the half's own middle (half-way between
 // its two crossings), so an even half-circle of the wrong size spreads no more than its size is off (graded apart).
@@ -137,6 +141,7 @@ export function sStep(st, s) {
     st.depth = rz; // south of the road on the way in
     // The course starts as the Cessna crosses the road northbound near the first pole.
     if (crossed && rz <= 0 && Math.abs(crossX) <= ENTRY_OFF_R * st.R) {
+      st.maxSquareDeg = Math.atan2(Math.abs(s.vx), Math.abs(s.vz)) * DEG;
       st.phase = 'course'; st.trackStart = Math.max(0, st.trackN - 1); st.halfN = st.trackStart;
       st.xIn = st.x0 + crossX; st.half = 0; st.ht = 0; st.maxDepth = 0;
       return 'course';
@@ -150,7 +155,7 @@ export function sStep(st, s) {
   const side = sideOf(st.half);
   st.depth = side < 0 ? -rz : rz; // + out on the half's own side of the road
   st.maxDepth = Math.max(st.maxDepth, st.depth);
-  st.d = Math.hypot(s.x - centreX(st, st.half), rz);
+  st.d = Math.hypot(s.x - centreX(st), rz);
   const altDev = s.altFt - st.alt0;
   if (Math.abs(altDev) > st.maxAltDevFt) { st.maxAltDevFt = Math.abs(altDev); st.altSignFt = altDev; }
   st.iasF += (s.iasKts - st.iasF) * Math.min(1, s.dt / IAS_TAU_S);
@@ -163,12 +168,14 @@ export function sStep(st, s) {
     const xOut = st.x0 + crossX;
     st.crossDeg[st.half] = bank;
     st.maxCrossDeg = Math.max(st.maxCrossDeg, bank);
+    st.maxSquareDeg = Math.max(st.maxSquareDeg, Math.atan2(Math.abs(s.vx), Math.abs(s.vz)) * DEG);
     if (xOut > st.xIn) return fail(st, 'wrongWay'); // turned east: the S goes west, left first
     if (st.maxDepth < SHALLOW_R * st.R) return fail(st, 'shallow');
     foldHalf(st, xOut);
-    st.half++; st.ht = 0; st.xIn = xOut; st.maxDepth = 0; st.ck = '';
+    st.half++; st.ht = 0; st.xIn = xOut; st.maxDepth = 0; st.ck = ''; st.out = false;
     if (st.half >= HALVES) { st.phase = 'complete'; return 'complete'; }
   }
+  if (s.x - st.xIn > WRONG_R * st.R && s.bankDeg * sideOf(st.half) < -5) return fail(st, 'wrongWay'); // banked the other way, going east
   if (s.stalled) return fail(st, 'stall');
   if (st.d > LOST_R * st.R) return fail(st, 'drift');
   if (st.maxAltDevFt > FAIL_FT) return fail(st, 'height');
@@ -191,7 +198,7 @@ export function sBankDeg(st, s) {
     return Math.max(-10, Math.min(10, 3 * (want - s.vx)));
   }
   const side = sideOf(st.half);
-  const rx = s.x - centreX(st, st.half), rz = s.z - st.z0;
+  const rx = s.x - centreX(st), rz = s.z - st.z0;
   const d = Math.max(1, Math.hypot(rx, rz));
   const vr = (s.vx * rx + s.vz * rz) / d; // + outward
   const vt2 = Math.max(0, s.vx * s.vx + s.vz * s.vz - vr * vr);
@@ -213,32 +220,35 @@ const windComing = (s, side) => {
   return v < 1 ? 0 : side * (-s.wx * s.vz + s.wz * s.vx) / v;
 };
 
+const ROLL_WORD = { L: { Steep: 'stRollLSteep', Gentle: 'stRollLGentle', M: 'stRollL' }, R: { Steep: 'stRollRSteep', Gentle: 'stRollRGentle', M: 'stRollR' } };
 // The coach's word for this moment (coach.js s.ds). kid: the guide flies it. A half's roll-in word is chosen once, at
-// its crossing, from the wind there (lesson 2026-11-24: never re-derived mid-roll), then the turn's own words.
+// its crossing, from the wind there (lesson 2026-11-24: never re-derived mid-roll), and held while the wings are level;
+// then the turn's words come from the bank the ground-track law asks (sBankDeg, the Kid guide's) against the player's,
+// so the coach never asks for the opposite of the technique the lesson grades (panel: "wide: steepen" from the distance
+// alone hooked a coach-following bot back over the road, D); "road ahead: roll out" once the half is well out and
+// closing, held until the crossing.
+export const BAND_DEG = 6; // the player's bank this far off the law's: steeper / shallower
 export function sPrompt(st, s, kid) {
   if (st.phase === 'complete' || st.phase === 'failed' || !st.live) return null;
   if (kid) return st.phase === 'entry' ? 'stKidIn' : 'stKid';
   if (st.phase === 'entry') return 'stFlyOn';
   if (Math.abs(s.bankDeg) > MAX_BANK_DEG + 2) return 'stSteep';
-  const side = sideOf(st.half), dir = side < 0 ? 'L' : 'R';
+  const side = sideOf(st.half), dir = side < 0 ? 'L' : 'R', bank = s.bankDeg * side; // + into the turn
   if (st.ck === '') { const wb = windBehind(s); st.ck = wb > 0.5 ? 'Steep' : wb < -0.5 ? 'Gentle' : 'M'; }
-  if (st.ht < ROLL_WORD_S && s.bankDeg * side < 10) return `stRoll${dir}${st.ck === 'M' ? '' : st.ck}`;
+  if (bank < 10 && !st.out && st.maxDepth < st.R / 2) return ROLL_WORD[dir][st.ck]; // a table: no string per frame
   const closing = side < 0 ? s.vz : -s.vz;
-  if (closing > 1 && st.depth / closing < SAY_OUT_S && s.x < centreX(st, st.half)) return 'stRollOut';
+  if (st.out || (closing > 1 && st.maxDepth > st.R / 2 && st.depth / closing < SAY_OUT_S)) { st.out = true; return 'stRollOut'; }
   if (st.iasF < st.kts0 - KTS_TOL) return 'stSlow';
-  const off = st.d - st.R;
-  if (Math.abs(off) > 2 * SAY_OFF_M) return off > 0 ? 'stWide' : 'stClose';
+  const want = sBankDeg(st, s) * side, coming = windComing(s, side);
+  if (bank < want - BAND_DEG) return coming > 0 ? 'stSteeper' : 'stWide';
+  if (bank > want + BAND_DEG) return coming < 0 ? 'stShallower' : 'stClose';
   const altDev = s.altFt - st.alt0;
   if (altDev < -ALT_TOL_FT / 2) return 'stLow';
   if (altDev > ALT_TOL_FT / 2) return 'stHigh';
-  if (off > SAY_OFF_M) return 'stWide';
-  if (off < -SAY_OFF_M) return 'stClose';
   if (st.iasF < st.kts0 - KTS_TOL / 2) return 'stSlow';
   if (st.iasF > st.kts0 + KTS_TOL / 2) return 'stFast';
   const wb = windBehind(s);
-  if (wb > 0.8) return 'stDown';
-  if (wb < -0.8) return 'stUp';
-  return windComing(s, side) > 0 ? 'stSteeper' : 'stShallower';
+  return wb > 0.7 ? 'stHoldDown' : wb < -0.7 ? 'stHoldUp' : 'stHold';
 }
 
 // Kid's hands-off guide (main.js applyAssists): the ground-track law, the flight path back to the entry height
@@ -282,14 +292,13 @@ export function kidGuide(st, out) {
   return ASSIST_BANK_DEG;
 }
 
-// The HUD's readout (aroundPoint.js drawPole's slot and box): an arrow from the nose to the next lit pole (where the
-// half-circle should cross back over the road), and the radius flown against the one asked, e.g. "RADIUS 1,480 / 1,500
+// The HUD's readout (aroundPoint.js drawPole's slot and box): an arrow from the nose to where the half-circle should
+// cross back over the road (the next lit pole when the last crossing was at one), and the radius flown against the one asked, e.g. "RADIUS 1,480 / 1,500
 // FT"; on the way in, the road's distance. The text is rebuilt only when its number changes (AGENTS.md invariant 4).
 export const BOX_W = 232, BOX_H = 24;
 let shownFt = -1, shownPhase = '', boxText = '';
 export function nextPoleRelDeg(st, x, z, hdgTrueDeg) {
-  const k = st.phase === 'entry' ? 0 : st.half + 1;
-  const px = st.x0 - 2 * k * st.R;
+  const px = st.phase === 'entry' ? st.x0 : st.xIn - 2 * st.R; // the first pole; then where this half should cross back
   const brg = Math.atan2(px - x, -(st.z0 - z)) * DEG; // true bearing (+x east, −z north)
   return ((brg - hdgTrueDeg) % 360 + 360) % 360;
 }
@@ -399,13 +408,15 @@ export function gradeSTurns(st, kid = false) {
   } else if (sdFt > SPREAD_C_FT) {
     score = Math.min(score, 69);
     reason = `The radius wandered ±${Math.round(sdFt)} ft: an uneven S. Change the bank as the wind comes round: steeper behind, shallower ahead. No better than a C.`;
-  } else if (sdFt > SPREAD_B_FT || off > OFF_FT || alt > ALT_TOL_FT || kts > KTS_TOL || st.steepS > STEEP_HOLD_S || cross > CROSS_B_DEG) {
+  } else if (flown && (sdFt > SPREAD_B_FT || off > OFF_FT) || alt > ALT_TOL_FT || kts > KTS_TOL || st.steepS > STEEP_HOLD_S || cross > CROSS_B_DEG || st.maxSquareDeg > SQUARE_B_DEG) {
     score = Math.min(score, ACS_CAP);
     reason = st.steepS > STEEP_HOLD_S ? 'Past 45° of bank: the handbook\'s limit. No better than a B.'
       : cross > CROSS_B_DEG ? `Banked ${Math.round(cross)}° over the road: roll the wings level just as you cross it. No better than a B.`
-        : sdFt > SPREAD_B_FT ? `The radius wandered ±${Math.round(sdFt)} ft (the game asks ±${SPREAD_B_FT}; the test sets no number). No better than a B.`
-          : off > OFF_FT ? 'Even half-circles, but not the size asked for. No better than a B.'
-            : 'Outside a test tolerance: no better than a B.';
+        : st.maxSquareDeg > SQUARE_B_DEG ? `Crossed the road ${Math.round(st.maxSquareDeg)}° off square: cross it at a right angle (the handbook's 90°). No better than a B.`
+        : flown && sdFt > SPREAD_B_FT ? `The radius wandered ±${Math.round(sdFt)} ft (the game asks ±${SPREAD_B_FT}; the test sets no number). No better than a B.`
+          : flown && off > OFF_FT ? 'Even half-circles, but not the size asked for. No better than a B.'
+            : alt > ALT_TOL_FT ? `${st.altSignFt < 0 ? 'Lost' : 'Gained'} ${Math.round(alt)} ft: the test allows 100. No better than a B.`
+              : `Airspeed off by ${Math.round(kts)} kt: the test allows 10. No better than a B.`;
   }
   const track = { pts: st.track.slice(0, 2 * st.trackN), n: st.trackN, start: st.trackStart, R: st.R, sTurns: HALVES, wind: st.wx && [st.wx.windDirDeg, st.wx.windKts] };
   return { kind: 'sTurns', title: failed ? 'S-turns not finished' : 'S-turns across a road', grade: letterGrade(score), score, factors, reason,
@@ -415,7 +426,7 @@ export const grade = gradeSTurns;
 
 export const debugSnap = (st) => {
   const { meanFt, sdFt } = spreadFt(st);
-  return { phase: st.phase, live: st.live, half: st.half, d: st.d, R: st.R, depth: st.depth, ct: st.ct, meanFt, sdFt, maxCrossDeg: st.maxCrossDeg,
+  return { phase: st.phase, live: st.live, half: st.half, d: st.d, R: st.R, depth: st.depth, ct: st.ct, meanFt, sdFt, maxCrossDeg: st.maxCrossDeg, maxSquareDeg: st.maxSquareDeg,
     maxAltDevFt: st.maxAltDevFt, maxKtsDev: st.maxKtsDev, maxBankDeg: st.maxBankDeg, why: st.why, trackN: st.trackN, windKts: st.wx.windKts, windDirDeg: st.wx.windDirDeg };
 };
 

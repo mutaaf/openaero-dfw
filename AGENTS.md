@@ -321,23 +321,29 @@ src/rectCourse.js   the rectangular course (0223, lazy chunk loaded with `rectan
                     bank for the groundspeed = S in four winds, corners ~20° downwind / ~12° upwind as tan φ = Vg²/(gR); compass
                     headings with no crab and a fixed 20° = D)
 src/sTurns.js       S-turns across a road (0224, lazy chunk loaded with `s_turns_road`, `sTurns: true`): the C172 at 90 KIAS, 1,000 ft
-                    AGL over the same fields in aroundPoint.js's scenario 12 kt south wind, an east-west road marked by five lit
-                    poles 3,000 ft apart (the game's: 3C names a road, fence or railroad), entered downwind heading north 1,200 m
-                    south of the first pole (FAA-H-8083-3C ch. 7, S-Turns pp. 7-8 to 7-10: cross the line at 90° downwind, "immediately"
-                    a 180° constant-radius turn, the bank steepest as it starts, wings level "just as the airplane crosses", the next
-                    turn the opposite way, shallow first). Four 1,500 ft half-circles going west, left (north) first, anchored on the
-                    poles (centreX); held at the spawn until the player flies; the course starts crossing northbound within 1 R of
-                    the first pole and ends on the fourth crossing back. The radius is graded on each half's own middle (half-way
-                    between its crossings, foldHalf over the track samples): spread ±150 ft a B, ±250 a C, ±350 a D; the average vs
-                    1,500 ft; the bank at each crossing (over 10° a B); ±100 ft, ±10 kt, 45°. Fails: turned east ('wrongWay'), back
-                    over the road under R/3 out ('shallow'), 3 R from the half's middle, 500 ft off, a stall, 300 s. st* coach words
-                    (the roll-in chosen once at the crossing by the wind there; shallower / steeper as the wind comes round; "road
-                    ahead: roll the wings level"); the HUD's RADIUS readout with an arrow to the next pole (ROAD on the way in);
-                    Kid's guide sBankDeg (Vt²/d round the half's middle, aroundPoint.js's spring and damping, eased to level from
-                    OUT_LEAD_S + OUT_S before the road); the card's plot draws the road, the S asked and the poles in a 2.3:1 view
-                    (trackPlot.js track.sTurns). Cards: tests/flight/sTurns.test.js (banking for the groundspeed = S in 0/12/18 kt
-                    and an oblique wind, wings within ~3° over the road; the still-air 27° held = drifted off, D; ~31° starting
-                    downwind, ~21° upwind as tan φ = Vg²/(gR); Kid hands off = S)
+                    AGL over the same fields in aroundPoint.js's scenario 12 kt south wind, an east-west line of five lit poles
+                    3,000 ft apart as the road (the game's: 3C names a road, fence or railroad; no real road is claimed), entered
+                    downwind heading north 1,200 m south of the first pole (FAA-H-8083-3C ch. 7, S-Turns pp. 7-8 to 7-10: cross the
+                    line at 90° downwind, "immediately" a 180° constant-radius turn, the bank steepest as it starts, wings level
+                    "just as the airplane crosses", the next turn the opposite way, shallow first). Four 1,500 ft half-circles going
+                    west, left (north) first; each half's middle is R west of where the Cessna crossed (centreX: the HUD, coach,
+                    guide, drift check and grade all use the pilot's own crossing; the poles mark the spacing asked). Held at the
+                    spawn until the player flies; starts crossing northbound within 1 R of the first pole, ends on the fourth
+                    crossing back. Graded on the radius round each half's own middle (half-way between its crossings, foldHalf):
+                    spread ±150 ft a B, ±250 a C, ±350 a D; the average within 200 ft of 1,500; the bank at each crossing (over 10°
+                    a B) and the track off square (over 20° a B); ±100 ft, ±10 kt, 45°. Fails: banked the wrong way and 0.3 R east
+                    of the crossing, or back over the road east of it ('wrongWay'), back under R/3 out ('shallow'), 3 R from the
+                    half's middle, 500 ft off, a stall, 300 s. st* coach words: the roll-in ("about 30°/25°/20°") chosen once at the
+                    crossing by the wind there and held while the wings are level; then "a little steeper / shallower" from the
+                    player's bank against the law's (sBankDeg, ±BAND_DEG 6°), "good bank, hold it" inside it; "road ahead: start
+                    rolling the wings level" once the half is R/2 out and ~4 s from the road, held to the crossing (first-timer
+                    panel: words from the distance alone hooked a coach-following bot back over the road, D). The HUD's RADIUS
+                    readout with an arrow to where the half should cross back (ROAD on the way in); Kid's guide sBankDeg (Vt²/d,
+                    aroundPoint.js's spring and damping, eased to level from OUT_LEAD_S + OUT_S before the road); the card's plot
+                    draws the road, the S asked and the poles in a 2.3:1 view (trackPlot.js track.sTurns). Cards:
+                    tests/flight/sTurns.test.js (banking for the groundspeed = S in 0/12/18 kt and an oblique wind, wings within ~3°
+                    over the road; the still-air 27° held = B in still air, D in the wind; each bank within 3° of tan φ = Vg²/(gR) at
+                    its groundspeed; Kid hands off = S; a pilot flying by the coach's words alone completes, B or better)
 src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_slow_flight`): the C172 clean at 95 KIAS,
                     4,500 ft AGL over Grapevine Lake; slow to the band and hold it, graded to FAA-S-ACS-6C Area VII Task A
                     (S5: altitude ±100 ft, heading ±10°, airspeed +10/−0; S4: no stall warning). The band is the airplane's

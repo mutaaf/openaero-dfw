@@ -17,8 +17,9 @@ import { windVector } from '../../src/weather.js';
 import { airAt, tasFromIas } from '../../src/atmosphere.js';
 import { trimThrottle, dihedralAileron, rollHoldScale } from '../../src/flightModel.js';
 import { assistConfig, createAssistState, shapeControls, slewRudder } from '../../src/assists.js';
-import { createSTurns, sSimStep, gradeSTurns, spreadFt, kidGuide, sideOf, centreX, ASSIST_BANK_DEG, MAX_BANK_DEG, SPREAD_B_FT, CROSS_B_DEG } from '../../src/sTurns.js';
+import { createSTurns, sSimStep, gradeSTurns, spreadFt, kidGuide, coachWord, sideOf, centreX, ASSIST_BANK_DEG, MAX_BANK_DEG, SPREAD_B_FT, CROSS_B_DEG } from '../../src/sTurns.js';
 import { MISSIONS } from '../../src/missions.js';
+import { RANK, COACH_MIN_HOLD_S } from '../../src/coach.js';
 import { makeBody, fly, attitude } from './harness.js';
 
 const c172 = AIRCRAFT_DATABASE.c172;
@@ -53,16 +54,18 @@ function sTurns(pilot, { fromDeg = 180, windKts = WIND_KTS } = {}) {
       target = Math.max(-10, Math.min(10, 3 * (-0.02 * x.pos.x - x.vel.x)));
     } else if (st.phase === 'course') {
       const side = sideOf(st.half);
+      const rx = x.pos.x - centreX(st), rz = x.pos.z;
+      let mag = 27;
       if (pilot === 'handbook') {
-        const rx = x.pos.x - centreX(st, st.half), rz = x.pos.z;
         const d = Math.hypot(rx, rz), vr = (x.vel.x * rx + x.vel.z * rz) / d;
         const vt2 = x.vel.x ** 2 + x.vel.z ** 2 - vr * vr;
-        let mag = Math.min(45, Math.max(-10, Math.atan((vt2 / d + 0.01 * (d - st.R) + 0.15 * vr) / GRAVITY) / DEG_TO_RAD));
-        const closing = side < 0 ? x.vel.z : -x.vel.z, depth = side < 0 ? -rz : rz;
-        if (closing > 1 && rx < 0) mag *= Math.min(1, Math.max(0, depth / closing - 0.7) / 3);
-        target = side * mag;
-      } else target = side * 27;
-      if (Math.abs(st.ht - 8) < 1 / 240) starts.push([st.half, bankRightDeg * side]);
+        mag = Math.min(45, Math.max(-10, Math.atan((vt2 / d + 0.01 * (d - st.R) + 0.15 * vr) / GRAVITY) / DEG_TO_RAD));
+      }
+      // Both roll out the same way, level as they cross (the 'fixed' pilot is no sloppier there: physics panel).
+      const closing = side < 0 ? x.vel.z : -x.vel.z, depth = side < 0 ? -rz : rz;
+      if (closing > 1 && rx < 0) mag *= Math.min(1, Math.max(0, depth / closing - 0.7) / 3);
+      target = side * mag;
+      if (Math.abs(st.ht - 8) < 1 / 240) starts.push([st.half, bankRightDeg * side, Math.hypot(x.vel.x, x.vel.z)]);
     }
     bankCmd += Math.max(-15 * dt, Math.min(15 * dt, target - bankCmd));
     x.aileronInput = aileronForBank(bankCmd, bankRightDeg, -x.angVel.z);
@@ -110,7 +113,11 @@ describe('C172 S-turns across a road (0224, FAA-H-8083-3C ch. 7): four half-circ
       expect(r.st.ct).toBeLessThan(160);
     }, 60000);
   }
-  it('the mission\'s wind: the still-air bank (27°) held round every half-circle is an uneven S, C or worse', () => {
+  it('the still-air bank (27°) held round every half-circle: a fair S in still air (the control), uneven in the mission\'s wind, C or worse', () => {
+    const calm = sTurns('fixed', { windKts: 0 });
+    console.log(`[c172 s-turns calm fixed 27°] ${fmt(calm)} (${calm.grade.reason})`);
+    expect(calm.st.phase).toBe('complete');
+    expect(calm.sdFt).toBeLessThan(250);
     const r = sTurns('fixed');
     console.log(`[c172 s-turns 180° fixed 27°] ${fmt(r)} (${r.grade.reason})`);
     expect(r.sdFt).toBeGreaterThan(250);
@@ -128,8 +135,8 @@ describe('C172 S-turns across a road (0224, FAA-H-8083-3C ch. 7): four half-circ
     expect(up.length).toBe(2);
     expect(avg(down) - avg(up)).toBeGreaterThan(8);
     expect(avg(down)).toBeLessThan(MAX_BANK_DEG);
-    expect(avg(down)).toBeGreaterThan(afh(r.tas) - 2); // steeper than the still-air bank
-    expect(avg(up)).toBeLessThan(afh(r.tas)); // shallower
+    // Each bank against the formula at that moment's groundspeed (physics panel: not TAS ± the wind).
+    for (const [, bank, vg] of r.starts) expect(Math.abs(bank - afh(vg))).toBeLessThan(3);
   }, 60000);
 });
 
@@ -185,6 +192,81 @@ describe('C172 S-turns on the assists (0224: main.js applyAssists in the lesson)
       expect(r.st.maxBankDeg).toBeLessThanOrEqual(ASSIST_BANK_DEG);
       expect(['S', 'A']).toContain(r.grade.grade);
       expect(r.grade.note).toMatch(/flew the S-turns/);
+    }, 60000);
+  }
+});
+
+// A pilot who flies only by the coach's words, as a first-timer would (lesson 2026-11-24: 0223's coach failed such a
+// bot): Learner on the stick, the word shown as coach.js shows it (rank, COACH_MIN_HOLD_S), heard 0.5 s late; a roll
+// word sets its bank ("about 30°/25°/20°"), "a little steeper / shallower" moves the stick 3°/s, "hold it" holds, "road
+// ahead" rolls level at 10°/s, the height and speed words nudge the stick and the throttle.
+function coachFollower(fromDeg = 180, windKts = WIND_KTS, rate = 3) {
+  const b = makeBody(c172, { kts: KTS, altM: ALT_M, throttle: 0 });
+  b.spec = c172;
+  b.throttle = b.engineN = trimThrottle(c172, KTS * KTS_TO_MPS, 0, 0, true, airAt(b.pos.y));
+  b.apMaster = false;
+  const m = lesson(fromDeg, windKts);
+  b.pos.x = m.pos[0]; b.pos.z = m.pos[1];
+  const w = windVector(fromDeg, windKts * KTS_TO_MPS);
+  b.windVec.set(w.x, 0, w.z);
+  b.vel.add(b.windVec);
+  const cfg = assistConfig('learner'), ast = createAssistState(), st = createSTurns(m), s = {}, out = {};
+  const c = { prompt: null, pending: null, pendingS: 0 };
+  const settle = (target, dt) => {
+    if (target === c.prompt) { c.pending = null; c.pendingS = 0; return; }
+    if (target === null || c.prompt === null || (RANK[target] ?? 1) > (RANK[c.prompt] ?? 1)) { c.prompt = target; c.pending = null; c.pendingS = 0; return; }
+    if (target !== c.pending) { c.pending = target; c.pendingS = 0; }
+    c.pendingS += dt;
+    if (c.pendingS >= COACH_MIN_HOLD_S) { c.prompt = target; c.pending = null; c.pendingS = 0; }
+  };
+  let t = 0, tgt = 0, cmd = 0, thr = b.throttle, heard = null, shownAt = 0, shownWord = null, ev = '', onset = 0;
+  const words = [];
+  fly(b, c172, 400, (x, dt) => {
+    t += dt;
+    const { pitchDeg, bankRightDeg } = attitude(x);
+    settle(coachWord(st, false), dt);
+    if (c.prompt !== shownWord) { shownWord = c.prompt; shownAt = t; if (words.at(-1) !== c.prompt) words.push(c.prompt); }
+    if (heard !== shownWord && t - shownAt >= 0.5) { heard = shownWord; onset = t; }
+    const side = sideOf(st.half), mag = Math.abs(tgt), sgn = Math.sign(tgt) || side;
+    let pitchIn = 0;
+    if (heard?.startsWith('stRoll') && heard !== 'stRollOut') tgt = (heard[6] === 'L' ? -1 : 1) * (heard.endsWith('Steep') ? 30 : heard.endsWith('Gentle') ? 20 : 25);
+    else if (heard === 'stRollOut' || heard === 'stFlyOn') tgt = sgn * Math.max(0, mag - 10 * dt);
+    else if (heard === 'stSteeper' || heard === 'stWide') tgt = side * Math.min(40, mag + rate * dt);
+    else if (heard === 'stShallower' || heard === 'stClose') tgt = sgn * Math.max(5, mag - rate * dt);
+    else if (heard === 'stSteep') tgt = sgn * 40;
+    else if (heard === 'stLow') { if ((t - onset) % 3 < 0.4) { pitchIn = -0.3; thr = Math.min(1, thr + 0.1 * dt); } }
+    else if (heard === 'stHigh') { if ((t - onset) % 3 < 0.4) pitchIn = 0.3; }
+    else if (heard === 'stSlow') { if ((t - onset) % 3 < 0.5) thr = Math.min(1, thr + 0.1 * dt); }
+    else if (heard === 'stFast') { if ((t - onset) % 3 < 0.5) thr = Math.max(0, thr - 0.1 * dt); }
+    cmd += Math.max(-20 * dt, Math.min(20 * dt, tgt - cmd)); // the thumb
+    s.guideBankDeg = 0; s.guideGammaDeg = 0;
+    Object.assign(s, {
+      pitchIn, rollIn: Math.max(-1, Math.min(1, cmd / (ASSIST_BANK_DEG * 0.85))), yawIn: 0, pitchDeg, bankRightDeg, pitchRateUp: x.angVel.x, rollRateRight: -x.angVel.z,
+      rollScale: rollHoldScale(c172, (x.tasKts ?? 0) * KTS_TO_MPS), yawRateRight: -x.angVel.y, driftDeg: 0,
+      aoaDeg: x.aoaDeg ?? 0, betaDeg: x.betaDeg ?? 0, dihedralAil: dihedralAileron(c172, (x.betaDeg ?? 0) * DEG_TO_RAD), propAil: x.propAil ?? 0,
+      stallAoaDeg: stallAoaDeg(c172, 0), tailstrikeDeg: 15, onGround: false, noseWheelDown: false, wheelHeightM: 300,
+      airspeedMps: (x.tasKts ?? 0) * KTS_TO_MPS, vsMps: x.vel.y, bankMaxDeg: ASSIST_BANK_DEG,
+    });
+    shapeControls(cfg, ast, s, dt, out);
+    x.elevInput = out.elev; x.aileronInput = out.ail; x.rudderInput = slewRudder(x.rudderInput, out.rud, dt);
+    x.throttle = thr;
+  }, (x) => {
+    ev = sSimStep(st, x, 1 / 120, true);
+    return ev === 'complete' || ev === 'failed';
+  });
+  return { st, grade: gradeSTurns(st), ...spreadFt(st), words };
+}
+
+describe('C172 S-turns flown by the coach\'s words alone (0224 first-timer panel)', () => {
+  for (const [dir, rate] of [[180, 3], [180, 2], [180, 5], [200, 3]]) {
+    it(`wind 12 kt from ${dir}°, the stick moved ${rate}°/s on "a little steeper / shallower": completes, B or better`, () => {
+      const r = coachFollower(dir, WIND_KTS, rate);
+      console.log(`[c172 s-turns coach bot ${dir}° ${rate}°/s] ${r.st.phase}${r.st.why ? ` (${r.st.why})` : ''}: radius ${r.meanFt.toFixed(0)} ±${r.sdFt.toFixed(0)} ft, `
+        + `crossings ${r.st.crossDeg.map((v) => v.toFixed(0)).join('/')}°, alt ±${r.st.maxAltDevFt.toFixed(0)} ft, IAS ±${r.st.maxKtsDev.toFixed(1)} kt → ${r.grade.grade} ${r.grade.score} (${r.grade.reason}); ${r.words.length} words`);
+      expect(r.st.phase).toBe('complete');
+      expect(['S', 'A', 'B']).toContain(r.grade.grade);
+      expect(r.st.maxCrossDeg).toBeLessThan(20);
+      expect(r.words.length).toBeLessThan(80); // no flicker
     }, 60000);
   }
 });

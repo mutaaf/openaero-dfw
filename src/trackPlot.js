@@ -11,12 +11,12 @@ const r1 = (v) => Math.round(v * 10) / 10;
 // track.sTurns (S-turns across a road, 0224): the number of half-circles, R their radius; the origin is the first pole on
 // the road (east-west, z = 0) and they go west, left first (north), so the view is centred on their middle, −halves·R east.
 // Its view is S_ASPECT times wider than tall (the card's plot box is ~2.3-3.4 times wider than tall), the long run-in
-// from the south left out (clipped).
+// from the south left out (clipped), and room west of the S for the wind's arrow (device panel: its label sat on the S).
 export const S_ASPECT = 2.3;
 export const plotCentreX = (track) => (track.sTurns ? -track.sTurns * track.R : 0);
 export function trackExtent(track) {
   const c = plotCentreX(track), k = track.sTurns ? S_ASPECT : 1;
-  let ext = track.rect ? Math.max(track.rect[0], track.rect[1]) + track.R * 1.15 : track.sTurns ? (track.sTurns + 0.6) * track.R : track.R * 1.3;
+  let ext = track.rect ? Math.max(track.rect[0], track.rect[1]) + track.R * 1.15 : track.sTurns ? (track.sTurns + 1.5) * track.R : track.R * 1.3;
   for (let i = track.sTurns ? 2 * Math.max(0, track.start) : 0; i < 2 * track.n; i += 2) ext = Math.max(ext, Math.abs(track.pts[i] - c), k * Math.abs(track.pts[i + 1]));
   return ext * 1.08;
 }
@@ -58,7 +58,7 @@ export function trackPlotSvg(track, px = 144) {
     const a = wind[0] * Math.PI / 180, ux = -Math.sin(a), uz = Math.cos(a);
     // Top left of a circle's plot; on the field itself for the rectangular course (device panel: the label sat on its path).
     const L = rect ? Math.min(ext * 0.2, rect[1] * 0.45) : ez * 0.2;
-    const cx = rect ? 0 : c - ext * (sTurns ? 0.88 : 0.7), cz = rect ? -fs * 0.7 : -ez * 0.72;
+    const cx = rect ? 0 : c - ext * (sTurns ? 0.84 : 0.7), cz = rect ? -fs * 0.7 : -ez * 0.72;
     const x0 = cx - ux * L, z0 = cz - uz * L, x1 = cx + ux * L, z1 = cz + uz * L, h = ez * 0.07;
     svg += `<path d="M${r1(x0)} ${r1(z0)}L${r1(x1)} ${r1(z1)}" ${line} stroke="#f8fafc" stroke-width="2"/>`
       + `<path d="M${r1(x1)} ${r1(z1)}L${r1(x1 - ux * h - uz * h * 0.6)} ${r1(z1 - uz * h + ux * h * 0.6)}L${r1(x1 - ux * h + uz * h * 0.6)} ${r1(z1 - uz * h - ux * h * 0.6)}Z" fill="#f8fafc"/>`

@@ -17,8 +17,8 @@ const V = 48;
 
 // The S asked as a function of its length s from the first pole: half k's middle 2k+1 radii west, north of the road
 // for even k (left turns, anticlockwise from above), south for odd (right turns). In the sim's frame +x east, +z south.
-function sAt(st, s, rOf = () => st.R) {
-  let k = 0, x0 = st.x0;
+function sAt(st, s, rOf = () => st.R, x0 = st.x0) {
+  let k = 0;
   for (;;) {
     const r = rOf(k);
     if (s <= Math.PI * r || k === HALVES - 1) {
@@ -41,7 +41,7 @@ function flyLesson(st, { rOf, extra = () => ({}), maxS = 400, across = 0 } = {})
     z -= V * DT; t += DT;
   }
   for (let s = V * DT; t < maxS && st.phase === 'course'; t += DT, s += V * DT) {
-    const p = sAt(st, s, rOf);
+    const p = sAt(st, s, rOf, st.x0 + across);
     const ev = sStep(st, input(p, extra(p, s)));
     if (ev) evs.push(ev);
   }
@@ -106,6 +106,30 @@ describe('S-turns: the course', () => {
     expect(g.grade).toBe('B');
     expect(g.reason).toMatch(/Banked 25° over the road/);
   });
+  it('an even S flown from a crossing off the pole, or of the wrong size, is judged on its own half-circles (physics panel)', () => {
+    // Crossed 400 m east of the first pole, then an even S from there: the guide, coach and grade all measure from the
+    // pilot's own crossing (they fought it, C 69, when the half-circles were anchored on the poles).
+    const off = createSTurns(MISSION);
+    flyLesson(off, { across: 400 });
+    expect(off.phase).toBe('complete');
+    expect(gradeSTurns(off).grade).toBe('S');
+    // A big even S finishes (it failed 'drift' with a wind message when its middle drifted off the poles' middles).
+    const big = createSTurns(MISSION);
+    flyLesson(big, { rOf: () => 1.3 * R });
+    expect(big.phase).toBe('complete');
+    expect(gradeSTurns(big).reason).toMatch(/not the size asked/);
+  });
+  it('a crossing well off square is no better than a B (3C: "at a 90° angle")', () => {
+    const st = createSTurns(MISSION);
+    let z = MISSION.pos[1], x = MISSION.road[0] - 600;
+    while (st.phase === 'entry') { sStep(st, input({ x, z, vx: V * 0.5, vz: -V * 0.87 })); z -= V * 0.87 * DT; x += V * 0.5 * DT; }
+    expect(st.maxSquareDeg).toBeCloseTo(30, 0);
+    const x1 = st.xIn;
+    for (let s = V * DT; st.phase === 'course'; s += V * DT) sStep(st, input(sAt(st, s, () => R, x1)));
+    const g = gradeSTurns(st);
+    expect([st.phase, st.why, g.reason]).toEqual(['complete', null, expect.stringMatching(/off square/)]);
+    expect(g.grade).toBe('B');
+  });
   it('a crossing far from the first pole is a missed entry', () => {
     const st = createSTurns(MISSION);
     expect(flyLesson(st, { across: 2 * R })).toEqual(['failed']);
@@ -120,9 +144,10 @@ describe('S-turns: the course', () => {
     while (east.phase === 'entry') { sStep(east, input({ x: east.x0, z, vx: 0, vz: -V })); z -= V * DT; }
     for (let s = V * DT; east.phase === 'course'; s += V * DT) {
       const th = s / R; // a right turn north of the road: the middle east of the pole
-      sStep(east, input({ x: east.x0 + R - R * Math.cos(th), z: east.z0 - R * Math.sin(th), vx: V * Math.sin(th), vz: -V * Math.cos(th) }));
+      sStep(east, input({ x: east.x0 + R - R * Math.cos(th), z: east.z0 - R * Math.sin(th), vx: V * Math.sin(th), vz: -V * Math.cos(th), bankDeg: 25 }));
     }
     expect(east.why).toBe('wrongWay');
+    expect(east.ct).toBeLessThan(15); // told a few seconds in, not a half-circle later (physics panel)
     expect(gradeSTurns(east).reason).toMatch(/wrong way/);
   });
   it('crossing back too soon is shallow; a stall, the height and drifting away fail', () => {
@@ -159,17 +184,17 @@ describe('S-turns: the ground-track law and the coach', () => {
   const st = createSTurns(MISSION);
   st.phase = 'course'; st.live = true; st.alt0 = 1700; st.half = 0; st.xIn = st.x0;
   it('banks left north of the road, right south, steeper with the wind behind (tan φ = Vg²/(gR))', () => {
-    const top = { x: centreX(st, 0), z: st.z0 - R, vx: -V, vz: 0 };
+    const top = { x: centreX(st), z: st.z0 - R, vx: -V, vz: 0 };
     const b0 = sBankDeg(st, top);
     expect(b0).toBeLessThan(-20);
     expect(b0).toBeCloseTo(-Math.atan(V * V / (9.80665 * R)) * 180 / Math.PI, 0);
     expect(sBankDeg(st, { ...top, vx: -V * 1.2 })).toBeLessThan(b0);
-    const s1 = { ...st, half: 1 };
-    expect(sBankDeg(s1, { x: centreX(st, 1), z: st.z0 + R, vx: -V, vz: 0 })).toBeGreaterThan(20);
+    const s1 = { ...st, half: 1, xIn: st.x0 - 2 * R };
+    expect(sBankDeg(s1, { x: centreX(s1), z: st.z0 + R, vx: -V, vz: 0 })).toBeGreaterThan(20);
   });
   it('eases the bank to level as it closes on the road', () => {
     // On the circle, closing on the road at its west end (the north half: heading south, a little west).
-    const on = (depth) => { const a = Math.sqrt(R * R - depth * depth); return { x: centreX(st, 0) - a, z: st.z0 - depth, vx: -V * depth / R, vz: V * a / R }; };
+    const on = (depth) => { const a = Math.sqrt(R * R - depth * depth); return { x: centreX(st) - a, z: st.z0 - depth, vx: -V * depth / R, vz: V * a / R }; };
     const full = sBankDeg(st, on(R * 0.7));
     expect(full).toBeLessThan(-20);
     const mid = sBankDeg(st, on(V * (OUT_LEAD_S + OUT_S / 2)));
@@ -179,32 +204,38 @@ describe('S-turns: the ground-track law and the coach', () => {
   });
   it('says roll left, steep with the wind behind at the first crossing, once; then roll out before the road', () => {
     const s = createSTurns(MISSION);
-    s.phase = 'course'; s.live = true; s.alt0 = 1700; s.kts0 = 90; s.iasF = 90;
+    s.phase = 'course'; s.live = true; s.alt0 = 1700; s.kts0 = 90; s.iasF = 90; s.xIn = s.x0;
     s.d = R;
     expect(sPrompt(s, input({ x: s.x0, z: s.z0 - 1, vx: 0, vz: -V, wz: -6 }), false)).toBe('stRollLSteep');
     s.ht = 2; // mid-roll, the wind abeam now: the word holds (lesson 2026-11-24)
     expect(sPrompt(s, input({ x: s.x0 - 50, z: s.z0 - 200, vx: -V, vz: 0, wz: -6, bankDeg: -5 }), false)).toBe('stRollLSteep');
-    s.ht = 30; s.depth = 4 * V; s.d = R;
-    expect(sPrompt(s, input({ x: centreX(s, 0) - R + 10, z: s.z0 - 4 * V, vx: 0, vz: V, wz: -6, bankDeg: -20 }), false)).toBe('stRollOut');
+    s.ht = 30; s.depth = 5 * V; s.d = R; s.maxDepth = R;
+    expect(sPrompt(s, input({ x: centreX(s) - R + 10, z: s.z0 - 5 * V, vx: 0, vz: V, wz: -6, bankDeg: -20 }), false)).not.toBe('stRollOut');
+    s.depth = 3 * V; // 3 s from the road
+    expect(sPrompt(s, input({ x: centreX(s) - R + 10, z: s.z0 - 3 * V, vx: 0, vz: V, wz: -6, bankDeg: -20 }), false)).toBe('stRollOut');
+    s.depth = V; // held to the road, whatever the bank says (panel: a flash of "shallower" over the road)
+    expect(sPrompt(s, input({ x: centreX(s) - R + 200, z: s.z0 - V, vx: -V / 2, vz: V, wz: -6, bankDeg: -2 }), false)).toBe('stRollOut');
     expect(sPrompt(s, input({ x: s.x0, z: s.z0 - 1, vx: 0, vz: -V, bankDeg: -60 }), false)).toBe('stSteep');
     expect(sPrompt(s, input({ x: s.x0, z: s.z0, vx: 0, vz: -V }), true)).toBe('stKid');
     const n = createSTurns(MISSION); n.live = true;
     expect(sPrompt(n, input({ x: n.x0, z: n.z0 + 500, vx: 0, vz: -V }), false)).toBe('stFlyOn');
   });
-  it('the second half starts gently into the wind, and says steeper as the wind comes behind', () => {
+  it('the second half starts gently into the wind; then steeper or shallower by the law\'s bank, and hold it on it', () => {
     const s = createSTurns(MISSION);
-    s.phase = 'course'; s.live = true; s.alt0 = 1700; s.kts0 = 90; s.iasF = 90; s.half = 1; s.d = R;
+    s.phase = 'course'; s.live = true; s.alt0 = 1700; s.kts0 = 90; s.iasF = 90; s.half = 1; s.d = R; s.xIn = s.x0 - 2 * R;
     expect(sPrompt(s, input({ x: s.x0 - 2 * R, z: s.z0 + 1, vx: 0, vz: V, wz: -6 }), false)).toBe('stRollRGentle');
     s.ht = 15; s.depth = R;
     // At the half's southernmost point heading west, turning right: the wind (from the south) is coming round behind.
-    expect(sPrompt(s, input({ x: centreX(s, 1), z: s.z0 + R, vx: -V, vz: 0, wz: -6, bankDeg: 25 }), false)).toBe('stSteeper');
+    expect(sPrompt(s, input({ x: centreX(s), z: s.z0 + R, vx: -V, vz: 0, wz: -6, bankDeg: 15 }), false)).toBe('stSteeper');
+    // On the law's bank (~27° here): hold it.
+    expect(sPrompt(s, input({ x: centreX(s), z: s.z0 + R, vx: -V, vz: 0, wz: -6, bankDeg: 27 }), false)).toBe('stHold');
     const s0 = createSTurns(MISSION);
-    Object.assign(s0, { phase: 'course', live: true, alt0: 1700, half: 0, d: R, ht: 15, depth: R, ck: 'Steep' });
-    expect(sPrompt(s0, input({ x: centreX(s0, 0), z: s0.z0 - R, vx: -V, vz: 0, wz: -6, bankDeg: -25 }), false)).toBe('stShallower');
+    Object.assign(s0, { phase: 'course', live: true, alt0: 1700, half: 0, d: R, ht: 15, depth: R, ck: 'Steep', xIn: s0.x0 });
+    expect(sPrompt(s0, input({ x: centreX(s0), z: s0.z0 - R, vx: -V, vz: 0, wz: -6, bankDeg: -36 }), false)).toBe('stShallower');
   });
   it('Kid\'s guide: the law, the lesson\'s 53° cap; nothing once done', () => {
     const out = {};
-    sKidGuide(st, { x: centreX(st, 0), z: st.z0 - R, vx: -V, vz: 0, altFt: 1700, aoaDeg: 4, bankDeg: -25 }, out);
+    sKidGuide(st, { x: centreX(st), z: st.z0 - R, vx: -V, vz: 0, altFt: 1700, aoaDeg: 4, bankDeg: -25 }, out);
     expect(out.guideBankDeg).toBeLessThan(-20);
     expect(Math.abs(out.guideGammaDeg)).toBeLessThan(1);
     const done = createSTurns(MISSION); done.phase = 'complete';
@@ -214,7 +245,7 @@ describe('S-turns: the ground-track law and the coach', () => {
   it('the HUD arrow points to the next pole', () => {
     const s = createSTurns(MISSION);
     expect(nextPoleRelDeg(s, s.x0, s.z0 + 1000, 0)).toBeCloseTo(0, 5); // the first pole dead ahead, heading north
-    s.phase = 'course'; s.half = 0;
+    s.phase = 'course'; s.half = 0; s.xIn = s.x0;
     expect(nextPoleRelDeg(s, s.x0, s.z0, 0)).toBeCloseTo(270, 5); // the next pole 2R west: off the left wing
   });
   it('five poles on the road, one at each crossing, seated on the ground', () => {
