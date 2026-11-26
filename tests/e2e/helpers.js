@@ -48,6 +48,16 @@ export function collectErrors(page) {
   return errors;
 }
 
+// A quick touch tap at (x, y) through a CDP session (one finger, id 1). Both events are sent before either is
+// acknowledged: awaiting touchStart's ack first let a loaded runner deliver the touchEnd 600+ ms later, past the
+// pedals' 400 ms tap-or-hold line (PEDAL_HOLD_MS in main.js), so a "tap" slid the rudder (main's CI on 3f30e08).
+export async function touchTap(cdp, x, y) {
+  await Promise.all([
+    cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] }),
+    cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
+  ]);
+}
+
 // Number of distinct colours in an element's rendered pixels (sampled on a 32x32 grid).
 // A blank or failed WebGL canvas yields 1; the approach scene with stubbed tiles yields ~6
 // (sky, horizon haze, ground). Measured 2026-10-16: render on = 6, render off = 1.

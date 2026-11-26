@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, collectErrors, touchTap } from './helpers.js';
 test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Ticket 0188 on a phone (390x844, touch): the wing-low lesson on Pilot shows the rudder pedals in the trim rocker's slot
@@ -42,8 +42,7 @@ test('phone, Pilot: the pedals under the left thumb, on screen and clear of the 
   const cdp = await page.context().newCDPSession(page);
   const tap = async (id) => {
     const b = boxes[id];
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 1 }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await touchTap(cdp, b.x + b.width / 2, b.y + b.height / 2);
   };
   await tap('#touchRudL');
   await tap('#touchRudL');

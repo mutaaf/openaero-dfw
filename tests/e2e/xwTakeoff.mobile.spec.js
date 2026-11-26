@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { BASE, stubTiles, collectErrors, touchTap } from './helpers.js';
 test.use({ simWarp: 2, deviceScaleFactor: 0.25 });
 
 // Ticket 0220 on a phone (390x844, touch): the crosswind takeoff on Pilot shows the touch words for the stick, and the rudder
@@ -39,8 +39,7 @@ test('phone, Pilot: the stick\'s touch words, the pedals under the left thumb, o
   await page.screenshot({ path: test.info().outputPath('xw-takeoff-390.png') });
   const cdp = await page.context().newCDPSession(page);
   const b = boxes['#touchRudL'];
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 1 }] });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await touchTap(cdp, b.x + b.width / 2, b.y + b.height / 2);
   await expect.poll(async () => (await snap(page)).touchYaw, { timeout: 5_000 }).toBeCloseTo(-0.2, 1);
   expect(errors).toEqual([]);
 });
