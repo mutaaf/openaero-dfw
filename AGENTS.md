@@ -414,6 +414,23 @@ src/softField.js    soft-field takeoff lesson (0182, lazy chunk loaded with `kad
                     (not Kid), an overrun, run-off or no lift-off ≤ D. Every tyre rolls at the same μ, so the Handbook roll
                     wins by the wing's early lift and slower lift-off, not a lighter nose tyre: nose-wheel bogging is not
                     modelled. The takeoff callouts are off in it (it lifts off under Vr). Cards: tests/flight/softField.test.js
+src/shortTakeoff.js short-field takeoff lesson (0225, lazy chunk loaded with `kads_16_short_field_takeoff`, `shortTakeoff: true`, Drills
+                    group): the C172 on all of Addison 16, flaps 10, the brakes set at the spawn (main.js startDrills). POH Section 4's
+                    checklist (p. 4-16: flaps 10, brakes, full throttle, release, slightly tail low, 56 KIAS until clear) and AFH ch. 6
+                    pp. 6-10 to 6-12. The coach (s.ds / dsGround): flaps, full power on the brakes, "let the brakes go (B)" (and again if
+                    they go back on mid-roll; a 10 s stop on them ends it), the nose down to ROTATE_KTS 45 then "tap ↑" to about 11° (the ease
+                    call looks 0.5 s ahead on the pitch rate: the arrow key raises the nose on the mains up to ~65°/s at 60 kt in
+                    flightModel), "Flying!" from 5 ft (the c172 card's rotation: the game's Cessna lifts off ~53-54 KIAS against Fig. 5-5's
+                    51), 56 to 50 ft (slow/fast at -3/+4), then Vy 74; graded at 200 ft. The distances run from the brake release against
+                    Fig. 5-5 (pohTakeoff: pressure altitude, °C, note 3's wind; the table at the release, st.poh): roll and 50 ft, the
+                    lift-off speed, when the nose came up (pitch ≥ 3° on the runway), the speed at 50 ft (no dip under 51 from 20 ft),
+                    the roll's centreline. Caps: 50 ft past x 1.15 ≤ B; not Kid: flaps not 10 at the lift-off, the nose up > 8 kt early
+                    (the AFH's premature lift-off: the game's Cessna pays little distance for it, so it is graded as technique), the tail
+                    ≤ B (Learner: named, uncapped); a settle-back ≤ C; overrun/run-off/stop ≤ D (a lift-off, settle and stop named so);
+                    a tailwind past note 3's 10 kt is said on the card and lifts the x 1.15 cap. The brakes let go before full power is named, not capped (AFH p.
+                    6-11: not established to shorten the run; the sim agrees). Kid: its brakes come off at full power (the chunk clears
+                    sim.brakesOn), its card is the roll and the 50 ft. The takeoff callouts are off in it. tests/unit/shortTakeoff.test.js,
+                    tests/flight/shortTakeoff.test.js (both models: POH technique S, early rotation B, flaps up D), e2e shortTakeoff(.mobile).spec.js.
 src/xwTakeoff.js    crosswind takeoff lesson (0220, lazy chunk loaded with `kads_crosswind_takeoff`, `xwTakeoff: true`, Drills group):
                     the C172 on KADS 16 flaps up, full length, in the wing-low lesson's wind (wingLow.js liveSuits/scenarioWx: Addison's
                     own live METAR 5-15 kt across, else 12 kt from the right, labelled SCENARIO; frozen once the roll starts). AFH
@@ -931,6 +948,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-26 (0225): 200.11 kB (the short-field takeoff's mission entry and blurb, its lazy import and wiring (checkShortTakeoff, the brakes set at the spawn and let go with an airplane switch, the coach's ground and air prompts, checkTouchdown's skip, the callouts off, the snapshot's shortTakeoff), +0.33 kB over 0224's 199.78; shortTakeoff.js is a lazy chunk).
 2026-11-26 (0224): 199.78 kB (the S-turns' mission entry and blurb, its lazy import in the ground-reference slot (grLibs), tower.js's quiet key, +0.21 kB over 0223's 199.57; sTurns.js is a lazy chunk).
 2026-11-24 (0223): 199.57 kB (the rectangular course's mission entry and blurb, its lazy import beside aroundPoint.js's in one ground-reference slot (sim.groundRef, grLib), the snapshot's computed field, placeCoach dropping the readout below a card over it, +0.40 kB over 0214's 199.17; rectCourse.js is a lazy chunk).
 2026-11-24 (0214): 199.17 kB (the C172's elevator lift beyond trim: flightModel.js elevatorLiftCl, its call and lift-off fade, gear.js's step-mean tail contact, +0.25 kB over 0221's 198.92).

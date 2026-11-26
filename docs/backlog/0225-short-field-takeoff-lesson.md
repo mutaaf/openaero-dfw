@@ -1,12 +1,12 @@
 ---
 id: 0225
 title: Short-field takeoff lesson at Addison: flaps 10, hold the brakes, lift off slow, clear a 50 ft obstacle
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: content
 created: 2026-11-26
-pr:
+pr: 327
 ---
 
 ## Why
@@ -27,11 +27,11 @@ lift-off speed, speed held ±5 kt through the climb, centreline. Kid: hands-off,
 Touches missions.js, main.js (loader), coach.js DRILL_TEXT, results text. No physics change.
 
 ## Acceptance criteria
-- [ ] The mission is in the Drills picker; every speed and distance in it cites the POH section and table.
-- [ ] A scripted handbook pilot (flaps 10, full power, rotate at the POH speed, hold the obstacle speed) grades A or B;
+- [x] The mission is in the Drills picker; every speed and distance in it cites the POH section and table.
+- [x] A scripted handbook pilot (flaps 10, full power, rotate at the POH speed, hold the obstacle speed) grades A or B;
       an early rotation or a flaps-up, low-pitch roll grades lower with the reason named.
-- [ ] Clearing 50 ft later than the POH's distance x 1.15 caps B.
-- [ ] Works at 390x844 touch and 1280x720 keyboard; boot JS budget unchanged (lazy chunk).
+- [x] Clearing 50 ft later than the POH's distance x 1.15 caps B.
+- [x] Works at 390x844 touch and 1280x720 keyboard; boot JS budget unchanged (lazy chunk).
 
 ## Test plan
 tests/flight/shortTakeoff.test.js flies the scripted pilots on both flight models; unit test for the grader;
@@ -39,3 +39,12 @@ e2e (desktop + mobile) picks the mission and reaches the results card.
 
 ## Out of scope
 Soft-field technique (0182), obstacle meshes, weight changes.
+
+## Shipped notes
+Read from the 172S POH itself (befa.org copy, Rev. 4): Section 4's SHORT FIELD TAKEOFF checklist (p. 4-16), the 56 KIAS
+obstacle speed (pp. 4-3, 4-25) and Fig. 5-5 sheet 1 (p. 5-14) with note 3's wind; the second-hand figures in "Why" match.
+The handbook pilot grades S on both models (roll 906 / 951 ft against the table's 960, 50 ft at 1,650 / 1,712 against
+1,633). Two findings shaped the grade: the game's Cessna needs the c172 card's rotation (45 KIAS to ~11°) to lift off
+near 51 (it lifts off at ~53-54), so that is the coach's; and it pays almost no distance for a nose raised early (AFH
+p. 6-12's "premature lift-off"), nor for letting the brakes go at idle (AFH p. 6-11: "not established"), so the early nose
+is graded as technique (capped B) and the brakes are named on the card, not capped. Flaps up grades D (803 ft late).
