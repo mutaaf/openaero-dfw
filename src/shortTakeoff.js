@@ -55,6 +55,18 @@ export const HOT_DONE_FT = 400;
 export const CLIMB_BAND_KTS = 8;
 // POH Section 4 SHORT FIELD TAKEOFF step 8: "Wing Flaps -- RETRACT slowly after reaching 60 KIAS" (Fig. 5-6 is flaps up).
 export const FLAPS_UP_KTS = 60;
+// The hot climb's words (first-timer panel): sinking under SINK_FPM; off Vy by CLIMB_WORD_KTS; "nose down a little" only
+// while still climbing (CLEAR_FPM) with the nose up (CLEAR_PITCH_DEG), else hold it and let the speed build.
+export const SINK_FPM = -100;
+export const CLIMB_WORD_KTS = 6;
+export const CLEAR_FPM = 200;
+export const CLEAR_PITCH_DEG = 8;
+// Kid's "a bit more" on the hot roll: past KID_MORE_KTS with the nose under KID_MORE_DEG (a 30% stick lifted it at ~70 kt).
+export const KID_MORE_KTS = 50;
+export const KID_MORE_DEG = 6;
+// A fit's extrapolation may lower the acceleration to no less than this share of the measured one: never reaching the
+// lift-off speed (Infinity, "the right call") is for a roll that has really stopped gaining (first-timer panel).
+export const FIT_FLOOR = 0.3;
 // A reject counts as the right call when the estimate needs more than this share of the runway left: the constant-acceleration
 // a = A - B v² estimate reads x 0.83-0.97 of the roll flown (tests/flight/hotTakeoff.test.js prints it), and a decision is the
 // pilot's, not a stopwatch's.
@@ -186,12 +198,23 @@ const STO_TOUCH = {
 // The hot day's own words (0226): the numbers are the scenario's, filled in by createShortTakeoff (hotWords).
 const HTO_TEXT = {
   htoClimb: `Climb at ${VY_KTS} knots: hot air, a slower climb`,
+  htoGood: `Good: hold ${VY_KTS} knots and climb`,
+  htoSink: `Sinking! Nose up a touch: keep climbing at ${VY_KTS}`,
+  htoFast: `Fast: nose up a touch for ${VY_KTS} knots`,
+  htoBuild: `Hold the nose there: let the speed build to ${VY_KTS}`,
+  htoSettle: `Back on the runway: hold the nose about ${PITCH_DEG}° and full power`,
+  htoKidMore: 'A bit more: hold ↑ until the nose comes up',
   htoFlapsUp: `Above ${FLAPS_UP_KTS} knots: flaps up, press F. Climb at ${VY_KTS}`,
   htoKidClimb: 'Flying! Hot air: it climbs slowly. Let go',
 };
-const HTO_TOUCH = { htoFlapsUp: `Above ${FLAPS_UP_KTS} knots: flaps up, tap FLAPS. Climb at ${VY_KTS}` };
+const HTO_TOUCH = {
+  htoFlapsUp: `Above ${FLAPS_UP_KTS} knots: flaps up, tap FLAPS. Climb at ${VY_KTS}`,
+  htoSink: `Sinking! Stick up a touch (nose up): keep climbing at ${VY_KTS}`,
+  htoFast: `Fast: stick up a touch (nose up) for ${VY_KTS} knots`,
+  htoKidMore: 'A bit more: hold the stick up until the nose comes up',
+};
 function hotWords(st) {
-  const ft = (n, r = 10) => fmt(Math.round(n / r) * r);
+  const ft = (n, r = 1) => fmt(Math.round(n / r) * r); // the card's figures exactly (first-timer panel: 1,020 vs 1,017)
   const da = `density altitude ${ft(st.daFt, 100)} ft`;
   Object.assign(HTO_TEXT, {
     htoFlaps: `Hot day (scenario ${HOT_C} °C): ${da}. Flaps 10°: press F`,
@@ -214,6 +237,7 @@ Object.assign(RANK, {
   stoFlaps: 1, stoPower: 1, stoPowerRoll: 2, stoRoll: 1, stoHold: 1, stoObstacle: 1, stoClear: 1, stoKidPower: 1, stoKidRoll: 1, stoKidClimb: 1,
   stoRelease: 2, stoBrakesOff: 3, stoRotate: 2, stoSlow: 2, stoFast: 2, stoKidRotate: 2, stoEase: 4, stoKidEase: 4,
   htoFlaps: 1, htoPower: 1, htoRelease: 2, htoKidPower: 1, htoClimb: 1, htoKidClimb: 1, htoFlapsUp: 2,
+  htoGood: 1, htoBuild: 2, htoFast: 2, htoSink: 4, htoSettle: 3, htoKidMore: 2,
 });
 
 // hot: the hot-day lesson (0226): its scenario air (st.wx, main.js currentWeather's while it flies), the table for it and
@@ -225,7 +249,7 @@ export function createShortTakeoff(end, hot = false) {
     tail: false, settled: false, why: null,
     hot: !!hot, wx: null, accelKps: null, gsPrev: null, low: null, reject: null, maxThr: 0, steadyS: 0, cut: null, flapsUp: false,
     daFt: null, hotPoh: null, cool: null, climbPoh: null, coolClimb: null, // the hot day's, set below (one shape either way)
-    c200T: null, climbFpm: null, climbKts: null,
+    c200T: null, c200Gs: null, climbFpm: null, climbKts: null,
   };
   if (hot) {
     const elevFt = end.elevFt ?? 0;
@@ -251,11 +275,12 @@ export function rejectCall(gsKts, iasKts, accelKps, leftM, low = null) {
   const vLof = REJECT_LOF_KTS * (iasKts > 10 ? gsKts / iasKts : 1); // the lift-off speed over the ground (calm: TAS)
   const v2 = gsKts * gsKts, l2 = vLof * vLof;
   let needM = Infinity;
-  if (accelKps > 0.05) {
+  if (l2 <= v2) needM = 0;
+  else if (accelKps > 0.05) {
     const b = low && v2 > low.kts * low.kts + 50 ? (low.accelKps - accelKps) / (v2 - low.kts * low.kts) : 0;
-    const aLof = accelKps - b * (l2 - v2);
+    const aLof = Math.max(FIT_FLOOR * accelKps, accelKps - b * (l2 - v2));
     if (b <= 1e-6) needM = KTS_TO_MPS * Math.max(0, l2 - v2) / (2 * accelKps);
-    else if (aLof > 0.02) needM = KTS_TO_MPS * Math.log(accelKps / aLof) / (2 * b);
+    else needM = KTS_TO_MPS * Math.log(accelKps / aLof) * (l2 - v2) / (2 * (accelKps - aLof)); // b, floored with aLof
   }
   return { needM, leftM, warranted: needM > leftM * REJECT_MARGIN };
 }
@@ -331,11 +356,14 @@ export function shortTakeoffStep(st, s, dt) {
   if (st.hot) {
     // The climb (0226): the time from DONE_FT to HOT_DONE_FT, and the speed's average over it.
     if (st.obstM !== null && s.iasKts >= FLAPS_UP_KTS) st.flapsUp = true; // main.js moveFlapLever: F raises a notch now
-    if (st.c200T === null) { if (s.wheelFt >= DONE_FT) { st.c200T = st.t; st.climbKts = 0; } }
+    if (st.c200T === null) { if (s.wheelFt >= DONE_FT) { st.c200T = st.t; st.climbKts = 0; st.c200Gs = s.gsKts; } }
     else st.climbKts += s.iasKts * dt; // time-weighted (device panel: per frame, slow frames counted less)
     if (s.wheelFt >= HOT_DONE_FT) {
       const min = (st.t - st.c200T) / 60;
-      st.climbFpm = min > 0 ? (HOT_DONE_FT - DONE_FT) / min : null;
+      // The energy height's rate (first-timer panel: 82 kt in and 69 out read 1,295 fpm): the height plus the speed given up,
+      // (v0² − v1²) / 2g, over the time (over the ground: calm air, the scenario's).
+      const v0 = st.c200Gs * KTS_TO_MPS, v1 = s.gsKts * KTS_TO_MPS;
+      st.climbFpm = min > 0 ? (HOT_DONE_FT - DONE_FT + (v0 * v0 - v1 * v1) / (2 * 9.80665) * M_TO_FT) / min : null;
       st.climbKts = st.t > st.c200T ? st.climbKts / (st.t - st.c200T) : s.iasKts;
       return finish(st, null);
     }
@@ -355,17 +383,28 @@ export function shortTakeoffTarget(st, s) {
     if (s.throttle < FULL_POWER) return hot ? 'htoPower' : 'stoPower';
     return hot ? 'htoRelease' : 'stoRelease';
   }
+  // Back on the runway after the lift-off on the hot day: hold the attitude and the power (first-timer panel: the roll's
+  // "45 knots: tap ↑" at 86 kt told a coach-follower nothing).
+  if (st.hot && st.phase === 'air' && s.onGround) return s.kid ? 'stoKidRotate' : 'htoSettle';
   if (st.phase === 'roll' || s.onGround) {
     if (s.brakes) return 'stoBrakesOff'; // pressed again on the roll (B twice, a tap on BRAKES): first-timer panel
     if (s.pitchDeg + Math.max(0, s.pitchRateDeg ?? 0) * LEAD_S > PITCH_HIGH_DEG) return s.kid ? 'stoKidEase' : 'stoEase';
     if (s.throttle < FULL_POWER && s.iasKts < ROTATE_KTS) return 'stoPowerRoll';
     if (s.iasKts < ROTATE_KTS) return s.kid ? 'stoKidRoll' : 'stoRoll';
-    if (s.kid) return 'stoKidRotate';
+    if (s.kid) return st.hot && s.iasKts > KID_MORE_KTS && s.pitchDeg < KID_MORE_DEG ? 'htoKidMore' : 'stoKidRotate';
     return s.pitchDeg < PITCH_DEG - 2 ? 'stoRotate' : 'stoHold';
   }
   if (s.kid) return st.hot && s.wheelFt >= OBSTACLE_FT ? 'htoKidClimb' : 'stoKidClimb';
   if (st.hot && st.flapsUp && s.flapsIndex > 0) return 'htoFlapsUp';
-  if (st.obstM !== null) return st.hot && s.wheelFt >= DONE_FT ? 'htoClimb' : 'stoClear';
+  if (st.hot && st.obstM !== null) {
+    // The climb past the obstacle to 400 ft (first-timer panel: "nose down a little" held all the way down let a
+    // coach-follower fly back onto the runway): sinking, then the speed against Vy.
+    if ((s.vsFpm ?? 0) < SINK_FPM) return 'htoSink';
+    if (s.iasKts > VY_KTS + CLIMB_WORD_KTS) return 'htoFast';
+    if (s.iasKts < VY_KTS - CLIMB_WORD_KTS) return (s.vsFpm ?? 0) > CLEAR_FPM && s.pitchDeg > CLEAR_PITCH_DEG ? 'stoClear' : 'htoBuild';
+    return s.wheelFt >= DONE_FT ? 'htoClimb' : 'htoGood';
+  }
+  if (st.obstM !== null) return 'stoClear';
   if (s.wheelFt >= WATCH_FT / 2 && s.iasKts < SLOW_KTS) return 'stoSlow';
   return s.iasKts > FAST_KTS ? 'stoFast' : 'stoObstacle';
 }
@@ -443,7 +482,12 @@ export function gradeShortTakeoff(st, kid = false, learner = false) {
   } else if (rej) {
     reasons.push(`Stopped a takeoff that would have flown: at the speed it was gaining it needed about ${ft(rej.needM)} ft more to lift off, and ${ft(rej.leftM)} ft were left (the game's estimate).`);
     score = Math.min(score, FAIL_CAP);
-  } else if (st.why) { reasons.push(hot && st.why === 'noclimb' ? REASONS.noclimb.replace(DONE_FT, HOT_DONE_FT) : REASONS[st.why]); score = Math.min(score, FAIL_CAP); }
+  } else if (st.why) {
+    reasons.push(hot && st.why === 'noclimb' ? REASONS.noclimb.replace(DONE_FT, HOT_DONE_FT)
+      : hot && st.obstM !== null && (st.why === 'overrun' || st.why === 'settledStop') ? `Flew back onto the runway after the 50 ft obstacle: keep the nose up and climb at ${VY_KTS}.`
+        : REASONS[st.why]);
+    score = Math.min(score, FAIL_CAP);
+  }
   if (st.settled && !st.why) { reasons.push(REASONS.settled); score = Math.min(score, CAP_C); }
   if (hot && flew && !st.why && !kid && st.climbFpm != null && !climbOk) reasons.push(`Climb at ${VY_KTS} knots: the hot day's best rate is only ${fmt(st.climbPoh)} fpm.`);
   if (!kid) {
@@ -470,7 +514,7 @@ export function gradeShortTakeoff(st, kid = false, learner = false) {
 }
 
 // main.js's calls, the input built here from the sim (reused: the chunk pays, not boot).
-const _in = { brakes: true, throttle: 0, flapsIndex: 0, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, alongM: 0, leftM: 0, crossM: 0, halfWidthM: 0, pitchDeg: 0, pitchRateDeg: 0, tailOn: false, poh: null, kid: false };
+const _in = { brakes: true, throttle: 0, flapsIndex: 0, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, alongM: 0, leftM: 0, crossM: 0, halfWidthM: 0, pitchDeg: 0, pitchRateDeg: 0, vsFpm: 0, tailOn: false, poh: null, kid: false };
 function input(st, sim, pitchDeg) {
   const e = st.end, r = e.hdgT * Math.PI / 180, dx = Math.sin(r), dz = -Math.cos(r);
   const rx = sim.pos.x - e.thrX, rz = sim.pos.z - e.thrZ;
@@ -478,7 +522,11 @@ function input(st, sim, pitchDeg) {
   _in.brakes = !!sim.brakesOn; _in.throttle = sim.throttle; _in.flapsIndex = sim.flapsIndex;
   _in.onGround = sim.onGround;
   _in.wheelFt = sim.onGround ? 0 : (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
-  _in.iasKts = sim.iasKts; _in.gsKts = sim.gsKts;
+  // The speed over the ground unrounded (flightModel.js rounds sim.gsKts to whole knots: differentiated per frame it made the
+  // reject's acceleration a sawtooth and its fit read Infinity, "the right call", on a normal roll; first-timer panel).
+  const v = sim.vel;
+  _in.iasKts = sim.iasKts; _in.gsKts = v ? Math.hypot(v.x, v.z) / KTS_TO_MPS : sim.gsKts;
+  _in.vsFpm = v ? v.y * M_TO_FT * 60 : 0;
   _in.alongM = rx * dx + rz * dz;
   _in.leftM = e.lengthM - e.displacedM - _in.alongM;
   _in.crossM = rx * -dz + rz * dx;

@@ -442,7 +442,11 @@ src/shortTakeoff.js short-field takeoff lesson (0225, lazy chunk loaded with `ka
                     judged by rejectCall: the roll still needed to 54 KIAS (the game's lift-off) on a = A − B v² fitted through 15 kt and
                     now, against 0.75 of the runway left: the right call grades A (90), a needless one D. The acceleration is measured
                     only at the power held with the brakes off; the reject is judged from where that ended (st.cut), and only after 1 s of
-                    steady power at half or more (physics panel: averaged through a ramped throttle and brakes, a needless stop read A). The game's Cessna flies away
+                    steady power at half or more (physics panel: averaged through a ramped throttle and brakes, a needless stop read A).
+                    The chunk reads the unrounded ground speed (flightModel.js rounds sim.gsKts: its per-frame derivative made the fit
+                    read Infinity, an A, on a normal reject) and a fit's acceleration is floored at 0.3 of the measured one. The climb
+                    is the energy height's rate (Δh + (v0² − v1²)/2g: a speed traded for height is not climb), and past the obstacle the
+                    coach says sinking, fast, "let the speed build" and, back on the runway, hold the attitude (first-timer panel). The game's Cessna flies away
                     when hauled off where a cool day lifted off (no settle-back, printed): the card shows a slower lift-off, no cap.
                     tests/unit/hotTakeoff.test.js, tests/flight/hotTakeoff.test.js (both models: hot/cool roll x 1.15-1.23 vs the POH's
                     1.18, climb x 0.83-0.95 vs 0.89, POH pilot S, the reject estimate x 0.83-0.97 of the roll flown), e2e

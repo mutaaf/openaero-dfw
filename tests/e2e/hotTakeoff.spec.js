@@ -25,10 +25,10 @@ test('?mission=kads_16_hot_takeoff: the scenario\'s density altitude on the star
   await page.screenshot({ path: test.info().outputPath('hot-takeoff-menu-1280.png') });
   await page.locator('#btnStartFlight').click();
   await page.locator('#onboardingModal').waitFor({ state: 'hidden' });
-  await expect(page.locator('#txtCoach')).toHaveText('Scenario 38 °C, density altitude 3,500 ft: the handbook roll is 1,200 ft, not 1,020. Hold Shift: full power', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Scenario 38 °C, density altitude 3,500 ft: the handbook roll is 1,202 ft, not 1,017. Hold Shift: full power', { timeout: 10_000 });
   await page.screenshot({ path: test.info().outputPath('hot-takeoff-1280.png') });
   await page.click('#btnToga');
-  await expect(page.locator('#txtCoach')).toHaveText('Full power. The same 45 knots, a longer roll (1,200 ft). Let the brakes go (B)', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Full power. The same 45 knots, a longer roll (1,202 ft). Let the brakes go (B)', { timeout: 10_000 });
   await page.keyboard.press('KeyB');
   await expect.poll(async () => (await snap(page)).shortTakeoff.phase, { timeout: 5_000 }).toBe('roll');
   // short-field's spec's keyboard pilot: the nose up from 45 kt, held to 30 ft, then the takeoff trim climbs it.
