@@ -36,7 +36,7 @@ test('phone, Pilot: the brakes\' touch words, throttle to the top, BRAKES lets t
   expect((await snap(page)).brakesOn).toBe(true);
   await page.locator('#touchBrakes').tap();
   await expect.poll(async () => (await snap(page)).shortTakeoff.phase, { timeout: 5_000 }).toBe('roll');
-  await expect(page.locator('#txtCoach')).toHaveText('Let it roll: stick up gently at 45 knots', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Nose down, let it roll. At 45 knots, stick up gently', { timeout: 10_000 });
   expect(errors).toEqual([]);
 });
 

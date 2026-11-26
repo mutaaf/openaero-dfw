@@ -25,7 +25,7 @@ function lesson({ rollFt = 960, obstFt = 1633, liftKts = 52, obstKts = 56, rotat
   for (let k = 10; k < liftKts; k += 5) {
     shortTakeoffStep(st, base({ iasKts: k, gsKts: k, flapsIndex: flaps, alongM: ftM(rollFt) * k / liftKts, crossM, pitchDeg: k >= rotateKts ? 10 : 0 }), 1);
   }
-  shortTakeoffStep(st, base({ onGround: false, wheelFt: 2, iasKts: liftKts, gsKts: liftKts, flapsIndex: flaps, alongM: ftM(rollFt), pitchDeg: 10 }), 0.5);
+  shortTakeoffStep(st, base({ onGround: false, wheelFt: 6, iasKts: liftKts, gsKts: liftKts, flapsIndex: flaps, alongM: ftM(rollFt), pitchDeg: 10 }), 0.5);
   if (settle) shortTakeoffStep(st, base({ iasKts: liftKts, gsKts: liftKts, alongM: ftM(rollFt + 50) }), 0.5);
   shortTakeoffStep(st, base({ onGround: false, wheelFt: 25, iasKts: obstKts, gsKts: obstKts, alongM: ftM((rollFt + obstFt) / 2) }), 1);
   shortTakeoffStep(st, base({ onGround: false, wheelFt: OBSTACLE_FT, iasKts: obstKts, gsKts: obstKts, alongM: ftM(obstFt) }), 1);
@@ -126,17 +126,58 @@ describe('shortTakeoff.js step and grade (0225)', () => {
     for (let i = 0; i < 5; i++) shortTakeoffStep(st, base({ brakes: true }), GIVE_UP_S);
     expect(st.phase).toBe('hold');
   });
-  it('a hop that settles under 1 ft is not the lift-off: the roll and its speed come from the last time the wheels left', () => {
+  it('a hop that settles under 5 ft is not the lift-off: the roll and its speed come from the last time the wheels left', () => {
     const st = createShortTakeoff(E16);
     shortTakeoffStep(st, base({ brakes: true }), 1);
     shortTakeoffStep(st, base({ iasKts: 30, gsKts: 30, alongM: 100 }), 1);
     shortTakeoffStep(st, base({ onGround: false, wheelFt: 0.3, iasKts: 48, alongM: 200 }), 0.1);
     shortTakeoffStep(st, base({ iasKts: 49, gsKts: 49, alongM: 210 }), 0.1);
-    shortTakeoffStep(st, base({ onGround: false, wheelFt: 0.5, iasKts: 52, alongM: 250 }), 0.1);
-    shortTakeoffStep(st, base({ onGround: false, wheelFt: 2, iasKts: 53, alongM: 260 }), 0.1);
+    shortTakeoffStep(st, base({ onGround: false, wheelFt: 3, iasKts: 52, alongM: 250 }), 0.1);
+    expect(st.phase).toBe('roll'); // "Flying!" waits for 5 ft
+    shortTakeoffStep(st, base({ onGround: false, wheelFt: 6, iasKts: 53, alongM: 260 }), 0.1);
     expect(st.phase).toBe('air');
     expect(st.liftKts).toBe(52);
     expect(st.rollM).toBe(150); // from the release at 100 m
+  });
+});
+
+describe('shortTakeoff.js first-timer panel (0225)', () => {
+  it('the brakes on again mid-roll: the coach says so, and a stop at full power on them ends it in 10 s, not 150', () => {
+    const st = createShortTakeoff(E16);
+    shortTakeoffStep(st, base({ brakes: true }), 1);
+    shortTakeoffStep(st, base({ iasKts: 30, gsKts: 30 }), 1);
+    expect(shortTakeoffTarget(st, base({ brakes: true, iasKts: 20, gsKts: 20 }))).toBe('stoBrakesOff');
+    expect(TOUCH_WORDS.stoBrakesOff).toMatch(/tap BRAKES/);
+    let r = '';
+    for (let i = 0; i < 12 && !r; i++) r = shortTakeoffStep(st, base({ brakes: true, iasKts: 0, gsKts: 0 }), 1);
+    expect(r).toBe('done');
+    expect(st.t).toBeLessThan(20);
+    expect(gradeShortTakeoff(st).reason).toMatch(/Never got airborne/);
+  });
+  it('lifted off, settled back and stopped is named as that, not "never airborne"', () => {
+    const st = createShortTakeoff(E16);
+    shortTakeoffStep(st, base({ brakes: true }), 1);
+    shortTakeoffStep(st, base({ iasKts: 30, gsKts: 30 }), 1);
+    shortTakeoffStep(st, base({ onGround: false, wheelFt: 6, iasKts: 49, gsKts: 49, alongM: 250 }), 1);
+    shortTakeoffStep(st, base({ iasKts: 30, gsKts: 30, alongM: 300 }), 1);
+    expect(shortTakeoffStep(st, base({ iasKts: 1, gsKts: 1, alongM: 400 }), 1)).toBe('done');
+    expect(gradeShortTakeoff(st).reason).toMatch(/settled back and stopped/);
+  });
+  it('the ease call comes ahead of a nose rising fast; flaps 20 at the lift-off is worded as more flap', () => {
+    const st = createShortTakeoff(E16);
+    shortTakeoffStep(st, base({ brakes: true }), 1);
+    shortTakeoffStep(st, base({ iasKts: 46, gsKts: 46 }), 1);
+    expect(shortTakeoffTarget(st, base({ iasKts: 47, pitchDeg: 9, pitchRateDeg: 1 }))).toBe('stoHold');
+    expect(shortTakeoffTarget(st, base({ iasKts: 47, pitchDeg: 9, pitchRateDeg: 20 }))).toBe('stoEase');
+    expect(lesson({ flaps: 2 }).r.reason).toMatch(/Flaps 20° at the lift-off.*more flap is more drag/);
+  });
+  it('the tail caps Pilot at B; Learner\'s card names it uncapped', () => {
+    const { st } = lesson();
+    st.tail = true;
+    expect(gradeShortTakeoff(st).score).toBeLessThanOrEqual(CAP_B);
+    const l = gradeShortTakeoff(st, false, true);
+    expect(l.score).toBeGreaterThan(CAP_B);
+    expect(l.reason).toMatch(/tail touched/);
   });
 });
 
@@ -182,7 +223,7 @@ describe('shortTakeoff.js coach (0225)', () => {
 
 describe('shortTakeoff.js against the sim (0225)', () => {
   const sim = (o = {}) => ({
-    pos: { x: E16.thrX, y: 0, z: E16.thrZ }, groundY: 0, spec: { gearHeight: 1 }, onGround: true, iasKts: 0, gsKts: 0,
+    pos: { x: E16.thrX, y: 0, z: E16.thrZ }, angVel: { x: 0, y: 0, z: 0 }, groundY: 0, spec: { gearHeight: 1 }, onGround: true, iasKts: 0, gsKts: 0,
     throttle: 0, flapsIndex: FLAPS, brakesOn: true, assist: 'pilot', wheelLoads: [1, 1, 1, 0], wx: { altimInHg: 29.92, tempC: 15, windKts: 0 }, ...o,
   });
   it('Kid\'s brakes come off by themselves at full power; Pilot\'s stay on until the player lets them go', () => {

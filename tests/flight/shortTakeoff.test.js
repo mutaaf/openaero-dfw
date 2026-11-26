@@ -47,7 +47,7 @@ export function flyShortTakeoff(tech) {
     const s = {
       brakes: x.brakesOn, throttle: x.throttle, flapsIndex: x.flapsIndex, onGround: x.onGround, wheelFt, iasKts: x.iasKts ?? 0,
       gsKts: Math.hypot(x.vel.x, x.vel.z) * 1.943844, alongM: -x.pos.z, leftM: 2000, crossM: x.pos.x, halfWidthM: 15, pitchDeg,
-      tailOn: (x.wheelLoads?.[3] ?? 0) > 0, poh: POH, kid: false,
+      pitchRateDeg: x.angVel.x * RAD_TO_DEG, tailOn: (x.wheelLoads?.[3] ?? 0) > 0, poh: POH, kid: false,
     };
     const p = shortTakeoffTarget(st, s);
     if (p && p !== prompts.at(-1)) prompts.push(p);

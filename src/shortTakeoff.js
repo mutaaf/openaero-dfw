@@ -52,7 +52,12 @@ export const FAST_KTS = OBSTACLE_KTS + 4;
 // The speed below 50 ft is watched from here (just off, the Cessna is still accelerating from 51 to 56).
 export const WATCH_FT = 20;
 // Lifted off: the wheels this high (a hop over a bump is not a lift-off). Done: the wheels this high, climbing.
-export const LIFT_FT = 1;
+// Flying: the wheels this high (first-timer panel: at 1 ft a Cessna hopped off at 48 kt said "Flying!" and settled back).
+export const LIFT_FT = 5;
+// The ease call looks this far ahead on the nose's rate (full ↑ on the runway raises it ~25°/s: first-timer panel).
+export const LEAD_S = 0.5;
+// Stopped this long with the brakes on or the power in, once rolling, is a stop.
+export const STOP_S = 10;
 export const DONE_FT = 200;
 // The brakes count as released at full power from this throttle.
 export const FULL_POWER = 0.95;
@@ -103,15 +108,16 @@ export const STO_TEXT = {
   stoFlaps: 'Short field: flaps 10°. Press F until 10°',
   stoPower: 'Short field: the brakes are on. Hold Shift: full power first',
   stoRelease: 'Full power: let the brakes go (B)',
-  stoRoll: `Let it roll: ease back (↑) at ${ROTATE_KTS} knots`,
-  stoRotate: `${ROTATE_KTS} knots: ease back (↑), nose about ${PITCH_DEG}° up`,
+  stoRoll: `Nose down, let it roll. At ${ROTATE_KTS} knots, tap ↑`,
+  stoRotate: `${ROTATE_KTS} knots: tap ↑ (short taps) to raise the nose to about ${PITCH_DEG}°`,
   stoHold: `Hold the nose about ${PITCH_DEG}°: let it fly off by itself`,
+  stoBrakesOff: 'The brakes are on: press B to let them go',
   stoPowerRoll: 'Full power: hold Shift',
   stoEase: 'Ease the nose down a little: the tail is close',
   stoObstacle: `Flying! Hold ${OBSTACLE_KTS} knots until 50 ft up`,
   stoSlow: `Slow: nose down a touch for ${OBSTACLE_KTS} knots`,
   stoFast: `Fast: nose up a touch for ${OBSTACLE_KTS} knots`,
-  stoClear: `Over the 50 ft obstacle: nose down a little, climb at ${VY_KTS}, then flaps up slowly`,
+  stoClear: `Over the 50 ft obstacle: nose down a little, climb at ${VY_KTS}`,
   stoKidPower: 'Hold Shift: power up to 100%. The brakes hold you',
   stoKidRoll: `Go! Hold ↑ gently at ${ROTATE_KTS} knots`,
   stoKidRotate: 'Hold ↑ gently: the nose comes up',
@@ -123,8 +129,9 @@ const STO_TOUCH = {
   stoPower: 'Short field: the brakes are on. Slide the throttle to the top first',
   stoRelease: 'Full power: tap BRAKES to let them go',
   stoPowerRoll: 'Full power: throttle to the top',
-  stoRoll: `Let it roll: stick up gently at ${ROTATE_KTS} knots`,
+  stoRoll: `Nose down, let it roll. At ${ROTATE_KTS} knots, stick up gently`,
   stoRotate: `${ROTATE_KTS} knots: stick up gently, nose about ${PITCH_DEG}° up`,
+  stoBrakesOff: 'The brakes are on: tap BRAKES to let them go',
   stoKidPower: 'Push the throttle to the top. The brakes hold you',
   stoKidRoll: `Go! Hold the stick up gently at ${ROTATE_KTS} knots`,
   stoKidRotate: 'Hold the stick up gently: the nose comes up',
@@ -133,12 +140,12 @@ Object.assign(DRILL_TEXT, STO_TEXT);
 Object.assign(TOUCH_WORDS, STO_TOUCH);
 Object.assign(RANK, {
   stoFlaps: 1, stoPower: 1, stoPowerRoll: 2, stoRoll: 1, stoHold: 1, stoObstacle: 1, stoClear: 1, stoKidPower: 1, stoKidRoll: 1, stoKidClimb: 1,
-  stoRelease: 2, stoRotate: 2, stoSlow: 2, stoFast: 2, stoKidRotate: 2, stoEase: 4, stoKidEase: 4,
+  stoRelease: 2, stoBrakesOff: 3, stoRotate: 2, stoSlow: 2, stoFast: 2, stoKidRotate: 2, stoEase: 4, stoKidEase: 4,
 });
 
 export const createShortTakeoff = (end) => ({
   end, phase: 'hold', t: 0, poh: null, startAlongM: null, releaseThrottle: null, flapsRelease: null,
-  rolled: false, rotateKts: null, liftKts: null, rollM: null, flapsLift: null, obstM: null, obstKts: null, minKts: null, maxCrossM: 0,
+  rolled: false, stopS: 0, rotateKts: null, liftKts: null, rollM: null, flapsLift: null, obstM: null, obstKts: null, minKts: null, maxCrossM: 0,
   tail: false, settled: false, why: null,
 });
 export const shortTakeoffDone = (st) => st.phase === 'done';
@@ -170,7 +177,7 @@ export function shortTakeoffStep(st, s, dt) {
       st.phase = 'air';
     } else if (s.leftM < 0) return finish(st, 'overrun');
     else if (Math.abs(s.crossM) > s.halfWidthM + 3) return finish(st, 'off');
-    else if (st.rolled && s.throttle < 0.5 && s.gsKts < 3) return finish(st, 'stopped');
+    else if (st.rolled && s.gsKts < 3 && (s.throttle < 0.5 || (st.stopS += dt) > STOP_S)) return finish(st, 'stopped');
     else if (st.t > GIVE_UP_S) return finish(st, 'stopped');
     return '';
   }
@@ -178,7 +185,7 @@ export function shortTakeoffStep(st, s, dt) {
     st.settled = true; // back on the runway after the lift-off: its checks go on
     if (s.leftM < 0) return finish(st, 'overrun');
     if (Math.abs(s.crossM) > s.halfWidthM + 3) return finish(st, 'off');
-    if (s.gsKts < 3) return finish(st, 'stopped');
+    if (s.gsKts < 3) return finish(st, 'settledStop');
   }
   if (st.obstM === null) {
     if (s.wheelFt >= WATCH_FT) st.minKts = Math.min(st.minKts ?? Infinity, s.iasKts);
@@ -198,7 +205,8 @@ export function shortTakeoffTarget(st, s) {
     return s.throttle < FULL_POWER ? 'stoPower' : 'stoRelease';
   }
   if (st.phase === 'roll' || s.onGround) {
-    if (s.pitchDeg > PITCH_HIGH_DEG) return s.kid ? 'stoKidEase' : 'stoEase';
+    if (s.brakes) return 'stoBrakesOff'; // pressed again on the roll (B twice, a tap on BRAKES): first-timer panel
+    if (s.pitchDeg + Math.max(0, s.pitchRateDeg ?? 0) * LEAD_S > PITCH_HIGH_DEG) return s.kid ? 'stoKidEase' : 'stoEase';
     if (s.throttle < FULL_POWER && s.iasKts < ROTATE_KTS) return 'stoPowerRoll';
     if (s.iasKts < ROTATE_KTS) return s.kid ? 'stoKidRoll' : 'stoRoll';
     if (s.kid) return 'stoKidRotate';
@@ -219,7 +227,9 @@ const REASONS = {
   noclimb: `Never climbed to ${DONE_FT} ft: hold ${OBSTACLE_KTS} knots to 50 ft, then climb at ${VY_KTS}.`,
   settled: `Settled back onto the runway: hold the nose about ${PITCH_DEG}° up and let it fly off by itself.`,
   tail: `The tail touched the runway: slightly tail low is about ${PITCH_DEG}°, not more.`,
-  flaps: 'Flaps 10° is the handbook\'s short-field setting: it lifts off slower and sooner.',
+  flapsLess: 'Flaps 10° is the handbook\'s short-field setting: with less, it lifts off faster and later.',
+  flapsMore: 'Flaps 10° is the handbook\'s short-field setting: more flap is more drag and a slower climb to 50 ft.',
+  settledStop: `Lifted off, then settled back and stopped: hold about ${PITCH_DEG}° and full power until it climbs.`,
   power: 'Full power on the brakes first, then let them go: the handbook\'s checklist and its table\'s condition.',
   roll: `A long roll: full power on the brakes, then ease back at ${ROTATE_KTS} knots to lift off near ${LIFTOFF_KTS}.`,
   obstacle: `Slow to 50 ft: lift off near ${LIFTOFF_KTS}, then hold ${OBSTACLE_KTS} knots, the handbook's obstacle clearance speed with flaps 10°.`,
@@ -231,8 +241,10 @@ const REASONS = {
   line: 'Keep it on the centreline with the rudder through the roll.',
 };
 
-// The grade. kid: Kid's card is the roll and the obstacle (its climb and its line-up are the plane's).
-export function gradeShortTakeoff(st, kid = false) {
+// The grade. kid: Kid's card is the roll and the obstacle (its climb and its line-up are the plane's). learner: the tail
+// is named, not capped (first-timer panel: the arrow key raises the nose on the mains up to ~65°/s at 60 kt in flightModel,
+// and a coach-following keyboard bot touched the tail in 4 runs of 4 there; on JSBSim in none).
+export function gradeShortTakeoff(st, kid = false, learner = false) {
   const poh = st.poh ?? pohTakeoff(st.end?.elevFt ?? 0);
   const wind = Math.round(Math.abs(poh.headKts));
   const windWords = !wind ? '' : poh.offChart ? `, a ${wind} kt tailwind (past the chart's 10 kt: counted as 10, so the handbook figure is short)`
@@ -268,8 +280,8 @@ export function gradeShortTakeoff(st, kid = false) {
   if (st.why) { reasons.push(REASONS[st.why]); score = Math.min(score, FAIL_CAP); }
   if (st.settled && !st.why) { reasons.push(REASONS.settled); score = Math.min(score, CAP_C); }
   if (!kid) {
-    if (st.tail) { reasons.push(REASONS.tail); score = Math.min(score, CAP_B); }
-    if (flew && st.flapsLift !== FLAPS) { reasons.push(`Flaps ${st.flapsLift * 10}° at the lift-off. ${REASONS.flaps}`); score = Math.min(score, CAP_B); }
+    if (st.tail) { reasons.push(REASONS.tail); if (!learner) score = Math.min(score, CAP_B); }
+    if (flew && st.flapsLift !== FLAPS) { reasons.push(`Flaps ${st.flapsLift * 10}° at the lift-off. ${st.flapsLift > FLAPS ? REASONS.flapsMore : REASONS.flapsLess}`); score = Math.min(score, CAP_B); }
     if (st.releaseThrottle !== null && st.releaseThrottle < FULL_POWER) reasons.push(REASONS.power);
     if (early > EARLY_KTS) { reasons.push(REASONS.early); score = Math.min(score, CAP_B); }
     if (flew && st.liftKts < LIFTOFF_KTS - 3) reasons.push(REASONS.slowLift);
@@ -287,7 +299,7 @@ export function gradeShortTakeoff(st, kid = false) {
 }
 
 // main.js's calls, the input built here from the sim (reused: the chunk pays, not boot).
-const _in = { brakes: true, throttle: 0, flapsIndex: 0, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, alongM: 0, leftM: 0, crossM: 0, halfWidthM: 0, pitchDeg: 0, tailOn: false, poh: null, kid: false };
+const _in = { brakes: true, throttle: 0, flapsIndex: 0, onGround: true, wheelFt: 0, iasKts: 0, gsKts: 0, alongM: 0, leftM: 0, crossM: 0, halfWidthM: 0, pitchDeg: 0, pitchRateDeg: 0, tailOn: false, poh: null, kid: false };
 function input(st, sim, pitchDeg) {
   const e = st.end, r = e.hdgT * Math.PI / 180, dx = Math.sin(r), dz = -Math.cos(r);
   const rx = sim.pos.x - e.thrX, rz = sim.pos.z - e.thrZ;
@@ -301,6 +313,7 @@ function input(st, sim, pitchDeg) {
   _in.crossM = rx * -dz + rz * dx;
   _in.halfWidthM = e.widthM / 2;
   _in.pitchDeg = pitchDeg;
+  _in.pitchRateDeg = sim.angVel.x * 180 / Math.PI; // + = nose up
   _in.tailOn = (sim.wheelLoads?.[3] ?? 0) > 0;
   _in.poh = null;
   // The table for today's air, once, on the step the roll starts (not a new object every frame on the brakes).

@@ -1107,7 +1107,7 @@ function checkShortTakeoff(dt) {
   const f = sim.shortTakeoff;
   if (!f || stoLib.shortTakeoffDone(f) || !cockpitEntered || modalOpen()) return;
   _euler.setFromQuaternion(sim.quat, 'YXZ');
-  if (stoLib.shortTakeoffSimStep(f, sim, _euler.x * RAD_TO_DEG, dt) === 'done') drillCard(stoLib.gradeShortTakeoff(f, sim.assist === 'kid'), f.end);
+  if (stoLib.shortTakeoffSimStep(f, sim, _euler.x * RAD_TO_DEG, dt) === 'done') drillCard(stoLib.gradeShortTakeoff(f, sim.assist === 'kid', sim.assist === 'learner'), f.end);
 }
 // Crosswind takeoff (0220, xwTakeoff.js): the aileron into the wind and the centreline on the roll, the climb's track; graded at 200 ft.
 let xtLib = null;
