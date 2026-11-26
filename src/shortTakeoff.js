@@ -260,7 +260,8 @@ export const shortTakeoffDone = (st) => st.phase === 'done';
 
 // The roll starts: the brakes off (at whatever power: Fig. 5-5's distances start there), or the airplane moving anyway.
 const released = (s) => !s.brakes || s.gsKts >= 2;
-const finish = (st, why) => { st.why = why; st.phase = 'done'; return 'done'; };
+// The lever's flaps-up direction is the lesson's climb only: after the card (KEEP FLYING, a landing) F lowers them again.
+const finish = (st, why) => { st.why = why; st.phase = 'done'; st.flapsUp = false; return 'done'; };
 // One step. s: { brakes, throttle, flapsIndex, onGround, wheelFt, iasKts, gsKts, alongM (along the runway from its
 // threshold), leftM (runway ahead), crossM, halfWidthM, pitchDeg, tailOn, poh (pohTakeoff for today's air) }.
 // Returns 'done' on the step the lesson ends (graded), else ''.

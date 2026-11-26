@@ -97,6 +97,10 @@ describe('hot-day takeoff (0226): the coach', () => {
     expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 120, iasKts: 66, flapsIndex: 0 }))).toBe('stoClear');
     expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 250, iasKts: 74, flapsIndex: 0 }))).toBe('htoClimb');
     expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 250, iasKts: 74, kid: true }))).toBe('htoKidClimb');
+    // The card: the lever's flaps-up direction ends with the lesson (a landing after KEEP FLYING needs F to lower them).
+    shortTakeoffStep(st, base({ onGround: false, wheelFt: DONE_FT, iasKts: 74, flapsIndex: 0 }), 0.1);
+    expect(shortTakeoffStep(st, base({ onGround: false, wheelFt: HOT_DONE_FT, iasKts: 74, flapsIndex: 0 }), 20)).toBe('done');
+    expect(st.flapsUp).toBe(false);
   });
 });
 
