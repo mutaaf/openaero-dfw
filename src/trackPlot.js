@@ -4,6 +4,7 @@
 // string for #trackPlot's innerHTML (no DOM), tested in tests/unit/trackPlot.test.js.
 // track: aroundPoint.js gradeAroundPoint's { pts (x, z pairs from the pole, metres, sim frame: +x east, +z south),
 // n, start (the first circling sample, −1 for none), R (metres), wind: [fromDeg, kts] | null }.
+import { approachGeometry, AIM_POINT_M, GLIDE_DEG } from './airports.js';
 const r1 = (v) => Math.round(v * 10) / 10;
 
 // track.rect (the rectangular course, 0223): [hx, hz], the field's half sides (metres), centred on the origin; R is then
@@ -88,4 +89,118 @@ export function trackLabel(track) {
   }
   return `Your ground track round the pole, seen from above with north up: the dashed circle is the ${ft} ft asked for`
     + (track.wind ? `, the arrow the ${Math.round(track.wind[1])} knot wind's way.` : '.');
+}
+
+// --- The approach profile (ticket 0227) ----------------------------------------------------------------------------
+// The last 30 s of the landing replay's ring buffer (replay.js, 0019: no new recording) seen from the side, against the
+// 3° path through the aim point (airports.js approachGeometry: the CG's height above the threshold, the height the
+// spawns, the gate and the coach fly) and the band the PAPI reads as on-slope (±0.5°, AIM 2-1-2 / aero.js
+// papiWhiteLights). Built once when the card opens (no per-frame work); pure: strings for #profilePlot, tested in
+// tests/unit/profilePlot.test.js.
+
+export const PROFILE_STRIDE = 14; // replay.js's sample layout: t, pos xyz, ... (REPLAY_STRIDE; a unit card pins it)
+export const PROFILE_MIN_S = 5; // less final than this in the buffer: no plot
+export const BAND_DEG = 0.5;
+const RAD = Math.PI / 180;
+const TAN_HI = Math.tan((GLIDE_DEG + BAND_DEG) * RAD), TAN_LO = Math.tan((GLIDE_DEG - BAND_DEG) * RAD), TAN_GS = Math.tan(GLIDE_DEG * RAD);
+const CONE = Math.tan(15 * RAD); // airports.js selectActiveRunway's final: within 15° of the centreline (300 m at least)
+const CLASSIFY_MIN_X = 60; // closer to the aim point than this the band is under the CG's height on the wheels
+const RUN_MIN = 20; // a sample run shorter than 1 s (20 Hz) outside the band is a gust, not the approach
+const FT = 3.28084, NM = 1852;
+
+// buf: replay.js's buffer; end: the runway end landed on; tdPastM: the touchdown's metres past the threshold
+// (landing.js result.touchdown.pastThresholdM). Returns null for nothing worth a plot, else { pts (x, h pairs: x the
+// metres to the aim point, positive before it; h the CG's metres above the threshold), n, tdX, tdH, seconds,
+// runs: [{ side: 'above' | 'below', fromM, toM }] (metres to the threshold), thrDevFt (ft above the path at the
+// threshold, null if the track does not reach it) }.
+export function profilePoints(buf, end, tdPastM) {
+  if (!buf || !end || !(buf.count > 1) || !Number.isFinite(tdPastM)) return null;
+  const d = buf.data, S = PROFILE_STRIDE, at = (i) => ((buf.head - buf.count + i + buf.n) % buf.n) * S;
+  const tdX = AIM_POINT_M - tdPastM, pos = { x: 0, y: 0, z: 0 };
+  const geo = (i) => { const o = at(i); pos.x = d[o + 1]; pos.y = d[o + 2]; pos.z = d[o + 3]; return approachGeometry(end, pos); };
+  // The touchdown: the first sample at or past its point along the runway.
+  let k = -1;
+  for (let i = 0; i < buf.count; i++) if (geo(i).distM + AIM_POINT_M <= tdX) { k = i; break; }
+  if (k < 1) return null;
+  // Back from it while on the final (inside the cone) and flying towards the runway (x rising as we go back).
+  let a = k, prevX = geo(k).distM + AIM_POINT_M;
+  while (a > 0) {
+    const g = geo(a - 1), x = g.distM + AIM_POINT_M;
+    if (Math.abs(g.crossM) > Math.max(300, Math.max(g.distM, 0) * CONE) || x < prevX - 1) break;
+    prevX = x; a--;
+  }
+  const seconds = d[at(k)] - d[at(a)];
+  if (seconds < PROFILE_MIN_S) return null;
+  const n = k - a + 1, pts = new Float32Array(2 * n), side = new Int8Array(n);
+  for (let i = 0; i < n; i++) {
+    const g = geo(a + i), x = g.distM + AIM_POINT_M, h = g.heightAbovePathM + g.pathHeightM;
+    pts[2 * i] = x; pts[2 * i + 1] = h;
+    side[i] = x < CLASSIFY_MIN_X ? 0 : h > x * TAN_HI ? 1 : h < x * TAN_LO ? -1 : 0;
+  }
+  // Runs outside the band, a second or more each; one side's runs either side of a short blip are one run.
+  const runs = [];
+  for (let i = 0; i < n;) {
+    let j = i;
+    while (j < n && side[j] === side[i]) j++;
+    if (side[i] && j - i >= RUN_MIN) {
+      const r = { side: side[i] > 0 ? 'above' : 'below', fromM: pts[2 * i] - AIM_POINT_M, toM: pts[2 * (j - 1)] - AIM_POINT_M };
+      const last = runs[runs.length - 1];
+      if (last && last.side === r.side && last.toM - r.fromM < 70 * 1.5) last.toM = r.toM; else runs.push(r);
+    }
+    i = j;
+  }
+  // At the threshold (x = the aim point's distance): the height off the path there, if the track crosses it.
+  let thrDevFt = null;
+  for (let i = 1; i < n; i++) {
+    const x0 = pts[2 * i - 2], x1 = pts[2 * i];
+    if (x0 >= AIM_POINT_M && x1 <= AIM_POINT_M) {
+      const f = x0 === x1 ? 0 : (x0 - AIM_POINT_M) / (x0 - x1), h = pts[2 * i - 1] + (pts[2 * i + 1] - pts[2 * i - 1]) * f;
+      thrDevFt = (h - AIM_POINT_M * TAN_GS) * FT;
+      break;
+    }
+  }
+  return { pts, n, tdX, tdH: pts[2 * n - 1], seconds, runs, thrDevFt };
+}
+
+const where = (m) => (m <= 0 ? 'the runway' : m < 0.15 * NM ? `${Math.max(100, Math.round(m * FT / 100) * 100).toLocaleString('en-US')} ft` : `${(m / NM).toFixed(1)} NM`);
+// The plot's alt text, and the line a screen reader gets: where the approach left the band, and the threshold.
+export function profileSummary(p) {
+  const parts = p.runs.map((r, i) => `${r.side} ${i && p.runs[i - 1].side !== r.side ? 'it' : 'the band'} from ${where(r.fromM)} to ${where(r.toM)}`);
+  let s = `Your approach from the side: ${parts.length ? parts.join(', then ') : 'inside the on-slope band all the way down'}`;
+  if (p.thrDevFt != null) {
+    const ft = Math.round(Math.abs(p.thrDevFt) / 5) * 5;
+    s += ft < 10 ? ', on the path at the threshold' : `, ${ft} ft ${p.thrDevFt > 0 ? 'high' : 'low'} at the threshold`;
+  }
+  return `${s}.`;
+}
+
+export const PROFILE_W = 300, PROFILE_H = 100;
+export const profileLegend = `<div style="font-size:11px;line-height:${LEGEND_PX}px;text-align:center;color:#cbd5e1">dashed: the 3° path · shaded: on slope · blue: you</div>`;
+// The side view: the runway to the right, the approach coming in from the left; heights stretched (a 3° path is 1:19).
+export function profileSvg(p) {
+  const L = 6, R = 6, T = 14, B = 14, w = PROFILE_W - L - R, h = PROFILE_H - T - B;
+  const xMax = p.pts[0], xMin = Math.min(p.tdX, p.pts[2 * (p.n - 1)]) - 0.06 * (xMax - p.tdX);
+  let hMax = xMax * TAN_HI;
+  for (let i = 0; i < p.n; i++) hMax = Math.max(hMax, p.pts[2 * i + 1]);
+  hMax *= 1.08;
+  const X = (x) => r1(L + (xMax - x) / (xMax - xMin) * w), Y = (y) => r1(T + h - Math.max(0, y) / hMax * h);
+  const line = 'fill="none" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"';
+  const ground = Y(0), xr = Math.max(xMin, -1e9);
+  // The band: from the left edge to the aim point and back under it.
+  const band = `M${X(xMax)} ${Y(xMax * TAN_HI)}L${X(0)} ${ground}L${X(xMax)} ${Y(xMax * TAN_LO)}Z`;
+  let track = '';
+  for (let i = 0; i < p.n; i++) track += `${i ? 'L' : 'M'}${X(p.pts[2 * i])} ${Y(p.pts[2 * i + 1])}`;
+  const thr = X(AIM_POINT_M), fs = 10;
+  const label = (x, y, t, anchor = 'middle') => `<text x="${x}" y="${y}" font-size="${fs}" fill="#cbd5e1" text-anchor="${anchor}" font-family="monospace">${t}</text>`;
+  return `<svg viewBox="0 0 ${PROFILE_W} ${PROFILE_H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="display:block">`
+    + `<path d="${band}" fill="#34d399" fill-opacity="0.18" stroke="#34d399" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="1 3" vector-effect="non-scaling-stroke"/>`
+    + `<path d="M${L} ${ground}L${PROFILE_W - R} ${ground}" ${line} stroke="#64748b" stroke-width="1"/>`
+    + `<path d="M${thr} ${ground}L${X(xr)} ${ground}" ${line} stroke="#cbd5e1" stroke-width="4" stroke-linecap="butt"/>`
+    + `<path d="M${X(xMax)} ${Y(xMax * TAN_GS)}L${X(0)} ${ground}" ${line} stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="5 4"/>`
+    + `<path d="${track}" ${line} stroke="#38bdf8" stroke-width="2.5"/>`
+    + `<circle cx="${X(p.tdX)}" cy="${ground}" r="3.5" fill="#facc15" stroke="#0f172a" stroke-width="1"/>`
+    + label(L, T - 4, `${Math.round(hMax * FT / 10) * 10} ft`, 'start')
+    + label(L, PROFILE_H - 2, `${((xMax - AIM_POINT_M) / NM).toFixed(1)} NM`, 'start')
+    + label(thr, PROFILE_H - 2, 'THR')
+    + '</svg>';
 }

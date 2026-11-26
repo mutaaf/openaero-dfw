@@ -169,6 +169,13 @@ src/results.js      the results card (lazy chunk, prefetched after boot, retried
                     airports.js AIM_POINT_M, the green band at landing.js ZONE_FULL_M (the zone's full marks)
                     The card is a flex column (0125): the grade and the button row stay put, #resultsBody
                     (reason, tip, gate, strip, factors) scrolls if the screen is short (Safari sideways ~340 px)
+                    A landing's card (main.js finishLanding passes replayBuf) draws the approach from the side under the strip
+                    (0227, #profilePlot, trackPlot.js profilePoints/profileSvg/profileSummary): the replay buffer's samples (no new
+                    recording; PROFILE_STRIDE pinned to replay.js REPLAY_STRIDE) from the touchdown back while inside
+                    selectActiveRunway's 15° cone and closing, x to the aim point, the CG's height above the threshold (the height
+                    approachGeometry's 3° path is flown by), the dashed 3° path and the PAPI's ±0.5° band (shaded, dotted edge); runs
+                    outside it ≥ 1 s are named in the aria-label with the height off the path at the threshold. Hidden under 5 s of
+                    final (PROFILE_MIN_S), off the runway, on a lesson with its own track plot and on every drill card
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)

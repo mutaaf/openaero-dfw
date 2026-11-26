@@ -4,10 +4,11 @@
 import { GRADE_COLOURS } from './landing.js';
 import { landingTip } from './landingTip.js';
 import { drawStrip, touchdownLabel } from './touchdownStrip.js';
-import { trackPlotSvg, trackLabel, trackLegend, LEGEND_PX } from './trackPlot.js';
+import { trackPlotSvg, trackLabel, trackLegend, LEGEND_PX, profilePoints, profileSvg, profileSummary, profileLegend } from './trackPlot.js';
 
 const byId = (id) => document.getElementById(id);
-export function showResults(sim, result, best, end, gate) {
+// replayBuf: replay.js's buffer on a landing's card (0227's approach profile), else null.
+export function showResults(sim, result, best, end, gate, replayBuf = null) {
   const card = byId('resultsCard');
   const goAround = result.kind === 'goAround';
   byId('txtResultTitle').textContent = result.title ?? (goAround ? 'Go-around complete' : 'Landing grade');
@@ -71,6 +72,13 @@ export function showResults(sim, result, best, end, gate) {
   plot.classList.toggle('hidden', !result.track);
   plot.innerHTML = result.track ? trackPlotSvg(result.track, plot.clientHeight - LEGEND_PX) + trackLegend(result.track) : '';
   plot.setAttribute('aria-label', result.track ? trackLabel(result.track) : '');
+  // The approach from the side against the 3° path (0227): a landing on the runway with 5 s of final in the replay's
+  // buffer; not a lesson with its own plot. Built once here, never per frame.
+  const side = byId('profilePlot');
+  const prof = replayBuf && td && !result.track ? profilePoints(replayBuf, end, td.pastThresholdM) : null;
+  side.classList.toggle('hidden', !prof);
+  side.innerHTML = prof ? profileSvg(prof) + profileLegend : '';
+  side.setAttribute('aria-label', prof ? profileSummary(prof) : '');
   const body = byId('resultsBody');
   body.scrollTop = 0;
   markMore();

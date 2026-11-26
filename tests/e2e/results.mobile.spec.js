@@ -1,5 +1,13 @@
 import { test, expect } from './fixtures.js';
 import { BASE, stubTiles, collectErrors } from './helpers.js';
+import { profileSvg, profileLegend } from '../../src/trackPlot.js';
+
+// 0227: the approach profile under the strip, a 1.2 NM final drawn by trackPlot.js itself.
+const PROFILE = (() => {
+  const n = 120, pts = new Float32Array(2 * n);
+  for (let i = 0; i < n; i++) { const x = 2500 - i * 22; pts[2 * i] = x; pts[2 * i + 1] = Math.max(2, x * 0.0524 + (x > 1200 ? 25 : 0)); }
+  return profileSvg({ pts, n, tdX: pts[2 * n - 2], tdH: 2, runs: [], thrDevFt: 0 }) + profileLegend;
+})();
 
 // Ticket 0125: iOS Safari held sideways leaves a page ~340 px tall (an iPhone SE 320). A fully
 // loaded results card (the crosswind card's six factors, the reason, the next-time tip, the gate
@@ -12,7 +20,7 @@ const FACTORS = [
 ];
 
 async function fillCard(page) {
-  await page.evaluate((factors) => {
+  await page.evaluate(([factors, profile]) => {
     const byId = (id) => document.getElementById(id);
     const show = (id, text) => { const el = byId(id); if (text != null) el.textContent = text; el.classList.remove('hidden'); };
     byId('txtBest').textContent = 'Learner level · ★ New personal best (was 61)';
@@ -21,6 +29,8 @@ async function fillCard(page) {
     byId('txtTip').textContent = 'Into the wind: hold the upwind wing a little low and keep the nose straight with the rudder.';
     show('txtStabilized', 'Unstabilized at 500 ft ✗ speed, sink rate');
     show('touchdownStrip');
+    byId('profilePlot').innerHTML = profile;
+    show('profilePlot');
     const list = byId('resultsFactors');
     list.innerHTML = '';
     for (const [label, value, score] of factors) {
@@ -31,7 +41,7 @@ async function fillCard(page) {
       list.appendChild(li);
     }
     show('resultsCard');
-  }, FACTORS);
+  }, [FACTORS, PROFILE]);
 }
 
 async function expectButtonsInView(page, w, h) {

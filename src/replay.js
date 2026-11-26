@@ -10,6 +10,7 @@ export const REPLAY_HZ = 20;
 export const REPLAY_CAMS = ['Chase', 'Wing', 'Side'];
 // t, pos xyz, quat xyzw, throttle, gearPos, flapDeg, aileron, elevator, rudder
 const STRIDE = 14;
+export const REPLAY_STRIDE = STRIDE; // trackPlot.js's approach profile (0227) reads the same layout
 
 export function createReplayBuffer(seconds = REPLAY_S, hz = REPLAY_HZ) {
   const n = Math.round(seconds * hz);
