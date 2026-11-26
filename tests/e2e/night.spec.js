@@ -111,12 +111,21 @@ test('the KDFW 35C night ILS flies at night with the lights showing, and the nex
   // and the control: with the runway lights' materials off, the count drops below it.
   // Each frame's numbers and where its bright pixels sit (an 8 x 3 grid over the band) are logged:
   // CI read >= 450 dark at the spawn where this sandbox reads ~30 (2026-11-23).
+  // Every read's time in ms (and any error) is logged too: on a slow CI runner (#325, 2026-11-26) no dark read came back
+  // inside the old 10 s poll (`dark: null`) while this sandbox reads in ~1 s, so both polls get the same 15 s.
   let lit = null, dark = null;
-  const ctx = () => JSON.stringify({ agl, px: s.pixelRatio, pitch: s.pitchDeg, sky: s.sky, lit, dark });
-  await expect.poll(async () => (lit = await band(page, 0.5, 0.62, 0, 1, true)).bright, { timeout: 15_000, message: `lit: ${agl} ft` }).toBeGreaterThan(450);
+  const reads = [];
+  const read = async () => {
+    const t0 = Date.now();
+    try { const b = await band(page, 0.5, 0.62, 0, 1, true); reads.push(Date.now() - t0); return b; }
+    catch (e) { reads.push(`${Date.now() - t0}:${String(e.message || e).slice(0, 80)}`); throw e; }
+  };
+  const ctx = () => JSON.stringify({ agl, px: s.pixelRatio, pitch: s.pitchDeg, sky: s.sky, lit, dark, reads });
+  await expect.poll(async () => (lit = await read()).bright, { timeout: 15_000, message: `lit: ${agl} ft` }).toBeGreaterThan(450);
+  reads.push('dark');
   await page.evaluate(() => { window.openaeroRunwayLights.points.traverse((o) => { if (o.material) o.material.visible = false; }); });
   try {
-    await expect.poll(async () => (dark = await band(page, 0.5, 0.62, 0, 1, true)).bright, { timeout: 10_000 }).toBeLessThan(450);
+    await expect.poll(async () => (dark = await read()).bright, { timeout: 15_000, message: `dark: ${agl} ft` }).toBeLessThan(450);
   } finally {
     console.log(`[night 0060] ${ctx()}`);
   }
