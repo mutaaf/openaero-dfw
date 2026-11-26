@@ -1,12 +1,12 @@
 ---
 id: 0227
 title: Results card: a side-view plot of the last 30 s of the approach against the 3° glidepath
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-26
-pr:
+pr: 333
 ---
 
 ## Why
