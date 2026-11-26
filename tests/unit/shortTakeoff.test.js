@@ -35,9 +35,9 @@ function lesson({ rollFt = 960, obstFt = 1633, liftKts = 52, obstKts = 56, rotat
 
 describe('shortTakeoff.js POH Fig. 5-5 table (0225)', () => {
   it('reads the table at its own points and interpolates between them (sea level 15 °C: the c172 card\'s 960 / 1,633 ft)', () => {
-    expect(pohTakeoff(0, 29.92, 0)).toEqual({ rollFt: 860, totalFt: 1465, headKts: 0 });
-    expect(pohTakeoff(8000, 29.92, 40)).toEqual({ rollFt: 2450, totalFt: 4615, headKts: 0 });
-    expect(pohTakeoff(3000, 29.92, 20)).toEqual({ rollFt: TABLE[3][2][0], totalFt: TABLE[3][2][1], headKts: 0 });
+    expect(pohTakeoff(0, 29.92, 0)).toEqual({ rollFt: 860, totalFt: 1465, headKts: 0, offChart: false });
+    expect(pohTakeoff(8000, 29.92, 40)).toEqual({ rollFt: 2450, totalFt: 4615, headKts: 0, offChart: false });
+    expect(pohTakeoff(3000, 29.92, 20)).toEqual({ rollFt: TABLE[3][2][0], totalFt: TABLE[3][2][1], headKts: 0, offChart: false });
     expect(POH.rollFt).toBeCloseTo(960, 6);
     expect(POH.totalFt).toBeCloseTo(1632.5, 6);
     // Addison (633 ft), 29.92, 15 °C: between the sea-level and 1,000 ft rows.
@@ -53,6 +53,12 @@ describe('shortTakeoff.js POH Fig. 5-5 table (0225)', () => {
     expect(gradeShortTakeoff(st).note).toMatch(/a 10 kt tailwind counted as its note 3 says/);
     st.poh = pohTakeoff(633);
     expect(gradeShortTakeoff(st).note).not.toMatch(/wind/);
+    // Past the chart's 10 kt of tailwind: said, and the x 1.15 cap is off (the figure is short of the truth).
+    const far = { ...lesson({ obstFt: 2000 }).st, poh: pohTakeoff(0, 29.92, 15, -20) };
+    expect(far.poh.offChart).toBe(true);
+    const g = gradeShortTakeoff(far);
+    expect(g.note).toMatch(/past the chart's 10 kt/);
+    expect(g.reason ?? '').not.toMatch(/past the handbook's/);
     expect(pohTakeoff(0, 29.92, 0, 9).rollFt).toBeCloseTo(860 * 0.9, 6);
     expect(pohTakeoff(0, 29.92, 0, -2).totalFt).toBeCloseTo(1465 * 1.1, 6);
     expect(pohTakeoff(0, 29.92, 0, -20).rollFt).toBeCloseTo(860 * 1.5, 6); // held at the chart's 10 kt

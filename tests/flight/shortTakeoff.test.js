@@ -120,6 +120,9 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S short-field
     expect(r.result.reason).toMatch(/Nose up too early/);
   });
 
+  // The D is mostly the flaps-up technique (55 KIAS to 7°, a Vy climb). Flaps 0 flown with the POH rotation and 56 KIAS
+  // rolls 8-15% longer and reaches 50 ft 1-6% later (physics panel): the flaps cap's B, near POH p. 4-25's "approximately
+  // 10 percent".
   it('flaps up and a low-pitch rotation: a longer roll, later to 50 ft, capped B with the flaps named', () => {
     const poh = run('poh'), r = run('flapsUp');
     log(model, 'flaps up', r);

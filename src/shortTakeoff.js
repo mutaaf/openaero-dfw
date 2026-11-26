@@ -37,7 +37,7 @@ export const VY_KTS = 74;
 // The coach's rotation: the POH says only "slightly tail low". Back from ROTATE_KTS to about PITCH_DEG (the tail at 13.7°,
 // takeoffCoach.js STATIC_TAIL_DEG; the ease call above PITCH_HIGH_DEG): the c172 cards' short-field rotation (harness.js
 // shortFieldTakeoff, 45 KIAS to 11°). Flown in tests/flight/shortTakeoff.test.js: the game's Cessna lifts off 2-3 kt over
-// Fig. 5-5's 51 KIAS (its stall is a little above the POH's; the lift-off row's full marks are within 3 kt).
+// Fig. 5-5's 51 KIAS (its stall is a little above the POH's; the lift-off row's full marks are within 4 kt).
 export const ROTATE_KTS = 45;
 export const PITCH_DEG = 11;
 export const PITCH_HIGH_DEG = 12.5;
@@ -79,7 +79,7 @@ export const TABLE = [
   [[1820, 3265], [1970, 3575], [2120, 3880], [2280, 4225], [2450, 4615]],
 ];
 
-// The table's { rollFt, totalFt, headKts } for a field (elevFt), the altimeter setting, the outside air (°C) and the steady wind
+// The table's { rollFt, totalFt, headKts, offChart } for a field (elevFt), the altimeter setting, the outside air (°C) and the steady wind
 // along the runway (headKts, + = headwind): interpolated (clamped to the table), then note 3: "Decrease distances 10% for
 // each 9 knots headwind. For operation with tail winds up to 10 knots, increase distances by 10% for each 2 knots" (a
 // tailwind past 10 kt is off the chart: held at 10). Pure.
@@ -93,7 +93,8 @@ export function pohTakeoff(elevFt, altimInHg = 29.92, tempC = 15, headKts = 0) {
     const row = (r) => TABLE[r][j][k] + (TABLE[r][j + 1][k] - TABLE[r][j][k]) * b;
     return (row(i) + (row(i + 1) - row(i)) * a) * wind;
   };
-  return { rollFt: at(0), totalFt: at(1), headKts };
+  // offChart: a tailwind past the chart's 10 kt (the correction is held at 10; the lesson does not cap against it).
+  return { rollFt: at(0), totalFt: at(1), headKts, offChart: headKts < -10 };
 }
 // The METAR's steady wind along the runway (kt, + = headwind); a variable wind (windDirDeg null) is none along it.
 export const headwindKts = (wx, hdgT) => (wx?.windKts && wx.windDirDeg != null ? wx.windKts * Math.cos((wx.windDirDeg - hdgT) * Math.PI / 180) : 0);
@@ -104,13 +105,13 @@ export const STO_TEXT = {
   stoRelease: 'Full power: let the brakes go (B)',
   stoRoll: `Let it roll: ease back (↑) at ${ROTATE_KTS} knots`,
   stoRotate: `${ROTATE_KTS} knots: ease back (↑), nose about ${PITCH_DEG}° up`,
-  stoHold: `Hold the nose about ${PITCH_DEG}°: it flies off near ${LIFTOFF_KTS}`,
+  stoHold: `Hold the nose about ${PITCH_DEG}°: let it fly off by itself`,
   stoPowerRoll: 'Full power: hold Shift',
   stoEase: 'Ease the nose down a little: the tail is close',
   stoObstacle: `Flying! Hold ${OBSTACLE_KTS} knots until 50 ft up`,
   stoSlow: `Slow: nose down a touch for ${OBSTACLE_KTS} knots`,
   stoFast: `Fast: nose up a touch for ${OBSTACLE_KTS} knots`,
-  stoClear: `Over the 50 ft obstacle: nose down a little, climb at ${VY_KTS}`,
+  stoClear: `Over the 50 ft obstacle: nose down a little, climb at ${VY_KTS}, then flaps up slowly`,
   stoKidPower: 'Hold Shift: power up to 100%. The brakes hold you',
   stoKidRoll: `Go! Hold ↑ gently at ${ROTATE_KTS} knots`,
   stoKidRotate: 'Hold ↑ gently: the nose comes up',
@@ -221,7 +222,7 @@ const REASONS = {
   flaps: 'Flaps 10° is the handbook\'s short-field setting: it lifts off slower and sooner.',
   power: 'Full power on the brakes first, then let them go: the handbook\'s checklist and its table\'s condition.',
   roll: `A long roll: full power on the brakes, then ease back at ${ROTATE_KTS} knots to lift off near ${LIFTOFF_KTS}.`,
-  obstacle: `Slow to 50 ft: lift off near ${LIFTOFF_KTS}, then hold ${OBSTACLE_KTS} knots, the best angle with flaps 10°.`,
+  obstacle: `Slow to 50 ft: lift off near ${LIFTOFF_KTS}, then hold ${OBSTACLE_KTS} knots, the handbook's obstacle clearance speed with flaps 10°.`,
   liftoff: `Lift off near ${LIFTOFF_KTS} knots: ease back at ${ROTATE_KTS}, slightly tail low (about ${PITCH_DEG}°).`,
   early: `Nose up too early: let it roll with its weight on the wheels (the least drag) to ${ROTATE_KTS} knots, then ease back.`,
   rotate: `Ease back at ${ROTATE_KTS} knots: before then the nose stays down, the least drag.`,
@@ -234,7 +235,8 @@ const REASONS = {
 export function gradeShortTakeoff(st, kid = false) {
   const poh = st.poh ?? pohTakeoff(st.end?.elevFt ?? 0);
   const wind = Math.round(Math.abs(poh.headKts));
-  const windWords = wind ? `, a ${wind} kt ${poh.headKts > 0 ? 'headwind' : 'tailwind'} counted as its note 3 says` : '';
+  const windWords = !wind ? '' : poh.offChart ? `, a ${wind} kt tailwind (past the chart's 10 kt: counted as 10, so the handbook figure is short)`
+    : `, a ${wind} kt ${poh.headKts > 0 ? 'headwind' : 'tailwind'} counted as its note 3 says`;
   const flew = st.liftKts !== null;
   const rollFt = flew ? st.rollM * M_TO_FT : null, obstFt = st.obstM === null ? null : st.obstM * M_TO_FT;
   const obstRatio = obstFt === null ? null : obstFt / poh.totalFt;
@@ -251,7 +253,7 @@ export function gradeShortTakeoff(st, kid = false) {
     obstacle: { key: 'obstacle', label: 'To 50 ft', value: obstFt === null ? 'never reached 50 ft' : `${fmt(obstFt)} ft (handbook ${fmt(poh.totalFt)})`,
       score: obstRatio === null ? 0 : ratioScore(obstRatio) },
     liftoff: { key: 'liftoff', label: 'Lift-off speed', value: flew ? `${Math.round(st.liftKts)} kt (handbook ${LIFTOFF_KTS})` : 'never lifted off',
-      score: flew ? curve(Math.abs(st.liftKts - LIFTOFF_KTS), [[3, 100], [6, 60], [10, 0]]) : 0 },
+      score: flew ? curve(Math.abs(st.liftKts - LIFTOFF_KTS), [[4, 100], [7, 60], [11, 0]]) : 0 }, // the game's Cessna lifts off at ~53.5-54.3
     rotate: { key: 'rotate', label: 'Nose up at', value: st.rotateKts === null ? 'never raised' : `${Math.round(st.rotateKts)} kt (coach ${ROTATE_KTS})`,
       score: st.rotateKts === null ? (flew ? 100 : 0) : curve(early, [[3, 100], [EARLY_KTS, 50], [15, 0]]) },
     speed: { key: 'speed', label: 'Speed at 50 ft', value: st.obstKts === null ? 'never reached 50 ft' : `${Math.round(st.obstKts)} kt (handbook ${OBSTACLE_KTS})`, score: speedScore },
@@ -272,7 +274,7 @@ export function gradeShortTakeoff(st, kid = false) {
     if (early > EARLY_KTS) { reasons.push(REASONS.early); score = Math.min(score, CAP_B); }
     if (flew && st.liftKts < LIFTOFF_KTS - 3) reasons.push(REASONS.slowLift);
   }
-  if (obstRatio !== null && obstRatio > POH_BAND) {
+  if (obstRatio !== null && obstRatio > POH_BAND && !poh.offChart) {
     reasons.push(`50 ft came ${fmt(obstFt - poh.totalFt)} ft past the handbook's ${fmt(poh.totalFt)} ft.`);
     score = Math.min(score, CAP_B);
   }
