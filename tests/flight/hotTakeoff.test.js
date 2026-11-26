@@ -24,7 +24,8 @@ const END = { hdgT: 0, elevFt: 633, airport: 'KADS' };
 const HOT = pohTakeoff(END.elevFt, 29.92, HOT_C), COOL = pohTakeoff(END.elevFt, 29.92, COOL_C);
 
 // tech: 'poh' | 'coolPoint' | 'reject'; throttle: the power held; runwayFt: the strip; rejectKts: idle and brakes there.
-export function flyHot(tech, { tempC = HOT_C, throttle = 1, runwayFt = 7203, rejectKts = null, coolRollFt = COOL.rollFt } = {}) {
+// ramp: the reject's throttle comes down at the keyboard's 0.4/s (main.js) with the brakes on at once (physics panel).
+export function flyHot(tech, { tempC = HOT_C, throttle = 1, runwayFt = 7203, rejectKts = null, coolRollFt = COOL.rollFt, ramp = false } = {}) {
   const b = makeBody(c172, { throttle, flaps: FLAPS });
   b.mslOffsetM = END.elevFt * FT_TO_M;
   b.isaDevC = isaDeviationC(tempC, END.elevFt * FT_TO_M); // main.js refreshWeather's
@@ -50,7 +51,7 @@ export function flyHot(tech, { tempC = HOT_C, throttle = 1, runwayFt = 7203, rej
     if (p && p !== prompts.at(-1)) prompts.push(p);
     if (shortTakeoffStep(st, s, dt) === 'done') ended = true;
     if (rejectKts !== null && s.iasKts >= rejectKts) rejected = true;
-    if (rejected) { x.throttle = 0; x.brakesOn = true; x.elevInput = 0; return; }
+    if (rejected) { x.throttle = ramp ? Math.max(0, x.throttle - 0.4 * dt) : 0; x.brakesOn = true; x.elevInput = 0; return; }
     if (st.phase === 'hold' || st.phase === 'roll' || x.onGround) {
       const go = tech === 'coolPoint' ? s.alongM * M_TO_FT >= coolRollFt : s.iasKts >= ROTATE_KTS;
       x.elevInput = go ? elevatorForPitch(tech === 'coolPoint' ? 14 : PITCH_DEG, pitchDeg, x.angVel.x) : 0;
@@ -108,7 +109,9 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S hot-day tak
     expect(r.prompts.at(-1)).toBe('htoClimb');
   });
 
-  // Fig. 5-6: 625 against 701 fpm (x 0.89). flightModel climbs x ~0.95 of its cool day, JSBSim x ~0.83 (printed).
+  // Fig. 5-6: 625 against 701 fpm (x 0.89). flightModel climbs x ~0.95 of its cool day, JSBSim x ~0.83 (printed). flightModel's
+  // hot climb (~713) is 14% over the table and above the cool day's handbook 701: its climb is less sensitive to temperature
+  // than the POH's (physics panel); the card prints both figures rather than hide it.
   it('the climb is weaker than the cool day\'s, by 3-20% (Fig. 5-6: 11%), and each within 15% of the table', () => {
     const h = hot().st.climbFpm, c = cool().st.climbFpm;
     expect(h / c).toBeLessThan(0.97);
@@ -157,5 +160,10 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S hot-day tak
     expect(full.result.score).toBeLessThanOrEqual(FAIL_CAP);
     expect(part.result.title).toBe('Hot-day takeoff: rejected');
     expect(full.result.reason).toMatch(/^Stopped a takeoff that would have flown/);
+    // The keyboard's throttle (0.4/s down) with the brakes on at once, on Addison's whole 7,203 ft: still needless, D.
+    const ramp = run('ramp', 'poh', { rejectKts: 35, ramp: true });
+    log(model, 'ramped reject', ramp);
+    expect(ramp.st.reject.warranted).toBe(false);
+    expect(ramp.result.score).toBeLessThanOrEqual(FAIL_CAP);
   });
 });

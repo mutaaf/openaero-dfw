@@ -56,7 +56,8 @@ export const CLIMB_BAND_KTS = 8;
 // POH Section 4 SHORT FIELD TAKEOFF step 8: "Wing Flaps -- RETRACT slowly after reaching 60 KIAS" (Fig. 5-6 is flaps up).
 export const FLAPS_UP_KTS = 60;
 // A reject counts as the right call when the estimate needs more than this share of the runway left: the constant-acceleration
-// estimate reads within ~15% (tests/flight/hotTakeoff.test.js prints it), and a decision is the pilot's, not a stopwatch's.
+// a = A - B v² estimate reads x 0.83-0.97 of the roll flown (tests/flight/hotTakeoff.test.js prints it), and a decision is the
+// pilot's, not a stopwatch's.
 export const REJECT_MARGIN = 0.75;
 export const REJECT_SCORE = 90;
 // POH: 10° (the C172's first notch, aircraft.js flapDetentsDeg [0, 10, 20, 30]).
@@ -222,7 +223,7 @@ export function createShortTakeoff(end, hot = false) {
     end, phase: 'hold', t: 0, poh: null, startAlongM: null, releaseThrottle: null, flapsRelease: null,
     rolled: false, stopS: 0, rotateKts: null, rotateM: null, liftKts: null, rollM: null, flapsLift: null, obstM: null, obstKts: null, minKts: null, maxCrossM: 0,
     tail: false, settled: false, why: null,
-    hot: !!hot, wx: null, accelKps: null, gsPrev: null, low: null, reject: null, c200T: null, climbFpm: null, climbKts: null,
+    hot: !!hot, wx: null, accelKps: null, gsPrev: null, low: null, reject: null, maxThr: 0, steadyS: 0, cut: null, c200T: null, climbFpm: null, climbKts: null,
   };
   if (hot) {
     const elevFt = end.elevFt ?? 0;
@@ -278,14 +279,29 @@ export function shortTakeoffStep(st, s, dt) {
     if (s.iasKts > 15) st.rolled = true;
     if (st.rotateKts === null && s.onGround && s.pitchDeg >= NOSE_UP_DEG) { st.rotateKts = s.iasKts; st.rotateM = s.alongM - st.startAlongM; }
     if (st.hot && s.onGround) {
-      // The acceleration at the power it had (a 1 s average), and the reject: the power off below the lift-off speed.
-      if (st.gsPrev !== null && s.throttle >= 0.5 && dt > 0) {
-        const a = (s.gsKts - st.gsPrev) / dt, k = Math.min(1, dt);
-        st.accelKps = st.accelKps === null ? a : st.accelKps + (a - st.accelKps) * k;
+      // The acceleration at the power the roll was flown with (a 1 s average), measured only while that power is held and
+      // the brakes are off ("steady"): a throttle easing down or the brakes coming on is the reject, not the roll (physics
+      // panel: averaged through them, a needless stop read as never reaching the speed, an A). Where it leaves steady, the
+      // speed, runway and acceleration are kept (st.cut); the reject (the power under half below the lift-off) is judged
+      // from there, and only after a second of steady power at half or more (a roll that never had it is just a stop).
+      st.maxThr = Math.max(st.maxThr ?? 0, s.throttle);
+      const steady = !s.brakes && s.throttle >= 0.5 && s.throttle >= st.maxThr - 0.05;
+      if (steady) {
+        if (st.gsPrev !== null && dt > 0) {
+          const a = (s.gsKts - st.gsPrev) / dt, k = Math.min(1, dt);
+          st.accelKps = st.accelKps === null ? a : st.accelKps + (a - st.accelKps) * k;
+        }
+        st.steadyS += dt;
+        st.cut = null;
+        if (!st.low && st.steadyS >= 1 && s.gsKts >= REJECT_LOW_KTS) st.low = { kts: s.gsKts, accelKps: st.accelKps, thr: s.throttle };
+      } else if (!st.cut && st.steadyS >= 1) {
+        st.cut = { gs: s.gsKts, ias: s.iasKts, leftM: s.leftM, atM: s.alongM - st.startAlongM, accelKps: st.accelKps, thr: st.maxThr };
       }
-      st.gsPrev = s.gsKts;
-      if (!st.low && st.accelKps !== null && s.throttle >= 0.5 && s.gsKts >= REJECT_LOW_KTS) st.low = { kts: s.gsKts, accelKps: st.accelKps };
-      if (!st.reject && st.rolled && s.throttle < 0.5 && s.iasKts < LIFTOFF_KTS) st.reject = { ...rejectCall(s.gsKts, s.iasKts, st.accelKps ?? 0, s.leftM, st.low), atM: s.alongM - st.startAlongM, kts: s.iasKts };
+      st.gsPrev = steady ? s.gsKts : null;
+      if (!st.reject && st.cut && st.rolled && s.throttle < 0.5 && s.iasKts < REJECT_LOF_KTS) {
+        const c = st.cut, low = st.low && Math.abs(st.low.thr - c.thr) <= 0.1 ? st.low : null; // a fit across two powers is no fit
+        st.reject = { ...rejectCall(c.gs, c.ias, c.accelKps ?? 0, c.leftM, low), atM: c.atM, kts: c.ias };
+      }
     }
     st.maxCrossM = Math.max(st.maxCrossM, Math.abs(s.crossM));
     // The lift-off: where the wheels left the runway (Fig. 5-5's roll), counted once they are LIFT_FT up (a hop that
@@ -419,7 +435,7 @@ export function gradeShortTakeoff(st, kid = false, learner = false) {
   if (rej?.warranted) {
     // The right call (0226): the power off before the lift-off speed on a roll that would not have made it.
     score = REJECT_SCORE;
-    reasons.push(`Right call: at ${Math.round(rej.kts)} knots it still needed ${Number.isFinite(rej.needM) ? `about ${ft(rej.needM)} ft` : 'more runway than there was'} to lift off, and ${ft(rej.leftM)} ft were left. Next time: full power on the brakes first.`);
+    reasons.push(`Right call: at ${Math.round(rej.kts)} knots it still needed ${Number.isFinite(rej.needM) ? `about ${ft(rej.needM)} ft` : 'more runway than there was'} to lift off, and ${ft(rej.leftM)} ft were left.`);
   } else if (rej) {
     reasons.push(`Stopped a takeoff that would have flown: at the speed it was gaining it needed about ${ft(rej.needM)} ft more to lift off, and ${ft(rej.leftM)} ft were left (the game's estimate).`);
     score = Math.min(score, FAIL_CAP);

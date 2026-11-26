@@ -183,6 +183,37 @@ describe('hot-day takeoff (0226): the reject', () => {
     expect(r.title).toBe('Hot-day takeoff failed');
     expect(r.reason).toMatch(/^Stopped a takeoff that would have flown/);
   });
+  // Physics panel: the throttle eased down (the keys move it 0.4/s) with the brakes on must not count as the roll's acceleration.
+  it('a needless reject with the throttle ramped down and the brakes on is still needless (the roll\'s acceleration is kept)', () => {
+    const st = createShortTakeoff(E16, true);
+    shortTakeoffStep(st, base({ brakes: true }), 1);
+    shortTakeoffStep(st, base(), 0.1);
+    let v = 2, x = 0;
+    for (let t = 0; t < 14; t += 0.1) { shortTakeoffStep(st, base({ iasKts: v, gsKts: v, alongM: x, leftM: 2000 - x }), 0.1); x += v * 0.0514; v += 0.25; }
+    for (let thr = 1; thr > 0; thr -= 0.04) { v -= 0.2; shortTakeoffStep(st, base({ brakes: true, throttle: thr, iasKts: v, gsKts: v, alongM: x, leftM: 2000 - x }), 0.1); }
+    expect(st.reject.warranted).toBe(false);
+    expect(st.reject.kts).toBeCloseTo(37, 0);
+    expect(st.accelKps).toBeCloseTo(2.5, 1);
+  });
+  it('a roll that never had half power is a stop, not a judged reject', () => {
+    const st = createShortTakeoff(E16, true);
+    shortTakeoffStep(st, base({ brakes: true, throttle: 0.45 }), 1);
+    shortTakeoffStep(st, base({ throttle: 0.45 }), 0.1);
+    for (let k = 2; k < 40; k++) shortTakeoffStep(st, base({ throttle: 0.45, iasKts: k, gsKts: k, alongM: k * 5 }), 1);
+    expect(st.reject).toBeNull();
+    shortTakeoffStep(st, base({ throttle: 0, iasKts: 30, gsKts: 30, alongM: 300 }), 1);
+    expect(st.reject).toBeNull();
+  });
+  it('power changed mid-roll: the low-speed sample of the other power is not fitted', () => {
+    const st = createShortTakeoff(E16, true);
+    shortTakeoffStep(st, base(), 0.1);
+    for (let k = 2; k < 20; k++) shortTakeoffStep(st, base({ iasKts: k, gsKts: k, alongM: k * 5 }), 1);
+    expect(st.low.thr).toBe(1);
+    for (let k = 20; k < 30; k++) shortTakeoffStep(st, base({ throttle: 0.6, iasKts: k, gsKts: k, alongM: k * 5 }), 1);
+    shortTakeoffStep(st, base({ throttle: 0, iasKts: 30, gsKts: 30, alongM: 160 }), 1);
+    expect(st.cut.thr).toBe(1);
+    expect(st.reject).not.toBeNull();
+  });
   it('the short-field lesson never judges a reject', () => {
     const st = createShortTakeoff(E16);
     shortTakeoffStep(st, base(), 0.1);
