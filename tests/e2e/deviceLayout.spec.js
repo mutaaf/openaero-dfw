@@ -6,6 +6,9 @@ import { DEVICES, ALERTS, PANELS, overlaps } from './devices.js';
 // they were the last 17 tests of devices.spec.js, which runs alone after `perf`, one at a time,
 // while the other workers sat idle. Here they run in the parallel phase with the rest (own
 // `device-layout` project: no Pilot profile, no 0.25x resolution, like `devices`).
+// Each test opens its own page, so the file runs in parallel mode: one at a time it was ~35 s of CI's tail on one
+// worker after the phone project, two workers idle (#329's run, cancelled at 30 min in `devices`).
+test.describe.configure({ mode: 'parallel' });
 
 // 0217 on a short 360 px Android (360x640), outside the matrix above: the tapes, their readouts and the
 // MSL tab are whole on screen and no DOM panel covers them. (The matrix's full alert-overlap check is a
