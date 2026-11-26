@@ -292,8 +292,6 @@ function input(st, sim, pitchDeg) {
   const e = st.end, r = e.hdgT * Math.PI / 180, dx = Math.sin(r), dz = -Math.cos(r);
   const rx = sim.pos.x - e.thrX, rz = sim.pos.z - e.thrZ;
   _in.kid = sim.assist === 'kid';
-  // Kid's brakes come off by themselves once the power is in (its card is the roll and the obstacle).
-  if (_in.kid && st.phase === 'hold' && sim.brakesOn && sim.throttle >= FULL_POWER) sim.brakesOn = false;
   _in.brakes = !!sim.brakesOn; _in.throttle = sim.throttle; _in.flapsIndex = sim.flapsIndex;
   _in.onGround = sim.onGround;
   _in.wheelFt = sim.onGround ? 0 : (sim.pos.y - sim.groundY - sim.spec.gearHeight) * M_TO_FT;
@@ -309,5 +307,10 @@ function input(st, sim, pitchDeg) {
   if (st.phase === 'hold' && released(_in)) _in.poh = pohTakeoff(e.elevFt, sim.wx?.altimInHg ?? 29.92, sim.wx?.tempC ?? 15, headwindKts(sim.wx, e.hdgT));
   return _in;
 }
-export const shortTakeoffSimStep = (st, sim, pitchDeg, dt) => shortTakeoffStep(st, input(st, sim, pitchDeg), dt);
+// Kid's brakes come off by themselves once the power is in (its card is the roll and the obstacle). Here only: the
+// prompt's input has no side effects (it runs behind the menu too; device panel).
+export function shortTakeoffSimStep(st, sim, pitchDeg, dt) {
+  if (sim.assist === 'kid' && st.phase === 'hold' && sim.brakesOn && sim.throttle >= FULL_POWER) sim.brakesOn = false;
+  return shortTakeoffStep(st, input(st, sim, pitchDeg), dt);
+}
 export const shortTakeoffPrompt = (st, sim, pitchDeg) => shortTakeoffTarget(st, input(st, sim, pitchDeg));

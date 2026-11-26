@@ -58,3 +58,18 @@ test('?mission=kads_16_short_field_takeoff: in Drills, flaps 10, the brakes held
   await page.screenshot({ path: test.info().outputPath('short-takeoff-card-1280.png') });
   expect(errors).toEqual([]);
 });
+
+// Device panel: another airplane picked on the brakes takes the lesson's held brakes with it (no 737 stuck at full power).
+test('picking another airplane during the lesson lets the brakes go', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto(`${BASE}?mission=kads_16_short_field_takeoff&debug`);
+  await page.locator('#onboardingModal').waitFor({ state: 'visible' });
+  await expect.poll(async () => (await snap(page)).shortTakeoff?.phase, { timeout: 10_000 }).toBe('hold');
+  expect((await snap(page)).brakesOn).toBe(true);
+  await page.locator('#selAircraft').selectOption('b738');
+  await expect.poll(async () => (await snap(page)).aircraft, { timeout: 5_000 }).toBe('b738');
+  const s = await snap(page);
+  expect(s.shortTakeoff).toBeNull();
+  expect(s.brakesOn).toBe(false);
+  expect(errors).toEqual([]);
+});

@@ -191,6 +191,9 @@ describe('shortTakeoff.js against the sim (0225)', () => {
     expect(k.brakesOn).toBe(false);
     expect(st.phase).toBe('roll');
     expect(st.poh.rollFt).toBeCloseTo(pohTakeoff(E16.elevFt).rollFt, 6);
+    const st3 = createShortTakeoff(E16), k3 = sim({ assist: 'kid', throttle: 1 });
+    shortTakeoffPrompt(st3, k3, 0);
+    expect(k3.brakesOn).toBe(true); // the coach's read changes nothing
     const st2 = createShortTakeoff(E16), p = sim({ throttle: 1 });
     expect(shortTakeoffPrompt(st2, p, 0)).toBe('stoRelease');
     shortTakeoffSimStep(st2, p, 0, 0.016);

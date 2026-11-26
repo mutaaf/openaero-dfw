@@ -3318,6 +3318,7 @@ byId('selAircraft').addEventListener('change', (e) => {
   sim.engineOut = null;
   sim.rto = null;
   sim.steepTurns = sim.upset = sim.wake = sim.slowFlight = sim.shortField = sim.noFlap = sim.emergencyDescent = null;
+  if (sim.shortTakeoff) sim.brakesOn = false; // 0225: the lesson's held brakes go with it (device panel)
   sim.softField = sim.surfaceMu = sim.shortTakeoff = null;
   if (sim.wingLow || sim.xwTakeoff) { sim.wingLow = sim.xwTakeoff = null; sim.touchYaw = 0; refreshWeather(); } // 0188, 0220: the lesson's wind goes with it
   endGroundRef(); // 0211: and this one's, with its pole
