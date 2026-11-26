@@ -1,7 +1,7 @@
 ---
 id: 0224
 title: S-turns across a road: two half-circles of equal radius either side of a line, in a crosswind
-status: proposed
+status: ready
 priority: P2
 size: M
 lens: content
