@@ -104,8 +104,11 @@ export const BAND_DEG = 0.5;
 const RAD = Math.PI / 180;
 const TAN_HI = Math.tan((GLIDE_DEG + BAND_DEG) * RAD), TAN_LO = Math.tan((GLIDE_DEG - BAND_DEG) * RAD), TAN_GS = Math.tan(GLIDE_DEG * RAD);
 const CONE = Math.tan(15 * RAD); // airports.js selectActiveRunway's final: within 15° of the centreline (300 m at least)
-const CLASSIFY_MIN_X = 60; // closer to the aim point than this the band is under the CG's height on the wheels
-const RUN_MIN = 20; // a sample run shorter than 1 s (20 Hz) outside the band is a gust, not the approach
+// Judged before the threshold only: past it the band narrows to the aim point under a flaring CG (physics panel: a C172
+// flare to 531 m read "above the band over the runway"), and the PAPI's guidance ends there.
+const RUN_MIN_S = 1; // outside the band for less than this is a gust, not the approach
+const MERGE_S = 1; // one side's runs this close together are one run
+const START_MIN_M = 300; // the track must start this far before the threshold: else it is no final (a land-ahead after takeoff)
 const FT = 3.28084, NM = 1852;
 
 // buf: replay.js's buffer; end: the runway end landed on; tdPastM: the touchdown's metres past the threshold
@@ -131,24 +134,28 @@ export function profilePoints(buf, end, tdPastM) {
   }
   const seconds = d[at(k)] - d[at(a)];
   if (seconds < PROFILE_MIN_S) return null;
+  if (geo(a).distM < START_MIN_M) return null;
   const n = k - a + 1, pts = new Float32Array(2 * n), side = new Int8Array(n);
   for (let i = 0; i < n; i++) {
     const g = geo(a + i), x = g.distM + AIM_POINT_M, h = g.heightAbovePathM + g.pathHeightM;
     pts[2 * i] = x; pts[2 * i + 1] = h;
-    side[i] = x < CLASSIFY_MIN_X ? 0 : h > x * TAN_HI ? 1 : h < x * TAN_LO ? -1 : 0;
+    side[i] = x < AIM_POINT_M ? 0 : h > x * TAN_HI ? 1 : h < x * TAN_LO ? -1 : 0;
   }
-  // Runs outside the band, a second or more each; one side's runs either side of a short blip are one run.
-  const runs = [];
+  // Runs outside the band by sample time (any replay rate or airspeed): one side's runs under MERGE_S apart are joined
+  // first (two short excursions round a single in-band sample are one), then those under RUN_MIN_S dropped.
+  const t = (i) => d[at(a + i)], raw = [];
   for (let i = 0; i < n;) {
     let j = i;
     while (j < n && side[j] === side[i]) j++;
-    if (side[i] && j - i >= RUN_MIN) {
-      const r = { side: side[i] > 0 ? 'above' : 'below', fromM: pts[2 * i] - AIM_POINT_M, toM: pts[2 * (j - 1)] - AIM_POINT_M };
-      const last = runs[runs.length - 1];
-      if (last && last.side === r.side && last.toM - r.fromM < 70 * 1.5) last.toM = r.toM; else runs.push(r);
+    if (side[i]) {
+      const last = raw[raw.length - 1];
+      if (last && last.s === side[i] && t(i) - t(last.j) < MERGE_S) last.j = j - 1; else raw.push({ s: side[i], i, j: j - 1 });
     }
     i = j;
   }
+  const dt = buf.dt || 0;
+  const runs = raw.filter((r) => t(r.j) - t(r.i) + dt >= RUN_MIN_S)
+    .map((r) => ({ side: r.s > 0 ? 'above' : 'below', fromM: pts[2 * r.i] - AIM_POINT_M, toM: pts[2 * r.j] - AIM_POINT_M }));
   // At the threshold (x = the aim point's distance): the height off the path there, if the track crosses it.
   let thrDevFt = null;
   for (let i = 1; i < n; i++) {

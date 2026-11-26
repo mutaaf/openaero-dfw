@@ -91,6 +91,19 @@ describe('approach profile (0227)', () => {
     expect(p.pts[0]).toBeGreaterThan(1100 + AIM_POINT_M - 10);
   });
 
+  it('a flare floating to 450 m past the threshold is not "above the band over the runway" (physics panel)', () => {
+    // On the path to the threshold (16 m), then a slow flare: the CG well over the narrowing band past the threshold.
+    const h = (dist) => (dist > 0 ? onPath(dist) : 2 + 14 * ((dist + 450) / 450) ** 2);
+    const p = profilePoints(fly({ h, tdM: 450 }), END, 450);
+    expect(p.runs).toEqual([]);
+    expect(profileSummary(p)).not.toMatch(/runway,|over the runway/);
+  });
+
+  it('a landing straight ahead after a takeoff (the track starts on the runway) is no final: no plot (physics panel)', () => {
+    // From 100 m before the threshold (the pavement before a displaced threshold) to 1,100 m past it: 17 s on the centreline.
+    expect(profilePoints(fly({ h: () => 20, startM: 100, tdM: 1100 }), END, 1100)).toBeNull();
+  });
+
   it(`nothing under ${PROFILE_MIN_S} s of final, an empty buffer or no touchdown on the track`, () => {
     expect(PROFILE_MIN_S).toBe(5);
     expect(profilePoints(createReplayBuffer(), END, 400)).toBeNull();

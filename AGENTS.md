@@ -174,8 +174,10 @@ src/results.js      the results card (lazy chunk, prefetched after boot, retried
                     recording; PROFILE_STRIDE pinned to replay.js REPLAY_STRIDE) from the touchdown back while inside
                     selectActiveRunway's 15° cone and closing, x to the aim point, the CG's height above the threshold (the height
                     approachGeometry's 3° path is flown by), the dashed 3° path and a ±0.5° band (shaded, "close to it": wider than the PAPI's two-and-two ±10', never called on slope); runs
-                    outside it ≥ 1 s are named in the aria-label with the height off the path at the threshold. Hidden under 5 s of
-                    final (PROFILE_MIN_S), off the runway, on a lesson with its own track plot and on every drill card
+                    outside it ≥ 1 s of sample time (judged before the threshold only: past it a flare rises out of the narrowing band)
+                    are named in the aria-label (three, then counted) with the height off the path at the threshold. Hidden under 5 s of
+                    final (PROFILE_MIN_S), for a track starting under 300 m before the threshold (a land-ahead after takeoff), off the
+                    runway, on a lesson with its own track plot, and on the non-landing cards (drillCard, the go-around)
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
