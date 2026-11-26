@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { createReplayBuffer, recordReplay, REPLAY_STRIDE } from '../../src/replay.js';
 import { courseVector, AIM_POINT_M, GLIDE_DEG, runwayEnd } from '../../src/airports.js';
-import { profilePoints, profileSummary, profileSvg, profileLegend, PROFILE_STRIDE, PROFILE_MIN_S } from '../../src/trackPlot.js';
+import { profilePoints, profileSummary, profileSvg, profileLegend, where, PROFILE_STRIDE, PROFILE_MIN_S } from '../../src/trackPlot.js';
 
 const TAN3 = Math.tan(GLIDE_DEG * Math.PI / 180);
 const END = runwayEnd('KDFW', '35C');
@@ -52,7 +52,7 @@ describe('approach profile (0227)', () => {
     expect(p.pts[2 * (p.n - 1)]).toBeGreaterThan(p.tdX - 3);
     expect(p.runs).toEqual([]);
     expect(Math.abs(p.thrDevFt)).toBeLessThan(2);
-    expect(profileSummary(p)).toMatch(/^Your approach from the side: inside the on-slope band all the way down, on the path at the threshold\.$/);
+    expect(profileSummary(p)).toMatch(/^Your approach from the side: close to the 3° path all the way down, on the path at the threshold\.$/);
   });
 
   it('a scripted high-then-dive approach plots above the band, then below it', () => {
@@ -76,7 +76,7 @@ describe('approach profile (0227)', () => {
     expect(text).toMatch(/\d+ ft low at the threshold\.$/);
   });
 
-  it('the band is the PAPI\'s ±0.5°: 3.4° is inside, 3.6° above, 2.4° below', () => {
+  it("the band is ±0.5° (the PAPI's all-white / all-red edges, not its two-and-two): 3.4° is inside, 3.6° above, 2.4° below", () => {
     const at = (deg) => profilePoints(fly({ h: (dist) => Math.max(2, (dist + AIM_POINT_M) * Math.tan(deg * Math.PI / 180)) }), END, 400).runs.map((r) => r.side);
     expect(at(3.4)).toEqual([]);
     expect(at(2.6)).toEqual([]);
@@ -112,5 +112,28 @@ describe('approach profile (0227)', () => {
     expect(svg).toContain('<circle ');
     expect(svg).not.toMatch(/NaN|undefined|Infinity/);
     expect(profileLegend).toMatch(/dashed: the 3° path/);
+    expect(profileLegend).not.toMatch(/on slope/); // ±0.5° is wider than the PAPI's two-and-two (±10'): not "on slope"
+    expect(svg).toContain('>runway</text>');
+    expect(svg).toContain(' NM out</text>');
+  });
+});
+
+describe('approach profile words (0227, first-timer panel)', () => {
+  const run = (side, fromM, toM) => ({ side, fromM, toM });
+  const p = (runs, thrDevFt = 0) => ({ runs, thrDevFt });
+  it('distances never read as heights, a run over the runway says so, a run within one rounding says "at"', () => {
+    expect(where(200)).toBe('700 ft out');
+    expect(where(-50)).toBe('the runway');
+    expect(profileSummary(p([run('above', -20, -200)]))).toBe('Your approach from the side: above the band over the runway, on the path at the threshold.');
+    expect(profileSummary(p([run('below', 1500, 1480)]))).toContain('below the band at 0.8 NM');
+    expect(profileSummary(p([run('above', 1500, 200)]))).toContain('above the band from 0.8 NM to 700 ft out');
+  });
+  it('an oscillating final names three runs and counts the rest', () => {
+    const runs = [];
+    for (let i = 0; i < 8; i++) runs.push(run(i % 2 ? 'above' : 'below', 1500 - i * 180, 1330 - i * 180));
+    const s = profileSummary(p(runs, 40));
+    expect(s.match(/ from /g).length).toBe(1 + 3); // "Your approach from the side" + three runs
+    expect(s).toContain('then out of it 5 more times to ');
+    expect(s).toMatch(/40 ft high at the threshold\.$/);
   });
 });

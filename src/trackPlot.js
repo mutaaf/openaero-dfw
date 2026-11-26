@@ -94,7 +94,7 @@ export function trackLabel(track) {
 // --- The approach profile (ticket 0227) ----------------------------------------------------------------------------
 // The last 30 s of the landing replay's ring buffer (replay.js, 0019: no new recording) seen from the side, against the
 // 3° path through the aim point (airports.js approachGeometry: the CG's height above the threshold, the height the
-// spawns, the gate and the coach fly) and the band the PAPI reads as on-slope (±0.5°, AIM 2-1-2 / aero.js
+// spawns, the gate and the coach fly) and a ±0.5° band, "close to it" (where the PAPI turns all white or all red; its two-and-two is ±10', aero.js
 // papiWhiteLights). Built once when the card opens (no per-frame work); pure: strings for #profilePlot, tested in
 // tests/unit/profilePlot.test.js.
 
@@ -162,11 +162,18 @@ export function profilePoints(buf, end, tdPastM) {
   return { pts, n, tdX, tdH: pts[2 * n - 1], seconds, runs, thrDevFt };
 }
 
-const where = (m) => (m <= 0 ? 'the runway' : m < 0.15 * NM ? `${Math.max(100, Math.round(m * FT / 100) * 100).toLocaleString('en-US')} ft` : `${(m / NM).toFixed(1)} NM`);
+// A distance to the threshold in words: NM out, feet out close in (never bare "ft": that reads as a height), the runway past it.
+export const where = (m) => (m <= 0 ? 'the runway' : m < 0.15 * NM ? `${Math.max(100, Math.round(m * FT / 100) * 100).toLocaleString('en-US')} ft out` : `${(m / NM).toFixed(1)} NM`);
+const span = (r) => (r.fromM <= 0 && r.toM <= 0 ? 'over the runway' : where(r.fromM) === where(r.toM) ? `at ${where(r.fromM)}` : `from ${where(r.fromM)} to ${where(r.toM)}`);
+const RUNS_NAMED = 3; // past these, the rest are counted (an oscillating final read 14 clauses: first-timer panel)
 // The plot's alt text, and the line a screen reader gets: where the approach left the band, and the threshold.
+// The band is ±0.5° ("close to the path"), wider than the PAPI's two-white-two-red (±10'): never called "on slope".
 export function profileSummary(p) {
-  const parts = p.runs.map((r, i) => `${r.side} ${i && p.runs[i - 1].side !== r.side ? 'it' : 'the band'} from ${where(r.fromM)} to ${where(r.toM)}`);
-  let s = `Your approach from the side: ${parts.length ? parts.join(', then ') : 'inside the on-slope band all the way down'}`;
+  const named = p.runs.slice(0, RUNS_NAMED);
+  const parts = named.map((r, i) => `${r.side} ${i && named[i - 1].side !== r.side ? 'it' : 'the band'} ${span(r)}`);
+  const more = p.runs.length - named.length;
+  if (more) parts.push(`out of it ${more} more time${more > 1 ? 's' : ''} to ${where(p.runs[p.runs.length - 1].toM)}`);
+  let s = `Your approach from the side: ${parts.length ? parts.join(', then ') : 'close to the 3° path all the way down'}`;
   if (p.thrDevFt != null) {
     const ft = Math.round(Math.abs(p.thrDevFt) / 5) * 5;
     s += ft < 10 ? ', on the path at the threshold' : `, ${ft} ft ${p.thrDevFt > 0 ? 'high' : 'low'} at the threshold`;
@@ -175,7 +182,7 @@ export function profileSummary(p) {
 }
 
 export const PROFILE_W = 300, PROFILE_H = 100;
-export const profileLegend = `<div style="font-size:11px;line-height:${LEGEND_PX}px;text-align:center;color:#cbd5e1">dashed: the 3° path · shaded: on slope · blue: you</div>`;
+export const profileLegend = `<div style="font-size:11px;line-height:${LEGEND_PX}px;text-align:center;color:#cbd5e1">dashed: the 3° path · shaded: close to it · solid blue: you · dot: touchdown</div>`;
 // The side view: the runway to the right, the approach coming in from the left; heights stretched (a 3° path is 1:19).
 export function profileSvg(p) {
   const L = 6, R = 6, T = 14, B = 14, w = PROFILE_W - L - R, h = PROFILE_H - T - B;
@@ -192,15 +199,19 @@ export function profileSvg(p) {
   for (let i = 0; i < p.n; i++) track += `${i ? 'L' : 'M'}${X(p.pts[2 * i])} ${Y(p.pts[2 * i + 1])}`;
   const thr = X(AIM_POINT_M), fs = 10;
   const label = (x, y, t, anchor = 'middle') => `<text x="${x}" y="${y}" font-size="${fs}" fill="#cbd5e1" text-anchor="${anchor}" font-family="monospace">${t}</text>`;
+  // An opaque ground (the card's glass let the HUD's tape numbers show through as false scale marks).
   return `<svg viewBox="0 0 ${PROFILE_W} ${PROFILE_H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="display:block">`
+    + `<rect width="${PROFILE_W}" height="${PROFILE_H}" rx="6" fill="#0a0f1d"/>`
+    + `<path d="M${L} ${T}L${PROFILE_W - R} ${T}" ${line} stroke="#334155" stroke-width="1" stroke-dasharray="2 3"/>`
     + `<path d="${band}" fill="#34d399" fill-opacity="0.18" stroke="#34d399" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="1 3" vector-effect="non-scaling-stroke"/>`
     + `<path d="M${L} ${ground}L${PROFILE_W - R} ${ground}" ${line} stroke="#64748b" stroke-width="1"/>`
     + `<path d="M${thr} ${ground}L${X(xr)} ${ground}" ${line} stroke="#cbd5e1" stroke-width="4" stroke-linecap="butt"/>`
-    + `<path d="M${X(xMax)} ${Y(xMax * TAN_GS)}L${X(0)} ${ground}" ${line} stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="5 4"/>`
+    // The track under the dashed path (first-timer panel: on a good approach the track hid the dashes the legend names).
     + `<path d="${track}" ${line} stroke="#38bdf8" stroke-width="2.5"/>`
+    + `<path d="M${X(xMax)} ${Y(xMax * TAN_GS)}L${X(0)} ${ground}" ${line} stroke="#f8fafc" stroke-width="1.5" stroke-dasharray="5 4"/>`
     + `<circle cx="${X(p.tdX)}" cy="${ground}" r="3.5" fill="#facc15" stroke="#0f172a" stroke-width="1"/>`
-    + label(L, T - 4, `${Math.round(hMax * FT / 10) * 10} ft`, 'start')
-    + label(L, PROFILE_H - 2, `${((xMax - AIM_POINT_M) / NM).toFixed(1)} NM`, 'start')
-    + label(thr, PROFILE_H - 2, 'THR')
+    + label(L + 2, T - 3, `${Math.round(hMax * FT / 10) * 10} ft up`, 'start')
+    + label(L + 2, PROFILE_H - 2, xMax - AIM_POINT_M < 0.15 * NM ? where(xMax - AIM_POINT_M) : `${where(xMax - AIM_POINT_M)} out`, 'start')
+    + label(thr, PROFILE_H - 2, 'runway', 'start')
     + '</svg>';
 }
