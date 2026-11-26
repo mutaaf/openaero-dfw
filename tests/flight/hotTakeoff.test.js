@@ -91,7 +91,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S hot-day tak
     expect((h.rollFt / c.rollFt) / (HOT.rollFt / COOL.rollFt)).toBeLessThan(1.08);
     expect((h.obstFt / c.obstFt) / (HOT.totalFt / COOL.totalFt)).toBeGreaterThan(0.92);
     expect((h.obstFt / c.obstFt) / (HOT.totalFt / COOL.totalFt)).toBeLessThan(1.08);
-  });
+  }, 30000);
 
   it('the same indicated speeds: the lift-off within 1 kt of the cool day\'s (the POH\'s speeds have no temperature column)', () => {
     expect(Math.abs(hot().st.liftKts - cool().st.liftKts)).toBeLessThan(1);
@@ -136,7 +136,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S hot-day tak
     expect(r.st.liftKts).toBeLessThan(h.st.liftKts + 0.5);
     expect(r.st.settled).toBe(false);
     expect(r.st.why).toBeNull();
-  });
+  }, 30000);
 
   // A 3,000 ft strip at 50% power (a roll of 3,250-4,500 ft, printed) pulled to idle at 35 KIAS: the game's estimate says it would
   // not have made it, the decision is an A. Full power on the same strip at the same speed would have: a needless stop, D.
@@ -150,7 +150,7 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S hot-day tak
       expect(est / f.rollFt).toBeGreaterThan(0.8);
       expect(est / f.rollFt).toBeLessThan(1.05);
     }
-  });
+  }, 30000); // six JSBSim rolls: 1.9 s here, past the 5 s default on a loaded CI runner (#333)
 
   it('a reject at 35 KIAS: the right call on a half-power roll that would not make a 3,000 ft strip (A), needless at full power (D)', () => {
     const part = run('part', 'poh', { throttle: 0.5, runwayFt: 3000, rejectKts: 35 });
@@ -169,5 +169,5 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S hot-day tak
     log(model, 'ramped reject', ramp);
     expect(ramp.st.reject.warranted).toBe(false);
     expect(ramp.result.score).toBeLessThanOrEqual(FAIL_CAP);
-  });
+  }, 30000);
 });

@@ -182,10 +182,10 @@ export function profileSummary(p) {
 }
 
 export const PROFILE_W = 300, PROFILE_H = 100;
-export const profileLegend = `<div style="font-size:11px;line-height:${LEGEND_PX}px;text-align:center;color:#cbd5e1">dashed: the 3° path · shaded: close to it · solid blue: you · dot: touchdown</div>`;
+export const profileLegend = `<div style="max-width:22rem;margin-inline:auto;font-size:11px;line-height:${LEGEND_PX}px;text-align:center;color:#cbd5e1">dashed: the 3° path · shaded: close to it · solid blue: you · dot: touchdown</div>`;
 // The side view: the runway to the right, the approach coming in from the left; heights stretched (a 3° path is 1:19).
 export function profileSvg(p) {
-  const L = 6, R = 6, T = 14, B = 14, w = PROFILE_W - L - R, h = PROFILE_H - T - B;
+  const L = 6, R = 6, T = 16, B = 16, w = PROFILE_W - L - R, h = PROFILE_H - T - B;
   const xMax = p.pts[0], xMin = Math.min(p.tdX, p.pts[2 * (p.n - 1)]) - 0.06 * (xMax - p.tdX);
   let hMax = xMax * TAN_HI;
   for (let i = 0; i < p.n; i++) hMax = Math.max(hMax, p.pts[2 * i + 1]);
@@ -197,7 +197,8 @@ export function profileSvg(p) {
   const band = `M${X(xMax)} ${Y(xMax * TAN_HI)}L${X(0)} ${ground}L${X(xMax)} ${Y(xMax * TAN_LO)}Z`;
   let track = '';
   for (let i = 0; i < p.n; i++) track += `${i ? 'L' : 'M'}${X(p.pts[2 * i])} ${Y(p.pts[2 * i + 1])}`;
-  const thr = X(AIM_POINT_M), fs = 10;
+  // fs 12.6 of a 300-wide view: ≥ 11 px on a 262 px plot (a 320 px phone; device panel: 10 read 8.7-10.6 px under 390).
+  const thr = X(AIM_POINT_M), fs = 12.6;
   const label = (x, y, t, anchor = 'middle') => `<text x="${x}" y="${y}" font-size="${fs}" fill="#cbd5e1" text-anchor="${anchor}" font-family="monospace">${t}</text>`;
   // An opaque ground (the card's glass let the HUD's tape numbers show through as false scale marks).
   return `<svg viewBox="0 0 ${PROFILE_W} ${PROFILE_H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="display:block">`
@@ -212,6 +213,6 @@ export function profileSvg(p) {
     + `<circle cx="${X(p.tdX)}" cy="${ground}" r="3.5" fill="#facc15" stroke="#0f172a" stroke-width="1"/>`
     + label(L + 2, T - 3, `${Math.round(hMax * FT / 10) * 10} ft up`, 'start')
     + label(L + 2, PROFILE_H - 2, xMax - AIM_POINT_M < 0.15 * NM ? where(xMax - AIM_POINT_M) : `${where(xMax - AIM_POINT_M)} out`, 'start')
-    + label(thr, PROFILE_H - 2, 'runway', 'start')
+    + label(thr, PROFILE_H - 2, 'runway', thr > PROFILE_W - R - 48 ? 'end' : 'start')
     + '</svg>';
 }
