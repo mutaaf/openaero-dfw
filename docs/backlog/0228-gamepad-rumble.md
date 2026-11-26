@@ -1,7 +1,7 @@
 ---
 id: 0228
 title: Gamepad rumble: touchdown thump, stall buffet and ground roll through the pad's dual-rumble motors
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
@@ -25,10 +25,10 @@ never throws, no per-frame allocation (reuse one params object). Lazy: only insi
 chunk.
 
 ## Acceptance criteria
-- [ ] A fake pad with a stubbed `vibrationActuator.playEffect` receives a touchdown pulse scaled by sink rate (hard > soft)
-- [ ] Silent when the haptics setting is off, under reduced motion, and when the actuator is missing or its promise rejects
-- [ ] Not fired while paused or behind the start screen/results card
-- [ ] Boot JS size unchanged (chunk-only)
+- [x] A fake pad with a stubbed `vibrationActuator.playEffect` receives a touchdown pulse scaled by sink rate (hard > soft)
+- [x] Silent when the haptics setting is off, under reduced motion, and when the actuator is missing or its promise rejects
+- [x] Not fired while paused or behind the start screen/results card
+- [x] Boot JS size unchanged (chunk-only)
 
 ## Test plan
 Unit test on the pure mapping (sink rate / buffet level -> magnitudes); e2e with a stubbed

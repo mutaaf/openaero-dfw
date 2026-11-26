@@ -1400,20 +1400,21 @@ const coachVals = { targetKts: 0, flapsDeg: 0 };
 const touchOnly = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ?? false;
 // Haptics (0033): touch-only screens with the Vibration API (Android; iOS has none), a toggle in
 // the menu. Touchdown buzzes by its sink; the stall and pull-up warnings pulse once at onset.
+// The same setting rumbles a gamepad that can (0228, gamepad.js rumble; it shows the toggle).
 const canBuzz = touchOnly && hapticsSupported(navigator);
-let hapticsOn = canBuzz && loadHaptics(safeStorage());
+let hapticsOn = loadHaptics(safeStorage());
 let stallEdge = createAlertEdge(), pullEdge = createAlertEdge();
 // Only in a flight the player is flying: not behind the start screen or the Missions picker.
-const hapt = (p) => hapticsOn && cockpitEntered && !modalOpen() && buzz(navigator, p);
+const hapt = (p) => canBuzz && hapticsOn && cockpitEntered && !modalOpen() && buzz(navigator, p);
 // A new flight or a pause stops a pattern still running, and re-arms the warnings' onsets.
 function hapticsReset() {
-  if (hapticsOn) buzz(navigator, [0]);
+  if (canBuzz && hapticsOn) buzz(navigator, [0]);
   stallEdge = createAlertEdge(); pullEdge = createAlertEdge();
 }
 // A later vibrate() cuts off a running pattern: no alert pulse for 0.5 s after a touchdown's.
-let touchBuzzT = -1;
+// sim.tdT is also the pad's touchdown thump (gamepad.js rumble).
 function touchdownBuzz() {
-  touchBuzzT = sim.simTime;
+  sim.tdT = sim.simTime;
   hapt(touchdownPattern(sim.lastAirVsi, reducedMotion, sim.assist === 'kid'));
   if (cockpitEntered && !modalOpen()) tdFeel?.touch(); // its chirp and tyre smoke (0147), not behind a menu
 }
@@ -1425,16 +1426,14 @@ function updateHapticsButton() {
   btn.setAttribute('aria-pressed', String(hapticsOn));
   btn.classList.toggle('active', hapticsOn);
 }
-if (canBuzz) {
-  byId('btnHaptics').classList.remove('hidden');
+if (canBuzz) byId('btnHaptics').classList.remove('hidden');
+updateHapticsButton();
+byId('btnHaptics').addEventListener('click', () => {
+  hapticsOn = !hapticsOn;
+  saveHaptics(safeStorage(), hapticsOn);
   updateHapticsButton();
-  byId('btnHaptics').addEventListener('click', () => {
-    hapticsOn = !hapticsOn;
-    saveHaptics(safeStorage(), hapticsOn);
-    updateHapticsButton();
-    hapt(TICK); // the toggle answers in kind (turning it off is silent: hapticsOn is false)
-  });
-}
+  hapt(TICK); // the toggle answers in kind (turning it off is silent: hapticsOn is false)
+});
 
 // Left-handed touch layout (0221): the Options chip on touch-only screens; styles.css mirrors the deck.
 let leftHanded = false; // the canvas wind box follows the deck (hudLayout.js windBoxRect)
@@ -2129,7 +2128,7 @@ function integrateSubStep(dt) {
   const gpwsWarning = isGpwsWarning(sim.raFt, sim.vsiFpm, sim.onGround);
   const gearWarning = !gpwsWarning && isGearWarning(sim.raFt, sim.vsiFpm, gearLocked(sim), sim.onGround);
   byId('stallAlertBanner').classList.toggle('hidden', !stallWarning);
-  const quiet = sim.simTime - touchBuzzT < 0.5;
+  const quiet = sim.simTime - sim.tdT < 0.5;
   if (stallEdge(stallWarning, sim.simTime) && !quiet) hapt(alertPattern('stall', reducedMotion));
   if (pullEdge(gpwsWarning, sim.simTime) && !quiet) hapt(alertPattern('pullup', reducedMotion));
   const banner = byId('masterAlertBanner');
@@ -3397,7 +3396,7 @@ byId('btnMouseYoke').addEventListener('click', () => {
 byId('btnTimeOfDay').addEventListener('click', toggleTimeOfDay);
 
 function setPaused(paused) {
-  if (paused && hapticsOn) buzz(navigator, [0]);
+  if (paused && canBuzz && hapticsOn) buzz(navigator, [0]);
   if (!paused && gfx.lost) return; // nothing to fly by until the GPU is back (0034)
   gfx.hidPaused = false;
   sim.paused = paused;
@@ -3680,7 +3679,7 @@ function updateGamepad() {
     sim.pad = null;
     return;
   }
-  const p = padLib.pollGamepad();
+  const p = padLib.pollGamepad(sim, hapticsOn); // 0228: and rumbles the pad (gamepad.js gates it on the flight)
   if (!p) { sim.pad = null; return; }
   sim.pad = p.targets;
   if (replaying) { if (p.edges.length) replaying.stop(); return; } // any button ends the replay (0019), nothing else

@@ -156,7 +156,14 @@ src/missions.js     mission catalogue (approaches by runway end, tours by spawn,
 src/landmarks.js    Dallas landmarks at true lat/lon (cited) + real heights, via geo.js;
                     DOWNTOWN_DALLAS (map dot, skyline tour), ATT_STADIUM
 src/gamepad.js      Gamepad API mapping (deadzone/expo, edges) + per-frame poll; a lazy chunk fetched once a pad shows up in
-                    main.js updateGamepad's getGamepads (0161: also a pad pressed before boot's listener), PAD_CLICKS names the button each pad button presses
+                    main.js updateGamepad's getGamepads (0161: also a pad pressed before boot's listener), PAD_CLICKS names the button each pad button presses.
+                    Rumble (0228): pollGamepad(sim, hapticsOn) plays the pad's vibrationActuator 'dual-rumble' (Chromium; feature-detected elsewhere,
+                    never throws, a rejecting pad left alone 5 s, one reused params object): touchdownRumble (pure) at main.js touchdownBuzz's
+                    sim.tdT, 120-250 ms scaled by the sink to 600 fpm (Kid capped at 0.6); feelRumble (pure) every 100 ms, the stall buffet
+                    (buffet.js writes sim.buffetK) on the heavy motor, the ground roll on the light one (to 60 kt piston / 120 kt jet, none
+                    stopped or on a belly slide). The haptics setting (openaero_haptics_v1) switches it; silent behind the start screen or
+                    results card, paused, in the replay and under reduced motion. A pad that can rumble shows the Vibrate toggle on any screen.
+                    tests/unit/gamepadRumble.test.js, e2e gamepadRumble.spec.js
 src/landing.js      landing grade (rate, centreline, zone, flare, speed → S/A/B/C/D/CRASH) +
                     versioned personal bests + the bounce tracker (0091: wheels > 2 ft for 0.3 s
                     after a contact; the card waits for 1 s on the wheels; 1 bounce caps C, 2+ D,
@@ -694,7 +701,7 @@ src/haptics.js      phone haptics (0033): touchdownPattern by sink (landing.js's
                     tick, ≤ 600 80 ms, else [80,40,120]; Kid never the last; re-contacts too), stall/pull-up pulses once per onset (createAlertEdge,
                     3 s hold-off), feature-detected navigator.vibrate (Android; iOS has none). Reduced motion:
                     no alert pulses, one short touchdown tick. "Vibrate" toggle only on touch-only screens
-                    with the API (main.js canBuzz); e2e haptics.mobile.spec.js stubs vibrate
+                    with the API (main.js canBuzz), or once a pad that can rumble shows up (0228, gamepad.js); e2e haptics.mobile.spec.js stubs vibrate
 src/wakeLock.js     Screen Wake Lock while flying (not paused/hidden/modal/results), feature-
                     detected and silent; hiding the tab pauses the sim + audio (ticket 0032)
 src/hudLayout.js    canvas HUD geometry that depends on the screen (heading box clears the
@@ -977,6 +984,9 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-26 (0228): 200.34 kB (the gamepad rumble: pollGamepad's two arguments, the Vibrate toggle bound on every screen and
+canBuzz on the phone's buzz calls, sim.tdT for the touchdown, ~+10 B; the rest is lazy-chunk hash noise: main's main.js with only
+the chunk edits built 200.33; the rumble is gamepad.js's lazy chunk).
 2026-11-26 (0226): 200.31 kB (the hot-day lesson's mission entry and blurb, createShortTakeoff's hot argument, currentWeather's
 lesson air and moveFlapLever's flaps-up hook, +0.20 kB over 0225's 200.11; the rest rides in shortTakeoff.js's lazy chunk).
 2026-11-26 (0225): 200.11 kB (the short-field takeoff's mission entry and blurb, its lazy import and wiring (checkShortTakeoff, the brakes set at the spawn and let go with an airplane switch, the coach's ground and air prompts, checkTouchdown's skip, the callouts off, the snapshot's shortTakeoff), +0.33 kB over 0224's 199.78; shortTakeoff.js is a lazy chunk).
