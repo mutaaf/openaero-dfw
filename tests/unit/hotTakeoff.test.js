@@ -7,7 +7,7 @@ import { densityAltitudeFt, thinAir } from '../../src/atmosphere.js';
 import { missionByKey } from '../../src/missions.js';
 import { missionFromLink } from '../../src/deeplink.js';
 import {
-  createShortTakeoff, shortTakeoffStep, shortTakeoffTarget, gradeShortTakeoff, pohTakeoff, pohClimbFpm, rejectCall, hotWx,
+  createShortTakeoff, shortTakeoffStep, shortTakeoffTarget, gradeShortTakeoff, pohTakeoff, pohClimbFpm, rejectCall, hotWx, shortTakeoffSimStep,
   CLIMB, FLAPS, OBSTACLE_FT, DONE_FT, HOT_DONE_FT, HOT_C, COOL_C, FAIL_CAP, REJECT_SCORE, REJECT_MARGIN, REJECT_LOF_KTS, FLAPS_UP_KTS,
   HOT_TAKEOFF_KEY,
 } from '../../src/shortTakeoff.js';
@@ -72,9 +72,9 @@ describe('hot-day takeoff (0226): the coach', () => {
     expect(shortTakeoffTarget(st, base({ brakes: true }))).toBe('htoRelease');
     expect(shortTakeoffTarget(st, base({ brakes: true, kid: true }))).toBe('htoKidPower');
     expect(DRILL_TEXT.htoFlaps).toBe('Hot day (scenario 38 °C): density altitude 3,500 ft. Flaps 10°: press F');
-    expect(DRILL_TEXT.htoPower).toBe('Scenario 38 °C, density altitude 3,500 ft: the handbook roll is 1,200 ft, not 1,020. Hold Shift: full power');
-    expect(coachText('htoPower', { touch: true })).toMatch(/1,200 ft, not 1,020\. Throttle to the top$/);
-    expect(DRILL_TEXT.htoRelease).toMatch(/The same 45 knots, a longer roll \(1,200 ft\)\. Let the brakes go \(B\)/);
+    expect(DRILL_TEXT.htoPower).toBe('Scenario 38 °C, density altitude 3,500 ft: the handbook roll is 1,202 ft, not 1,017. Hold Shift: full power');
+    expect(coachText('htoPower', { touch: true })).toMatch(/1,202 ft, not 1,017\. Throttle to the top$/);
+    expect(DRILL_TEXT.htoRelease).toMatch(/The same 45 knots, a longer roll \(1,202 ft\)\. Let the brakes go \(B\)/);
     expect(TOUCH_WORDS.htoRelease).toMatch(/Tap BRAKES/);
     // The short-field lesson keeps its own words.
     expect(shortTakeoffTarget(createShortTakeoff(E16), base({ brakes: true }))).toBe('stoRelease');
@@ -89,13 +89,22 @@ describe('hot-day takeoff (0226): the coach', () => {
     shortTakeoffStep(st, base({ onGround: false, wheelFt: 10, iasKts: 52, gsKts: 52, alongM: 400 }), 0.1);
     shortTakeoffStep(st, base({ onGround: false, wheelFt: 55, iasKts: 57, alongM: 600 }), 0.1);
     expect(st.flapsUp).toBeFalsy();
-    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 55, iasKts: 57 }))).toBe('stoClear');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 55, iasKts: 57, vsFpm: 600, pitchDeg: 12 }))).toBe('stoClear');
+    // Not climbing, or the nose already low: hold it and let the speed build; sinking: nose up (first-timer panel).
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 55, iasKts: 57, vsFpm: 100, pitchDeg: 12 }))).toBe('htoBuild');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 55, iasKts: 57, vsFpm: 600, pitchDeg: 5 }))).toBe('htoBuild');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 120, iasKts: 83, vsFpm: -400 }))).toBe('htoSink');
+    expect(TOUCH_WORDS.htoSink).toMatch(/Stick up a touch \(nose up\)/);
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 120, iasKts: 83, vsFpm: 300, flapsIndex: 0 }))).toBe('htoFast');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 120, iasKts: 73, vsFpm: 600, flapsIndex: 0 }))).toBe('htoGood');
+    // Back on the runway after the lift-off: not the roll's "45 knots" words.
+    expect(shortTakeoffTarget(st, base({ iasKts: 80, gsKts: 80 }))).toBe('htoSettle');
     shortTakeoffStep(st, base({ onGround: false, wheelFt: 90, iasKts: 61 }), 0.1);
     expect(st.flapsUp).toBe(true);
     expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 90, iasKts: 61 }))).toBe('htoFlapsUp');
     expect(DRILL_TEXT.htoFlapsUp).toBe('Above 60 knots: flaps up, press F. Climb at 74');
-    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 120, iasKts: 66, flapsIndex: 0 }))).toBe('stoClear');
-    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 250, iasKts: 74, flapsIndex: 0 }))).toBe('htoClimb');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 120, iasKts: 66, flapsIndex: 0, vsFpm: 600, pitchDeg: 12 }))).toBe('stoClear');
+    expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 250, iasKts: 74, flapsIndex: 0, vsFpm: 600 }))).toBe('htoClimb');
     expect(shortTakeoffTarget(st, base({ onGround: false, wheelFt: 250, iasKts: 74, kid: true }))).toBe('htoKidClimb');
     // The card: the lever's flaps-up direction ends with the lesson (a landing after KEEP FLYING needs F to lower them).
     shortTakeoffStep(st, base({ onGround: false, wheelFt: DONE_FT, iasKts: 74, flapsIndex: 0 }), 0.1);
@@ -153,7 +162,13 @@ describe('hot-day takeoff (0226): the reject', () => {
     expect(f.needM).toBeCloseTo(0.514444 * Math.log(2 / aLof) / (2 * B), 6);
     expect(f.needM).toBeGreaterThan(c.needM); // the fall costs runway
     // Never reaching the lift-off speed at that rate of fall: Infinity, the right call.
-    expect(rejectCall(30, 28, 0.5, 1e6, { kts: 15, accelKps: 3 })).toMatchObject({ needM: Infinity, warranted: true });
+    // A fit that would never reach it is floored at FIT_FLOOR of the measured acceleration (first-timer panel: a sawtooth
+    // sample read Infinity, "the right call", on a normal roll): finite, and only a roll that stopped gaining is Infinity.
+    const floored = rejectCall(30, 28, 0.5, 1e6, { kts: 15, accelKps: 3 });
+    expect(Number.isFinite(floored.needM)).toBe(true);
+    expect(floored.needM).toBeGreaterThan(rejectCall(30, 28, 0.5, 1e6).needM);
+    expect(rejectCall(30, 28, 0.04, 1e6, { kts: 15, accelKps: 3 })).toMatchObject({ needM: Infinity, warranted: true });
+    expect(rejectCall(60, 56, 1, 10).needM).toBe(0); // already past the lift-off speed
   });
   // Pulled to idle at speed on a strip the roll wouldn't have made, then stopped: graded A for the decision.
   function rejected(leftM, accel) {
@@ -220,5 +235,41 @@ describe('hot-day takeoff (0226): the reject', () => {
     shortTakeoffStep(st, base({ iasKts: 30, gsKts: 30, alongM: 100 }), 1);
     shortTakeoffStep(st, base({ throttle: 0, iasKts: 30, gsKts: 30, alongM: 110 }), 1);
     expect(st.reject).toBeNull();
+  });
+});
+
+// First-timer panel: flightModel.js rounds sim.gsKts to whole knots; differentiated per frame the acceleration was a
+// sawtooth and a normal reject at 20-30 kt read Infinity ("Right call", A). The chunk reads the unrounded velocity.
+describe('hot-day takeoff (0226) against the sim: the speed the reject reads', () => {
+  const r = E16.hdgT * Math.PI / 180, dx = Math.sin(r), dz = -Math.cos(r);
+  function roll(rejectKts) {
+    const st = createShortTakeoff(E16, true);
+    const sim = { pos: { x: E16.thrX, y: 0, z: E16.thrZ }, vel: { x: 0, y: 0, z: 0 }, angVel: { x: 0, y: 0, z: 0 }, groundY: 0, spec: { gearHeight: 1 },
+      onGround: true, iasKts: 0, gsKts: 0, throttle: 1, flapsIndex: FLAPS, brakesOn: false, assist: 'pilot', wheelLoads: [1, 1, 1, 0], wx: hotWx(E16) };
+    let v = 0; // m/s, falling acceleration like the airplane's: 1.2 m/s² less 0.0002 v²
+    for (let t = 0; t < 60 && st.phase !== 'done'; t += 1 / 60) {
+      const kts = v / 0.514444;
+      if (kts >= rejectKts) { sim.throttle = 0; sim.brakesOn = true; }
+      const a = sim.throttle ? 1.2 - 0.0002 * v * v : -3;
+      v = Math.max(0, v + a / 60);
+      sim.vel.x = v * dx; sim.vel.z = v * dz; sim.pos.x += sim.vel.x / 60; sim.pos.z += sim.vel.z / 60;
+      sim.iasKts = v / 0.514444 * 0.95; sim.gsKts = Math.round(v / 0.514444);
+      shortTakeoffSimStep(st, sim, 0, 1 / 60);
+    }
+    return st;
+  }
+  for (const k of [20, 25, 30, 40]) it(`a normal full-power roll rejected at ${k} kt is needless (D), with a finite estimate`, () => {
+    const st = roll(k);
+    expect(st.why).toBe('stopped');
+    expect(st.reject.warranted).toBe(false);
+    expect(Number.isFinite(st.reject.needM)).toBe(true);
+    expect(gradeShortTakeoff(st).score).toBeLessThanOrEqual(FAIL_CAP);
+  });
+  it('Kid: "a bit more" when the nose stays low past 50 kt on the roll', () => {
+    const st = createShortTakeoff(E16, true);
+    shortTakeoffStep(st, base({ kid: true }), 0.1);
+    expect(shortTakeoffTarget(st, base({ kid: true, iasKts: 52, gsKts: 52, pitchDeg: 3 }))).toBe('htoKidMore');
+    expect(shortTakeoffTarget(st, base({ kid: true, iasKts: 52, gsKts: 52, pitchDeg: 9 }))).toBe('stoKidRotate');
+    expect(TOUCH_WORDS.htoKidMore).toMatch(/stick up/);
   });
 });

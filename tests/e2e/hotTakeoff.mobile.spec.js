@@ -29,13 +29,13 @@ test('phone, Pilot: the hot day\'s touch words fit, throttle to the top, BRAKES 
   test.setTimeout(90_000);
   const errors = collectErrors(page);
   const { throttleUp } = await open(page, 'pilot');
-  await expect(page.locator('#txtCoach')).toHaveText('Scenario 38 °C, density altitude 3,500 ft: the handbook roll is 1,200 ft, not 1,020. Throttle to the top', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Scenario 38 °C, density altitude 3,500 ft: the handbook roll is 1,202 ft, not 1,017. Throttle to the top', { timeout: 10_000 });
   const coach = await page.locator('#coach').boundingBox();
   expect(coach.x).toBeGreaterThanOrEqual(0);
   expect(coach.x + coach.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('hot-takeoff-390.png') });
   await throttleUp();
-  await expect(page.locator('#txtCoach')).toHaveText('Full power. The same 45 knots, a longer roll (1,200 ft). Tap BRAKES to let them go', { timeout: 10_000 });
+  await expect(page.locator('#txtCoach')).toHaveText('Full power. The same 45 knots, a longer roll (1,202 ft). Tap BRAKES to let them go', { timeout: 10_000 });
   await page.locator('#touchBrakes').tap();
   await expect.poll(async () => (await snap(page)).shortTakeoff.phase, { timeout: 5_000 }).toBe('roll');
   expect(errors).toEqual([]);
