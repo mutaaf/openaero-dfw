@@ -1,20 +1,20 @@
 ---
 id: 0228
 title: Gamepad rumble: touchdown thump, stall buffet and ground roll through the pad's dual-rumble motors
-status: ready
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-11-26
-pr:
+pr: 334
 ---
 
 ## Why
 Touch players already feel the touchdown and the buffet (`src/haptics.js`, 0086-era
-`navigator.vibrate`); a pad in the player's hands feels nothing. Chromium and Firefox expose
+`navigator.vibrate`); a pad in the player's hands feels nothing. Chromium exposes
 `gamepad.vibrationActuator.playEffect('dual-rumble', {...})`
 (https://developer.mozilla.org/docs/Web/API/GamepadHapticActuator/playEffect), the same Gamepad
-API `src/gamepad.js` already polls; Safari lacks it, so it must be feature-detected.
+API `src/gamepad.js` already polls; Firefox lacks it (and other browsers vary), so it must be feature-detected.
 
 ## What
 Reuse haptics.js's event model (touchdown scaled by sink rate, stall buffet from
@@ -25,10 +25,10 @@ never throws, no per-frame allocation (reuse one params object). Lazy: only insi
 chunk.
 
 ## Acceptance criteria
-- [ ] A fake pad with a stubbed `vibrationActuator.playEffect` receives a touchdown pulse scaled by sink rate (hard > soft)
-- [ ] Silent when the haptics setting is off, under reduced motion, and when the actuator is missing or its promise rejects
-- [ ] Not fired while paused or behind the start screen/results card
-- [ ] Boot JS size unchanged (chunk-only)
+- [x] A fake pad with a stubbed `vibrationActuator.playEffect` receives a touchdown pulse scaled by sink rate (hard > soft)
+- [x] Silent when the haptics setting is off, under reduced motion, and when the actuator is missing or its promise rejects
+- [x] Not fired while paused or behind the start screen/results card
+- [x] Boot JS size unchanged (chunk-only)
 
 ## Test plan
 Unit test on the pure mapping (sink rate / buffet level -> magnitudes); e2e with a stubbed

@@ -62,7 +62,7 @@ export const SHAKE_VIEWS = [0, 3]; // main.js sim.cameraNames: Cockpit 3D, Wing 
 const AOA_TAU_S = 0.15; // the AoA's smoothing
 const RUMBLE_IDLE_S = 2; // the rumble's nodes stop this long after the buffet ends
 
-// scene: the THREE.Scene main.js renders; sim: the shared state (read only: aoaDeg, iasKts, spec,
+// scene: the THREE.Scene main.js renders; sim: the shared state (writes buffetK; reads aoaDeg, iasKts, spec,
 // flapPos, flapsIndex, onGround, paused, audioEnabled, cameraMode); audio: audio.js (its ctx once sound has started).
 export function createBuffet(scene, sim, audio, reducedMotion = false, now = () => performance.now() / 1000) {
   const state = { intensity: 0, shakeDeg: 0, peakShakeDeg: 0, gain: 0, cue: 0 };
@@ -167,6 +167,7 @@ export function createBuffet(scene, sim, audio, reducedMotion = false, now = () 
     lastT = t;
     const k = on ? wingBuffet(sim.spec, sim, aoaF) : 0;
     state.intensity = k;
+    sim.buffetK = k; // the gamepad's rumble feels it too (0228, gamepad.js feelRumble)
     setRumble(k, t);
     if (reducedMotion) setCue(k);
     state.shakeDeg = 0;

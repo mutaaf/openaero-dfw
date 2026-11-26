@@ -47,12 +47,125 @@ export const BUTTON = { A: 0, B: 1, X: 2, Y: 3, START: 9, DPAD_UP: 12 };
 // Start pause, D-pad up the ILS autoland.
 // The toast when a pad connects (main.js): its name without the vendor/product tail, and the mapping.
 export const padName = (id) => (id || 'Controller').replace(/\s*\(.*$/, '').trim() || 'Controller';
-export const connectedText = (id) => `🎮 ${padName(id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`;
+// A pad that can rumble says so, and how to stop it (0228).
+const canRumble = (id) => { try { return !!navigator.getGamepads().find((p) => p?.id === id)?.vibrationActuator; } catch { return false; } };
+export const connectedText = (id) => `🎮 ${padName(id)} connected: left stick flies, RT/LT throttle, A flaps, B gear, right stick trims in Pilot`
+  + (canRumble(id) ? '. It rumbles: Vibrate in the menu turns that off' : '');
 export const PAD_CLICKS = { [BUTTON.A]: 'btnFlaps', [BUTTON.B]: 'btnGear', [BUTTON.X]: 'btnBrakes', [BUTTON.Y]: 'btnCamera', [BUTTON.START]: 'btnPause', [BUTTON.DPAD_UP]: 'btnApApr' };
 
-// Browser wrapper: returns { targets, edges, id } for the first connected pad, or null.
+// Rumble (0228): the pad's dual-rumble motors (Gamepad API vibrationActuator.playEffect; Chromium has it,
+// others may not: feature-detected) feel what the phone's haptics feel. strongMagnitude is the
+// low-frequency motor, weakMagnitude the high one; both 0-1, duration in ms.
+// The touchdown: a thump scaled by the sink like haptics.js touchdownPattern, 120 ms for a greaser, to
+// 0.8 at 600 fpm; only past it (landing.js's crash) the full 250 ms; Kid (gentle) never gets past 0.6.
+export function touchdownRumble(vsFpm, gentle = false, out = {}) {
+  const sink = Math.max(0, -vsFpm) || 0;
+  const k = Math.min(gentle ? 0.6 : 1, sink > 600 ? 1 : 0.8 * sink / 600);
+  out.startDelay = 0;
+  out.duration = Math.round(120 + 130 * k);
+  out.strongMagnitude = 0.2 + 0.8 * k;
+  out.weakMagnitude = 0.15 + 0.85 * k; // low for a greaser: the roll's light motor follows at once
+  return out;
+}
+
+// Continuous feels are short pulses re-sent every RUMBLE_GAP_MS, each a little longer than the gap.
+export const RUMBLE_GAP_MS = 100;
+// In the air, the stall buffet (buffet.js writes its 0-1 intensity to sim.buffetK): mostly the heavy
+// motor, from nothing as the shudder starts. On the wheels, the ground roll: the light motor, growing
+// with the square of the ground speed to full at 60 kt on a piston, 120 kt on a jet (rollSound.js
+// rumbleLevel's speeds), each pulse ±20% (runway texture, not a motor's whine), Kid's at 0.6; a slow
+// taxi is all but still; stopped or on a belly slide, nothing. rand: 0-1 (Math.random).
+export function feelRumble(sim, out = {}, rand = Math.random) {
+  let strong = 0, weak = 0;
+  if (!sim.onGround) {
+    const k = sim.buffetK > 0.02 ? Math.min(1, sim.buffetK) : 0;
+    if (k) { strong = 0.8 * k; weak = 0.3 * k; }
+  } else if ((sim.gearPos ?? (sim.gearDown === false ? 0 : 1)) >= 1 && sim.gsKts > 2) {
+    const r = Math.min(1, sim.gsKts / (sim.spec?.engine?.type === 'piston-prop' ? 60 : 120));
+    const w = 0.4 * r * r * (0.8 + 0.4 * rand()) * (sim.assist === 'kid' ? 0.6 : 1);
+    if (w >= 0.03) { weak = w; strong = 0.2 * w; }
+  }
+  out.startDelay = 0;
+  out.duration = RUMBLE_GAP_MS + 40;
+  out.strongMagnitude = strong;
+  out.weakMagnitude = weak;
+  return out;
+}
+
+const noop = () => {};
+// One pad's rumble: call it every frame with the pad's actuator, the sim (tdT: main.js touchdownBuzz's
+// sim time; lastAirVsi, assist, onGround, gsKts, gearPos, buffetK, spec), whether it may play
+// (the haptics setting, no reduced motion, flying: no start screen, results card, pause or replay)
+// and the wall clock in ms. One params object for every effect; never throws; a touchdown while it
+// may not play is not felt later; a pad whose promise rejects is left alone for 5 s.
+export function createRumble() {
+  const fx = { startDelay: 0, duration: 0, strongMagnitude: 0, weakMagnitude: 0 };
+  let lastTd, nextAt = 0, playing = false, mutedUntil = -Infinity, lastT = 0;
+  const onFail = () => { mutedUntil = lastT + 5000; playing = false; };
+  const play = (act) => {
+    try {
+      act.playEffect('dual-rumble', fx)?.catch?.(onFail);
+      playing = true;
+    } catch { onFail(); }
+  };
+  return (act, sim, on, t) => {
+    lastT = t;
+    const td = sim.tdT;
+    const fresh = td !== lastTd && Number.isFinite(td) && sim.simTime - td < 0.25;
+    lastTd = td;
+    if (!on || typeof act?.playEffect !== 'function' || t < mutedUntil) {
+      if (playing) { try { act?.reset?.()?.catch?.(noop); } catch { /* best-effort */ } }
+      playing = false;
+      return false;
+    }
+    if (fresh) {
+      touchdownRumble(sim.lastAirVsi, sim.assist === 'kid', fx);
+      nextAt = t + fx.duration;
+      play(act);
+      return true;
+    }
+    if (t < nextAt) return false;
+    feelRumble(sim, fx);
+    if (!(fx.strongMagnitude > 0 || fx.weakMagnitude > 0)) return false; // the last pulse ends by itself
+    nextAt = t + RUMBLE_GAP_MS;
+    play(act);
+    return true;
+  };
+}
+
+// Browser wrapper, from pollGamepad each frame with main.js's sim and haptics setting (`on`). It plays
+// only in a flight the player is flying: no start screen (#onboardingModal) or results card up, not
+// paused, not in the replay (body.replaying), no reduced motion (the rumble is motion-like;
+// haptics.js keeps one tick there, a pad keeps none). A pad that can rumble shows the Options' Vibrate
+// toggle (main.js binds it; on a phone it is shown already).
+const padRumble = createRumble();
+let curPad = null, toggleShown = false, els = null, reduced = null;
+const hidden = (el) => !el || el.classList.contains('hidden');
+function rumble(sim, on) {
+  const act = curPad?.vibrationActuator;
+  if (act && !toggleShown) {
+    toggleShown = true;
+    const btn = document.getElementById('btnHaptics');
+    btn?.classList.remove('hidden');
+    // Turning it on answers in kind, as the phone's tick does (main.js's handler ran first: aria-pressed is the new state).
+    btn?.addEventListener('click', () => {
+      const a = curPad?.vibrationActuator;
+      if (btn.getAttribute('aria-pressed') !== 'true' || typeof a?.playEffect !== 'function') return;
+      try { a.playEffect('dual-rumble', touchdownRumble(0))?.catch?.(noop); } catch { /* best-effort */ }
+    });
+  }
+  if (on && act) {
+    els ??= [document.getElementById('onboardingModal'), document.getElementById('resultsCard')];
+    reduced ??= globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? { matches: false };
+    on = !sim.paused && !reduced.matches && hidden(els[0]) && hidden(els[1]) && !document.body.classList.contains('replaying');
+  }
+  return padRumble(act, sim, !!on, performance.now());
+}
+
+// Browser wrapper: returns { targets, edges, id } for the first connected pad, or null; given a sim,
+// it rumbles that pad too (0228).
 let prevPressed = [];
-export function pollGamepad() {
+export function pollGamepad(sim, rumbleOn = false) {
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
   const pads = navigator.getGamepads();
   for (const p of pads) {
@@ -60,8 +173,11 @@ export function pollGamepad() {
     const targets = gamepadTargets(p.axes, p.buttons, p.mapping);
     const edges = buttonEdges(prevPressed, p.buttons);
     prevPressed = Array.from(p.buttons, down);
+    curPad = p;
+    if (sim) rumble(sim, rumbleOn);
     return { targets, edges, id: p.id };
   }
   prevPressed = [];
+  curPad = null;
   return null;
 }
