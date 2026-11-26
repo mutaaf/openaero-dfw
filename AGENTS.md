@@ -300,7 +300,7 @@ src/aroundPoint.js  turns around a point (0211, lazy chunk loaded with `turns_ar
                     while it is live; Kid and Learner get a 53° cap (full stick 45°). The card's track plot is src/trackPlot.js (an SVG
                     in results.js's chunk). Kept once graded (its wind flies on); another mission or airframe ends it (endGroundRef).
                     Cards: tests/flight/aroundPoint.test.js (one bank = an oval, D; banking for the groundspeed = A, four winds).
-                    main.js holds it (or rectCourse.js's) in sim.groundRef with grLib its chunk: both export the same calls
+                    main.js holds it (or rectCourse.js's, or sTurns.js's) in sim.groundRef with grLib its chunk (grLibs caches them): all export the same calls
                     (create, live, simStep, coachWord, grade, PLACE, drawHud, kidGuide, makeMarker, seatMarker, debugSnap, SNAP
                     = openaeroDebug's field name).
 src/rectCourse.js   the rectangular course (0223, lazy chunk loaded with `rectangular_course`, `rectCourse: true`): the C172 at 90 KIAS,
@@ -320,6 +320,24 @@ src/rectCourse.js   the rectangular course (0223, lazy chunk loaded with `rectan
                     SVG rect with rx) and the corner poles (trackPlot.js track.rect). Cards: tests/flight/rectCourse.test.js (crab +
                     bank for the groundspeed = S in four winds, corners ~20° downwind / ~12° upwind as tan φ = Vg²/(gR); compass
                     headings with no crab and a fixed 20° = D)
+src/sTurns.js       S-turns across a road (0224, lazy chunk loaded with `s_turns_road`, `sTurns: true`): the C172 at 90 KIAS, 1,000 ft
+                    AGL over the same fields in aroundPoint.js's scenario 12 kt south wind, an east-west road marked by five lit
+                    poles 3,000 ft apart (the game's: 3C names a road, fence or railroad), entered downwind heading north 1,200 m
+                    south of the first pole (FAA-H-8083-3C ch. 7, S-Turns pp. 7-8 to 7-10: cross the line at 90° downwind, "immediately"
+                    a 180° constant-radius turn, the bank steepest as it starts, wings level "just as the airplane crosses", the next
+                    turn the opposite way, shallow first). Four 1,500 ft half-circles going west, left (north) first, anchored on the
+                    poles (centreX); held at the spawn until the player flies; the course starts crossing northbound within 1 R of
+                    the first pole and ends on the fourth crossing back. The radius is graded on each half's own middle (half-way
+                    between its crossings, foldHalf over the track samples): spread ±150 ft a B, ±250 a C, ±350 a D; the average vs
+                    1,500 ft; the bank at each crossing (over 10° a B); ±100 ft, ±10 kt, 45°. Fails: turned east ('wrongWay'), back
+                    over the road under R/3 out ('shallow'), 3 R from the half's middle, 500 ft off, a stall, 300 s. st* coach words
+                    (the roll-in chosen once at the crossing by the wind there; shallower / steeper as the wind comes round; "road
+                    ahead: roll the wings level"); the HUD's RADIUS readout with an arrow to the next pole (ROAD on the way in);
+                    Kid's guide sBankDeg (Vt²/d round the half's middle, aroundPoint.js's spring and damping, eased to level from
+                    OUT_LEAD_S + OUT_S before the road); the card's plot draws the road, the S asked and the poles in a 2.3:1 view
+                    (trackPlot.js track.sTurns). Cards: tests/flight/sTurns.test.js (banking for the groundspeed = S in 0/12/18 kt
+                    and an oblique wind, wings within ~3° over the road; the still-air 27° held = drifted off, D; ~31° starting
+                    downwind, ~21° upwind as tan φ = Vg²/(gR); Kid hands off = S)
 src/slowFlight.js   slow flight (0164, lazy chunk loaded with the mission `c172_slow_flight`): the C172 clean at 95 KIAS,
                     4,500 ft AGL over Grapevine Lake; slow to the band and hold it, graded to FAA-S-ACS-6C Area VII Task A
                     (S5: altitude ±100 ft, heading ±10°, airspeed +10/−0; S4: no stall warning). The band is the airplane's
@@ -907,6 +925,7 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-26 (0224): 199.78 kB (the S-turns' mission entry and blurb, its lazy import in the ground-reference slot (grLibs), tower.js's quiet key, +0.21 kB over 0223's 199.57; sTurns.js is a lazy chunk).
 2026-11-24 (0223): 199.57 kB (the rectangular course's mission entry and blurb, its lazy import beside aroundPoint.js's in one ground-reference slot (sim.groundRef, grLib), the snapshot's computed field, placeCoach dropping the readout below a card over it, +0.40 kB over 0214's 199.17; rectCourse.js is a lazy chunk).
 2026-11-24 (0214): 199.17 kB (the C172's elevator lift beyond trim: flightModel.js elevatorLiftCl, its call and lift-off fade, gear.js's step-mean tail contact, +0.25 kB over 0221's 198.92).
 2026-11-24 (0221): 198.92 kB (the left-handed chip's wiring (setHand, the stored hand, the wind box's side and height), +0.19 kB over 0220's 198.73; the mirror is CSS).
