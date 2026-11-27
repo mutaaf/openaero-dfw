@@ -175,6 +175,18 @@ for (const model of ['flightModel', 'jsbsim']) describe(`Cessna 172S vs POH (${m
     within(shortFieldLanding(c172).totalFt, 1335, 0.15);
   });
 
+  // POH Fig. 5-11 (p. 5-23), sea level, the two printed columns either side of ISA: 10 °C ground
+  // roll 565 ft / 1320 ft over 50 ft, 20 °C 585 ft / 1350 ft. Temperature alone (ISA -5 to +5):
+  // roll x1.035, total x1.023. The roll follows (model x1.032); the total does not, see below.
+  // Measured (validator, 2026-11-27): roll 531 -> 548 ft, total 1288 -> 1277 ft (float shortens).
+  it('landing roll grows with temperature like the POH table (10 to 20 °C: 565 to 585 ft, x1.035, ±2 points)', () => {
+    within(shortFieldLanding(c172, { isaDevC: 5 }).rollFt / shortFieldLanding(c172, { isaDevC: -5 }).rollFt, 585 / 565, 0.02);
+  });
+
+  it.fails('KNOWN GAP (0229): landing total over 50 ft grows with temperature like the POH table (10 to 20 °C: 1320 to 1350 ft, x1.023, ±2 points)', () => {
+    within(shortFieldLanding(c172, { isaDevC: 5 }).totalFt / shortFieldLanding(c172, { isaDevC: -5 }).totalFt, 1350 / 1320, 0.02);
+  }, 60000);
+
   // POH Fig. 5-5 at sea level: 960 ft at 15 °C (interpolated), 1150 ft at 40 °C (+20%).
   it('a hot day lengthens the ground roll like the POH table (ISA +25 °C: +20%, ±8%)', () => {
     within(shortFieldTakeoff(c172, 25).rollFt / shortFieldTakeoff(c172, 0).rollFt, 1.198, 0.08);
