@@ -1458,7 +1458,7 @@ if (touchOnly) {
 // Phone tilt steering (0231, tilt.js, a lazy chunk): an Options toggle on touch-only screens with an
 // orientation sensor, off by default. iOS asks for motion access only from a tap, so the ask starts
 // here, inside the click (or Start flight's, for a stored on), before the chunk is fetched.
-let tilt = null, tiltOn = false, tiltBusy = false; // busy: a start is waiting for its answer or first reading
+let tilt = null, tiltOn = false, tiltBusy = false, tiltKept = false; // kept: Re-centre was tapped on this start screen // busy: a start is waiting for its answer or first reading
 const canTilt = touchOnly && 'DeviceOrientationEvent' in window;
 const tiltLive = () => cockpitEntered && !modalOpen() && !sim.paused && !document.hidden && resultsCard.classList.contains('hidden');
 function showTilt(why = '') {
@@ -1487,7 +1487,7 @@ function setTilt(on) {
 if (canTilt) {
   byId('tiltPicker').classList.replace('hidden', 'flex');
   byId('btnTilt').addEventListener('click', () => setTilt(!tiltOn));
-  byId('btnTiltCentre').addEventListener('click', () => tilt?.recentre());
+  byId('btnTiltCentre').addEventListener('click', () => { tilt?.recentre(); tiltKept = true; showToast('Tilt: this hold is level'); }); // kept through Fly (closeModal)
 }
 
 function resetCoach() {
@@ -3246,7 +3246,8 @@ function openModal(opener) {
 // keeps focus, so a flight key can't land on a HUD button.
 function closeModal(restoreFocus = false) {
   cockpitEntered = true; // ENTER COCKPIT, ✕ or Esc: the flight is under way
-  if (tiltOn) tilt?.on || tiltBusy ? tilt?.recentre() : setTilt(true); // the phone as it is held now is level; a stored on asks inside this tap
+  if (tiltOn) tilt?.on || tiltBusy ? tiltKept || tilt?.recentre() : setTilt(true);
+  tiltKept = false; // the phone as it is held now is level; a stored on asks inside this tap
   hapticsReset(); // an onset behind the start screen was not felt: re-arm it
   onboardingModal.classList.add('hidden');
   // On phones the Missions button lives in the folded menu: fall back to ☰ Menu.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { tiltAngles, tiltAxis, tiltToStick, createTilt, TILT_DEAD_DEG, TILT_FULL_DEG, TILT_WAIT_MS, TILT_TEXT } from '../../src/tilt.js';
+import { tiltAngles, tiltAxis, tiltToStick, createTilt, TILT_DEAD_DEG, TILT_KID_DEAD_DEG, TILT_FULL_DEG, TILT_WAIT_MS, TILT_TEXT } from '../../src/tilt.js';
 
 // Ticket 0231: phone tilt steering. beta/gamma are DeviceOrientationEvent's (MDN): beta + as the
 // top rises (0 flat, 90 upright), gamma + as the right edge drops. Stick units: x + roll right,
@@ -207,5 +207,25 @@ describe('createTilt: overlapping taps', () => {
       expect(t.on).toBe(false);
       expect(w.listeners()).toBe(0);
     } finally { vi.useRealTimers(); }
+  });
+});
+
+// 0231 first-timer panel: Kid's wider deadzone takes a resting arm's sag; full stick is still 25°.
+describe('Kid\'s tilt deadzone', () => {
+  it('6° of sag is nothing on Kid and a nudge on Pilot; 25° is full on both', async () => {
+    const run = async (assist) => {
+      const w = fakeWin(), sim = { assist };
+      const t = createTilt(w, sim, () => true);
+      const p = t.start(); w.fire(40, 0); await p;
+      w.fire(46, 0); const sag = sim.tilt.y;
+      w.fire(65, 0); const full = sim.tilt.y;
+      return { sag, full };
+    };
+    const kid = await run('kid'), pilot = await run('pilot');
+    expect(kid.sag).toBe(0);
+    expect(pilot.sag).toBeLessThan(-0.1);
+    expect(kid.full).toBeCloseTo(-1, 6);
+    expect(pilot.full).toBeCloseTo(-1, 6);
+    expect(tiltAxis(TILT_KID_DEAD_DEG + 1, TILT_KID_DEAD_DEG)).toBeCloseTo(1 / (TILT_FULL_DEG - TILT_KID_DEAD_DEG), 9);
   });
 });

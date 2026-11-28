@@ -157,6 +157,7 @@
           <b class="hand-r">Right thumb</b><b class="hand-l">Left thumb</b>: the stick (drag up to raise the nose; on the ground on Pilot, left and right steer the nose wheel below 40 kt; Kid and Learner keep you on the centreline)<br>
           <b class="hand-r">Left thumb</b><b class="hand-l">Right thumb</b>: throttle (top = full power)<br>
           <b>Middle</b>: gear, flaps, brakes, and ILS AUTO lands it for you<br>
+          <b>Tilt steering</b> (Options): tip the phone right to bank right, top toward you to raise the nose; Pause then Resume makes the way you hold it level<br>
           <span class="hand-tip"><b>Left-handed?</b> In Options at the bottom of this screen, tap Left-handed: the stick goes under your left thumb, the throttle under your right<br></span>
           <b>Pilot</b>: hold NOSE UP / NOSE DN by the throttle to trim; let go of the stick and it settles on the amber trim speed (T on the speed tape)<br>
           <b>Gamepad</b>: left stick flies, RT/LT throttle, A flaps, B gear, X brakes, right stick trims
@@ -207,7 +208,7 @@
         <!-- Phone tilt steering (0231, src/tilt.js): touch-only screens with an orientation sensor (main.js unhides it);
              off by default, iOS asks for motion access on the tap; the reason shows below when it can't -->
         <div id="tiltPicker" role="group" aria-labelledby="txtTiltTitle" class="hidden flex-wrap items-center gap-2 text-xs text-slate-300">
-          <span id="txtTiltTitle">Tilt steering<span class="block text-[10px] text-slate-400">tip the phone like a yoke; the stick still works</span></span>
+          <span id="txtTiltTitle">Tilt steering<span class="block text-[10px] text-slate-400">tip the phone to steer; how you hold it at Fly or Resume is level; the stick still works</span></span>
           <button id="btnTilt" aria-pressed="false" class="hud-btn min-h-[44px] px-3 rounded-lg font-bold text-slate-100">Tilt: OFF</button>
           <button id="btnTiltCentre" class="hidden hud-btn min-h-[44px] px-3 rounded-lg font-bold text-slate-100" title="Hold the phone the way you fly it, then tap: that is level">Re-centre</button>
           <span id="txtTiltWhy" role="status" class="basis-full text-[10px] text-amber-300 empty:hidden"></span>

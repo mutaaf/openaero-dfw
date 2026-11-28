@@ -125,6 +125,27 @@ test('switched on: it asks on the tap, tilt flies, the stick overrides, pause ze
   expect(errors).toEqual([]);
 });
 
+test('Re-centre on the start screen is kept through Fly (0231 first-timer panel)', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.addInitScript(fakeIos, 'granted');
+  await stubTiles(page);
+  await page.goto(BASE);
+  await openOptions(page);
+  await page.locator('#btnTilt').tap();
+  await orient(page, 40, 0);
+  await expect(page.locator('#btnTilt')).toHaveAttribute('aria-pressed', 'true');
+  await orient(page, 60, 20); // the way this player flies it
+  await page.locator('#btnTiltCentre').tap();
+  await orient(page, 60, 20);
+  await orient(page, 40, 0); // slumped while reaching for Fly
+  await fly(page);
+  await orient(page, 60, 20);
+  expect((await snap(page)).tilt).toMatchObject({ x: 0, y: 0, active: true });
+  await orient(page, 40, 0);
+  expect((await snap(page)).tilt.y).toBeGreaterThan(0.5); // well nose down from the chosen level (had Fly re-centred, 0)
+  expect(errors).toEqual([]);
+});
+
 test('iOS says no: off with the reason, nothing listens, no console error (0231)', async ({ page }) => {
   const errors = collectErrors(page);
   await page.addInitScript(fakeIos, 'denied');

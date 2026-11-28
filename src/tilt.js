@@ -13,6 +13,9 @@
 // first reading after it is switched on, at Start flight, on Resume, on Re-centre and when the
 // screen rotates. Deadzone 3°, full deflection at 25°.
 export const TILT_DEAD_DEG = 3;
+// Kid (0231 first-timer panel): a resting arm sags a few degrees over a final; 3° of sag took a
+// hands-off Kid final away from its autoland. Kid's deadzone is wider; full stick is still 25°.
+export const TILT_KID_DEAD_DEG = 8;
 export const TILT_FULL_DEG = 25;
 const D2R = Math.PI / 180;
 
@@ -33,20 +36,20 @@ export function tiltAngles(beta, gamma, screenAngle, out = {}) {
 }
 
 /** One axis: degrees from neutral to -1..1 with the deadzone and the full-deflection angle. */
-export function tiltAxis(deg) {
-  const m = Math.abs(deg) - TILT_DEAD_DEG;
+export function tiltAxis(deg, dead = TILT_DEAD_DEG) {
+  const m = Math.abs(deg) - dead;
   if (!(m > 0)) return 0;
-  return Math.sign(deg) * Math.min(1, m / (TILT_FULL_DEG - TILT_DEAD_DEG));
+  return Math.sign(deg) * Math.min(1, m / (TILT_FULL_DEG - dead));
 }
 
 const wrap = (d) => ((((d + 180) % 360) + 360) % 360) - 180;
 const _a = {};
 /** Pure: the stick position { x, y } for this reading against a neutral from tiltAngles. x + =
  *  roll right; y + = nose down (the stick's sign: tipping the top toward you gives y < 0). */
-export function tiltToStick(beta, gamma, screenAngle, neutral, out = { x: 0, y: 0 }) {
+export function tiltToStick(beta, gamma, screenAngle, neutral, out = { x: 0, y: 0 }, dead = TILT_DEAD_DEG) {
   const t = tiltAngles(beta, gamma, screenAngle, _a);
-  out.x = tiltAxis(t.roll - neutral.roll);
-  out.y = 0 - tiltAxis(wrap(t.pitch - neutral.pitch)); // 0 - : never -0
+  out.x = tiltAxis(t.roll - neutral.roll, dead);
+  out.y = 0 - tiltAxis(wrap(t.pitch - neutral.pitch), dead); // 0 - : never -0
   return out;
 }
 
@@ -54,7 +57,7 @@ export function tiltToStick(beta, gamma, screenAngle, neutral, out = { x: 0, y: 
 // never fires it with angles).
 export const TILT_WAIT_MS = 2000;
 export const TILT_TEXT = {
-  denied: 'Motion access was not allowed, so tilt stays off. Allow Motion & Orientation for this site and tap again.',
+  denied: 'Motion access was not allowed, so tilt is off. To try again later, reopen the browser and turn Tilt on in Options.',
   none: 'No tilt reading came from this device (no sensor, or motion access is off), so tilt stays off.',
   // The ask threw rather than answered (WebKit: not from a tap, e.g. Esc on an iPad's keyboard).
   tap: 'Tilt steering needs a tap to start: tap Tilt in Options.',
@@ -72,7 +75,7 @@ export function createTilt(win, sim, live) {
     const ang = win.screen?.orientation?.angle ?? win.orientation ?? 0;
     if (!neutral || neutral.angle !== ang) neutral = tiltAngles(e.beta, e.gamma, ang);
     if (!live()) { zero(); return; }
-    tiltToStick(e.beta, e.gamma, ang, neutral, t);
+    tiltToStick(e.beta, e.gamma, ang, neutral, t, sim.assist === 'kid' ? TILT_KID_DEAD_DEG : TILT_DEAD_DEG);
     t.active = true;
   };
   const onHide = () => { if (win.document.hidden) zero(); };
