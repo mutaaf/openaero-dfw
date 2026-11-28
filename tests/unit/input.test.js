@@ -45,6 +45,15 @@ describe('combineTargets', () => {
   it('keyboard yaw still works while the touch stick is held', () => {
     expect(combineTargets({ pitch: 0, roll: 0, yaw: -1 }, { x: 0.2, y: 0.1, active: true }, null).yaw).toBe(-1);
   });
+  // 0231: phone tilt ranks below a held stick and a deflected pad, and gives way to a pitch/roll key.
+  it('phone tilt flies when nothing above it is held, and keeps the keyboard rudder', () => {
+    const tilt = { x: 0.4, y: -0.6, active: true }, idle = { pitch: 0, roll: 0, yaw: 1 };
+    expect(combineTargets(idle, { x: 0, y: 0, active: false }, null, tilt)).toEqual({ pitch: -0.6, roll: 0.4, yaw: 1, source: 'tilt' });
+    expect(combineTargets(idle, { x: 0.1, y: 0.2, active: true }, null, tilt).source).toBe('stick');
+    expect(combineTargets(idle, null, { roll: 0.3, pitch: 0, yaw: 0, active: true }, tilt).source).toBe('gamepad');
+    expect(combineTargets(kb, null, null, tilt).source).toBe('keyboard');
+    expect(combineTargets(idle, null, null, { ...tilt, active: false })).toEqual({ pitch: 0, roll: 0, yaw: 1, source: 'keyboard' });
+  });
 });
 
 describe('throttleFromPoint', () => {

@@ -120,8 +120,8 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    first-flight coach remembers `openaero_coach_v1 = { v: 1, seen, at }` (`src/coach.js`);
    the autopilot tutor `openaero_tutor_v1 = { v: 1, on, at }` (`src/apTutor.js`); the assist
    level `openaero_assist_v1 = { v: 1, level, at }` (`src/assists.js`); the clean view
-   `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`); sound, camera and the last mission flown
-  `openaero_prefs_v1 = { v: 1, sound, camera, mission, at }` (`src/prefs.js`, 0022); haptics
+   `openaero_view_v1 = { v: 1, clean, at }` (`src/viewPrefs.js`); sound, camera, the last mission flown and phone tilt steering
+  `openaero_prefs_v1 = { v: 1, sound, camera, mission, tilt, at }` (`src/prefs.js`, 0022; `tilt` 0231: off unless stored `true`); haptics
    `openaero_haptics_v1 = { v: 1, on, at }` (`src/haptics.js`); the player's keys
    `openaero_keys_v1 = { v: 1, map, labels, at }` (`src/keyMap.js`, 0171; anything invalid falls back
    to the default keys); the touch hand `openaero_hand_v1 = { v: 1, left, at }` (`src/handPrefs.js`, 0221;
@@ -993,6 +993,8 @@ Start flight tap**, and the billable Google session still starts only there (see
 
 Budgets: JS ≤ 201 kB gzipped at boot, **enforced by `scripts/check-budget.mjs` in `npm run check` and
 `check:fast`** (the entry plus its modulepreloaded chunks, gzip -9, kB = 1000 B; it reads the number from this line).
+2026-11-28 (0231): 200.75 kB (phone tilt steering's boot wiring: the Options toggle, its permission ask inside the tap, setTilt/showTilt,
+the live gate, combineTargets' tilt rank and the snapshot's tilt, +0.41 kB over 0229's 200.34; the mapping and the sensor are tilt.js's lazy chunk).
 2026-11-26 (0228): 200.34 kB (the gamepad rumble: pollGamepad's two arguments, the Vibrate toggle bound on every screen and
 canBuzz on the phone's buzz calls, sim.tdT for the touchdown, ~+10 B; the rest is lazy-chunk hash noise: main's main.js with only
 the chunk edits built 200.33; the rumble is gamepad.js's lazy chunk).

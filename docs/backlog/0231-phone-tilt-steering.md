@@ -1,7 +1,7 @@
 ---
 id: 0231
 title: Optional phone tilt steering (DeviceOrientation) as a stick alternative
-status: ready
+status: in-progress
 priority: P2
 size: M
 lens: accessibility
