@@ -187,6 +187,20 @@ describe('saveBestLanding (the results card calls this)', () => {
     expect(s.getItem(TRACK_KEY)).toBeNull();
   });
 
+  it('a new best whose own track cannot be kept drops the old best\'s track (no ghost of a beaten landing)', () => {
+    const s = memStorage();
+    saveBestLanding(s, newBest, landed, flight(), END, td);
+    saveBestLanding(s, { ...newBest, key: 'other' }, landed, flight(), END, td);
+    const better = { isNewBest: true, key: 'kdfw_35c_flare', best: { score: 95, grade: 'S', at: 5000 } };
+    expect(saveBestLanding(s, better, { grade: 'S', score: 95 }, flight({ finalS: 3 }), END, td)).toBe(false);
+    const tracks = loadBestTracks(s).tracks;
+    expect(tracks.kdfw_35c_flare).toBeUndefined();
+    expect(tracks.other).toBeDefined();
+    // Not a new best: nothing dropped.
+    saveBestLanding(s, { ...newBest, key: 'other', isNewBest: false }, landed, null, END, td);
+    expect(loadBestTracks(s).tracks.other).toBeDefined();
+  });
+
   it('never throws, whatever the storage does', () => {
     const blocked = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
     expect(() => saveBestLanding(blocked, newBest, landed, flight(), END, td)).not.toThrow();

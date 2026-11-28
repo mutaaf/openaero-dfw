@@ -94,12 +94,24 @@ export function recordBestTrack(storage, missionKey, pack, now = Date.now()) {
 // The results card's hook: a landing that set a new personal best (landing.js recordBest's answer,
 // with its key) keeps its final approach. Not a crash, not a lesson with its own track plot, not a
 // landing off the runway (td null), not a track under TRACK_MIN_S. Never throws.
+// A new best whose own track can't be kept drops the old best's track, so a ghost never flies a landing that is
+// no longer the best (validation panel).
 export function saveBestLanding(storage, best, result, buf, end, td) {
   try {
-    if (!best?.isNewBest || !best.key || !result || result.grade === 'CRASH' || result.track || !td) return false;
-    const pack = packTrack(buf, end, td.pastThresholdM);
-    return pack ? recordBestTrack(storage, best.key, pack, best.best?.at ?? Date.now()) : false;
+    if (!best?.isNewBest || !best.key) return false;
+    const pack = !result || result.grade === 'CRASH' || result.track || !td ? null : packTrack(buf, end, td.pastThresholdM);
+    if (pack) return recordBestTrack(storage, best.key, pack, best.best?.at ?? Date.now());
+    dropBestTrack(storage, best.key);
+    return false;
   } catch {
     return false;
   }
+}
+
+// Removes missionKey's track (nothing written if there is none). Never throws.
+export function dropBestTrack(storage, missionKey) {
+  const data = loadBestTracks(storage);
+  if (!data.tracks[missionKey]) return false;
+  delete data.tracks[missionKey];
+  try { storage.setItem(TRACK_KEY, JSON.stringify(data)); return true; } catch { return false; }
 }
