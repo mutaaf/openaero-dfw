@@ -171,6 +171,7 @@ const sim = {
 
   // Input channels merged by combineTargets(): on-screen stick (touch/drag) and gamepad
   stick: { x: 0, y: 0, active: false },
+  tilt: null, // phone tilt steering (0231, tilt.js): { x, y, active } in the stick's units once switched on
   touchTrim: 0, // the touch trim rocker held: +1 nose up, -1 nose down (0094)
   trimUsed: false, // the player has trimmed this flight: the hold-to-trim stand-in stops
   mouseStick: { x: 0, y: 0 }, // direct mouse yoke position (M), read by the assists
@@ -1454,6 +1455,41 @@ if (touchOnly) {
   }
 }
 
+// Phone tilt steering (0231, tilt.js, a lazy chunk): an Options toggle on touch-only screens with an
+// orientation sensor, off by default. iOS asks for motion access only from a tap, so the ask starts
+// here, inside the click (or Start flight's, for a stored on), before the chunk is fetched.
+let tilt = null, tiltOn = false, tiltBusy = false, tiltKept = false; // kept: Re-centre was tapped on this start screen // busy: a start is waiting for its answer or first reading
+const canTilt = touchOnly && 'DeviceOrientationEvent' in window;
+const tiltLive = () => cockpitEntered && !modalOpen() && !sim.paused && !document.hidden && resultsCard.classList.contains('hidden');
+function showTilt(why = '') {
+  const b = byId('btnTilt');
+  b.setAttribute('aria-pressed', String(tiltOn));
+  b.classList.toggle('active', tiltOn);
+  b.textContent = tiltOn ? 'Tilt: ON' : 'Tilt: OFF';
+  byId('btnTiltCentre').classList.toggle('hidden', !tiltOn);
+  byId('txtTiltWhy').textContent = why;
+}
+function setTilt(on) {
+  const ask = on && window.DeviceOrientationEvent.requestPermission?.(); // iOS 13+; elsewhere undefined
+  tiltOn = tiltBusy = on;
+  showTilt();
+  import('./tilt.js').then(async (m) => {
+    tilt ??= m.createTilt(window, sim, tiltLive);
+    const why = on ? await tilt.start(ask) : (tilt.stop(), '');
+    if (why === undefined) return; // a later tap overtook this one (0231 panel)
+    tiltBusy = false;
+    tiltOn = on && !why;
+    showTilt(why);
+    if (why && cockpitEntered) showToast(why, 6000);
+    if (why !== m.TILT_TEXT.tap) rememberPrefs(); // an ask that needed a tap keeps the stored choice
+  }).catch(console.warn);
+}
+if (canTilt) {
+  byId('tiltPicker').classList.replace('hidden', 'flex');
+  byId('btnTilt').addEventListener('click', () => setTilt(!tiltOn));
+  byId('btnTiltCentre').addEventListener('click', () => { tilt?.recentre(); tiltKept = true; showToast('Tilt: this hold is level'); }); // kept through Fly (closeModal)
+}
+
 function resetCoach() {
   Object.assign(coach, createCoach());
   coachDoneS = 0;
@@ -1980,7 +2016,7 @@ function integrateSubStep(dt) {
   const spec = sim.spec;
 
   // Pilot Input Controls: touch/drag stick > gamepad > keyboard (input.js)
-  const targets = combineTargets(pilotTargets(keys), sim.stick, sim.pad);
+  const targets = combineTargets(pilotTargets(keys), sim.stick, sim.pad, sim.tilt);
   sim.inputSource = targets.source;
   let targetPitch = targets.pitch, targetRoll = targets.roll;
   let targetYaw = targets.yaw;
@@ -1999,7 +2035,7 @@ function integrateSubStep(dt) {
   // (the stick, or a touch-only screen with the thumb off it) gets their centreline hold on the
   // runway whenever the tiller isn't steering (0106: the METAR's crosswind on the roll ran a phone
   // 737 off the side from 40 kt to Vr, and a rollout into the grass).
-  if (sim.onGround && (targets.source === 'stick' || (touchOnly && targets.source === 'keyboard')) && !targetYaw && sim.assist === 'pilot' && !sim.apMaster && spec.gear) {
+  if (sim.onGround && (targets.source === 'stick' || targets.source === 'tilt' || (touchOnly && targets.source === 'keyboard')) && !targetYaw && sim.assist === 'pilot' && !sim.apMaster && spec.gear) {
     const gs = Math.hypot(sim.vel.x, sim.vel.z);
     _euler.setFromQuaternion(sim.quat, 'YXZ');
     runwayUnderWheels(gs, -_euler.y * RAD_TO_DEG);
@@ -3210,6 +3246,8 @@ function openModal(opener) {
 // keeps focus, so a flight key can't land on a HUD button.
 function closeModal(restoreFocus = false) {
   cockpitEntered = true; // ENTER COCKPIT, ✕ or Esc: the flight is under way
+  if (tiltOn) tilt?.on || tiltBusy ? tiltKept || tilt?.recentre() : setTilt(true);
+  tiltKept = false; // the phone as it is held now is level; a stored on asks inside this tap
   hapticsReset(); // an onset behind the start screen was not felt: re-arm it
   onboardingModal.classList.add('hidden');
   // On phones the Missions button lives in the folded menu: fall back to ☰ Menu.
@@ -3261,7 +3299,7 @@ byId('btnStartFlight').addEventListener('click', () => {
 // Sound, camera and the last mission flown, kept between visits (0022, src/prefs.js). The
 // start screen's sound box is the one record of sound: the in-flight toggle writes it too.
 const prefStore = () => window.localStorage;
-const rememberPrefs = () => savePrefs(prefStore, { sound: byId('chkAutoSound').checked, camera: sim.cameraMode, mission: sim.missionKey });
+const rememberPrefs = () => savePrefs(prefStore, { sound: byId('chkAutoSound').checked, camera: sim.cameraMode, mission: sim.missionKey, tilt: tiltOn });
 byId('btnOpenMissions').addEventListener('click', (e) => {
   setHudMenu(false);
   syncDensityAltitude(); // the active runway may have changed since the pick
@@ -3400,6 +3438,7 @@ function setPaused(paused) {
   if (!paused && gfx.lost) return; // nothing to fly by until the GPU is back (0034)
   gfx.hidPaused = false;
   sim.paused = paused;
+  if (!paused) tilt?.recentre(); // Resume: the phone as it is held now is level (0231)
   audio.pause(paused);
   byId('btnPause').textContent = sim.paused ? 'RESUME' : 'PAUSE';
   // Pause/Resume lives in the folded menu on phones: say so on the button that's always shown.
@@ -3865,6 +3904,7 @@ window.openaeroDebug = () => {
     ilsLocDots: sim.ilsLocDots, ilsGsDots: sim.ilsGsDots, ilsLocBarPx: sim.ilsLocBarPx && sim.ilsLocBarPx * sim.hudScale, ilsGsBarPx: sim.ilsGsBarPx && sim.ilsGsBarPx * sim.hudScale, // screen px (0218)
     inputSource: sim.inputSource,
     stick: { ...sim.stick },
+    tilt: sim.tilt && { ...sim.tilt, on: tiltOn },
     simTime: sim.simTime,
     missionRunway: m.airport ? `${m.airport}_${m.rwy}` : null,
     activeRunway: sim.activeEnd?.id ?? null,
@@ -4085,6 +4125,7 @@ function boot() {
   const p = loadPrefs(prefStore, MISSIONS.map((m) => m.key), sim.cameraNames.length);
   byId('chkAutoSound').checked = p.sound;
   setCamera(p.camera);
+  if (canTilt && p.tilt) { tiltOn = true; showTilt(); } // switched on at Start flight's tap (closeModal)
   const key = linked || p.mission;
   loadScenario(key || 'kdfw_35c_final');
   if (key) byId('selScenario').value = key;
