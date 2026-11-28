@@ -115,7 +115,8 @@ describe('createTilt: opt-in, gated, honest when it cannot', () => {
     const w = fakeWin(), sim = {};
     const t = createTilt(w, sim, () => true);
     expect(await t.start(Promise.resolve('denied'))).toBe(TILT_TEXT.denied);
-    expect(await t.start(Promise.reject(new Error('NotAllowedError')))).toBe(TILT_TEXT.denied);
+    // A thrown ask (WebKit outside a tap) is not the player's refusal: it says to tap.
+    expect(await t.start(Promise.reject(new Error('NotAllowedError')))).toBe(TILT_TEXT.tap);
     // Chrome's 'prompt' (no prompt to show) is not a refusal: a reading turns it on.
     const p = t.start(Promise.resolve('prompt'));
     await Promise.resolve(); await Promise.resolve();

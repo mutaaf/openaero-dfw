@@ -1458,7 +1458,7 @@ if (touchOnly) {
 // Phone tilt steering (0231, tilt.js, a lazy chunk): an Options toggle on touch-only screens with an
 // orientation sensor, off by default. iOS asks for motion access only from a tap, so the ask starts
 // here, inside the click (or Start flight's, for a stored on), before the chunk is fetched.
-let tilt = null, tiltOn = false;
+let tilt = null, tiltOn = false, tiltBusy = false; // busy: a start is waiting for its answer or first reading
 const canTilt = touchOnly && 'DeviceOrientationEvent' in window;
 const tiltLive = () => cockpitEntered && !modalOpen() && !sim.paused && !document.hidden && resultsCard.classList.contains('hidden');
 function showTilt(why = '') {
@@ -1471,16 +1471,17 @@ function showTilt(why = '') {
 }
 function setTilt(on) {
   const ask = on && window.DeviceOrientationEvent.requestPermission?.(); // iOS 13+; elsewhere undefined
-  tiltOn = on;
+  tiltOn = tiltBusy = on;
   showTilt();
   import('./tilt.js').then(async (m) => {
     tilt ??= m.createTilt(window, sim, tiltLive);
     const why = on ? await tilt.start(ask) : (tilt.stop(), '');
     if (why === undefined) return; // a later tap overtook this one (0231 panel)
+    tiltBusy = false;
     tiltOn = on && !why;
     showTilt(why);
     if (why && cockpitEntered) showToast(why, 6000);
-    rememberPrefs();
+    if (why !== m.TILT_TEXT.tap) rememberPrefs(); // an ask that needed a tap keeps the stored choice
   }).catch(console.warn);
 }
 if (canTilt) {
@@ -3245,7 +3246,7 @@ function openModal(opener) {
 // keeps focus, so a flight key can't land on a HUD button.
 function closeModal(restoreFocus = false) {
   cockpitEntered = true; // ENTER COCKPIT, ✕ or Esc: the flight is under way
-  if (tiltOn) tilt?.on ? tilt.recentre() : setTilt(true); // the phone as it is held now is level; a stored on asks inside this tap
+  if (tiltOn) tilt?.on || tiltBusy ? tilt?.recentre() : setTilt(true); // the phone as it is held now is level; a stored on asks inside this tap
   hapticsReset(); // an onset behind the start screen was not felt: re-arm it
   onboardingModal.classList.add('hidden');
   // On phones the Missions button lives in the folded menu: fall back to ☰ Menu.

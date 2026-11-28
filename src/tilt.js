@@ -56,6 +56,8 @@ export const TILT_WAIT_MS = 2000;
 export const TILT_TEXT = {
   denied: 'Motion access was not allowed, so tilt stays off. Allow Motion & Orientation for this site and tap again.',
   none: 'No tilt reading came from this device (no sensor, or motion access is off), so tilt stays off.',
+  // The ask threw rather than answered (WebKit: not from a tap, e.g. Esc on an iPad's keyboard).
+  tap: 'Tilt steering needs a tap to start: tap Tilt in Options.',
 };
 
 /** The controller. win: window; sim.tilt is created here; live(): the flight is being flown
@@ -93,9 +95,10 @@ export function createTilt(win, sim, live) {
       const id = ++gen;
       // iOS answers 'granted' or 'denied'; Chrome (which has the call too) can answer 'prompt'
       // where it has no prompt to show: only a refusal stops here, the first-reading wait decides.
-      const r = ask && (await Promise.resolve(ask).catch(() => 'denied'));
+      const r = ask && (await Promise.resolve(ask).catch(() => 'threw'));
       if (id !== gen) return undefined;
       if (r === 'denied') { stop(); return TILT_TEXT.denied; }
+      if (r === 'threw') { stop(); return TILT_TEXT.tap; }
       neutral = null;
       on = true;
       const first = new Promise((res) => { seen = () => { seen = null; res(true); }; win.setTimeout(() => res(false), TILT_WAIT_MS); });
