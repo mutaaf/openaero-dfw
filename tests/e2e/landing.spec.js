@@ -45,13 +45,28 @@ test('a landing is graded and the personal best survives a reload', async ({ pag
   await expect(side.locator('svg path[stroke="#38bdf8"]')).toHaveCount(1);
   await expect(page.locator('#trackPlot')).toBeHidden();
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_best') || 'null'));
+  const tracks = await page.evaluate(() => localStorage.getItem('openaero_besttrack_v1'));
   if (grade.trim() !== 'CRASH') {
     expect(stored.v).toBe(1);
     expect(stored.missions.kdfw_35c_flare.grade).toBe(grade.trim());
+    // 0229: the first landing is a new best, so its final approach is kept: a second apart, runway metres, the
+    // last point the touchdown (where the strip put it), under 1.5 kB, stamped with the best's time.
+    expect(tracks.length).toBeLessThan(1500);
+    const t = JSON.parse(tracks).tracks.kdfw_35c_flare;
+    expect(JSON.parse(tracks).v).toBe(1);
+    expect(t.dt).toBe(1);
+    expect(t.at).toBe(stored.missions.kdfw_35c_flare.at);
+    expect(t.pts.length).toBeGreaterThan(5);
+    const td = t.pts[t.pts.length - 1];
+    expect(Math.abs(td[2] - landed.pastThresholdM)).toBeLessThan(6);
+    expect(Math.abs(td[0] - landed.crossM)).toBeLessThan(2);
+    expect(t.pts[0][2]).toBeLessThan(td[2]); // flown towards the runway
+    expect(t.pts[0][1]).toBeGreaterThan(td[1]); // and down to it
     await page.reload();
     const again = await page.evaluate(() => JSON.parse(localStorage.getItem('openaero_best')));
     expect(again.missions.kdfw_35c_flare.score).toBe(stored.missions.kdfw_35c_flare.score);
-  }
+    expect(await page.evaluate(() => localStorage.getItem('openaero_besttrack_v1'))).toBe(tracks);
+  } else expect(tracks).toBeNull();
   // "Fly again" reloads the mission airborne.
   await page.goto('/openaero/');
 });

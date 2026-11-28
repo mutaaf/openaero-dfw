@@ -4,6 +4,7 @@
 import { GRADE_COLOURS } from './landing.js';
 import { landingTip } from './landingTip.js';
 import { drawStrip, touchdownLabel } from './touchdownStrip.js';
+import { saveBestLanding } from './bestTrack.js';
 import { trackPlotSvg, trackLabel, trackLegend, LEGEND_PX, profilePoints, profileSvg, profileSummary, profileLegend } from './trackPlot.js';
 
 const byId = (id) => document.getElementById(id);
@@ -79,6 +80,8 @@ export function showResults(sim, result, best, end, gate, replayBuf = null) {
   side.classList.toggle('hidden', !prof);
   side.innerHTML = prof ? profileSvg(prof) + profileLegend : '';
   side.setAttribute('aria-label', prof ? profileSummary(prof) : '');
+  // A new personal best keeps its final approach (0229, bestTrack.js): the ghost's data. Storage may throw.
+  try { saveBestLanding(localStorage, best, result, replayBuf, end, td); } catch { /* blocked storage */ }
   const body = byId('resultsBody');
   body.scrollTop = 0;
   markMore();

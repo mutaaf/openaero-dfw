@@ -144,7 +144,8 @@ export function bestGrades(storage) {
   return out;
 }
 
-// Records a result if it beats the stored best. Returns { isNewBest, best, previous }.
+// Records a result if it beats the stored best. Returns { isNewBest, best, previous } (+ key on a new best:
+// the results card keeps that landing's track under it, bestTrack.js, 0229).
 export function recordBest(storage, missionKey, result, now = Date.now()) {
   const data = loadBest(storage);
   const previous = data.missions[missionKey] || null;
@@ -153,5 +154,5 @@ export function recordBest(storage, missionKey, result, now = Date.now()) {
   const best = { score: result.score, grade: result.grade, at: now };
   data.missions[missionKey] = best;
   try { storage.setItem(BEST_KEY, JSON.stringify(data)); } catch { /* private mode: keep in memory only */ }
-  return { isNewBest: true, best, previous };
+  return { isNewBest: true, best, previous, key: missionKey };
 }

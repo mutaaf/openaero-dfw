@@ -53,6 +53,7 @@ describe('personal bests', () => {
     const s = memStorage();
     const r1 = recordBest(s, 'kdfw_35c_final', { score: 80, grade: 'B' }, 1000);
     expect(r1.isNewBest).toBe(true);
+    expect(r1.key).toBe('kdfw_35c_final'); // 0229: the results card stores the best's track under it
     const r2 = recordBest(s, 'kdfw_35c_final', { score: 70, grade: 'C' }, 2000);
     expect(r2.isNewBest).toBe(false);
     expect(r2.best.score).toBe(80);
