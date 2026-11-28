@@ -1,12 +1,12 @@
 ---
 id: 0229
 title: Keep the track of your best landing per mission (a compact stored path, the ghost's data)
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-27
-pr:
+pr: 338
 ---
 
 ## Why

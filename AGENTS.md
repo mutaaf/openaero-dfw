@@ -125,7 +125,9 @@ adding aircraft or modes. Never claim something is "live" or "real" unless it is
    `openaero_haptics_v1 = { v: 1, on, at }` (`src/haptics.js`); the player's keys
    `openaero_keys_v1 = { v: 1, map, labels, at }` (`src/keyMap.js`, 0171; anything invalid falls back
    to the default keys); the touch hand `openaero_hand_v1 = { v: 1, left, at }` (`src/handPrefs.js`, 0221;
-   anything but `left: true` is right-handed). Kid and Learner keep
+   anything but `left: true` is right-handed); the best landing's final approach
+   `openaero_besttrack_v1 = { v: 1, tracks: { <missionKey>: { v: 1, dt, pts, at } } }` (`src/bestTrack.js`, 0229:
+   written only on a new personal best, the same keys as `openaero_best`, at most 40). Kid and Learner keep
    their personal bests under `<missionKey>@kid` / `@learner` in `openaero_best`; Pilot keeps
    the plain mission key.
 7. **Accessibility floor.** Respect `prefers-reduced-motion` for screen shake/flashes;
@@ -186,6 +188,12 @@ src/results.js      the results card (lazy chunk, prefetched after boot, retried
                     are named in the aria-label (three, then counted) with the height off the path at the threshold. Hidden under 5 s of
                     final (PROFILE_MIN_S), for a track starting under 300 m before the threshold (a land-ahead after takeoff), off the
                     runway, on a lesson with its own track plot, and on the non-landing cards (drillCard, the go-around)
+src/bestTrack.js    the best landing's track (0229, in the results chunk; the ghost's data, 0230): results.js saveBestLanding on a
+                    new personal best (landing.js recordBest returns its key) packs the replay buffer's last 30 s up to the
+                    touchdown (packTrack: the touchdown sample and a second apart back from it, interpolated; runway metres
+                    x across, y above the threshold, z past it, rounded to 1 m; < 1.5 kB) into openaero_besttrack_v1. Not a
+                    crash, a lesson with its own track plot, a landing off the runway or under 5 s; prune to 40 keys
+                    (oldest at); never throws. tests/unit/bestTrack.test.js, e2e landing.spec.js
 src/coach.js        landing coach on every final (0073): gear, flaps, speed, centreline, PAPI,
                     sink, flare/de-crab, then the rollout (pure state machine) + seen flag;
                     e2e specs import `test` from tests/e2e/fixtures.js (speech stubbed: silent)
