@@ -62,7 +62,7 @@ export const TILT_TEXT = {
  *  (not paused, no start screen or results card, the tab shown). */
 export function createTilt(win, sim, live) {
   const t = (sim.tilt = { x: 0, y: 0, active: false });
-  let neutral = null, seen = null, on = false;
+  let neutral = null, seen = null, on = false, gen = 0; // gen: the latest start/stop; an older start's answer is dropped
   const zero = () => { t.active = false; t.x = 0; t.y = 0; };
   const onEvent = (e) => {
     if (e.beta == null || e.gamma == null) return;
@@ -75,6 +75,8 @@ export function createTilt(win, sim, live) {
   };
   const onHide = () => { if (win.document.hidden) zero(); };
   function stop() {
+    gen++;
+    seen = null;
     on = false;
     win.removeEventListener('deviceorientation', onEvent);
     win.document.removeEventListener('visibilitychange', onHide);
@@ -85,18 +87,23 @@ export function createTilt(win, sim, live) {
     recentre() { neutral = null; },
     stop,
     /** Switch on: ask (the permission promise main.js started inside the tap, or undefined where
-     *  none is needed), then wait for a first reading. Resolves null when on, else the reason. */
+     *  none is needed), then wait for a first reading. Resolves null when on, else the reason, or
+     *  undefined when a later start or a stop overtook it (its answer is not the player's). */
     async start(ask) {
+      const id = ++gen;
       // iOS answers 'granted' or 'denied'; Chrome (which has the call too) can answer 'prompt'
       // where it has no prompt to show: only a refusal stops here, the first-reading wait decides.
-      if (ask && (await Promise.resolve(ask).catch(() => 'denied')) === 'denied') { stop(); return TILT_TEXT.denied; }
+      const r = ask && (await Promise.resolve(ask).catch(() => 'denied'));
+      if (id !== gen) return undefined;
+      if (r === 'denied') { stop(); return TILT_TEXT.denied; }
       neutral = null;
       on = true;
       const first = new Promise((res) => { seen = () => { seen = null; res(true); }; win.setTimeout(() => res(false), TILT_WAIT_MS); });
       win.addEventListener('deviceorientation', onEvent);
       win.document.addEventListener('visibilitychange', onHide);
-      if (await first) return null;
-      seen = null;
+      const got = await first;
+      if (id !== gen) return undefined;
+      if (got) return null;
       stop();
       return TILT_TEXT.none;
     },

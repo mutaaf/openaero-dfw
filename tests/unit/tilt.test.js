@@ -172,3 +172,39 @@ describe('createTilt: opt-in, gated, honest when it cannot', () => {
     expect(sim.tilt.y).toBe(0);
   });
 });
+
+// 0231 physics panel: a second start (Start flight tapped before the chunk's first start had a
+// reading) or an OFF tap during the wait must not be undone by the first start's 2 s timeout.
+describe('createTilt: overlapping taps', () => {
+  it('a second start supersedes the first; the first one\'s timeout stops nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      const w = fakeWin(), sim = {};
+      const t = createTilt(w, sim, () => true);
+      const a = t.start();
+      vi.advanceTimersByTime(1000);
+      const b = t.start();
+      w.fire(40, 0);
+      expect(await b).toBe(null);
+      vi.advanceTimersByTime(TILT_WAIT_MS * 2);
+      expect(await a).toBe(undefined);
+      expect(t.on).toBe(true);
+      expect(w.listeners()).toBe(1);
+      w.fire(40, 40);
+      expect(sim.tilt.x).toBe(1);
+    } finally { vi.useRealTimers(); }
+  });
+  it('OFF during the wait: off, and the pending start reports nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      const w = fakeWin(), sim = {};
+      const t = createTilt(w, sim, () => true);
+      const a = t.start();
+      t.stop();
+      vi.advanceTimersByTime(TILT_WAIT_MS + 1);
+      expect(await a).toBe(undefined);
+      expect(t.on).toBe(false);
+      expect(w.listeners()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+});

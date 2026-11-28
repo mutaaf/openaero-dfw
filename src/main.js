@@ -1476,6 +1476,7 @@ function setTilt(on) {
   import('./tilt.js').then(async (m) => {
     tilt ??= m.createTilt(window, sim, tiltLive);
     const why = on ? await tilt.start(ask) : (tilt.stop(), '');
+    if (why === undefined) return; // a later tap overtook this one (0231 panel)
     tiltOn = on && !why;
     showTilt(why);
     if (why && cockpitEntered) showToast(why, 6000);
